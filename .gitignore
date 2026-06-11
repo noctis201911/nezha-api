@@ -1,0 +1,44 @@
+# === Laravel dependencies ===
+/vendor/
+/node_modules/
+
+# === Secrets / environment (NEVER commit) ===
+.env
+.env.*
+# keep .env.example as template (uncomment if you create one)
+# !.env.example
+
+# === Laravel OAuth keys (sensitive) ===
+/storage/oauth-private.key
+/storage/oauth-public.key
+
+# === Storage: runtime, uploads, logs ===
+/storage/app/public/
+/storage/app/__MACOSX/
+/storage/framework/
+/storage/logs/
+/storage/debugbar/
+/storage/tmp/
+
+# === Laravel bootstrap cache ===
+/bootstrap/cache/
+
+# === Backup files from deployment process ===
+*.bak
+*.bak.*
+
+# === Original StackFood zip (large binary, not source) ===
+*.zip
+
+# === Server / tool files ===
+composer.phar
+php.ini
+reset-pwd.php
+
+# === IDE / OS ===
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
