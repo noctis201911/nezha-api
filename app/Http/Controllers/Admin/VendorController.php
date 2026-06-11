@@ -666,6 +666,24 @@ class VendorController extends Controller
         return back();
     }
 
+    // 哪吒外卖: 更新平台美元兑人民币汇率 (platform-wide, 所有商家共用)
+    public function updateRmbRate(Request $request)
+    {
+        $rate = (float)$request->input('nezha_usd_to_rmb_rate', 7.1);
+        if ($rate <= 0 || $rate > 100) {
+            Toastr::error(translate('汇率无效, 请填写合理值 (如 7.1)'));
+            return back();
+        }
+        \App\CentralLogics\Helpers::businessUpdateOrInsert(
+            ['key' => 'nezha_usd_to_rmb_rate'],
+            ['value' => (string)$rate]
+        );
+        \Illuminate\Support\Facades\Cache::forget('business_settings_keys');
+        \Illuminate\Support\Facades\Cache::forget('business_settings_all_data');
+        Toastr::success(translate('汇率已更新: 1 USD = ' . $rate . ' CNY'));
+        return back();
+    }
+
     public function view($restaurant, Request $request, $tab = null, $sub_tab = 'cash')
     {
         $key = explode(' ', $request['search']);
@@ -691,7 +709,8 @@ class VendorController extends Controller
             $depositBalance = $restaurant?->wallet?->deposit_balance ?? 0;
             $depositLogs = \App\Models\RestaurantDepositTransaction::where('restaurant_id', $restaurant->id)
                 ->latest()->limit(20)->get();
-            return view('admin-views.vendor.view.payment-info', compact('restaurant', 'depositMode', 'depositThreshold', 'depositBalance', 'depositLogs'));
+            $rmbRate = (float)(BusinessSetting::where('key', 'nezha_usd_to_rmb_rate')->first()?->value ?? 7.1);
+            return view('admin-views.vendor.view.payment-info', compact('restaurant', 'depositMode', 'depositThreshold', 'depositBalance', 'depositLogs', 'rmbRate'));
         } elseif ($tab == 'order') {
             $orders = Order::where('restaurant_id', $restaurant->id)->with('customer')
                 ->when(isset($key), function ($q) use ($key) {

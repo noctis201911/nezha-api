@@ -2349,4 +2349,9 @@
   'The guest id field is required.' => 'The guest id field is required.',
   'reload_page' => 'Reload page',
   'instant_order_is_not_available_for_now!' => 'Instant order is not available for now!',
+  'The email has already been taken.' => 'The email has already been taken.',
+  'User_credential_does_not_match' => 'User credential does not match',
+  'Item_already_exists' => 'Item already exists',
+  'added_to_wish_list' => 'Added to wish list',
+  'Removed_from_wish_list' => 'Removed from wish list',
 );

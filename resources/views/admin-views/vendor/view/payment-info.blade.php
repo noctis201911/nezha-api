@@ -100,6 +100,38 @@
             </div>
         </form>
 
+        {{-- 哪吒外卖: 平台美元兑人民币汇率 (顾客付款面板显示"应付 $X ≈ ¥Y") --}}
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <span class="card-header-icon"><i class="tio-exchange-horizontal"></i></span> &nbsp;
+                    <span>{{ translate('今日美元兑人民币汇率 (平台全局)') }}</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">
+                    {{ translate('此汇率用于顾客收款面板显示人民币应付金额("应付 $X ≈ ¥Y"), 也用于商家转人民币充值保证金时折算美元余额。手动填写当天市场汇率即可。') }}
+                </p>
+                <form action="{{ route('admin.restaurant.update-rmb-rate') }}" method="post">
+                    @csrf
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="input-label">{{ translate('1 USD = ? CNY (人民币)') }}</label>
+                            <input type="number" step="0.01" min="1" max="99" name="nezha_usd_to_rmb_rate"
+                                   class="form-control" value="{{ $rmbRate ?? 7.1 }}"
+                                   placeholder="7.1" required>
+                        </div>
+                        <div class="col-md-3">
+                            <button type="submit" class="btn btn-primary btn-block">{{ translate('更新汇率') }}</button>
+                        </div>
+                        <div class="col-md-5 text-muted small pt-2">
+                            {{ translate('示例: 填 7.25 表示 $10 订单 ≈ ¥72.50') }}
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         {{-- 哪吒外卖 B方案 组4: 保证金管理 (余额 / 充值 / 流水) --}}
         <div class="card mb-3">
             <div class="card-header">
@@ -156,6 +188,33 @@
                     </div>
                     <small class="text-muted">{{ translate('提示: 充值仅记录到本系统保证金账本, 实际收款请商家另行线下转账给平台。') }}</small>
                 </form>
+                {{-- 换算小工具: 商家转了多少人民币 → 应充多少 USD --}}
+                <div class="mt-3 p-3 bg-light rounded">
+                    <small class="text-muted d-block mb-2"><i class="tio-calculator"></i> {{ translate('换算小工具 (不提交): 商家转了多少人民币 → 应充多少 USD?') }}</small>
+                    <div class="row g-2 align-items-center">
+                        <div class="col-auto">
+                            <div class="input-group input-group-sm">
+                                <div class="input-group-prepend"><span class="input-group-text">¥</span></div>
+                                <input type="number" step="0.01" min="0" id="rmb-helper-input" class="form-control" style="max-width:120px" placeholder="{{ translate('人民币金额') }}">
+                            </div>
+                        </div>
+                        <div class="col-auto text-muted">÷ {{ $rmbRate ?? 7.1 }} =</div>
+                        <div class="col-auto"><strong class="text-success" id="rmb-usd-result">—</strong> <small class="text-muted">USD</small></div>
+                    </div>
+                </div>
+                <script>
+                (function(){
+                    var inp = document.getElementById('rmb-helper-input');
+                    var res = document.getElementById('rmb-usd-result');
+                    var rate = {{ $rmbRate ?? 7.1 }};
+                    if(inp && res) {
+                        inp.addEventListener('input', function(){
+                            var v = parseFloat(this.value);
+                            res.textContent = (!isNaN(v) && v > 0) ? (v / rate).toFixed(2) : '—';
+                        });
+                    }
+                })();
+                </script>
             </div>
         </div>
 

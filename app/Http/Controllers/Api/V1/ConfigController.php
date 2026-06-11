@@ -149,7 +149,8 @@ class ConfigController extends Controller
             'subscription_free_trial_type',
             'subscription_free_trial_status',
             'dine_in_order_option',
-            'customer_add_fund_min_amount'
+            'customer_add_fund_min_amount',
+            'nezha_usd_to_rmb_rate'
         ];
 
 
@@ -437,6 +438,7 @@ class ConfigController extends Controller
             'is_mail_active' =>  (bool)config('mail.status'),
             'seo_page_list' => Helpers::seoPageList(),
             'openai_status' => (int) data_get(Helpers::get_business_settings('openai_config'), 'status', 0),
+            'nezha_usd_to_rmb_rate' => (float)($settings['nezha_usd_to_rmb_rate'] ?? 7.1),
             'invoice_settings' => $invoiceSettings,
         ]);
     }

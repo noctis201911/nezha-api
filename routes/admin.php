@@ -298,6 +298,8 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
                 Route::post('update-payment-info/{restaurant}', [VendorController::class, 'updatePaymentInfo'])->name('update-payment-info');
                 // 哪吒外卖 B方案 组4: 管理员充值/调整商家保证金
                 Route::post('recharge-deposit/{restaurant}', [VendorController::class, 'rechargeDeposit'])->name('recharge-deposit');
+                // 哪吒外卖: 更新平台美元兑人民币汇率 (platform-wide setting)
+                Route::post('update-rmb-rate', [VendorController::class, 'updateRmbRate'])->name('update-rmb-rate');
                 Route::post('discount/{restaurant}', [VendorController::class, 'discountSetup'])->name('discount');
                 Route::post('update-settings/{restaurant}', [VendorController::class, 'updateRestaurantSettings'])->name('update-settings');
                 Route::delete('clear-discount/{restaurant}', [VendorController::class, 'cleardiscount'])->name('clear-discount');
