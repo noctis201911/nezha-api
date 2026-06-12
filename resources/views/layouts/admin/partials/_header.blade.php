@@ -198,7 +198,7 @@
                     <form class="flex-grow-1" id="searchForm" action="{{ route('admin.search.routing') }}">
                         @csrf
                         <div class="d-flex align-items-center global-search-container">
-                            <input class="form-control flex-grow-1 rounded-10 search-input" id="searchInput" name="search" type="search" placeholder="Search" aria-label="Search" autofocus>
+                            <input class="form-control flex-grow-1 rounded-10 search-input" id="searchInput" name="search" type="search" placeholder="搜索" aria-label="搜索" autofocus>
                         </div>
                     </form>
                     <div class="position-absolute right-0 pr-2">
