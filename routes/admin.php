@@ -457,6 +457,17 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::put('add-dine-in-table-number/{order}', [OrderController::class, 'add_dine_in_table_number'])->name('add_dine_in_table_number');
         });
 
+        // 哪吒风控① 风控中心: 审核队列 + 风控日志 + 风控设置
+        Route::group(['prefix' => 'nezha-risk', 'as' => 'nezha-risk.', 'middleware' => ['module:order']], function () {
+            Route::get('queue', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'queue'])->name('queue');
+            Route::get('logs', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'logs'])->name('logs');
+            Route::get('settings', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'settings'])->name('settings');
+            Route::post('settings', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'updateSettings'])->name('settings.update');
+            Route::post('approve/{id}', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'approve'])->name('approve');
+            Route::post('reject/{id}', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'reject'])->name('reject');
+            Route::post('refund/{id}', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'refund'])->name('refund');
+        });
+
 
         Route::group(['prefix' => 'dispatch', 'as' => 'dispatch.', 'middleware' => ['module:order']], function () {
             Route::get('list/{status}', [OrderController::class, 'dispatch_list'])->name('list');

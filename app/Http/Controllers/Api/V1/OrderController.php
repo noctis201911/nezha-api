@@ -128,6 +128,19 @@ class OrderController extends Controller
             $restaurant = $order_validation_check;
         }
 
+        // ▼ 哪吒风控① 兜底: 防止前端绕过预检直接下单. 命中 reject→拒单 / review→转人工审核, 两种都不创建订单.
+        $nezha_risk_ctx = \App\Http\Controllers\Api\V1\NezhaRiskController::build_context($request);
+        $nezha_risk = \App\CentralLogics\NezhaRiskControl::evaluate($nezha_risk_ctx);
+        if ($nezha_risk['action'] !== 'pass') {
+            \App\CentralLogics\NezhaRiskControl::record($nezha_risk_ctx, $nezha_risk);
+            return response()->json([
+                'errors' => [
+                    ['code' => $nezha_risk['action'] === 'reject' ? 'risk_reject' : 'risk_review', 'message' => $nezha_risk['message']]
+                ]
+            ], 403);
+        }
+        // ▲ 哪吒风控① 兜底结束
+
         $coupon = null;
         $coupon_created_by = null;
         $delivery_charge = null;

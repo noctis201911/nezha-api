@@ -421,6 +421,41 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                     @endif
                     <!-- End Orders -->
 
+                    <!-- 哪吒风控中心 -->
+                    @if (Helpers::module_permission_check('order'))
+                        <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-risk*') ? 'active' : '' }}">
+                            <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
+                                title="{{ translate('风控中心') }}">
+                                <i class="tio-shield nav-icon"></i>
+                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
+                                    {{ translate('风控中心') }}
+                                </span>
+                            </a>
+                            <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
+                                style="display: {{ Request::is('admin/nezha-risk*') ? 'block' : 'none' }}">
+                                <li class="nav-item {{ Request::is('admin/nezha-risk/queue') ? 'active' : '' }}">
+                                    <a class="nav-link" href="{{ route('admin.nezha-risk.queue') }}" title="{{ translate('审核队列') }}">
+                                        <span class="tio-circle nav-indicator-icon"></span>
+                                        <span class="text-truncate">{{ translate('审核队列') }}</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item {{ Request::is('admin/nezha-risk/logs') ? 'active' : '' }}">
+                                    <a class="nav-link" href="{{ route('admin.nezha-risk.logs') }}" title="{{ translate('风控日志') }}">
+                                        <span class="tio-circle nav-indicator-icon"></span>
+                                        <span class="text-truncate">{{ translate('风控日志') }}</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item {{ Request::is('admin/nezha-risk/settings') ? 'active' : '' }}">
+                                    <a class="nav-link" href="{{ route('admin.nezha-risk.settings') }}" title="{{ translate('风控设置') }}">
+                                        <span class="tio-circle nav-indicator-icon"></span>
+                                        <span class="text-truncate">{{ translate('风控设置') }}</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                    @endif
+                    <!-- End 风控中心 -->
+
 
 
                     @if (Helpers::module_permission_check('zone') || Helpers::module_permission_check('restaurant'))
