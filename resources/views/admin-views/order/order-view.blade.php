@@ -329,7 +329,12 @@ $max_processing_time = $order->restaurant?explode('-', $order->restaurant['deliv
                                                 <h6 class="">
                                                     <div class="d-flex justify-content-sm-end text-capitalize">
                                                         <span class="title-color">{{translate($key)}} :</span>
-                                                        <strong>{{ $item }}</strong>
+                                                        @php($nzProof = \App\CentralLogics\Helpers::offline_payment_proof_url($item))
+                                                        @if($nzProof)
+                                                            <a href="{{ $nzProof }}" target="_blank" rel="noopener"><img src="{{ $nzProof }}" alt="{{ translate('payment proof') }}" style="max-width:120px;max-height:120px;border-radius:8px;border:1px solid #e6e6e6;object-fit:cover;"></a>
+                                                        @else
+                                                            <strong>{{ $item }}</strong>
+                                                        @endif
                                                     </div>
                                                 </h6>
                                             @endif
@@ -1924,7 +1929,12 @@ $max_processing_time = $order->restaurant?explode('-', $order->restaurant['deliv
                                             <div class="col-sm-6  col-lg-5">
                                                 <div class="d-flex align-items-center gap-2">
                                                     <span class="w-sm-25"> {{translate($key)}}</span>:
-                                                    <span class="text-dark text-break">{{ $item }}</span>
+                                                    @php($nzProof = \App\CentralLogics\Helpers::offline_payment_proof_url($item))
+                                                    @if($nzProof)
+                                                        <a href="{{ $nzProof }}" target="_blank" rel="noopener"><img src="{{ $nzProof }}" alt="{{ translate('payment proof') }}" style="max-width:140px;max-height:140px;border-radius:8px;border:1px solid #e6e6e6;object-fit:cover;"></a>
+                                                    @else
+                                                        <span class="text-dark text-break">{{ $item }}</span>
+                                                    @endif
                                                 </div>
                                             </div>
                                             @endif

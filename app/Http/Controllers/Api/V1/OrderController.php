@@ -1225,16 +1225,49 @@ class OrderController extends Controller
             // 哪吒: 顾客凭证字段名取自 method_fields 的 input_field_name。
             // 本站 method_informations 列被用作纯文字说明(cast→null),沿用原逻辑会丢弃顾客输入(如USDT交易哈希),
             // 导致退款无法按原始 tx 反查原路。优先 method_fields,空时回退 method_informations(兼容标准StackFood配置)。
-            $fields = array_column($method->method_fields ?? [], 'input_field_name');
+            $methodFields = $method->method_fields ?? [];
+            $fields = array_column($methodFields, 'input_field_name');
             if (empty($fields)) {
                 $fields = array_column($method->method_informations ?? [], 'customer_input');
+            }
+            // 哪吒: 字段类型/必填表 —— 用来区分文本字段(如USDT哈希)与文件截图字段(input_type==='file')。
+            $fieldType = [];
+            $fieldRequired = [];
+            foreach ($methodFields as $mf) {
+                if (isset($mf['input_field_name'])) {
+                    $fieldType[$mf['input_field_name']] = $mf['input_type'] ?? 'text';
+                    $fieldRequired[$mf['input_field_name']] = (int) ($mf['is_required'] ?? 0);
+                }
             }
             $values = $request->all();
 
             $offline_payment_info['method_id'] = $request->method_id;
             $offline_payment_info['method_name'] = $method->method_name;
             foreach ($fields as $field) {
-                if(key_exists($field, $values)) {
+                if (($fieldType[$field] ?? 'text') === 'file') {
+                    // 哪吒: 付款截图属PII。存到 public 磁盘 offline_payment/ 下,
+                    // payment_info 内记【完整相对路径 offline_payment/xxx】,这样
+                    // PurgePaymentProofs(90天到期清除)可按 public 磁盘路径精确找到并删除该文件。
+                    $uploaded = $request->file($field);
+                    if ($uploaded) {
+                        // 哪吒: 截图只收图片, 且扩展名落在 purge/display 都覆盖的集合内 —— 杜绝 PII 清除盲区(L1-7)。
+                        $ext = strtolower($uploaded->getClientOriginalExtension());
+                        if (! in_array($ext, ['png', 'jpg', 'jpeg', 'webp', 'gif'])) {
+                            return response()->json([
+                                'errors' => [
+                                    ['code' => $field, 'message' => '付款截图仅支持 PNG / JPG / GIF / WEBP 图片']
+                                ]
+                            ], 403);
+                        }
+                        $offline_payment_info[$field] = 'offline_payment/'.Helpers::upload('offline_payment/', 'png', $uploaded);
+                    } elseif (($fieldRequired[$field] ?? 0) === 1) {
+                        return response()->json([
+                            'errors' => [
+                                ['code' => $field, 'message' => '请上传'.$field]
+                            ]
+                        ], 403);
+                    }
+                } elseif (key_exists($field, $values)) {
                     $offline_payment_info[$field] = $values[$field];
                 }
             }
@@ -1293,15 +1326,52 @@ class OrderController extends Controller
         }
         $offline_payment_info = [];
         // 哪吒: 同 offline_payment(), 字段名优先取 method_fields.input_field_name(回退 method_informations.customer_input)
-        $fields = array_column($method->method_fields ?? [], 'input_field_name');
+        $methodFields = $method->method_fields ?? [];
+        $fields = array_column($methodFields, 'input_field_name');
         if (empty($fields)) {
             $fields = array_column($method->method_informations ?? [], 'customer_input');
+        }
+        // 哪吒: 字段类型表(区分文本 vs 文件截图字段)
+        $fieldType = [];
+        foreach ($methodFields as $mf) {
+            if (isset($mf['input_field_name'])) {
+                $fieldType[$mf['input_field_name']] = $mf['input_type'] ?? 'text';
+            }
         }
         $values = $request->all();
         $offline_payment_info['method_id'] =$method->id;
         $offline_payment_info['method_name'] = $method->method_name;
         foreach ($fields as $field) {
-            if(key_exists($field, $values)) {
+            if (($fieldType[$field] ?? 'text') === 'file') {
+                // 哪吒: 截图字段。传了新文件→替换(并删旧文件防孤儿); 没传→保留原截图路径,避免编辑文本时丢截图。
+                $uploaded = $request->file($field);
+                if ($uploaded) {
+                    // 哪吒: 同上, 截图扩展名限定在 purge/display 覆盖集合内(L1-7 防清除盲区)。
+                    $ext = strtolower($uploaded->getClientOriginalExtension());
+                    if (! in_array($ext, ['png', 'jpg', 'jpeg', 'webp', 'gif'])) {
+                        return response()->json([
+                            'errors' => [['code' => $field, 'message' => '付款截图仅支持 PNG / JPG / GIF / WEBP 图片']]
+                        ], 403);
+                    }
+                    try {
+                        $newPath = 'offline_payment/'.Helpers::upload('offline_payment/', 'png', $uploaded);
+                    } catch (\Throwable $e) {
+                        return response()->json([
+                            'errors' => [['code' => $field, 'message' => '付款截图上传失败，请重试']]
+                        ], 403);
+                    }
+                    $old = data_get($old_data, $field);
+                    if (is_string($old) && $old !== '' && $old !== $newPath) {
+                        try { \Illuminate\Support\Facades\Storage::disk(Helpers::getDisk())->delete($old); } catch (\Throwable $e) {}
+                    }
+                    $offline_payment_info[$field] = $newPath;
+                } else {
+                    $old = data_get($old_data, $field);
+                    if (is_string($old) && $old !== '') {
+                        $offline_payment_info[$field] = $old;
+                    }
+                }
+            } elseif (key_exists($field, $values)) {
                 $offline_payment_info[$field] = $values[$field];
             }
         }

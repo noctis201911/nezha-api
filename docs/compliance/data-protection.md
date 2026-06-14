@@ -19,6 +19,7 @@
 - 后台访问需登录认证;敏感后端接口需令牌鉴权;后台路径另加 nginx Basic Auth(见运维记录)。
 - 风控与操作记录通过 git 版本管理,变更可追溯。
 - **(2026-06-14)支付凭证保留期自动清除**:顾客离线支付凭证(payment_info/method_fields/customer_note 及关联截图)超过保留期(默认 90 天,后台 `nezha_payment_proof_retention_days` 可调)由计划任务 `nezha:purge-payment-proofs` 每日自动抹除 PII,保留交易行/状态/时间戳供审计;链上/交易/审计记录不在删除范围(另留 ≥5 年)。
+- **(2026-06-14)离线支付付款截图文件上传(端到端落地)**:顾客可在下单页/订单详情上传付款截图(人民币方式**必填**、USDT 方式**可选**)。文件存于 public 磁盘 `offline_payment/` 目录,`payment_info` 内记**完整相对路径**(`offline_payment/xxx.webp`)。**该截图为高敏 PII**,已确认被上述两道既有机制完整覆盖:① 随**全表静态加密**(at-rest,见下文);② 到期由 `nezha:purge-payment-proofs` **连同截图文件一并删除**(以 `--dry-run` 实测:回填 120 天前的测试行,命中并标记删除 `offline_payment/...webp`)。后端仅接受图片扩展名(png/jpg/jpeg/webp/gif),从源头杜绝"清除/展示判定盲区"。截图在顾客端与后台订单详情可点开查看。
 - **(2026-06-14)后台管理员两步验证(2FA/TOTP)**:可选开启(opt-in),登录在密码之外需认证器 App 动态码;含 8 个一次性恢复码;认证器丢失可经 SSH `php artisan nezha:2fa-disable <email>` 应急关闭。
 - **(2026-06-14)代码库密钥泄露扫描**:已核查前后端 git 全历史,`.env`/密钥从未入库,`.gitignore` 已屏蔽 .env/OAuth key/凭据文件,历史中无已知机密命中。
 - **(2026-06-14)数据库 PII 静态加密(at-rest)**:对应用库全部 150 张 InnoDB 表启用 MySQL 表空间加密(`ENCRYPTION='Y'` + `keyring_file` 插件,`early-plugin-load` 启动加载),覆盖姓名/电话/邮箱/地址/坐标/证件号/USDT 地址等全部 PII 字段。透明加密,应用搜索/派单不受影响(已验证读写正常 + API 200)。密钥置于 `/www/server/mysql-keyring/`(在数据目录与备份目录之外)。**诚实边界**:防的是磁盘/数据文件/备份被盗;密钥与数据同在一台机器,**防不了**服务器被攻破或宿主机层面访问;MySQL 5.7 下 redo/undo log 不被加密、binlog 加密不支持(本机 binlog 当前已关闭,少一个明文漏点)。

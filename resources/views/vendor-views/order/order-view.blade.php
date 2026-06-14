@@ -284,7 +284,12 @@
                                             <h6 class="">
                                                 <div class="d-flex justify-content-sm-end text-capitalize">
                                                     <span class="title-color">{{ translate($key) }} :</span>
-                                                    <strong>{{ $item }}</strong>
+                                                    @php($nzProof = \App\CentralLogics\Helpers::offline_payment_proof_url($item))
+                                                    @if($nzProof)
+                                                        <a href="{{ $nzProof }}" target="_blank" rel="noopener"><img src="{{ $nzProof }}" alt="{{ translate('payment proof') }}" style="max-width:140px;max-height:140px;border-radius:8px;border:1px solid #e6e6e6;object-fit:cover;"></a>
+                                                    @else
+                                                        <strong>{{ $item }}</strong>
+                                                    @endif
                                                 </div>
                                             </h6>
                                         @endif

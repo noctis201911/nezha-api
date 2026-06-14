@@ -3829,19 +3829,53 @@ class Helpers
         }
     }
 
+    /**
+     * 哪吒: 顾客离线支付凭证里"付款截图"字段的完整可访问 URL。
+     * 仅当 $value 是一个【真实存在于磁盘】的图片相对路径(如 offline_payment/xxx.webp)时返回 URL,
+     * 否则返回 null(纯文本字段/已过期清除/伪造的图片扩展名都会得到 null,从而仍按文本展示)。
+     * 与 PurgePaymentProofs::looksLikeStoredFile 的判定保持一致(扩展名白名单 + 文件真实存在)。
+     */
+    public static function offline_payment_proof_url($value)
+    {
+        if (! is_string($value) || $value === '' || strlen($value) > 255) {
+            return null;
+        }
+        if (! preg_match('/\.(png|jpe?g|webp|gif|pdf)$/i', $value)) {
+            return null;
+        }
+        $disk = self::getDisk();
+        try {
+            if (! Storage::disk($disk)->exists($value)) {
+                return null;
+            }
+        } catch (\Throwable $e) {
+            return null;
+        }
+        $dir = trim(dirname($value), '/.');
+        if ($dir === '' || $dir === '.') {
+            $dir = 'offline_payment';
+        }
+
+        return self::get_full_url($dir, basename($value), $disk, 'order');
+    }
+
     public static function offline_payment_formater($user_data)
     {
         $userInputs = [];
 
-        $user_inputes = json_decode($user_data->payment_info, true);
-        $method_name = $user_inputes['method_name'];
-        $method_id = $user_inputes['method_id'];
+        $user_inputes = json_decode($user_data->payment_info, true) ?: [];
+        $method_name = $user_inputes['method_name'] ?? null;
+        $method_id = $user_inputes['method_id'] ?? null;
 
         foreach ($user_inputes as $key => $value) {
             if (! in_array($key, ['method_name', 'method_id'])) {
+                // 哪吒: 截图字段 → 附带可访问的图片 URL(顾客端/后台据此渲染可点开的图片)。
+                $fileUrl = self::offline_payment_proof_url($value);
                 $userInput = [
                     'user_input' => $key,
                     'user_data' => $value,
+                    'is_file' => $fileUrl !== null,
+                    'file_url' => $fileUrl,
                 ];
                 $userInputs[] = $userInput;
             }
