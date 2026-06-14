@@ -636,23 +636,23 @@ trait ReportGeneratorTrait
         return [
             'categories' => $months->map(function ($m) use ($filter, $dateFormat, $singleDayCustom) {
                 if ($filter === 'this_week') {
-                    return Carbon::parse($m)->format('D');
+                    return Carbon::parse($m)->locale('zh')->isoFormat('ddd');
                 }
                 if ($filter === 'this_month') {
                     return Carbon::parse($m)->format('j');
                 }
                 if ($filter === 'custom') {
                     if ($singleDayCustom) {
-                        return Carbon::parse($m)->format('d M Y');
+                        return Carbon::parse($m)->locale('zh')->isoFormat('YYYY[年]M[月]D[日]');
                     }
                     if ($dateFormat === '%Y')
                         return $m;
                     if ($dateFormat === '%Y-%m')
-                        return Carbon::parse($m . '-01')->format('M');
+                        return Carbon::parse($m . '-01')->isoFormat('M[月]');
                     if ($dateFormat === '%Y-%m-%d')
                         return Carbon::parse($m)->format('j');
                 }
-                return Carbon::parse($m . '-01')->format('M');
+                return Carbon::parse($m . '-01')->isoFormat('M[月]');
             }),
             'earning_series' => $earningSeries,
             'expense_series' => $expenseSeries
@@ -842,23 +842,23 @@ trait ReportGeneratorTrait
         return [
             'categories' => $months->map(function ($m) use ($filter, $dateFormat, $singleDayCustom) {
                 if ($filter === 'this_week') {
-                    return Carbon::parse($m)->format('D');
+                    return Carbon::parse($m)->locale('zh')->isoFormat('ddd');
                 }
                 if ($filter === 'this_month') {
                     return Carbon::parse($m)->format('j');
                 }
                 if ($filter === 'custom') {
                     if ($singleDayCustom) {
-                        return Carbon::parse($m)->format('d M Y');
+                        return Carbon::parse($m)->locale('zh')->isoFormat('YYYY[年]M[月]D[日]');
                     }
                     if ($dateFormat === '%Y')
                         return $m;
                     if ($dateFormat === '%Y-%m')
-                        return Carbon::parse($m . '-01')->format('M');
+                        return Carbon::parse($m . '-01')->isoFormat('M[月]');
                     if ($dateFormat === '%Y-%m-%d')
                         return Carbon::parse($m)->format('j');
                 }
-                return Carbon::parse($m . '-01')->format('M');
+                return Carbon::parse($m . '-01')->isoFormat('M[月]');
             }),
             'earning_series' => $earningSeries,
             'expense_series' => $expenseSeries
