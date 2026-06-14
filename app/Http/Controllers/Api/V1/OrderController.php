@@ -1222,7 +1222,7 @@ class OrderController extends Controller
         }
 
         try{
-            $fields = array_column($method->method_informations, 'customer_input');
+            $fields = array_column($method->method_informations ?? [], 'customer_input');
             $values = $request->all();
 
             $offline_payment_info['method_id'] = $request->method_id;
@@ -1286,7 +1286,7 @@ class OrderController extends Controller
             ], 403);
         }
         $offline_payment_info = [];
-        $fields = array_column($method->method_informations, 'customer_input');
+        $fields = array_column($method->method_informations ?? [], 'customer_input');
         $values = $request->all();
         $offline_payment_info['method_id'] =$method->id;
         $offline_payment_info['method_name'] = $method->method_name;

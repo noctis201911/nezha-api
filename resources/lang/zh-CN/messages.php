@@ -2356,4 +2356,6 @@
   'Removed_from_wish_list' => 'Removed from wish list',
   'restaurant_is_closed_at_order_time' => 'Restaurant is closed at order time',
   'The method id field is required.' => 'The method id field is required.',
+  'Order_not_found' => 'Order not found',
+  'The order id field is required.' => 'The order id field is required.',
 );
