@@ -127,11 +127,8 @@ class NezhaRiskControl
             }
         }
 
-        // ── 规则4: 金额特征 (整百/整千 或 大额) → 转审核 ──
-        if ((string) self::cfg('nezha_risk_round_amount_flag', '1') === '1' && $amount >= 100 && fmod($amount, 100.0) === 0.0) {
-            $hits[] = ['rule' => 'round_amount', 'detail' => "整百/整千金额 \${$amount}"];
-            $action = 'review';
-        }
+        // ── 规则4: 金额特征 (大额) → 转审核 ──
+        // 注: "整百/整千"子规则已于 2026-06-14 删除 —— 德拉姆计价下正常菜价多为整百(1500/2000), 会大量误报(用户决定移除)。
         $largeThreshold = (float) self::cfg('nezha_risk_large_amount_threshold', 80);
         if ($largeThreshold > 0 && $amount >= $largeThreshold) {
             $hits[] = ['rule' => 'large_amount', 'detail' => "大额 \${$amount} ≥ \${$largeThreshold}"];
