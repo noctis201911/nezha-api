@@ -2358,4 +2358,6 @@
   'The method id field is required.' => 'The method id field is required.',
   'Order_not_found' => 'Order not found',
   'The order id field is required.' => 'The order id field is required.',
+  'New_Order_Notification' => 'New Order Notification',
+  'New order alert, confirm to proceed' => 'New order alert, confirm to proceed',
 );
