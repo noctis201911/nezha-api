@@ -159,7 +159,7 @@ label {
 }
 
 .auth-bg {
-    background: url(images/auth-bg.png) no-repeat center center/cover;
+    background: url(images/auth-bg.png?v=2) no-repeat center center/cover;
     background-attachment: fixed;
 }
 
