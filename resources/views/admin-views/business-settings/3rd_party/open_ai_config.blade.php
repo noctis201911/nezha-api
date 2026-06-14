@@ -125,8 +125,7 @@
                                             <input type="text"
                                                 placeholder="{{ translate('messages.Ex:') }} org-xxxxxxxxxxx"
                                                 class="form-control" name="OPENAI_ORGANIZATION"
-                                                value="{{ env('APP_MODE') != 'demo' ? $data['OPENAI_ORGANIZATION'] ?? '' : '' }}"
-                                                required>
+                                                value="{{ env('APP_MODE') != 'demo' ? $data['OPENAI_ORGANIZATION'] ?? '' : '' }}">
                                         </div>
                                     </div>
 

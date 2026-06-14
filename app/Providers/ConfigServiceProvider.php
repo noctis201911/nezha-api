@@ -297,7 +297,9 @@ class ConfigServiceProvider extends ServiceProvider
             $openAi =  $openAi? json_decode($openAi['value'], true) : null;
             if ($openAi) {
                 Config::set('openai.api_key', $openAi['OPENAI_API_KEY']);
-                Config::set('openai.organization', $openAi['OPENAI_ORGANIZATION']);
+                if (!empty($openAi['OPENAI_ORGANIZATION'])) {
+                    Config::set('openai.organization', $openAi['OPENAI_ORGANIZATION']);
+                }
             }
 
 
