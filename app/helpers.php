@@ -31,9 +31,13 @@ if (! function_exists('translate')) {
             $processed_key = ucfirst(str_replace('_', ' ', Helpers::remove_invalid_charcaters($key)));
 
             if (!array_key_exists($key, $lang_array)) {
-                $lang_array[$key] = $processed_key;
-                $str = "<?php return " . var_export($lang_array, true) . ";";
-                file_put_contents(base_path('resources/lang/' . $local . '/messages.php'), $str);
+                // 仅在英语 locale 时自动写入新 key；非英语 locale 只展示 fallback，
+                // 避免 zh/messages.php 被自动填满英文值导致无法区分"已翻译"和"未翻译"
+                if ($local === 'en') {
+                    $lang_array[$key] = $processed_key;
+                    $str = "<?php return " . var_export($lang_array, true) . ";";
+                    file_put_contents(base_path('resources/lang/' . $local . '/messages.php'), $str);
+                }
                 $result = $processed_key;
             } else {
                 $result = trans('messages.' . $key, $replace);
