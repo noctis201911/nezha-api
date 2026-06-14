@@ -474,6 +474,15 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::post('refund/{id}', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'refund'])->name('refund');
         });
 
+        // 哪吒 退款机制② 退款留痕/审核
+        Route::group(['prefix' => 'nezha-refund', 'as' => 'nezha-refund.', 'middleware' => ['module:order']], function () {
+            Route::get('records', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'records'])->name('records');
+            Route::post('submit-tx/{id}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'submitTx'])->name('submit-tx');
+            Route::post('upload-proof/{id}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'uploadProof'])->name('upload-proof');
+            Route::post('approve/{id}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'approve'])->name('approve');
+            Route::post('reject/{id}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'reject'])->name('reject');
+        });
+
 
         Route::group(['prefix' => 'dispatch', 'as' => 'dispatch.', 'middleware' => ['module:order']], function () {
             Route::get('list/{status}', [OrderController::class, 'dispatch_list'])->name('list');

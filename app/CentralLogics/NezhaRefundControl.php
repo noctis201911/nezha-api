@@ -116,6 +116,10 @@ class NezhaRefundControl
         if (!self::enabled()) {
             return ['action' => 'pass', 'hits' => []];
         }
+        // 超限审核放行: 该订单已有 admin 放行记录 → 本次豁免限额(对应后台「退款审核」放行)
+        if (NezhaRefundRecord::where('order_id', $order->id)->where('status', 'approved')->exists()) {
+            return ['action' => 'pass', 'hits' => [['rule' => 'admin_approved', 'detail' => '超限已经管理员审核放行']]];
+        }
         $hits = [];
         $restaurantId = $order->restaurant_id;
 
