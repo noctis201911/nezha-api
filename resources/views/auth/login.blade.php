@@ -29,10 +29,15 @@
     <link rel="stylesheet" href="{{dynamicAsset('assets/admin')}}/css/toastr.css">
     <style>
         /* 哪吒品牌背景 - inline覆盖CSS缓存 */
-        .auth-bg { background: url('{{ dynamicAsset("assets/admin/css/images/auth-bg-nezha.png") }}') no-repeat center center/cover !important; }
+        .auth-bg { background: url('{{ dynamicAsset("assets/admin/css/images/auth-bg-v2.png") }}') no-repeat center center/cover !important; }
         /* 正方形logo */
         .auth-logo img { max-height: 100px !important; width: auto !important; max-width: 120px !important; border-radius: 50% !important; }
         .auth-logo { text-align: center !important; display: block !important; }
+        .auth-content { background: transparent !important; color: #8A5A4E !important; }
+        .auth-content .title { color: #C4193E !important; }
+        #signInBtn { background:#C4193E !important; border-color:#C4193E !important; }
+        #signInBtn:hover { background:#A8152F !important; border-color:#A8152F !important; }
+        .badge-soft-success.initial-1 { display:none !important; }
     </style>
 </head>
 
@@ -47,6 +52,11 @@
                 <p>
                     {{translate('Manage_your_app_&_website_easily')}}
                 </p>
+                <div style="margin-top:24px;display:flex;gap:10px;flex-wrap:wrap">
+                    <span style="background:rgba(196,25,62,0.1);color:#C4193E;padding:7px 15px;border-radius:20px;font-size:13px;font-weight:600">🍜 海量中餐</span>
+                    <span style="background:rgba(196,25,62,0.1);color:#C4193E;padding:7px 15px;border-radius:20px;font-size:13px;font-weight:600">🛵 极速配送</span>
+                    <span style="background:rgba(196,25,62,0.1);color:#C4193E;padding:7px 15px;border-radius:20px;font-size:13px;font-weight:600">🇨🇳 华人专属</span>
+                </div>
             </div>
         </div>
         <div class="auth-wrapper">
