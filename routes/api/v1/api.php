@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AddonCategoryController;
 use App\Http\Controllers\Api\V1\AdvertisementController;
 use App\Http\Controllers\Api\V1\MerchantLeadController;
+use App\Http\Controllers\Api\V1\LocalLifeController;
 use App\Http\Controllers\Api\V1\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\V1\Auth\DeliveryManLoginController;
 use App\Http\Controllers\Api\V1\Auth\DMPasswordResetController;
@@ -523,6 +524,12 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     Route::get('react-landing-page', [ConfigController::class, 'react_landing_page'])->middleware('actch:react_web');
     Route::get('react-registration-page', [ConfigController::class, 'react_registration_page']);
     Route::post('merchant-lead', [MerchantLeadController::class, 'store'])->name('merchant-lead.store')->middleware('rateLimiter');
+
+    // 本地生活：公开只读（列表不返回 contact_info；详情对游客返回 contact_info=null）
+    Route::group(['prefix' => 'local-life'], function () {
+        Route::get('posts', [LocalLifeController::class, 'posts']);
+        Route::get('posts/{id}', [LocalLifeController::class, 'postDetail']);
+    });
 
     Route::get('vehicle/extra_charge', [ConfigController::class, 'extra_charge']);
     Route::get('most-tips', [OrderController::class, 'most_tips']);

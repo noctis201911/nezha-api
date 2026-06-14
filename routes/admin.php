@@ -17,6 +17,7 @@ use App\Http\Controllers\Admin\CashBackController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\ContactMessages;
 use App\Http\Controllers\Admin\MerchantLeadController;
+use App\Http\Controllers\Admin\LocalLifeController as AdminLocalLifeController;
 use App\Http\Controllers\Admin\ConversationController;
 use App\Http\Controllers\Admin\CouponController;
 use App\Http\Controllers\Admin\CuisineController;
@@ -1087,6 +1088,15 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('view/{id}', [MerchantLeadController::class, 'view'])->name('view');
             Route::post('update-status/{id}', [MerchantLeadController::class, 'updateStatus'])->name('update-status');
             Route::delete('delete', [MerchantLeadController::class, 'destroy'])->name('delete');
+        });
+        Route::group(['prefix' => 'local-life', 'as' => 'local-life.'], function () {
+            Route::get('list', [AdminLocalLifeController::class, 'list'])->name('list');
+            Route::get('create', [AdminLocalLifeController::class, 'create'])->name('create');
+            Route::post('store', [AdminLocalLifeController::class, 'store'])->name('store');
+            Route::get('edit/{id}', [AdminLocalLifeController::class, 'edit'])->name('edit');
+            Route::post('update/{id}', [AdminLocalLifeController::class, 'update'])->name('update');
+            Route::post('status/{id}', [AdminLocalLifeController::class, 'statusToggle'])->name('status');
+            Route::delete('delete', [AdminLocalLifeController::class, 'destroy'])->name('delete');
         });
         Route::group(['prefix' => 'vehicle', 'as' => 'vehicle.', 'middleware' => ['module:deliveryman']], function () {
             Route::get('list', [VehicleController::class, 'list'])->name('list');

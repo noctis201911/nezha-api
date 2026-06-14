@@ -938,6 +938,18 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                     @endif
 
                     <li
+                        class="navbar-vertical-aside-has-menu {{ Request::is('admin/local-life*') ? 'active' : '' }}">
+                        <a class="js-navbar-vertical-aside-menu-link nav-link"
+                            href="{{ route('admin.local-life.list') }}"
+                            title="本地生活">
+                            <i class="tio-poi-outlined nav-icon"></i>
+                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
+                                本地生活
+                            </span>
+                        </a>
+                    </li>
+
+                    <li
                         class="navbar-vertical-aside-has-menu {{ Request::is('admin/merchant-lead/*') ? 'active' : '' }}">
                         <a class="js-navbar-vertical-aside-menu-link nav-link"
                             href="{{ route('admin.merchant-lead.list') }}"
