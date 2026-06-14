@@ -189,9 +189,7 @@
                      <p class="text-center mt-4 fs-14">{{ translate('Login as Restaurant Owner?') }} <a href="{{url('/') }}/login/{{$data}}" class="text__primary font-semibold">{{ translate('Login Here') }}</a></p>
                     @endif
 
-                     @if ($role == 'vendor')
-                     <p class="text-center mt-4 fs-14">{{ translate('Don’t have account ?') }} <a href="{{ route('restaurant.create') }}" class="text__primary font-semibold">{{ translate('Registration Here') }}</a></p>
-                    @endif
+                     
                 </form>
                 <!-- End Form -->
 
