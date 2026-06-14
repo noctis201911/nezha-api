@@ -14,6 +14,7 @@
 6. [后台安全（两步验证 / 凭证自动清除）](#6-后台安全)（2026-06-14 新增）
 7. [商家入驻申请](#7-商家入驻申请)（2026-06-14 新增）
 8. [本地生活](#8-本地生活)（2026-06-15 新增）
+9. [推送通知 (Firebase FCM)](#9-推送通知-firebase-fcm)（2026-06-15 新增）
 
 ---
 
@@ -261,3 +262,33 @@
 - **想要数是你手动填的展示数字**，不是真实点击量，别当真实数据看。
 - **联系方式是 PII**：列表接口永不返回、详情只给登录顾客；数据库整体已加密（见 6.3）。如填了电话/微信，注意这是真人信息，删帖即一并删除。
 - 顾客端「本地生活」页面要显示这些帖子，需前端接入列表接口（前端窗口的活）；后台这边录好已发布帖即可。
+
+---
+
+## 9. 推送通知 (Firebase FCM)
+
+顾客端「出餐提醒」等推送，靠 Google Firebase Cloud Messaging (FCM) 发送。**2026-06-15 已配置并真机验证通过**（手机能收到通知）。下面记录配置位置和**踩过的坑**，以后维护别重蹈覆辙。
+
+### 9.1 后台在哪填
+- 路径：后台 →「第三方集成与配置」→「**Firebase 推送设置**」（路由 `business-settings/fcm-index`）
+- 那页**只有最上面那个大文本框「Service File Content」要填**——粘贴**服务账号 JSON 全文**。
+- ⚠️ 下面那排小框（API密钥 / FCM项目ID / 授权域名 / 应用ID 等）**全部留空**。我们顾客端走前端自己的 `.env`，不读后台这些字段，填了也没用、反而易混。
+
+### 9.2 服务账号 JSON 从哪来
+1. [Firebase 控制台](https://console.firebase.google.com) → 项目 **nezha-dummy** → ⚙️ 项目设置 →「服务账号」标签 →「**生成新的私钥**」→ 下载一个 JSON 文件。
+2. 用记事本打开，全选复制，粘进 9.1 那个大文本框 →「提交」。
+3. 🔴 这个 JSON 含私钥 = **密钥**，只贴这一个地方，**别贴聊天 / 别进 git / 别外发**。
+
+### 9.3 🔴 维护红线（都是 2026-06-15 配置时真踩过的坑）
+1. **绝不删除服务账号 `firebase-adminsdk-fbsvc@nezha-dummy...`**。在 Google Cloud「服务账号」页删除时，"删钥匙"和"删账号"挨得很近——删了账号会导致发送报 `account not found`，整个推送瘫痪。只在必要时删**单个钥匙行**，永不删账号。
+2. 服务账号必须有 **「Firebase Cloud Messaging API Admin」** 这个 IAM 角色，否则发送报 `403 cloudmessaging.messages.create denied`。若账号被重建过，需在 Google Cloud → IAM 重新授予此角色。
+3. 换/转钥匙时：先生成新钥匙→上传后台→**确认能发**，再删旧钥匙。别先删后换。
+4. 前端 `.env.production` 里有 6 个 `NEXT_PUBLIC_FIREBASE_*` + `NEXT_PUBLIC_FIREBASE_VAPID_KEY`（gitignored，服务器有 `.bak` 备份）。SW 文件 `public/firebase-messaging-sw.js` 里也硬编码了同一套配置，**两处的 appId 要一致**。
+
+### 9.4 顾客侧前提（顾客自己操作，非后台）
+- **iPhone 必须"添加到主屏幕"、从主屏幕图标打开**，才能收推送（iOS 死规矩；普通 Safari 标签页不行，需 iOS 16.4+）。安卓 Chrome 无此限制。
+- 顾客需在站内**授权通知权限**，前端才会把设备 token 上报到后端（存 `users.cm_firebase_token`）。
+
+### 9.5 怎么自检推送是否正常
+- 商家把某单推进状态（接单/出餐），已授权的顾客手机应收到通知。
+- 后端发送逻辑在 `app/CentralLogics/Helpers.php::sendNotificationToHttp`（FCM HTTP v1，OAuth2 服务账号鉴权）。
