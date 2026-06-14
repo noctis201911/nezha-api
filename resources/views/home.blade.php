@@ -17,18 +17,24 @@
                     src="{{ $landing_data['header_content_image_full_url']   }}"
 
                     alt="">
+                    @if($landing_data['header_floating_total_reviews'])
                     <div class="img-data-1">
                         <img src="{{dynamicAsset('assets/landing/assets_new/img/banner/icon-1.png')}}" alt="Review">
                         <span>{{ translate('Review') }} {{ $landing_data['header_floating_total_reviews']}} +</span>
                     </div>
+                    @endif
+                    @if($landing_data['header_floating_total_order'])
                     <div class="img-data-2">
                         <img src="{{dynamicAsset('assets/landing/assets_new/img/banner/icon-2.png')}}" alt="Order">
                         <span>{{ translate('Order') }} {{ $landing_data['header_floating_total_order']}} +</span>
                     </div>
+                    @endif
+                    @if($landing_data['header_floating_total_user'])
                     <div class="img-data-3">
                         <img src="{{dynamicAsset('assets/landing/assets_new/img/banner/icon-3.png')}}" alt="User">
                         <span>{{ translate('User') }} {{  $landing_data['header_floating_total_user']}} +</span>
                     </div>
+                    @endif
                 </div>
                 <div class="banner-content wow fadeInRight">
                     <h2 class="title"> {{ $landing_data['header_title'] }}</h2>
