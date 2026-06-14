@@ -41,7 +41,9 @@ class ConfigServiceProvider extends ServiceProvider
         try {
             $data = BusinessSetting::where(['key' => 'mail_config'])->first();
             $emailServices = json_decode($data['value'], true);
-            if ($emailServices) {
+            // 哪吒: 仅当后台 SMTP 已启用且填写完整时才用 DB 配置覆盖；
+            // 否则保留 config/mail.php(.env) 的 SMTP，避免空配置清空 config('mail') 导致全平台邮件失效。
+            if ($emailServices && !empty($emailServices['status']) && !empty($emailServices['host']) && !empty($emailServices['username'])) {
                 $config = array(
                     'status' => (Boolean)(isset($emailServices['status'])?$emailServices['status']:1),
                     'driver' => $emailServices['driver'],
