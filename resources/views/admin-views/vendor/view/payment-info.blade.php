@@ -105,28 +105,37 @@
             <div class="card-header">
                 <h5 class="card-title">
                     <span class="card-header-icon"><i class="tio-exchange-horizontal"></i></span> &nbsp;
-                    <span>{{ translate('今日美元兑人民币汇率 (平台全局)') }}</span>
+                    <span>{{ translate('顾客端换算汇率 (平台全局)') }}</span>
                 </h5>
             </div>
             <div class="card-body">
                 <p class="text-muted small">
-                    {{ translate('此汇率用于顾客收款面板显示人民币应付金额("应付 $X ≈ ¥Y"), 也用于商家转人民币充值保证金时折算美元余额。手动填写当天市场汇率即可。') }}
+                    {{ translate('菜价以德拉姆(֏)计。下面两个汇率用于把 ֏ 换算成人民币/美元: 浏览页显示"≈¥/≈$"参考价, 结算页显示精确"应付¥/USDT"(顾客实付=商家实收)。请填当天市场汇率, 偏差过大商家会系统性多收/少收。') }}
                 </p>
                 <form action="{{ route('admin.restaurant.update-rmb-rate') }}" method="post">
                     @csrf
                     <div class="row g-3 align-items-end">
-                        <div class="col-md-4">
-                            <label class="input-label">{{ translate('1 USD = ? CNY (人民币)') }}</label>
+                        <div class="col-md-3">
+                            <label class="input-label">{{ translate('1 元人民币 = ? ֏') }}</label>
+                            <input type="number" step="0.01" min="1" max="100000" name="nezha_rate_cny_to_amd"
+                                   class="form-control" value="{{ $cnyToAmd ?? 55 }}" placeholder="55" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="input-label">{{ translate('1 美元 = ? ֏') }}</label>
+                            <input type="number" step="0.01" min="1" max="100000" name="nezha_rate_usd_to_amd"
+                                   class="form-control" value="{{ $usdToAmd ?? 400 }}" placeholder="400" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="input-label">{{ translate('1 美元 = ? 元 (仅保证金折算)') }}</label>
                             <input type="number" step="0.01" min="1" max="99" name="nezha_usd_to_rmb_rate"
-                                   class="form-control" value="{{ $rmbRate ?? 7.1 }}"
-                                   placeholder="7.1" required>
+                                   class="form-control" value="{{ $rmbRate ?? 7.1 }}" placeholder="7.1">
                         </div>
                         <div class="col-md-3">
                             <button type="submit" class="btn btn-primary btn-block">{{ translate('更新汇率') }}</button>
                         </div>
-                        <div class="col-md-5 text-muted small pt-2">
-                            {{ translate('示例: 填 7.25 表示 $10 订单 ≈ ¥72.50') }}
-                        </div>
+                    </div>
+                    <div class="text-muted small pt-2">
+                        {{ translate('示例: 1元=55֏、1美元=400֏ → 5500֏ 订单 ≈ ¥100 / $13.75') }}
                     </div>
                 </form>
             </div>

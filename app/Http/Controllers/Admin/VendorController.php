@@ -669,18 +669,25 @@ class VendorController extends Controller
     // 哪吒外卖: 更新平台美元兑人民币汇率 (platform-wide, 所有商家共用)
     public function updateRmbRate(Request $request)
     {
-        $rate = (float)$request->input('nezha_usd_to_rmb_rate', 7.1);
-        if ($rate <= 0 || $rate > 100) {
-            Toastr::error(translate('汇率无效, 请填写合理值 (如 7.1)'));
+        // 哪吒外卖: 顾客端换算汇率 (AMD德拉姆 -> 人民币/美元). usd_to_rmb 仅保证金折算用, 可选.
+        $cnyToAmd = (float)$request->input('nezha_rate_cny_to_amd', 0);
+        $usdToAmd = (float)$request->input('nezha_rate_usd_to_amd', 0);
+        if ($cnyToAmd <= 0 || $usdToAmd <= 0) {
+            Toastr::error(translate('汇率无效, 请填写大于0的数值'));
             return back();
         }
-        \App\CentralLogics\Helpers::businessUpdateOrInsert(
-            ['key' => 'nezha_usd_to_rmb_rate'],
-            ['value' => (string)$rate]
-        );
+        \App\CentralLogics\Helpers::businessUpdateOrInsert(['key' => 'nezha_rate_cny_to_amd'], ['value' => (string)$cnyToAmd]);
+        \App\CentralLogics\Helpers::businessUpdateOrInsert(['key' => 'nezha_rate_usd_to_amd'], ['value' => (string)$usdToAmd]);
+        // 旧"美元兑人民币"仅保证金折算用, 仅在表单提交了该字段且合法时更新, 避免被默认值覆盖
+        if ($request->filled('nezha_usd_to_rmb_rate')) {
+            $rmb = (float)$request->input('nezha_usd_to_rmb_rate');
+            if ($rmb > 0 && $rmb <= 100) {
+                \App\CentralLogics\Helpers::businessUpdateOrInsert(['key' => 'nezha_usd_to_rmb_rate'], ['value' => (string)$rmb]);
+            }
+        }
         \Illuminate\Support\Facades\Cache::forget('business_settings_keys');
         \Illuminate\Support\Facades\Cache::forget('business_settings_all_data');
-        Toastr::success(translate('汇率已更新: 1 USD = ' . $rate . ' CNY'));
+        Toastr::success(translate('汇率已更新: 1元=' . $cnyToAmd . '֏, 1美元=' . $usdToAmd . '֏'));
         return back();
     }
 
@@ -710,7 +717,9 @@ class VendorController extends Controller
             $depositLogs = \App\Models\RestaurantDepositTransaction::where('restaurant_id', $restaurant->id)
                 ->latest()->limit(20)->get();
             $rmbRate = (float)(BusinessSetting::where('key', 'nezha_usd_to_rmb_rate')->first()?->value ?? 7.1);
-            return view('admin-views.vendor.view.payment-info', compact('restaurant', 'depositMode', 'depositThreshold', 'depositBalance', 'depositLogs', 'rmbRate'));
+            $cnyToAmd = (float)(BusinessSetting::where('key', 'nezha_rate_cny_to_amd')->first()?->value ?? 55);
+            $usdToAmd = (float)(BusinessSetting::where('key', 'nezha_rate_usd_to_amd')->first()?->value ?? 400);
+            return view('admin-views.vendor.view.payment-info', compact('restaurant', 'depositMode', 'depositThreshold', 'depositBalance', 'depositLogs', 'rmbRate', 'cnyToAmd', 'usdToAmd'));
         } elseif ($tab == 'order') {
             $orders = Order::where('restaurant_id', $restaurant->id)->with('customer')
                 ->when(isset($key), function ($q) use ($key) {
