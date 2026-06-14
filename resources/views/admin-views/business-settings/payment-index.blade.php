@@ -132,11 +132,11 @@
                                     @if(!in_array($key,$skip))
                                         <div class="form-floating mb-2" >
                                             <label for="{{$payment_key}}-{{$key}}"
-                                                   class="form-label">{{ucwords(str_replace('_',' ',$key))}}
+                                                   class="form-label">{{translate($key)}}
                                                 *</label>
                                             <input id="{{$payment_key}}-{{$key}}" type="text" class="form-control"
                                                    name="{{$key}}"
-                                                   placeholder="{{ucwords(str_replace('_',' ',$key))}} *"
+                                                   placeholder="{{translate($key)}} *"
                                                    value="{{env('APP_ENV')=='demo'?'':$value}}">
                                         </div>
                                     @endif

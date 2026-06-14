@@ -62,7 +62,7 @@ function newdonutChart(id, value, labels, legendPosition = "bottom") {
                         total: {
                             show: true,
                             showAlways: false,
-                            label: "Total",
+                            label: "合计",
                             fontSize: "15px",
                             fontFamily: "Helvetica, Arial, sans-serif",
                             fontWeight: 500,
