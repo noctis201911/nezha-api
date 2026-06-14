@@ -713,6 +713,46 @@ class OrderController extends Controller
                 Toastr::warning(translate('messages.you_can_not_refund_a_cod_order'));
                 return back();
             }
+
+            // 哪吒 退款机制②: 原路锁定 + 限额风控.
+            // 开关 nezha_refund_control_status 默认关; 关闭时整段跳过, 现网退款行为完全不变.
+            $nezhaRefundRoute  = null;
+            $nezhaRefundAmount = null;
+            if (\App\CentralLogics\NezhaRefundControl::enabled()) {
+                $nezhaRefundAmount = round(
+                    $order->order_amount - $order->delivery_charge - $order->dm_tips - $order->additional_charge - $order->extra_packaging_amount,
+                    config('round_up_to_digit')
+                );
+                if ($nezhaRefundAmount < 0) { $nezhaRefundAmount = 0; }
+                if ($nezhaRefundAmount > $order->order_amount) { $nezhaRefundAmount = $order->order_amount; } // 金额≤原单 兜底
+                $nezhaRefundRoute = \App\CentralLogics\NezhaRefundControl::lock_route($order);
+                $nezhaLimits      = \App\CentralLogics\NezhaRefundControl::check_limits($order, $nezhaRefundAmount);
+                if ($nezhaLimits['action'] === 'over_limit') {
+                    // 超限不直接拒: 转 admin 审核队列, 本次不执行退款 (留痕原路+命中规则)
+                    \App\Models\NezhaRefundRecord::create([
+                        'order_id'          => $order->id,
+                        'refund_id'         => optional(Refund::where('order_id', $order->id)->first())->id,
+                        'restaurant_id'     => $order->restaurant_id,
+                        'user_id'           => $order->user_id,
+                        'guest_id'          => $order->is_guest ? (string) $order->user_id : null,
+                        'payment_channel'   => $nezhaRefundRoute['channel'] ?? 'other',
+                        'order_amount'      => $order->order_amount,
+                        'refund_amount'     => $nezhaRefundAmount,
+                        'reason_note'       => $request->admin_note ?? null,
+                        'route_locked_note' => $nezhaRefundRoute['note'] ?? null,
+                        'chain'             => $nezhaRefundRoute['chain'] ?? null,
+                        'original_tx_hash'  => $nezhaRefundRoute['original_tx_hash'] ?? null,
+                        'locked_to_address' => $nezhaRefundRoute['locked_to_address'] ?? null,
+                        'risk_action'       => 'over_limit',
+                        'risk_hit'          => $nezhaLimits['hits'],
+                        'status'            => 'pending_admin',
+                        'operator_id'       => auth('admin')->id(),
+                    ]);
+                    Toastr::warning(translate('退款超过限额, 已转审核队列, 本次未执行') . ' (' . collect($nezhaLimits['hits'])->pluck('detail')->implode('; ') . ')');
+                    return back();
+                }
+            }
+
             if (isset($order->delivered)) {
                 $rt = OrderLogic::refund_order($order);
 
@@ -725,13 +765,20 @@ class OrderController extends Controller
             $wallet_status = BusinessSetting::where('key', 'wallet_status')->first()?->value;
             $refund_to_wallet = BusinessSetting::where('key', 'wallet_add_refund')->first()?->value;
 
-            if ($order->payment_status == "paid" && $wallet_status == 1 && $refund_to_wallet == 1) {
+            // 哪吒 L1-1 护栏: 直付订单(offline_payment)平台不持币, 严禁走平台钱包退款
+            // (退到平台钱包 = 平台替顾客记账/欠款 = 平台碰钱, 违反"平台全程不碰资金"). 直付一律原路由商家退, 平台仅留痕.
+            $isDirectPay = ($order->payment_method == 'offline_payment');
+            if ($order->payment_status == "paid" && $wallet_status == 1 && $refund_to_wallet == 1 && !$isDirectPay) {
                 $refund_amount = round($order->order_amount - $order->delivery_charge - $order->dm_tips, config('round_up_to_digit'));
                 CustomerLogic::create_wallet_transaction(user_id: $order->user_id, amount: $refund_amount, transaction_type: 'order_refund', referance: $order->id);
                 Toastr::info(translate('Refunded amount added to customer wallet'));
                 $refund_method = 'wallet';
             } else {
-                Toastr::warning(translate('Customer Wallet Refund is not active.Plase Manage the Refund Amount Manually'));
+                if ($isDirectPay) {
+                    Toastr::info(translate('直付订单: 退款由商家按原路退还原付款人, 平台不经手资金, 仅留痕'));
+                } else {
+                    Toastr::warning(translate('Customer Wallet Refund is not active.Plase Manage the Refund Amount Manually'));
+                }
                 $refund_method = $request->refund_method ?? 'manual';
             }
 
@@ -741,6 +788,30 @@ class OrderController extends Controller
                 'refund_status' => 'approved',
                 'refund_method' => $refund_method,
             ]);
+
+            // 哪吒 退款机制②: 退款执行成功后留痕(原路锁定/通道/金额), 合规留存≥5年.
+            // USDT 置 unverified, 待后续登记商家退款 tx hash 做链上校验; 法币置 na(走凭证版).
+            if (\App\CentralLogics\NezhaRefundControl::enabled() && $nezhaRefundRoute) {
+                \App\Models\NezhaRefundRecord::create([
+                    'order_id'           => $order->id,
+                    'refund_id'          => optional(Refund::where('order_id', $order->id)->first())->id,
+                    'restaurant_id'      => $order->restaurant_id,
+                    'user_id'            => $order->user_id,
+                    'guest_id'           => $order->is_guest ? (string) $order->user_id : null,
+                    'payment_channel'    => $nezhaRefundRoute['channel'] ?? 'other',
+                    'order_amount'       => $order->order_amount,
+                    'refund_amount'      => $nezhaRefundAmount,
+                    'reason_note'        => $request->admin_note ?? null,
+                    'route_locked_note'  => $nezhaRefundRoute['note'] ?? null,
+                    'chain'              => $nezhaRefundRoute['chain'] ?? null,
+                    'original_tx_hash'   => $nezhaRefundRoute['original_tx_hash'] ?? null,
+                    'locked_to_address'  => $nezhaRefundRoute['locked_to_address'] ?? null,
+                    'chain_verify_status'=> ($nezhaRefundRoute['channel'] ?? '') === 'usdt' ? 'unverified' : 'na',
+                    'risk_action'        => 'pass',
+                    'status'             => 'recorded',
+                    'operator_id'        => auth('admin')->id(),
+                ]);
+            }
 
             Helpers::increment_order_count($order->restaurant);
 
