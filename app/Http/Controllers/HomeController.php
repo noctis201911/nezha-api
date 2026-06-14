@@ -85,10 +85,10 @@ class HomeController extends Controller
         $zones= Zone::where('status',1)->get(['id','name','display_name']);
 
         $landing_data = [
-            'header_title'=>  $settings['header_title'] ??  'Why Stay Hungry !' ,
-            'header_sub_title'=> $settings['header_sub_title'] ?? 'When you can order from' ,
-            'header_tag_line'=> $settings['header_tag_line'] ?? 'Get Offers' ,
-            'header_app_button_name'=> $settings['header_app_button_name'] ?? 'Order now' ,
+            'header_title'=>  $settings['header_title'] ??  '在埃里温，吃哪吒！' ,
+            'header_sub_title'=> $settings['header_sub_title'] ?? '随时点餐，极速送达' ,
+            'header_tag_line'=> $settings['header_tag_line'] ?? '领取优惠' ,
+            'header_app_button_name'=> $settings['header_app_button_name'] ?? '立即点餐' ,
             'header_app_button_status'=> $settings['header_app_button_status'] ?? 0 ,
             'header_button_redirect_link'=>   $settings['header_button_content'] ?? null ,
 
@@ -104,7 +104,7 @@ class HomeController extends Controller
             'about_us_title'=>   $settings['about_us_title'] ?? null ,
             'about_us_sub_title'=>   $settings['about_us_sub_title'] ?? null ,
             'about_us_text'=>   $settings['about_us_text'] ?? null ,
-            'about_us_app_button_name'=>   $settings['about_us_app_button_name'] ?? 'More' ,
+            'about_us_app_button_name'=>   $settings['about_us_app_button_name'] ?? '了解更多' ,
             'about_us_app_button_status'=>   $settings['about_us_app_button_status'] ?? 0 ,
 
             'about_us_redirect_link'=>   $settings['about_us_button_content'] ?? null ,
@@ -175,7 +175,7 @@ class HomeController extends Controller
             'earn_money_delivery_req_button_link'=>   $settings['earn_money_delivery_man_req_button_link']??  null ,
             'earn_money_restaurant_req_button_link'=>   $settings['earn_money_restaurant_req_button_link'] ??  null ,
 
-            'business_name' =>  $business_settings['business_name'] ?? 'Stackfood',
+            'business_name' =>  $business_settings['business_name'] ?? '哪吒外卖',
 
             'available_zone_status' => (int)((isset($settings['available_zone_status'])) ? $settings['available_zone_status'] : 0),
             'available_zone_title' => (isset($settings['available_zone_title'])) ? $settings['available_zone_title'] : null,
