@@ -17,11 +17,15 @@ class OpenAIEngine implements AIEngineInterface
     {
         $content = [['type' => 'text', 'text' => $prompt]];
 
-        // DeepSeek-chat does not support image_url; skip image if provided
-        // If image generation is needed, upgrade to a vision-capable model
+        if (!empty($imageUrl)) {
+            $content[] = [
+                'type' => 'image_url',
+                'image_url' => ['url' => $imageUrl],
+            ];
+        }
 
         $response = OpenAI::chat()->create([
-            'model' => 'deepseek-chat',
+            'model' => 'gemini-2.5-flash',
             'messages' => [
                 [
                     'role' => 'user',
