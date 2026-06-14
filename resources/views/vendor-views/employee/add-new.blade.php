@@ -276,7 +276,10 @@
         });
     </script>
     <script>
-        document.getElementById('customFileUpload').addEventListener('change', function () {
+        // 旧版上传控件已被 _image-uploader partial(id=image-input)取代,customFileUpload/viewer 不再渲染;加判空避免对 null 绑事件报错
+        const customFileUploadEl = document.getElementById('customFileUpload');
+        if (customFileUploadEl) {
+        customFileUploadEl.addEventListener('change', function () {
 
             const allowedExtensions = "{{ IMAGE_EXTENSION }}"
                 .replace(/\s/g, '')
@@ -317,6 +320,7 @@
             };
             reader.readAsDataURL(file);
         });
+        }
     </script>
 
 @endpush
