@@ -9,7 +9,13 @@ $(document).on('click', '.general_setup_auto_fill', function () {
     const $editor = $('#description-default' + '-editor');
 
 
-    const description = $('#description-default').val();
+    // CKEditor does not auto-sync to textarea -- read from the editor instance
+    let description = '';
+    if (typeof CKEDITOR !== 'undefined' && CKEDITOR.instances['description-default']) {
+        description = CKEDITOR.instances['description-default'].getData().replace(/<[^>]*>/g, '').trim();
+    } else {
+        description = $('#description-default').val();
+    }
     const $container = $('.general-setup-container');
 
     $container.addClass('animating');
