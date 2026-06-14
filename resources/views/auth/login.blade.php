@@ -27,6 +27,13 @@
     <link rel="stylesheet" href="{{dynamicAsset('assets/admin')}}/css/theme.minc619.css?v=1.0">
     <link rel="stylesheet" href="{{dynamicAsset('assets/admin')}}/css/style.css">
     <link rel="stylesheet" href="{{dynamicAsset('assets/admin')}}/css/toastr.css">
+    <style>
+        /* 哪吒品牌背景 - inline覆盖CSS缓存 */
+        .auth-bg { background: url('{{ dynamicAsset("assets/admin/css/images/auth-bg-nezha.png") }}') no-repeat center center/cover !important; }
+        /* 正方形logo */
+        .auth-logo img { max-height: 100px !important; width: auto !important; max-width: 120px !important; border-radius: 50% !important; }
+        .auth-logo { text-align: center !important; display: block !important; }
+    </style>
 </head>
 
 <body>
