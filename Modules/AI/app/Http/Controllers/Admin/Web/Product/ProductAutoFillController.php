@@ -60,7 +60,7 @@ class ProductAutoFillController extends Controller
             $request->langCode
         );
 
-        if ($increment == true) {
+        if ($increment == true && $RestaurantConfig) {
             $RestaurantConfig->increment('section_wise_ai_use_count');
         }
 
@@ -91,7 +91,7 @@ class ProductAutoFillController extends Controller
             $request->langCode
         );
 
-        if ($increment == true) {
+        if ($increment == true && $RestaurantConfig) {
             $RestaurantConfig->increment('section_wise_ai_use_count');
         }
 
@@ -125,7 +125,7 @@ class ProductAutoFillController extends Controller
             $request->restaurant_id
         );
 
-        if ($increment == true) {
+        if ($increment == true && $RestaurantConfig) {
             $RestaurantConfig->increment('section_wise_ai_use_count');
         }
 
@@ -161,7 +161,7 @@ class ProductAutoFillController extends Controller
         );
 
 
-        if ($increment == true) {
+        if ($increment == true && $RestaurantConfig) {
             $RestaurantConfig->increment('section_wise_ai_use_count');
         }
 
@@ -189,7 +189,7 @@ class ProductAutoFillController extends Controller
         );
 
 
-        if ($increment == true) {
+        if ($increment == true && $RestaurantConfig) {
             $RestaurantConfig->increment('section_wise_ai_use_count');
         }
 
@@ -232,7 +232,7 @@ class ProductAutoFillController extends Controller
             $request->description,
         );
 
-        if ($increment == true) {
+        if ($increment == true && $RestaurantConfig) {
             $RestaurantConfig->increment('section_wise_ai_use_count');
         }
         return $this->productResponse->variationSetupAutoFill($result);
@@ -264,7 +264,7 @@ class ProductAutoFillController extends Controller
             $increment = true;
         }
 
-        if ($increment == true) {
+        if ($increment == true && $RestaurantConfig) {
             $RestaurantConfig->increment('image_wise_ai_use_count');
         }
 
@@ -308,7 +308,7 @@ class ProductAutoFillController extends Controller
         $result = $this->productAutoFillService->generateTitleSuggestions($keywords);
 
 
-        if ($increment == true) {
+        if ($increment == true && $RestaurantConfig) {
             $RestaurantConfig->increment('section_wise_ai_use_count');
         }
 
