@@ -479,12 +479,10 @@
             $('#offcanvas-status')
                 .prop('checked', Number(isActive) === 1)
                 .attr('data-id', methodId)
-                .attr('data-title-on', 'Do You Want to ' + methodName + ' Status ON')
-                .attr('data-title-off', 'Do You Want to ' + methodName + ' Status OFF')
-                .attr('data-text-on', 'If you turn status on for ' + methodName +
-                    ' it will show in withdraw methods dropdown list')
-                .attr('data-text-off', 'If you turn status off for ' + methodName +
-                    ' it will not show in withdraw methods dropdown list')
+                .attr('data-title-on', '确认开启 ' + methodName + '？')
+                .attr('data-title-off', '确认关闭 ' + methodName + '？')
+                .attr('data-text-on', '开启 ' + methodName + ' 后，该提现方式将出现在下拉列表中')
+                .attr('data-text-off', '关闭 ' + methodName + ' 后，该提现方式将不再出现在下拉列表中')
                 .attr('data-image-on', "{{ dynamicAsset('assets/admin/img/status-on-off.png') }}")
                 .attr('data-image-off', "{{ dynamicAsset('assets/admin/img/status-on-off.png') }}");
 
@@ -693,13 +691,13 @@
 
                     if (res && Number(res.success) === 1) {
                         if ($currentCheckbox) $currentCheckbox.prop('checked', !prevChecked);
-                        if (window.toastr) toastr.success(res.message || 'Status updated');
+                        if (window.toastr) toastr.success(res.message || '状态已更新');
                         setTimeout(function() {
                             window.location.reload();
                         }, 800);
                     } else {
                         if ($currentCheckbox) $currentCheckbox.prop('checked', prevChecked);
-                        if (window.toastr) toastr.error((res && res.message) ? res.message : 'Failed');
+                        if (window.toastr) toastr.error((res && res.message) ? res.message : '操作失败');
                     }
                 },
                 error: function(xhr) {

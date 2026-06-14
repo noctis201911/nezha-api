@@ -2360,4 +2360,5 @@
   'The order id field is required.' => 'The order id field is required.',
   'New_Order_Notification' => 'New Order Notification',
   'New order alert, confirm to proceed' => 'New order alert, confirm to proceed',
+  'The order amount field is required.' => 'The order amount field is required.',
 );

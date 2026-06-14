@@ -36,7 +36,8 @@
                         @endif
                     </div>
                     <span>
-                        {{str_replace('_',' ',$status)}} {{translate('messages.orders')}} <span class="badge badge-soft-dark ml-2">{{$orders->total()}}</span>
+                        @php $__sl=['All'=>'全部','Pending'=>'待处理','Confirmed'=>'已确认','Cooking'=>'备餐中','Ready_for_delivery'=>'待取餐','Food_on_the_way'=>'配送中','Delivered'=>'已送达','Refunded'=>'已退款','Scheduled'=>'预约中']; @endphp
+                        {{$__sl[$status] ?? str_replace('_',' ',$status)}} {{translate('messages.orders')}} <span class="badge badge-soft-dark ml-2">{{$orders->total()}}</span>
                     </span>
                 </h2>
             </div>

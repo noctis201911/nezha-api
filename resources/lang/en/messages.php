@@ -9561,4 +9561,6 @@ characters)',
   'The model field is required.' => 'The model field is required.',
   'The limit field is required.' => 'The limit field is required.',
   'The offset field is required.' => 'The offset field is required.',
+  'The selected model is invalid.' => 'The selected model is invalid.',
+  'The price field is required.' => 'The price field is required.',
 );

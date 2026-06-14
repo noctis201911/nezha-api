@@ -487,12 +487,12 @@
                 startDate: startDate || undefined,
                 endDate: endDate || undefined,
                 locale: {
-                    cancelLabel: 'Clear',
-                    applyLabel: 'Confirm'
+                    cancelLabel: '清除',
+                    applyLabel: '确认'
                 },
                 ranges: {
-                    'Today': [moment(), moment()],
-                    'Yesterday': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+                    '今天': [moment(), moment()],
+                    '昨天': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
                     'Last 7 Days': [moment().subtract(6, 'days'), moment()],
                     'Last 30 Days': [moment().subtract(29, 'days'), moment()],
                     'Last 2 Months': [moment().subtract(2, 'months').startOf('month'), moment().subtract(1, 'month').endOf('month')],
