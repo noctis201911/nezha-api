@@ -1268,7 +1268,7 @@
   'admin_commission' => '平台佣金',
   'total_sell' => '总销售额',
   'Subscription' => '订阅制',
-  'currency' => '系统货币',
+  'currency' => '货币',
   'Jan' => '1月',
   'Feb' => '2月',
   'Mar' => '3月',
