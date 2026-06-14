@@ -1222,7 +1222,13 @@ class OrderController extends Controller
         }
 
         try{
-            $fields = array_column($method->method_informations ?? [], 'customer_input');
+            // 哪吒: 顾客凭证字段名取自 method_fields 的 input_field_name。
+            // 本站 method_informations 列被用作纯文字说明(cast→null),沿用原逻辑会丢弃顾客输入(如USDT交易哈希),
+            // 导致退款无法按原始 tx 反查原路。优先 method_fields,空时回退 method_informations(兼容标准StackFood配置)。
+            $fields = array_column($method->method_fields ?? [], 'input_field_name');
+            if (empty($fields)) {
+                $fields = array_column($method->method_informations ?? [], 'customer_input');
+            }
             $values = $request->all();
 
             $offline_payment_info['method_id'] = $request->method_id;
@@ -1286,7 +1292,11 @@ class OrderController extends Controller
             ], 403);
         }
         $offline_payment_info = [];
-        $fields = array_column($method->method_informations ?? [], 'customer_input');
+        // 哪吒: 同 offline_payment(), 字段名优先取 method_fields.input_field_name(回退 method_informations.customer_input)
+        $fields = array_column($method->method_fields ?? [], 'input_field_name');
+        if (empty($fields)) {
+            $fields = array_column($method->method_informations ?? [], 'customer_input');
+        }
         $values = $request->all();
         $offline_payment_info['method_id'] =$method->id;
         $offline_payment_info['method_name'] = $method->method_name;
