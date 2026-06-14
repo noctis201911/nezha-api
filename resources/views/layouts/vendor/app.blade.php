@@ -16,7 +16,7 @@
     <title>@yield('title')</title>
     <!-- Favicon -->
     @php($logo=\App\Models\BusinessSetting::where(['key'=>'icon'])->first()->value)
-    <link rel="shortcut icon" href="">
+    {{-- A5: 删除空 href 的冗余 favicon link(避免空href向当前页发请求);真 favicon 见下一行 --}}
     <link rel="icon" type="image/x-icon" href="{{dynamicStorage('storage/app/public/business/'.$logo??'')}}">
     <!-- Font -->
     <link href="{{dynamicAsset('assets/admin/css/fonts.css')}}" rel="stylesheet">
@@ -133,7 +133,7 @@
                 </div>
                 <div class="modal-body text-center p-10 pt-0">
                     <div class="imageModal_img_wrapper">
-                        <img class="img-fluid imageModal_img" alt="{{ translate('Preview_Image') }}">
+                        <img src="" class="img-fluid imageModal_img" alt="{{ translate('Preview_Image') }}">
                         <div class="imageModal_btn_wrapper">
                             <a href="javascript:" class="btn icon-btn download_btn" title="{{ translate('Download') }}" download>
                                 <i class="tio-arrow-large-downward"></i>
