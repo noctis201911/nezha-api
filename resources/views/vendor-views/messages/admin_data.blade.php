@@ -24,9 +24,9 @@
                     </small>
                 @endif
             </h5>
-            <span>{{ $user['phone'] }} </span>
+            <span>{{ preg_replace('/^(\+\d{1,4})\1\s*/', '$1 ', $user['phone'] ?? '') }} </span>
             <div class="text-title line--limit-1 text-gray1 fs-12">{{ $admin_conversation->last_message?->message ? Str::limit($admin_conversation->last_message?->message ??'', 35, '...') : (count($admin_conversation?->last_message?->file_full_url ?? []) > 0 ?  count($admin_conversation?->last_message?->file_full_url) .' '. translate('messages.Attachments') :'' )}}</div>
         </div>
     </div>
 @endif
-<script src="{{dynamicAsset('assets/admin')}}/js/view-pages/common.js"></script>
+{{-- common.js loaded once in vendor layout after jQuery; do not re-include here (caused jQuery-undefined + LinkValidator redeclare) --}}

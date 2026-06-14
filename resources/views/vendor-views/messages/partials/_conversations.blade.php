@@ -20,7 +20,7 @@
         <div class="chat-user-info-content">
             <h5 class="mb-0 text-capitalize">
                 {{$user_type == 'admin'? ($admin_name->value ?? translate('admin')): $user['f_name'].' '.$user['l_name']}}</h5>
-            <span class="gray-dark fs-12">{{ $user['phone'] }}</span>
+            <span class="gray-dark fs-12">{{ preg_replace('/^(\+\d{1,4})\1\s*/', '$1 ', $user['phone'] ?? '') }}</span>
         </div>
     </div>
 
@@ -237,7 +237,7 @@
 <script src="{{ dynamicAsset('assets/admin/js/chatting/select-multiple-image-for-message.js')}}"></script>
 
 <script src="{{ dynamicAsset('assets/admin/js/chatting/picmo-emoji.js')}}"></script>
-<script src="{{dynamicAsset('assets/admin')}}/js/view-pages/common.js"></script>
+{{-- common.js loaded once in vendor layout after jQuery; do not re-include here (caused jQuery-undefined + LinkValidator redeclare) --}}
 <script>
 
     $(document).ready(function () {

@@ -82,4 +82,4 @@
         </div>
     </div>
 @endforelse
-<script src="{{dynamicAsset('assets/admin')}}/js/view-pages/common.js"></script>
+{{-- common.js loaded once in vendor layout after jQuery; do not re-include here (caused jQuery-undefined + LinkValidator redeclare) --}}
