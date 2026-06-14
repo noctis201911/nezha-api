@@ -155,25 +155,29 @@ class LoginController extends Controller
 
         $recaptcha = Helpers::get_business_settings('recaptcha');
         if (isset($recaptcha) && $recaptcha['status'] == 1 && !$request?->set_default_captcha) {
-            $request->validate([
-                'g-recaptcha-response' => [
-                    function ($attribute, $value, $fail) {
-                        $secret_key = Helpers::get_business_settings('recaptcha')['secret_key'];
-                        $gResponse = Http::asForm()->post('https://www.google.com/recaptcha/api/siteverify', [
-                            'secret' => $secret_key,
-                            'response' => $value,
-                            'remoteip' => \request()->ip(),
-                        ]);
-
-                        if (!$gResponse->successful()) {
-                            $fail(translate('ReCaptcha Failed'));
-                        }
-                    },
-                ],
-            ]);
-        } else if (strtolower(session('six_captcha')) != strtolower($request->custome_recaptcha)) {
+            // Google reCAPTCHA v3: verify token AND check success + score.
+            // On low score / invalid token / Google unreachable, fall back to the built-in
+            // image captcha instead of blocking, so legit (e.g. VPN/privacy) users are never locked out.
+            $googleOk = false;
+            try {
+                $secret_key = Helpers::get_business_settings('recaptcha')['secret_key'];
+                $gResponse = Http::asForm()->timeout(8)->post('https://www.google.com/recaptcha/api/siteverify', [
+                    'secret' => $secret_key,
+                    'response' => $request->input('g-recaptcha-response'),
+                    'remoteip' => $request->ip(),
+                ]);
+                $body = $gResponse->successful() ? (array) $gResponse->json() : [];
+                $googleOk = (($body['success'] ?? false) === true) && (((float) ($body['score'] ?? 0)) >= 0.5);
+            } catch (\Throwable $e) {
+                $googleOk = false; // Google unreachable etc. -> fall back, never 500 the login
+            }
+            if (!$googleOk) {
+                Toastr::info(translate('Enter recaptcha value'));
+                return back()->withInput($request->only('email', 'remember'))->with('show_image_captcha', true);
+            }
+        } else if (strtolower(session('six_captcha')) != strtolower((string) $request->custome_recaptcha)) {
             Toastr::error(translate('messages.ReCAPTCHA Failed'));
-            return back();
+            return back()->withInput($request->only('email', 'remember'))->with('show_image_captcha', (bool) $request->set_default_captcha);
         }
 
         $ip = $request->ip();
