@@ -133,7 +133,7 @@
                 </div>
                 <div class="modal-body text-center p-10 pt-0">
                     <div class="imageModal_img_wrapper">
-                        <img src="" class="img-fluid imageModal_img" alt="{{ translate('Preview_Image') }}">
+                        <img class="img-fluid imageModal_img" alt="{{ translate('Preview_Image') }}">
                         <div class="imageModal_btn_wrapper">
                             <a href="javascript:" class="btn icon-btn download_btn" title="{{ translate('Download') }}" download>
                                 <i class="tio-arrow-large-downward"></i>
