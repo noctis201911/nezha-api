@@ -5,6 +5,7 @@
 
 | 日期 | 变更 | 等级 | 批准人 | 说明 |
 |---|---|---|---|---|
+| 2026-06-14 | PII 静态加密 + 加密备份③ 实装 | 🔴 L1 (PII加密) | 用户 | MySQL 表空间加密(全部150张 InnoDB 表 `ENCRYPTION='Y'` + keyring_file/early-plugin-load),覆盖全部 PII 字段,验证读写正常+API200;keyring 在数据&备份目录之外.每日 AES-256 加密备份(留14份,密钥 /root/.nezha/backup.key,明文不落盘).诚实边界:防磁盘/备份被盗,非防服务器被攻破;5.7 的 redo/undo/binlog 未覆盖(binlog 已关).一次 MySQL 重启~2s.属 DB/配置层变更,repo 仅同步本文档 |
 | 2026-06-14 | 支付凭证 90 天留存自动清除③ | 🔴 L1 (PII到期删) | 用户 | 命令 nezha:purge-payment-proofs + 每日计划任务,抹除超期 offline_payments 的 PII 字段及截图,保留行/状态供审计;链上/交易记录不动(另留≥5年).天数后台 nezha_payment_proof_retention_days 可调(默认90).提交 a31d25c |
 | 2026-06-14 | Admin 后台 TOTP 两步验证③ | 🟡 访问控制加固 | 用户 | 零依赖手写TOTP(RFC6238已验证),opt-in默认关,含8个一次性恢复码+SSH应急关闭命令.E2E验证通过.提交 aa9fa45 |
 | 2026-06-14 | 代码库密钥泄露扫描③ | — (核查) | 用户 | 前后端 git 全历史核查: .env从未入库, .gitignore已屏蔽密钥/凭据, 已知机密0命中. 无需修复 |
@@ -16,5 +17,5 @@
 
 ## 待实施(实施时在此追加记录)
 - ② USDT 制裁名单(OFAC SDN)+黑名单地址筛查、链上记录留存≥5年、退款地址锁定 — 🔴 L1
-- ③ 剩余项:**PII静态加密(已评估,待批准 MySQL 表空间加密)**、RBAC、审计日志、自动安全更新、加密备份验证、密钥轮换、泄露应急流程 — 🔴 L1 / 🟡
-  - ✅ 已完成: 支付凭证90天自动删、Admin 2FA、git密钥扫描、服务器加固(key-only/fail2ban/限速)、后台nginx Basic Auth
+- ③ 剩余项:RBAC、审计日志、自动安全更新、密钥轮换、泄露应急流程 — 🔴 L1 / 🟡
+  - ✅ 已完成: 支付凭证90天自动删、Admin 2FA、git密钥扫描、服务器加固(key-only/fail2ban/限速)、后台nginx Basic Auth、**PII静态加密(MySQL表空间加密)**、**每日加密备份(AES-256,留14份)**
