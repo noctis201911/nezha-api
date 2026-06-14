@@ -25,7 +25,9 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-
+        // 哪吒: 每日清除超过保留期的顾客离线支付凭证PII(默认90天, 后台 nezha_payment_proof_retention_days 可调)。
+        // 只抹 PII 字段+关联截图, 保留行/状态供审计; 不动订单/交易/链上记录。
+        $schedule->command('nezha:purge-payment-proofs')->dailyAt('03:30')->withoutOverlapping();
     }
 
     /**
