@@ -84,6 +84,58 @@
                 </div>
             </div>
 
+            {{-- 退款控制 (机制②: 原路锁定 + 限额) --}}
+            <div class="card mb-3">
+                <div class="card-header"><h5 class="card-title"><i class="tio-undo"></i> {{ translate('退款控制 (原路锁定 + 限额限笔)') }}</h5></div>
+                <div class="card-body">
+                    <div class="alert alert-warning" role="alert">
+                        <i class="tio-warning"></i>
+                        {{ translate('退款护栏总开关独立于上方交易风控。开启后: 退款金额强制 ≤ 原订单; USDT 退款锁定原付款地址(链上反查+校验); 法币退还原付款人; 超过限额的退款转审核队列, 不直接执行。开启属"真实影响"操作, 请先用测试订单验证再开。关闭时现网退款行为完全不变。') }}
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="input-label">{{ translate('退款护栏总开关') }}</label>
+                            <select name="nezha_refund_control_status" class="form-control">
+                                <option value="1" {{ ($cfg['nezha_refund_control_status'] ?? '0') == '1' ? 'selected' : '' }}>{{ translate('启用') }}</option>
+                                <option value="0" {{ ($cfg['nezha_refund_control_status'] ?? '0') == '0' ? 'selected' : '' }}>{{ translate('禁用 (退款行为不变)') }}</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="input-label">{{ translate('单笔退款上限 ($) — 超过转审核') }}</label>
+                            <input type="number" step="0.01" min="0" name="nezha_refund_single_limit" class="form-control" value="{{ $cfg['nezha_refund_single_limit'] ?? 100 }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="input-label">{{ translate('单商家单日退款累计上限 ($) — 超过转审核') }}</label>
+                            <input type="number" step="0.01" min="0" name="nezha_refund_daily_total_limit" class="form-control" value="{{ $cfg['nezha_refund_daily_total_limit'] ?? 300 }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="input-label">{{ translate('单商家单日退款笔数上限 — 超过转审核') }}</label>
+                            <input type="number" min="0" name="nezha_refund_daily_count_limit" class="form-control" value="{{ $cfg['nezha_refund_daily_count_limit'] ?? 5 }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="input-label">{{ translate('退款窗口 (交付后 N 天内可退, 0 = 不限)') }}</label>
+                            <input type="number" min="0" name="nezha_refund_window_days" class="form-control" value="{{ $cfg['nezha_refund_window_days'] ?? 7 }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="input-label">{{ translate('USDT 退款链上自动校验') }}</label>
+                            <select name="nezha_refund_usdt_verify_status" class="form-control">
+                                <option value="1" {{ ($cfg['nezha_refund_usdt_verify_status'] ?? '1') == '1' ? 'selected' : '' }}>{{ translate('启用 (校验退款tx金额+地址)') }}</option>
+                                <option value="0" {{ ($cfg['nezha_refund_usdt_verify_status'] ?? '1') == '0' ? 'selected' : '' }}>{{ translate('禁用 (仅锁定+人工核)') }}</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="input-label">{{ translate('BscScan API Key (选填, 空则用公共RPC节点)') }}</label>
+                            <input type="text" name="nezha_refund_bscscan_api_key" class="form-control" maxlength="191" value="{{ $cfg['nezha_refund_bscscan_api_key'] ?? '' }}" placeholder="{{ translate('留空即可, 免密钥公共节点') }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="input-label">{{ translate('TronGrid API Key (选填, 空则用公共端点)') }}</label>
+                            <input type="text" name="nezha_refund_trongrid_api_key" class="form-control" maxlength="191" value="{{ $cfg['nezha_refund_trongrid_api_key'] ?? '' }}" placeholder="{{ translate('留空即可, 免密钥公共端点') }}">
+                        </div>
+                    </div>
+                    <small class="text-muted">{{ translate('退款留痕(含原路锁定地址/链上校验结果)记入 nezha_refund_records, 合规留存 ≥5年。') }}</small>
+                </div>
+            </div>
+
             {{-- 其它 --}}
             <div class="card mb-3">
                 <div class="card-header"><h5 class="card-title">{{ translate('其它') }}</h5></div>

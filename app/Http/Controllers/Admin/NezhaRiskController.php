@@ -29,6 +29,15 @@ class NezhaRiskController extends Controller
         'nezha_risk_usdt_daily_limit'       => '500',
         'nezha_risk_approval_grace_minutes' => '60',
         'nezha_risk_contact_info'           => '',
+        // 退款控制 (机制②) — 独立于上方下单风控
+        'nezha_refund_control_status'       => '0',
+        'nezha_refund_single_limit'         => '100',
+        'nezha_refund_daily_total_limit'    => '300',
+        'nezha_refund_daily_count_limit'    => '5',
+        'nezha_refund_window_days'          => '7',
+        'nezha_refund_usdt_verify_status'   => '1',
+        'nezha_refund_bscscan_api_key'      => '',
+        'nezha_refund_trongrid_api_key'     => '',
     ];
 
     /** 人工审核队列 */
