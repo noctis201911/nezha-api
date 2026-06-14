@@ -50,6 +50,7 @@
                     </div>
                 </div>
 
+                {{-- B方案隐藏:提现余额卡(平台不向商家打款,提现腿已禁 INVARIANTS L1-5);将来充值扣佣台账如需可恢复
                 <!-- Earnings (Monthly) Card Example -->
                 <div class="col-sm-{{ isset($col_size)  == true ? '3' :'4' }}">
                     <div class="resturant-card shadow--card-2">
@@ -58,6 +59,7 @@
                         <img class="resturant-icon" src="{{dynamicAsset('assets/admin/img/transactions/image_w_balance.png')}}" alt="public">
                     </div>
                 </div>
+                --}}
                 <!-- Pending Requests Card Example -->
                 <div class="col-sm-{{ isset($col_size) == true ? '6' :'4' }}">
                     <div class="resturant-card shadow--card-2">
@@ -110,7 +112,8 @@
                                     </a>
                                 @endif
 
-                                @if ($disbursement_type ==  'manual'  )
+                                {{-- B方案隐藏"请求提现"(平台不向商家打款 INVARIANTS L1-5),保留下方 Pay Now/Adjust --}}
+                                @if (false && $disbursement_type ==  'manual'  )
                                     <a  href="javascript:"
 
                                        @if(count($withdrawal_methods) !== 0 )
@@ -171,6 +174,7 @@
 
         <div class="col-md-12">
             <div class="row g-3">
+                {{-- B方案隐藏:待提现/已提现总额卡(打款腿已禁 INVARIANTS L1-5);将来充值扣佣台账如需可恢复
                 <!-- Panding Withdraw Card Example -->
                 <div class="col-sm-4">
                     <div class="resturant-card  bg--3" >
@@ -188,6 +192,7 @@
                         <img class="resturant-icon" src="{{dynamicAsset('assets/admin/img/transactions/image_withdaw.png')}}" alt="public">
                     </div>
                 </div>
+                --}}
 
 
                 <!-- Pending Requests Card Example -->
@@ -286,17 +291,21 @@
                 <div class="card-header">
 
                     <ul class="nav nav-tabs page-header-tabs">
+                        {{-- B方案隐藏:提现申请标签(平台不向商家打款 INVARIANTS L1-5)
                         <li class="nav-item">
                             <a class="nav-link {{ Request::is('restaurant-panel/wallet') ?'active':''}}"  href="{{ route('vendor.wallet.index') }}">{{translate('messages.withdraw_request')}}</a>
                         </li>
+                        --}}
 
                         <li class="nav-item">
-                            <a class="nav-link  {{Request::is('restaurant-panel/wallet/wallet-payment-list') ?'active':''}}" href="{{route('vendor.wallet.wallet_payment_list')}}"  aria-disabled="true">{{translate('messages.Payment_history')}}</a>
+                            <a class="nav-link  {{Request::is('restaurant-panel/wallet/wallet-payment-list') ?'active':''}} {{ Request::is('restaurant-panel/wallet') ?'active':''}}" href="{{route('vendor.wallet.wallet_payment_list')}}"  aria-disabled="true">{{translate('messages.Payment_history')}}</a>
                         </li>
 
+                        {{-- B方案隐藏:Next Payouts标签(自动打款腿已禁 INVARIANTS L1-5)
                         <li class="nav-item">
                             <a class="nav-link  {{Request::is('restaurant-panel/wallet/disbursement-list') ?'active':''}}" href="{{route('vendor.wallet.getDisbursementList')}}"  aria-disabled="true">{{translate('messages.Next_Payouts')}}</a>
                         </li>
+                        --}}
                     </ul>
 
                 </div>
