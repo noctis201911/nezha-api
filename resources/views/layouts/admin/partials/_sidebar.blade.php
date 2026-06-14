@@ -931,6 +931,18 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                         </li>
                     @endif
 
+                    <li
+                        class="navbar-vertical-aside-has-menu {{ Request::is('admin/merchant-lead/*') ? 'active' : '' }}">
+                        <a class="js-navbar-vertical-aside-menu-link nav-link"
+                            href="{{ route('admin.merchant-lead.list') }}"
+                            title="商家入驻申请">
+                            <i class="tio-shop nav-icon"></i>
+                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
+                                商家入驻申请
+                            </span>
+                        </a>
+                    </li>
+
 
 
 

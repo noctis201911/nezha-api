@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\CashBackController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\ContactMessages;
+use App\Http\Controllers\Admin\MerchantLeadController;
 use App\Http\Controllers\Admin\ConversationController;
 use App\Http\Controllers\Admin\CouponController;
 use App\Http\Controllers\Admin\CuisineController;
@@ -1070,6 +1071,13 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('view/{id}', [ContactMessages::class, 'view'])->name('view');
             Route::post('update/{id}', [ContactMessages::class, 'update'])->name('update');
             Route::post('send-mail/{id}', [ContactMessages::class, 'send_mail'])->name('send-mail');
+        });
+
+        Route::group(['prefix' => 'merchant-lead', 'as' => 'merchant-lead.'], function () {
+            Route::get('list', [MerchantLeadController::class, 'list'])->name('list');
+            Route::get('view/{id}', [MerchantLeadController::class, 'view'])->name('view');
+            Route::post('update-status/{id}', [MerchantLeadController::class, 'updateStatus'])->name('update-status');
+            Route::delete('delete', [MerchantLeadController::class, 'destroy'])->name('delete');
         });
         Route::group(['prefix' => 'vehicle', 'as' => 'vehicle.', 'middleware' => ['module:deliveryman']], function () {
             Route::get('list', [VehicleController::class, 'list'])->name('list');
