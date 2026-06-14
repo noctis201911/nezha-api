@@ -150,7 +150,9 @@ class ConfigController extends Controller
             'subscription_free_trial_status',
             'dine_in_order_option',
             'customer_add_fund_min_amount',
-            'nezha_usd_to_rmb_rate'
+            'nezha_usd_to_rmb_rate',
+            'nezha_rate_cny_to_amd',
+            'nezha_rate_usd_to_amd'
         ];
 
 
@@ -439,6 +441,8 @@ class ConfigController extends Controller
             'seo_page_list' => Helpers::seoPageList(),
             'openai_status' => (int) data_get(Helpers::get_business_settings('openai_config'), 'status', 0),
             'nezha_usd_to_rmb_rate' => (float)($settings['nezha_usd_to_rmb_rate'] ?? 7.1),
+            'nezha_rate_cny_to_amd' => (float)($settings['nezha_rate_cny_to_amd'] ?? 55),
+            'nezha_rate_usd_to_amd' => (float)($settings['nezha_rate_usd_to_amd'] ?? 400),
             'invoice_settings' => $invoiceSettings,
         ]);
     }
