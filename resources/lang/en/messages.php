@@ -9553,4 +9553,8 @@ characters)',
   'Please add more options or change the max value for asd' => 'Please add more options or change the max value for asd',
   'food_added_successfully' => 'Food added successfully',
   'The zone id field is required.' => 'The zone id field is required.',
+  '风控中心' => '风控中心',
+  '审核队列' => '审核队列',
+  '风控日志' => '风控日志',
+  '风控设置' => '风控设置',
 );

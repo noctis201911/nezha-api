@@ -740,8 +740,8 @@
 
             let options = {
                 series: [
-                    { name: "Earning", data: earnings },
-                    { name: "Expense", data: expenses }
+                    { name: '{{ translate("messages.Earning") }}', data: earnings },
+                    { name: '{{ translate("messages.Expense") }}', data: expenses }
                 ],
                 chart: {
                     type: 'bar',
