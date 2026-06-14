@@ -65,6 +65,11 @@ use App\Http\Controllers\Admin\ZoneController;
 Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
 
     Route::group(['middleware' => ['admin', 'actch:admin_panel']], function () {
+        Route::group(['prefix' => 'two-factor', 'as' => 'two-factor.'], function () {
+            Route::get('setup', [\App\Http\Controllers\Admin\TwoFactorController::class, 'setup'])->name('setup');
+            Route::post('enable', [\App\Http\Controllers\Admin\TwoFactorController::class, 'enable'])->name('enable');
+            Route::post('disable', [\App\Http\Controllers\Admin\TwoFactorController::class, 'disable'])->name('disable');
+        });
 
 
         // Route::view('test' , 'admin-views.customer.customer-details-new-feature.customer-overview-report')->name('test');

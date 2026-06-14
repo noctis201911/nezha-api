@@ -261,8 +261,20 @@ class LoginController extends Controller
 
     $data=$this->login_attemp($request->role,$request->email ,$request->password,$request->ip(), $request->remember);
 
-    if($data == 'admin' ||$data == 'vendor' ){
-        return redirect()->route($data.'.dashboard');
+    if($data == 'admin'){
+        $admin = auth('admin')->user();
+        // 哪吒: 密码正确; 若该管理员开启了两步验证, 先登出转 2FA 挑战页, 验过第二因子才放行
+        if($admin && $admin->two_factor_enabled){
+            $remember = (bool) $request->remember;
+            auth('admin')->logout();
+            $request->session()->put('2fa:pending_admin_id', $admin->id);
+            $request->session()->put('2fa:remember', $remember);
+            return redirect()->route('admin.2fa.challenge');
+        }
+        return redirect()->route('admin.dashboard');
+    }
+    if($data == 'vendor' ){
+        return redirect()->route('vendor.dashboard');
     }
 
         RateLimiter::hit($key, $decayMinutes * 60);

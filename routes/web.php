@@ -53,6 +53,9 @@ Route::get('login/{tab}', [LoginController::class, 'login'])->name('login');
 
 Route::post('login_submit', [LoginController::class, 'submit'])->name('login_post')->middleware('actch');
 Route::get('logout', [LoginController::class, 'logout'])->name('logout');
+// 哪吒 Admin 两步验证(登录第二步, 此时尚未完成登录, guest 可访问)
+Route::get('two-factor-challenge', [\App\Http\Controllers\Admin\TwoFactorController::class, 'challenge'])->name('admin.2fa.challenge');
+Route::post('two-factor-challenge', [\App\Http\Controllers\Admin\TwoFactorController::class, 'verifyChallenge'])->name('admin.2fa.verify');
 Route::get('/reload-captcha', [HomeController::class, 'reloadCaptcha'])->name('reload-captcha');
 Route::get('/reset-password', [LoginController::class, 'reset_password_request'])->name('reset-password');
 Route::post('/vendor-reset-password', [LoginController::class, 'vendor_reset_password_request'])->name('vendor-reset-password');

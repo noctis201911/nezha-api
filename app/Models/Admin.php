@@ -14,6 +14,13 @@ class Admin extends Authenticatable
 
     protected $fillable = ['remember_token'];
 
+    // 哪吒 2FA: secret 加密落库; recovery_codes 存已哈希的一次性码数组
+    protected $casts = [
+        'two_factor_secret' => 'encrypted',
+        'two_factor_enabled' => 'boolean',
+        'two_factor_recovery_codes' => 'array',
+    ];
+
     protected $appends = ['image_full_url'];
 
     public function getImageFullUrlAttribute(){
