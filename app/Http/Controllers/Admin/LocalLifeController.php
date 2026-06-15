@@ -174,6 +174,64 @@ class LocalLifeController extends Controller
         return back();
     }
 
+    /* ============================ 护栏与文案设置 ============================ */
+
+    // 设置页可编辑的 business_settings 键（违禁词/免责文案/规则全文 + 三个反滥用阈值）
+    private const SETTING_KEYS = [
+        'locallife_banned_words',
+        'locallife_disclaimer',
+        'locallife_terms',
+        'locallife_ugc_daily_limit',
+        'locallife_report_daily_limit',
+        'locallife_ugc_min_interval_sec',
+    ];
+
+    // 编辑页：违禁词 / 免责短提示 / 规则全文 / 反滥用阈值
+    public function settings()
+    {
+        $s = DB::table('business_settings')
+            ->whereIn('key', self::SETTING_KEYS)
+            ->pluck('value', 'key');
+        return view('admin-views.local-life.settings', compact('s'));
+    }
+
+    public function settingsSave(Request $request)
+    {
+        $request->validate([
+            'locallife_banned_words'         => 'nullable|string|max:20000',
+            'locallife_disclaimer'           => 'nullable|string|max:2000',
+            'locallife_terms'                => 'nullable|string|max:30000',
+            'locallife_ugc_daily_limit'      => 'nullable|integer|min:1|max:100',
+            'locallife_report_daily_limit'   => 'nullable|integer|min:1|max:500',
+            'locallife_ugc_min_interval_sec' => 'nullable|integer|min:0|max:3600',
+        ], [
+            'locallife_ugc_daily_limit.integer'      => '每日发帖上限须为整数',
+            'locallife_ugc_daily_limit.min'          => '每日发帖上限至少 1',
+            'locallife_report_daily_limit.integer'   => '每日举报上限须为整数',
+            'locallife_ugc_min_interval_sec.integer' => '最小发帖间隔须为整数（秒）',
+        ]);
+
+        // 文案类(违禁词/免责/规则)：原样保存，允许清空(清空则顾客端回退代码内默认)
+        foreach (['locallife_banned_words', 'locallife_disclaimer', 'locallife_terms'] as $k) {
+            DB::table('business_settings')->updateOrInsert(
+                ['key' => $k],
+                ['value' => (string) $request->input($k, ''), 'updated_at' => now()]
+            );
+        }
+        // 阈值类：留空则不动(保留原值/代码默认)，只在填了有效整数时写入
+        foreach (['locallife_ugc_daily_limit', 'locallife_report_daily_limit', 'locallife_ugc_min_interval_sec'] as $k) {
+            if ($request->filled($k)) {
+                DB::table('business_settings')->updateOrInsert(
+                    ['key' => $k],
+                    ['value' => (string) (int) $request->input($k), 'updated_at' => now()]
+                );
+            }
+        }
+
+        Toastr::success('本地生活护栏与文案设置已保存');
+        return redirect()->route('admin.local-life.settings');
+    }
+
     public function destroy(Request $request)
     {
         $post = LocalLifePost::find($request->id);

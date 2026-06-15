@@ -19,13 +19,18 @@
                 </h5>
                 <small class="text-muted">开放后，登录顾客可在 H5「本地生活」自助发帖（默认进待审核，审核通过才公开）。关闭时入口显示"即将开放"。</small>
             </div>
-            <form action="{{ route('admin.local-life.ugc-toggle') }}" method="post">
-                @csrf
-                <input type="hidden" name="enable" value="{{ $ugcEnabled ? 0 : 1 }}">
-                <button type="submit" class="btn {{ $ugcEnabled ? 'btn--danger' : 'btn--primary' }}">
-                    {{ $ugcEnabled ? '关闭发帖入口' : '开放发帖入口' }}
-                </button>
-            </form>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <a href="{{ route('admin.local-life.settings') }}" class="btn btn--secondary">
+                    <i class="tio-settings"></i> 护栏与文案设置
+                </a>
+                <form action="{{ route('admin.local-life.ugc-toggle') }}" method="post">
+                    @csrf
+                    <input type="hidden" name="enable" value="{{ $ugcEnabled ? 0 : 1 }}">
+                    <button type="submit" class="btn {{ $ugcEnabled ? 'btn--danger' : 'btn--primary' }}">
+                        {{ $ugcEnabled ? '关闭发帖入口' : '开放发帖入口' }}
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
 
