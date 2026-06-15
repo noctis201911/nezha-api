@@ -288,14 +288,17 @@ class NezhaRefundControl
         return (string) hexdec($hex);
     }
 
-    // Tron 地址转换: hex(41..) → base58check. 失败返回原值(便于人工核).
-    protected static function tron_hex_to_base58(string $hex): string
+    // Tron 地址转换: hex(41.. 或 0x..20字节) → base58check. 已是 base58(T 开头,大小写敏感) 则原样返回. 失败返回原值(便于人工核).
+    // 注: 不可对入参无条件 strtolower —— base58 大小写敏感, 早前 bug 把 TronGrid 返回的 base58 合约地址 lowercase 后比对永不相等(致 TRC20 链上自动校验恒 failed).
+    protected static function tron_hex_to_base58(string $addr): string
     {
-        $hex = strtolower(trim($hex));
-        if ($hex === '') return '';
-        if (str_starts_with($hex, '0x')) $hex = substr($hex, 2);
+        $addr = trim($addr);
+        if ($addr === '') return '';
+        $hex = str_starts_with($addr, '0x') ? substr($addr, 2) : $addr;
+        if (!ctype_xdigit($hex)) return $addr;                // 非纯 hex → 已是 base58, 原样返回(保留大小写)
+        $hex = strtolower($hex);
         if (strlen($hex) === 40) $hex = '41' . $hex;          // 补 Tron 前缀
-        if (!preg_match('/^41[0-9a-f]{40}$/', $hex)) return $hex;
+        if (!preg_match('/^41[0-9a-f]{40}$/', $hex)) return $addr;
         $bin = hex2bin($hex);
         $hash = hash('sha256', hash('sha256', $bin, true), true);
         $checksum = substr($hash, 0, 4);
