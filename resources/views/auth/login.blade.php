@@ -195,7 +195,6 @@
                                         <span type="button" data-toggle="modal" data-target="#forgetPassModal1">{{ translate('Forget_Password') }} ?</span>
                                     </div>
                                 </div>
-                            </div>
                             <!-- End forget password -->
                         </div>
                     </div>
