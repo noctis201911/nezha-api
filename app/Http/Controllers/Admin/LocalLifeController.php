@@ -184,6 +184,7 @@ class LocalLifeController extends Controller
         'locallife_ugc_daily_limit',
         'locallife_report_daily_limit',
         'locallife_ugc_min_interval_sec',
+        'locallife_report_retention_days',
     ];
 
     // 编辑页：违禁词 / 免责短提示 / 规则全文 / 反滥用阈值
@@ -204,11 +205,13 @@ class LocalLifeController extends Controller
             'locallife_ugc_daily_limit'      => 'nullable|integer|min:1|max:100',
             'locallife_report_daily_limit'   => 'nullable|integer|min:1|max:500',
             'locallife_ugc_min_interval_sec' => 'nullable|integer|min:0|max:3600',
+            'locallife_report_retention_days' => 'nullable|integer|min:1|max:3650',
         ], [
             'locallife_ugc_daily_limit.integer'      => '每日发帖上限须为整数',
             'locallife_ugc_daily_limit.min'          => '每日发帖上限至少 1',
             'locallife_report_daily_limit.integer'   => '每日举报上限须为整数',
             'locallife_ugc_min_interval_sec.integer' => '最小发帖间隔须为整数（秒）',
+            'locallife_report_retention_days.integer' => '举报记录保留天数须为整数',
         ]);
 
         // 文案类(违禁词/免责/规则)：原样保存，允许清空(清空则顾客端回退代码内默认)
@@ -219,7 +222,7 @@ class LocalLifeController extends Controller
             );
         }
         // 阈值类：留空则不动(保留原值/代码默认)，只在填了有效整数时写入
-        foreach (['locallife_ugc_daily_limit', 'locallife_report_daily_limit', 'locallife_ugc_min_interval_sec'] as $k) {
+        foreach (['locallife_ugc_daily_limit', 'locallife_report_daily_limit', 'locallife_ugc_min_interval_sec', 'locallife_report_retention_days'] as $k) {
             if ($request->filled($k)) {
                 DB::table('business_settings')->updateOrInsert(
                     ['key' => $k],

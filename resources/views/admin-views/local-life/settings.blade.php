@@ -76,6 +76,23 @@
             </div>
         </div>
 
+        {{-- 举报记录保留期 --}}
+        <div class="card mt-2">
+            <div class="card-header py-2"><h5 class="card-title mb-0">举报记录 PII 保留期</h5></div>
+            <div class="card-body">
+                <p class="text-muted mb-3" style="font-size:13px;">
+                    顾客举报里的「补充说明」（detail）可能含联系方式等个人信息（PII）。计划任务每日 03:40 会把超过保留期的举报<strong>补充说明清空</strong>（置空），但<strong>保留举报本身、理由、处理状态</strong>供运营审计。留空则保持当前值（默认 180 天）。
+                </p>
+                <div class="row">
+                    <div class="form-group col-md-4">
+                        <label class="input-label">举报补充说明保留天数（默认 180）</label>
+                        <input type="number" name="locallife_report_retention_days" class="form-control" min="1" max="3650"
+                               value="{{ $s['locallife_report_retention_days'] ?? '' }}" placeholder="180">
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="d-flex justify-content-end mt-3 mb-4">
             <button type="submit" class="btn btn--primary">保存设置</button>
         </div>

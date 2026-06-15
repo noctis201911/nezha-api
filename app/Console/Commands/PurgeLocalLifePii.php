@@ -18,13 +18,18 @@ use Carbon\Carbon;
  *   - 保留帖子行 / 状态 / 标题等供审计与展示层判断
  *   - 仅处理 source='user' 的 UGC 帖；平台(admin)帖不在此列
  *
+ * 另：本地生活顾客举报(local_life_reports)的 detail（"补充说明"，"其他"理由必填，
+ * 可能含联系方式等 PII）也按保留期到期清理 —— 只清 detail（置 null），
+ * 保留 行/reason/status 供运营审计。该表无 expires_at，用 created_at 判过期，
+ * 保留期 business_settings.locallife_report_retention_days（默认 180 天）。
+ *
  * 注：本库已全表静态加密(at-rest)，本命令是"到期主动删"这层(超出加密)的持续义务。
  */
 class PurgeLocalLifePii extends Command
 {
     protected $signature = 'nezha:purge-locallife-pii {--dry-run : 只报告将清除什么, 不实际删除}';
 
-    protected $description = '哪吒: 清除已过期的本地生活UGC帖PII(contact_info + 上传图片), 保留帖子行/状态供审计。';
+    protected $description = '哪吒: 清除已过期的本地生活UGC帖PII(contact_info + 上传图片)与举报detail, 保留帖子行/举报行/状态供审计。';
 
     private const IMG_DIR = 'local-life';
 
@@ -77,6 +82,49 @@ class PurgeLocalLifePii extends Command
             . ($dry ? '将删 ' : '删除 ') . $files . ' 个图片文件。帖子行/状态保留供审计。';
         $this->info($msg);
         Log::info('NEZHA_PURGE_LOCALLIFE_PII: ' . $msg);
+
+        // ── 本地生活顾客举报 detail 的 PII 到期清理（L1-7）─────────────────
+        // local_life_reports.detail 是举报"补充说明"("其他"理由必填), 可能含联系方式等 PII。
+        // 表无 expires_at, 用 created_at 判过期; 保留期 business_settings.locallife_report_retention_days(默认180天)。
+        // 只清 detail(置 null), 保留 行/reason/status 供运营审计。
+        $reportDays = (int) (DB::table('business_settings')
+            ->where('key', 'locallife_report_retention_days')
+            ->value('value') ?? 180);
+        if ($reportDays < 1) {
+            $reportDays = 180;
+        }
+        $reportCutoff = Carbon::now()->subDays($reportDays);
+
+        // 命中: created_at 早于截止、且 detail 还没清过(非空)
+        $reportRows = DB::table('local_life_reports')
+            ->whereNotNull('detail')
+            ->where('detail', '!=', '')
+            ->where('created_at', '<', $reportCutoff)
+            ->get(['id', 'created_at']);
+
+        $this->info('举报detail清理: 保留期=' . $reportDays . '天, 截止=' . $reportCutoff->toDateTimeString()
+            . ', 命中待清理举报数: ' . $reportRows->count());
+
+        $reportsPurged = 0;
+
+        foreach ($reportRows as $r) {
+            if ($dry) {
+                $this->line('  [DRY] 将清除 local_life_reports#' . $r->id . '.detail (建于 ' . $r->created_at . ')');
+                $reportsPurged++;
+                continue;
+            }
+
+            DB::table('local_life_reports')->where('id', $r->id)->update([
+                'detail'     => null,
+                'updated_at' => now(),
+            ]);
+            $reportsPurged++;
+        }
+
+        $reportMsg = ($dry ? '[DRY-RUN] 将清除 ' : '已清除 ') . $reportsPurged
+            . ' 条举报的 detail(补充说明 PII), 保留 行/reason/status 供审计。';
+        $this->info($reportMsg);
+        Log::info('NEZHA_PURGE_LOCALLIFE_REPORTS_PII: ' . $reportMsg);
 
         return self::SUCCESS;
     }
