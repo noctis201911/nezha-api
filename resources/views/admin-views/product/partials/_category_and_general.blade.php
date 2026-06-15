@@ -294,7 +294,7 @@
                 <div class="card-body">
                     <input type="text" class="form-control" id="tags" name="tags"
                         @if (isset($product)) value="@foreach ($product->tags as $c) {{ $c->tag . ',' }} @endforeach" @endif
-                        placeholder="Enter tags" data-role="tagsinput">
+                        placeholder="{{ translate('messages.Enter tags') }}" data-role="tagsinput">
                 </div>
             </div>
         </div>
