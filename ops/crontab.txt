@@ -1,0 +1,19 @@
+# =====================================================================
+# 哪吒服务器 root crontab 快照（导出自 `crontab -l`，仅作文档/重建参考）
+# 服务器: 178.105.216.158
+# 恢复方法: 审阅后用 `crontab -e` 手工录入需要的行（不要整文件覆盖，
+#           因为第 1 条是宝塔面板托管、换机时由宝塔自己重建）。
+# =====================================================================
+
+# [1] 宝塔(BT)面板托管的计划任务（hash 命名，宝塔自动生成/管理）。
+#     ⚠️ 换机时不要照搬此行——重装宝塔后由面板重新生成对应任务即可。
+48 8 * * *  /www/server/cron/a50afd8f7d0e95dc2fd7bbbcfdcccd82 >> /www/server/cron/a50afd8f7d0e95dc2fd7bbbcfdcccd82.log 2>&1
+
+# [2] 代理看门狗：每 3 分钟检查/拉起出站代理（脚本 /usr/local/bin/proxy-watchdog.sh，不在本 repo）。
+*/3 * * * * /usr/local/bin/proxy-watchdog.sh
+
+# [3] Laravel 计划任务调度器：每分钟跑一次（驱动后端所有 schedule，如凭证90天自动删等）。
+* * * * * cd /www/wwwroot/api.nezha.am && /usr/bin/php artisan schedule:run >> /dev/null 2>&1
+
+# [4] 每日加密数据库备份：04:17 跑 nezha-encrypted-backup.sh（脚本快照见 ops/backup/）。
+17 4 * * * /root/nezha-backup/nezha-encrypted-backup.sh >> /root/nezha-backup/backup.log 2>&1

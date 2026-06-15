@@ -1,0 +1,33 @@
+# =====================================================================
+# admin_basicauth.conf —— 模板 / 说明（本文件不含任何凭证）
+# =====================================================================
+# 线上真实文件位置：
+#   /www/server/panel/vhost/nginx/extension/api.nezha.am/admin_basicauth.conf
+#
+# 作用：给后台 /admin 和 /login/admin 路径加一层 nginx HTTP Basic Auth，
+#       是 Laravel 自身登录之外的额外门禁。
+#
+# 凭证（用户名/密码 hash）不在本 .conf 里，而在独立的 htpasswd 文件：
+#   /www/server/nginx/conf/.htpasswd_nezha_admin   ← 【含 htpasswd 凭证 hash】
+#   该文件存密码管理器，绝不入库（git）。
+#
+# 重建步骤（换机/换人时）：
+#   1. 生成凭证文件（用密码管理器里的账号密码）：
+#        htpasswd -c /www/server/nginx/conf/.htpasswd_nezha_admin admin
+#      （-c 仅首次创建用，追加账号去掉 -c）
+#   2. 把下面的 location 块放回线上路径的 admin_basicauth.conf
+#   3. nginx -t && nginx -s reload
+#
+# 撤销：删除线上 admin_basicauth.conf + nginx -s reload。
+# ---------------------------------------------------------------------
+
+location ~ ^/admin(/|$) {
+    auth_basic "Nezha Admin";
+    auth_basic_user_file /www/server/nginx/conf/.htpasswd_nezha_admin;
+    try_files $uri $uri/ /index.php$is_args$query_string;
+}
+location ~ ^/login/admin {
+    auth_basic "Nezha Admin";
+    auth_basic_user_file /www/server/nginx/conf/.htpasswd_nezha_admin;
+    try_files $uri $uri/ /index.php$is_args$query_string;
+}

@@ -6,7 +6,7 @@
 .env
 .env.*
 # keep .env.example as template (uncomment if you create one)
-# !.env.example
+!.env.example
 
 # === Laravel OAuth keys (sensitive) ===
 /storage/oauth-private.key
