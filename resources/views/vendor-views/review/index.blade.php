@@ -405,7 +405,7 @@
                     </div>
                 </div>
                 <div class="global-bg-box rounded p-xl-20 p-16">
-                    <h5 class="mb-10px font-regular text-color font-normal">Reply status </h5>
+                    <h5 class="mb-10px font-regular text-color font-normal">{{ translate('messages.Reply status') }}</h5>
                     <div class="bg-white rounded p-xl-3 p-2">
                         <div class="row gx-xl-3 gx-2 gy-xl-3 gy-2">
                             <div class="col-sm-6 col-auto">
