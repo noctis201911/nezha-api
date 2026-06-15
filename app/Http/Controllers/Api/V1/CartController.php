@@ -66,11 +66,17 @@ class CartController extends Controller
             ], 403);
         }
         if($cart){
-            return response()->json([
-                'errors' => [
-                    ['code' => 'cart_item', 'message' => translate('messages.Item_already_exists')]
-                ]
-            ], 403);
+            // 幂等：商品已在购物车时不再报 403(污染顾客 console),直接返回当前购物车列表(与加购成功同结构),前端据此刷新;数量增减走 update 接口,不受影响
+            $carts = Cart::where('user_id', $user_id)->where('is_guest',$is_guest)->get()
+            ->map(function ($data) {
+                $data->add_on_ids = json_decode($data->add_on_ids,true);
+                $data->add_on_qtys = json_decode($data->add_on_qtys,true);
+                $data->variations = json_decode($data->variations,true);
+                $data->item = Helpers::cart_product_data_formatting($data->item, $data->variations,$data->add_on_ids,
+                $data->add_on_qtys, false, app()->getLocale());
+                return $data;
+            });
+            return response()->json($carts, 200);
         }
 
         if($item?->maximum_cart_quantity && ($request->quantity>$item->maximum_cart_quantity)){
