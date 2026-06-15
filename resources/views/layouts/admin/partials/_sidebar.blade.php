@@ -2004,7 +2004,9 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                     <!-- End system_addons -->
                 @endif
 
-                @if (count(config('addon_admin_routes')) > 0 && Helpers::module_permission_check('system_addon'))
+                {{-- 防御: 某个插件 admin_routes.php 返回非数组(string等)时不应崩掉整个后台侧边栏 --}}
+                @php($addonRoutes = is_array(config('addon_admin_routes')) ? config('addon_admin_routes') : [])
+                @if (count($addonRoutes) > 0 && Helpers::module_permission_check('system_addon'))
                     <li class="nav-item">
                         <small class="nav-subtitle">{{ translate('messages.addon_menus') }}</small>
                         <small class="tio-more-horizontal nav-subtitle-replacer"></small>
@@ -2018,8 +2020,9 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                         </a>
                         <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
                             style="display: {{ Request::is('admin/payment/configuration/*') || Request::is('admin/sms/configuration/*') ? 'block' : 'none' }}">
-                            @foreach (config('addon_admin_routes') as $routes)
-                                @foreach ($routes as $route)
+                            @foreach ($addonRoutes as $routes)
+                                @foreach ((is_array($routes) ? $routes : []) as $route)
+                                    @continue(!is_array($route) || !isset($route['path'], $route['url'], $route['name']))
                                     <li
                                         class="navbar-vertical-aside-has-menu {{ Request::is($route['path']) ? 'active' : '' }}">
                                         <a class="js-navbar-vertical-aside-menu-link nav-link "
