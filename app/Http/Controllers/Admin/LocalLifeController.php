@@ -180,7 +180,18 @@ class LocalLifeController extends Controller
     private const SETTING_KEYS = [
         'locallife_banned_words',
         'locallife_disclaimer',
+        'locallife_disclaimer_en',
+        'locallife_disclaimer_ru',
+        'locallife_disclaimer_hy',
         'locallife_terms',
+        'locallife_terms_en',
+        'locallife_terms_ru',
+        'locallife_terms_hy',
+        'locallife_pii_notice',
+        'locallife_pii_notice_en',
+        'locallife_pii_notice_ru',
+        'locallife_pii_notice_hy',
+        'locallife_pii_consent_enabled',
         'locallife_ugc_daily_limit',
         'locallife_report_daily_limit',
         'locallife_ugc_min_interval_sec',
@@ -202,6 +213,16 @@ class LocalLifeController extends Controller
             'locallife_banned_words'         => 'nullable|string|max:20000',
             'locallife_disclaimer'           => 'nullable|string|max:2000',
             'locallife_terms'                => 'nullable|string|max:30000',
+            'locallife_disclaimer_en'        => 'nullable|string|max:2000',
+            'locallife_disclaimer_ru'        => 'nullable|string|max:2000',
+            'locallife_disclaimer_hy'        => 'nullable|string|max:2000',
+            'locallife_terms_en'             => 'nullable|string|max:30000',
+            'locallife_terms_ru'             => 'nullable|string|max:30000',
+            'locallife_terms_hy'             => 'nullable|string|max:30000',
+            'locallife_pii_notice'           => 'nullable|string|max:30000',
+            'locallife_pii_notice_en'        => 'nullable|string|max:30000',
+            'locallife_pii_notice_ru'        => 'nullable|string|max:30000',
+            'locallife_pii_notice_hy'        => 'nullable|string|max:30000',
             'locallife_ugc_daily_limit'      => 'nullable|integer|min:1|max:100',
             'locallife_report_daily_limit'   => 'nullable|integer|min:1|max:500',
             'locallife_ugc_min_interval_sec' => 'nullable|integer|min:0|max:3600',
@@ -215,12 +236,17 @@ class LocalLifeController extends Controller
         ]);
 
         // 文案类(违禁词/免责/规则)：原样保存，允许清空(清空则顾客端回退代码内默认)
-        foreach (['locallife_banned_words', 'locallife_disclaimer', 'locallife_terms'] as $k) {
+        foreach (['locallife_banned_words', 'locallife_disclaimer', 'locallife_disclaimer_en', 'locallife_disclaimer_ru', 'locallife_disclaimer_hy', 'locallife_terms', 'locallife_terms_en', 'locallife_terms_ru', 'locallife_terms_hy', 'locallife_pii_notice', 'locallife_pii_notice_en', 'locallife_pii_notice_ru', 'locallife_pii_notice_hy'] as $k) {
             DB::table('business_settings')->updateOrInsert(
                 ['key' => $k],
                 ['value' => (string) $request->input($k, ''), 'updated_at' => now()]
             );
         }
+        // PII 同意采集总开关：复选框未勾=0(默认)，勾选=1。开启后发帖才强制勾《个人数据处理通知》
+        DB::table('business_settings')->updateOrInsert(
+            ['key' => 'locallife_pii_consent_enabled'],
+            ['value' => $request->boolean('locallife_pii_consent_enabled') ? '1' : '0', 'updated_at' => now()]
+        );
         // 阈值类：留空则不动(保留原值/代码默认)，只在填了有效整数时写入
         foreach (['locallife_ugc_daily_limit', 'locallife_report_daily_limit', 'locallife_ugc_min_interval_sec', 'locallife_report_retention_days'] as $k) {
             if ($request->filled($k)) {

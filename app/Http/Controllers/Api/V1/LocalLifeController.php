@@ -102,6 +102,8 @@ class LocalLifeController extends Controller
             'ugc_enabled'    => $this->ugcEnabled(),
             'ugc_disclaimer' => $this->disclaimerText(),
             'ugc_terms'      => $this->termsText(),
+            'ugc_pii_notice'   => $this->piiNoticeText(),
+            'ugc_pii_required' => $this->piiConsentRequired(),
             'posts'          => $posts,
         ], 200);
     }
@@ -130,6 +132,8 @@ class LocalLifeController extends Controller
 
         $data['ugc_disclaimer'] = $this->disclaimerText();
         $data['ugc_terms']      = $this->termsText();
+        $data['ugc_pii_notice']   = $this->piiNoticeText();
+        $data['ugc_pii_required'] = $this->piiConsentRequired();
         $data['report_reasons'] = self::REPORT_REASONS;
 
         return response()->json($data, 200);
@@ -221,6 +225,11 @@ class LocalLifeController extends Controller
         if ($this->hitsBannedWord($scan)) {
             // 不回显命中词，避免被试探绕过
             return response()->json(['errors' => [['code' => 'banned', 'message' => '内容含违规词，请修改后再发布']]], 422);
+        }
+
+        // PII 同意守卫：仅当运营开启《个人数据处理通知》采集时强制(默认关→永不触发，行为不变)
+        if ($this->piiConsentRequired() && !$request->boolean('agree_pii')) {
+            return response()->json(['errors' => [['code' => 'agree_pii', 'message' => '请阅读并同意《个人数据处理通知》后再发布']]], 422);
         }
 
         $isFree = $request->boolean('is_free');
@@ -376,14 +385,68 @@ class LocalLifeController extends Controller
 
     private function disclaimerText(): string
     {
-        $v = $this->setting('locallife_disclaimer', null);
-        return ($v !== null && trim($v) !== '') ? $v : self::DEFAULT_DISCLAIMER;
+        return $this->localizedSetting('locallife_disclaimer', self::DEFAULT_DISCLAIMER);
     }
 
     private function termsText(): string
     {
-        $v = $this->setting('locallife_terms', null);
-        return ($v !== null && trim($v) !== '') ? $v : self::DEFAULT_TERMS;
+        return $this->localizedSetting('locallife_terms', self::DEFAULT_TERMS);
+    }
+
+    /**
+     * 《个人数据处理通知》(PII 同意文案)。多语言键 locallife_pii_notice{,_en,_ru,_hy}。
+     * 默认无任何配置 → 返回空串；正式上线须先有注册主体(数据控制者=公司全称+注册地址)+律师审校。
+     */
+    private function piiNoticeText(): string
+    {
+        return $this->localizedSetting('locallife_pii_notice', '');
+    }
+
+    /**
+     * 发帖时是否强制勾选《个人数据处理通知》同意。两道门同时满足才生效：
+     * ① 运营显式开启 locallife_pii_consent_enabled；② 通知文本非空。
+     * 默认开关关 → 永远 false → 不采集新同意，行为与今天一致(零变化)。
+     */
+    private function piiConsentRequired(): bool
+    {
+        $enabled = (bool) $this->setting('locallife_pii_consent_enabled', '0');
+        return $enabled && trim($this->piiNoticeText()) !== '';
+    }
+
+    /**
+     * 按当前 UI 语言(X-localization)解析文案：该语种专属键(_en/_ru/_hy)非空→用之；
+     * 否则回退中文基键；再回退代码默认 $fallback。任一语种键留空 = 自动回退中文，
+     * 故"只搭多语言骨架、暂不灌俄/亚语文案"对线上零影响。
+     */
+    private function localizedSetting(string $baseKey, string $fallback): string
+    {
+        $suffix = $this->langSuffix();
+        if ($suffix !== '') {
+            $v = $this->setting($baseKey . $suffix, null);
+            if ($v !== null && trim($v) !== '') {
+                return $v;
+            }
+        }
+        $v = $this->setting($baseKey, null);
+        return ($v !== null && trim($v) !== '') ? $v : $fallback;
+    }
+
+    /**
+     * X-localization → 文案键后缀。中文用无后缀基键(locallife_terms)，未知语言一律回退中文。
+     */
+    private function langSuffix(): string
+    {
+        $loc = strtolower((string) (request()->header('X-localization') ?: app()->getLocale() ?: 'zh'));
+        if (str_starts_with($loc, 'en')) {
+            return '_en';
+        }
+        if (str_starts_with($loc, 'ru')) {
+            return '_ru';
+        }
+        if (str_starts_with($loc, 'hy') || str_starts_with($loc, 'am') || str_starts_with($loc, 'arm')) {
+            return '_hy';
+        }
+        return ''; // zh-CN / zh / 未知 → 中文基键
     }
 
     /**
