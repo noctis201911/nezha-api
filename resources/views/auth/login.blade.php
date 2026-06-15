@@ -148,7 +148,7 @@
                                 <input type="hidden" name="set_default_captcha" id="set_default_captcha_value" value="{{ $showImg ? 1 : 0 }}" >
                                 <div class="row p-2 {{ $showImg ? '' : 'd-none' }}" id="reload-captcha">
                                     <div class="col-6 pr-0">
-                                        <input type="text" class="form-control form-control-lg border-0" name="custome_recaptcha"
+                                        <input type="text" class="form-control form-control-lg" name="custome_recaptcha"
                                             id="custome_recaptcha" required placeholder="{{translate('Enter recaptcha value')}}" autocomplete="off" value="{{env('APP_MODE')=='dev'? session('six_captcha'):''}}">
                                     </div>
                                     <div class="col-6 bg-white rounded d-flex">
@@ -162,7 +162,7 @@
                             @else
                                 <div class="row p-2" id="reload-captcha">
                                     <div class="col-6 pr-0">
-                                        <input type="text" class="form-control form-control-lg border-0" name="custome_recaptcha"
+                                        <input type="text" class="form-control form-control-lg" name="custome_recaptcha"
                                             id="custome_recaptcha" required placeholder="{{translate('Enter recaptcha value')}}" autocomplete="off" value="{{env('APP_MODE')=='dev'? session('six_captcha'):''}}">
                                     </div>
                                     <div class="col-6 bg-white rounded d-flex">
