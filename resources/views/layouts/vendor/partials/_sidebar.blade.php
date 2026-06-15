@@ -540,8 +540,9 @@
 
                     <!-- Wallet Management -->
 
-                    @if(\App\CentralLogics\Helpers::employee_module_permission_check('wallet_method') ||
-                        \App\CentralLogics\Helpers::employee_module_permission_check('my_wallet'))
+                    {{-- 钱包侧边栏入口隐藏: B方案平台不碰钱/系统无提现入口,此为StackFood残留菜单。删掉本@if里的 false && 即可恢复显示;路由与数据均未动 --}}
+                    @if(false && (\App\CentralLogics\Helpers::employee_module_permission_check('wallet_method') ||
+                        \App\CentralLogics\Helpers::employee_module_permission_check('my_wallet')))
                         <!-- Business Section-->
                         <li class="nav-item">
                             <small class="nav-subtitle"
@@ -550,7 +551,7 @@
                         </li>
                     @endif
 
-                    @if(\App\CentralLogics\Helpers::employee_module_permission_check('my_wallet'))
+                    @if(false && \App\CentralLogics\Helpers::employee_module_permission_check('my_wallet'))
                         <!-- RestaurantWallet -->
                         <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/wallet*')?'active':''}}">
                             <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{route('vendor.wallet.index')}}" title="{{translate('messages.my_wallet')}}">
