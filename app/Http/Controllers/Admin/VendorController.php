@@ -625,7 +625,7 @@ class VendorController extends Controller
     }
 
     /**
-     * 哪吒外卖 B方案 组4: 管理员给商家充值/调整保证金, 并写入保证金流水。
+     * 哪吒外卖 B方案 组4: 管理员给商家充值/调整预存佣金, 并写入预存佣金流水。
      * amount 可正(充值)可负(扣减/纠错). 写 restaurant_deposit_transactions 留账。
      */
     public function rechargeDeposit(Request $request, Restaurant $restaurant)
@@ -641,7 +641,7 @@ class VendorController extends Controller
 
         $vendor_id = $restaurant->vendor_id;
         if (!$vendor_id) {
-            Toastr::error(translate('该餐馆未绑定商家账户, 无法操作保证金'));
+            Toastr::error(translate('该餐馆未绑定商家账户, 无法操作预存佣金'));
             return back();
         }
 
@@ -668,18 +668,18 @@ class VendorController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             info(['nezha_recharge_deposit', $e->getFile(), $e->getLine(), $e->getMessage()]);
-            Toastr::error(translate('保证金操作失败, 请重试'));
+            Toastr::error(translate('预存佣金操作失败, 请重试'));
             return back();
         }
 
-        Toastr::success(translate('保证金已更新'));
+        Toastr::success(translate('预存佣金已更新'));
         return back();
     }
 
     // 哪吒外卖: 更新平台美元兑人民币汇率 (platform-wide, 所有商家共用)
     public function updateRmbRate(Request $request)
     {
-        // 哪吒外卖: 顾客端换算汇率 (AMD德拉姆 -> 人民币/美元). usd_to_rmb 仅保证金折算用, 可选.
+        // 哪吒外卖: 顾客端换算汇率 (AMD德拉姆 -> 人民币/美元). usd_to_rmb 仅预存佣金折算用, 可选.
         $cnyToAmd = (float)$request->input('nezha_rate_cny_to_amd', 0);
         $usdToAmd = (float)$request->input('nezha_rate_usd_to_amd', 0);
         if ($cnyToAmd <= 0 || $usdToAmd <= 0) {
@@ -688,7 +688,7 @@ class VendorController extends Controller
         }
         \App\CentralLogics\Helpers::businessUpdateOrInsert(['key' => 'nezha_rate_cny_to_amd'], ['value' => (string)$cnyToAmd]);
         \App\CentralLogics\Helpers::businessUpdateOrInsert(['key' => 'nezha_rate_usd_to_amd'], ['value' => (string)$usdToAmd]);
-        // 旧"美元兑人民币"仅保证金折算用, 仅在表单提交了该字段且合法时更新, 避免被默认值覆盖
+        // 旧"美元兑人民币"仅预存佣金折算用, 仅在表单提交了该字段且合法时更新, 避免被默认值覆盖
         if ($request->filled('nezha_usd_to_rmb_rate')) {
             $rmb = (float)$request->input('nezha_usd_to_rmb_rate');
             if ($rmb > 0 && $rmb <= 100) {
@@ -720,7 +720,7 @@ class VendorController extends Controller
         if ($tab == 'settings') {
             return view('admin-views.vendor.view.settings', compact('restaurant'));
         } elseif ($tab == 'payment_info') {
-            // 哪吒外卖 B方案: 收款信息(商家本人收款码/USDT地址) + 保证金概览/充值/流水
+            // 哪吒外卖 B方案: 收款信息(商家本人收款码/USDT地址) + 预存佣金概览/充值/流水
             $depositMode = BusinessSetting::where('key', 'nezha_deposit_mode_status')->first()?->value;
             $depositThreshold = BusinessSetting::where('key', 'nezha_min_deposit_threshold')->first()?->value ?? 0;
             $depositBalance = $restaurant?->wallet?->deposit_balance ?? 0;

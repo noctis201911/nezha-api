@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * 哪吒外卖 B方案 组4: 保证金流水.
+ * 哪吒外卖 B方案 组4: 预存佣金流水.
  * 见 migration 2026_06_10_140000_create_restaurant_deposit_transactions.
  */
 class RestaurantDepositTransaction extends Model

@@ -1439,7 +1439,7 @@ class OrderController extends Controller
         return true;
     }
     /**
-     * [哪吒 B方案/组4 保证金扣佣] 判断某餐馆是否因保证金低于阈值而应停止接单。
+     * [哪吒 B方案/组4 预存佣金扣佣] 判断某餐馆是否因预存佣金低于阈值而应停止接单。
      * 仅在开关 nezha_deposit_mode_status=1 时生效; 关闭(一阶段免佣免押)或餐馆不存在时返回 false。
      */
     public static function nezha_deposit_below_threshold($restaurant){
@@ -1465,7 +1465,7 @@ class OrderController extends Controller
 
         $restaurant = Restaurant::with(['discount', 'restaurant_sub','restaurant_config'])->selectRaw('*, IF(((select count(*) from `restaurant_schedule` where `restaurants`.`id` = `restaurant_schedule`.`restaurant_id` and `restaurant_schedule`.`day` = '.$schedule_at->format('w').' and `restaurant_schedule`.`opening_time` < "'.$schedule_at->format('H:i:s').'" and `restaurant_schedule`.`closing_time` >"'.$schedule_at->format('H:i:s').'") > 0), true, false) as open')->where('id', $request->restaurant_id)->first();
 
-        // [哪吒 B方案/组4 保证金扣佣] 开关(nezha_deposit_mode_status)开启时, 保证金低于阈值的餐馆停止接收新单。
+        // [哪吒 B方案/组4 预存佣金扣佣] 开关(nezha_deposit_mode_status)开启时, 预存佣金低于阈值的餐馆停止接收新单。
         // 开关关闭(一阶段免佣免押)时 $nezha_deposit_low 恒为 false, 不影响接单。
         $nezha_deposit_low = self::nezha_deposit_below_threshold($restaurant);
 
@@ -1672,7 +1672,7 @@ class OrderController extends Controller
 
         $restaurant = Restaurant::with(['discount', 'restaurant_sub','restaurant_config'])->selectRaw('*, IF(((select count(*) from `restaurant_schedule` where `restaurants`.`id` = `restaurant_schedule`.`restaurant_id` and `restaurant_schedule`.`day` = '.$schedule_at->format('w').' and `restaurant_schedule`.`opening_time` < "'.$schedule_at->format('H:i:s').'" and `restaurant_schedule`.`closing_time` >"'.$schedule_at->format('H:i:s').'") > 0), true, false) as open')->where('id', $request->restaurant_id)->first();
 
-        // [哪吒 B方案/组4 保证金扣佣] 结算预检同样拦保证金不足的餐馆(开关关闭时恒 false)。
+        // [哪吒 B方案/组4 预存佣金扣佣] 结算预检同样拦预存佣金不足的餐馆(开关关闭时恒 false)。
         $nezha_deposit_low = self::nezha_deposit_below_threshold($restaurant);
 
         $response = match (true) {

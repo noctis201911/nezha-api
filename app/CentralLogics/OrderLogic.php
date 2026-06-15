@@ -42,7 +42,7 @@ class OrderLogic
         $restaurant_amount=0;
         // [哪吒 B方案/组3 拔二清腿] 直付订单 = 顾客直接付款给商家本人(支付宝/USDT), 平台全程不碰钱。
         // 按 COD 思路记账: 不累加 total_earning(平台不欠商家/永不打款)、不记平台收款(digital_received),
-        // 仅保留应收佣金(order_transaction.admin_commission + adminWallet->total_commission_earning), 留给组4保证金扣佣去收。
+        // 仅保留应收佣金(order_transaction.admin_commission + adminWallet->total_commission_earning), 留给组4预存佣金扣佣去收。
         $is_direct_pay = ($order->payment_method == 'offline_payment');
 
         // free delivery by admin
@@ -225,7 +225,7 @@ class OrderLogic
                 {
                     // [哪吒 B方案/组3] 顾客直付商家本人, 平台不收款: 不记 digital_received, 也不记 collected_cash。
                     // 平台应收佣金已在上方 adminWallet->total_commission_earning + order_transaction.admin_commission 记下。
-                    // [组4 保证金扣佣] 开关(nezha_deposit_mode_status)开启时, 从商家保证金扣除本单"向商家收的佣金"。
+                    // [组4 预存佣金扣佣] 开关(nezha_deposit_mode_status)开启时, 从商家预存佣金扣除本单"向商家收的佣金"。
                     // 注: 服务费(向客户收)不在此扣; 佣金率沿用现成 admin_commission/餐馆 comission(后台可调)。
                     $nezha_deposit_mode = BusinessSetting::where('key','nezha_deposit_mode_status')->first()?->value;
                     if($nezha_deposit_mode == 1 && $comission_amount > 0){
@@ -410,7 +410,7 @@ class OrderLogic
             if($is_direct_pay)
             {
                 // [哪吒 B方案/组3] 直付订单平台无现金桶可冲销(退款走商家直退顾客)。
-                // [组4 保证金扣佣] 若本单此前从保证金扣过佣金, 退款时对称返还(基于已记流水, 不受开关后续变动影响)。
+                // [组4 预存佣金扣佣] 若本单此前从预存佣金扣过佣金, 退款时对称返还(基于已记流水, 不受开关后续变动影响)。
                 $deducted = \App\Models\RestaurantDepositTransaction::where('order_id',$order->id)
                     ->where('type','commission_deduction')->sum('commission');
                 if($deducted > 0){
