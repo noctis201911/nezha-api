@@ -406,7 +406,7 @@
                                     </label>
                                     <input type="text" class="form-control" name="tags"
                                         value="@foreach ($restaurant->tags as $c) {{ $c->tag . ',' }} @endforeach"
-                                        placeholder="Enter tags" data-role="tagsinput">
+                                        placeholder="{{ translate('messages.Enter tags') }}" data-role="tagsinput">
 
                                 </div>
                             </div>

@@ -1,6 +1,6 @@
 @extends('layouts.vendor.app')
 
-@section('title', 'Advertisement Create')
+@section('title', translate('messages.Create_Advertisement'))
 
 
 @section('advertisement_create')

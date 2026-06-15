@@ -288,6 +288,40 @@
 @stack('script')
 <script src="{{dynamicAsset('assets/admin/js/vendor.min.js')}}"></script>
 <script src="{{dynamicAsset('assets/admin/js/theme.min.js')}}"></script>
+<script>
+    // 全局 DataTables 中文文案默认值（搜索框/分页/统计/空表/导出按钮），
+    // 在各页面 @@stack('script_2') 初始化表格之前注入，统一汉化库自带英文。
+    if (window.jQuery && jQuery.fn && jQuery.fn.dataTable) {
+        jQuery.extend(true, jQuery.fn.dataTable.defaults, {
+            language: {
+                search: '搜索：',
+                searchPlaceholder: '输入关键词',
+                lengthMenu: '每页 _MENU_ 条',
+                info: '显示第 _START_ 至 _END_ 条，共 _TOTAL_ 条',
+                infoEmpty: '共 0 条',
+                infoFiltered: '（从 _MAX_ 条中筛选）',
+                zeroRecords: '未找到匹配记录',
+                emptyTable: '暂无数据',
+                loadingRecords: '加载中…',
+                processing: '处理中…',
+                paginate: { first: '首页', last: '末页', next: '下一页', previous: '上一页' },
+                aria: { sortAscending: '：升序排列', sortDescending: '：降序排列' },
+                buttons: {
+                    copy: '复制',
+                    copyTitle: '已复制到剪贴板',
+                    copyKeys: '按 Ctrl 或 ⌘ + C 复制表格数据',
+                    copySuccess: { _: '已复制 %d 行', 1: '已复制 1 行' },
+                    print: '打印',
+                    csv: 'CSV',
+                    excel: 'Excel',
+                    pdf: 'PDF',
+                    colvis: '列显示',
+                    pageLength: { _: '每页 %d 条', '-1': '显示全部' }
+                }
+            }
+        });
+    }
+</script>
 <script src="{{dynamicAsset('assets/admin/js/sweet_alert.js')}}"></script>
 <script src="{{dynamicAsset('assets/admin/js/toastr.js')}}"></script>
 <script src="{{dynamicAsset('assets/admin/js/owl.min.js')}}"></script>

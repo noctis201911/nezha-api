@@ -597,9 +597,9 @@
                 function updateButton() {
                     const hiddenCount = $items.filter(":hidden").length;
                     if (hiddenCount > 0) {
-                        $button.html(`See More <span class="count">(${hiddenCount})</span>`);
+                        $button.html(`{{ translate('See More') }} <span class="count">(${hiddenCount})</span>`);
                     } else {
-                        $button.html(`See Less`);
+                        $button.html(`{{ translate('See Less') }}`);
                     }
                 }
 

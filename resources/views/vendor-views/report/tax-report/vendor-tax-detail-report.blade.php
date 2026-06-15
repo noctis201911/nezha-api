@@ -322,15 +322,21 @@
                 endDate: moment('{{ $endDate }}'),
                 maxDate: moment(),
                 locale: {
-                    format: 'MM/DD/YYYY'
+                    format: 'YYYY-MM-DD',
+                    applyLabel: '确认',
+                    cancelLabel: '清除',
+                    customRangeLabel: '自定义',
+                    daysOfWeek: ['日', '一', '二', '三', '四', '五', '六'],
+                    monthNames: ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'],
+                    firstDay: 1
                 },
                 ranges: {
-                    'Today': [moment(), moment()],
-                    'Yesterday': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
-                    'Last 7 Days': [moment().subtract(6, 'days'), moment()],
-                    'Last 30 Days': [moment().subtract(29, 'days'), moment()],
-                    'This Month': [moment().startOf('month'), moment().endOf('month')],
-                    'Last Month': [
+                    '今天': [moment(), moment()],
+                    '昨天': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+                    '最近7天': [moment().subtract(6, 'days'), moment()],
+                    '最近30天': [moment().subtract(29, 'days'), moment()],
+                    '本月': [moment().startOf('month'), moment().endOf('month')],
+                    '上月': [
                         moment().subtract(1, 'month').startOf('month'),
                         moment().subtract(1, 'month').endOf('month')
                     ]
@@ -349,10 +355,10 @@
                 const orderTaxAmount = this.dataset.order_tax_amount;
                 const orderTaxes = JSON.parse(this.dataset.order_taxes || '[]');
 
-                document.getElementById('order_id').textContent = `Order ID #${orderId}`;
+                document.getElementById('order_id').textContent = `{{ translate('messages.Order ID') }} #${orderId}`;
                 document.getElementById('payment_status').textContent = paymentStatus;
                 document.getElementById('order_status').textContent = orderStatus;
-                document.getElementById('order_date').textContent = `Date: ${orderDate}`;
+                document.getElementById('order_date').textContent = `日期：${orderDate}`;
                 document.getElementById('order_amount').textContent = orderAmount;
                 document.getElementById('order_tax_amount').textContent = orderTaxAmount;
 
@@ -364,19 +370,19 @@
                 let basicLabel;
                 switch (taxType) {
                     case 'category_wise':
-                        basicLabel = 'Category Tax';
+                        basicLabel = '分类税';
                         break;
                     case 'product_wise':
-                        basicLabel = 'Product Tax';
+                        basicLabel = '商品税';
                         break;
                     default:
-                        basicLabel = 'Order Tax';
+                        basicLabel = '订单税';
                 }
 
                 const taxLabels = {
                     basic: basicLabel,
-                    tax_on_additional_charge: 'Additional Charge',
-                    tax_on_packaging_charge: 'Packaging Charge',
+                    tax_on_additional_charge: '附加费',
+                    tax_on_packaging_charge: '打包费',
                 };
 
                 const grouped = {};

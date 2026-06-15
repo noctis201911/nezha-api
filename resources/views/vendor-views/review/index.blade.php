@@ -341,14 +341,14 @@
                 <input type="hidden" name="end_date" id="end_date_value" value="{{ request('end_date') }}">
             <div class="d-flex flex-column gap-20px">
                 <div class="global-bg-box rounded p-xl-20 p-16">
-                    <h5 class="mb-10px font-regular text-color font-normal not-scrolling-date">Select date Range</h5>
+                    <h5 class="mb-10px font-regular text-color font-normal not-scrolling-date">{{ translate('messages.Select Date Range') }}</h5>
                     <button type="button" class="btn w-100 btn-white d-flex justify-content-between gap-10 align-items-center dateRange">
                         <span class="fs-14 text-title"></span>
                         <i class="tio-calendar-month"></i>
                     </button>
                 </div>
                 <div class="global-bg-box rounded p-xl-20 p-16">
-                    <h5 class="mb-10px font-regular text-color font-normal">Ratting</h5>
+                    <h5 class="mb-10px font-regular text-color font-normal">{{ translate('messages.Rating') }}</h5>
                     <div class="bg-white rounded p-xl-3 p-2">
                         <div class="row gx-xl-3 gx-2 gy-xl-3 gy-2">
                             <div class="col-sm-12">
@@ -438,8 +438,8 @@
         </div>
     </div>
     <div class="align-items-center bg-white bottom-0 d-flex gap-3 justify-content-center offcanvas-footer p-3 position-sticky">
-        <button type="button" id="filter_reset" class="btn w-100 btn--reset offcanvas-close">Reset</button>
-        <button type="submit" form="filter_form" class="btn w-100 btn--primary">Apply</button>
+        <button type="button" id="filter_reset" class="btn w-100 btn--reset offcanvas-close">{{ translate('messages.Reset') }}</button>
+        <button type="submit" form="filter_form" class="btn w-100 btn--primary">{{ translate('messages.Apply') }}</button>
     </div>
 </div>
 <div id="offcanvasOverlay" class="offcanvas-overlay"></div>
@@ -464,7 +464,7 @@
         $(function () {
             const $button = $('.dateRange');
             const $label = $button.find('span');
-            const placeholder = $label.data('placeholder') || 'Select Date';
+            const placeholder = $label.data('placeholder') || '{{ translate('messages.Select Date') }}';
 
             const currentUrl = new URL(window.location.href);
             const startDateUrl = currentUrl.searchParams.get('start_date');
@@ -488,15 +488,19 @@
                 endDate: endDate || undefined,
                 locale: {
                     cancelLabel: '清除',
-                    applyLabel: '确认'
+                    applyLabel: '确认',
+                    customRangeLabel: '自定义',
+                    daysOfWeek: ['日', '一', '二', '三', '四', '五', '六'],
+                    monthNames: ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'],
+                    firstDay: 1
                 },
                 ranges: {
                     '今天': [moment(), moment()],
                     '昨天': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
-                    'Last 7 Days': [moment().subtract(6, 'days'), moment()],
-                    'Last 30 Days': [moment().subtract(29, 'days'), moment()],
-                    'Last 2 Months': [moment().subtract(2, 'months').startOf('month'), moment().subtract(1, 'month').endOf('month')],
-                    'Last 6 Months': [moment().subtract(6, 'months').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+                    '最近7天': [moment().subtract(6, 'days'), moment()],
+                    '最近30天': [moment().subtract(29, 'days'), moment()],
+                    '最近2个月': [moment().subtract(2, 'months').startOf('month'), moment().subtract(1, 'month').endOf('month')],
+                    '最近6个月': [moment().subtract(6, 'months').startOf('month'), moment().subtract(1, 'month').endOf('month')]
                 }
             }, function(start, end, label) {
                 // callback when selecting a range
@@ -547,7 +551,7 @@
             $(document).on('dateRangeCleared', function(){
                 $('#start_date_value').val('');
                 $('#end_date_value').val('');
-                $('.dateRange').find('span').text('Select Date');
+                $('.dateRange').find('span').text('{{ translate('messages.Select Date') }}');
             });
         });
     </script>
