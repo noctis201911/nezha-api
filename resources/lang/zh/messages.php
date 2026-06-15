@@ -1627,7 +1627,7 @@
   'ready_for_delivery' => '待配送',
   'food_on_the_way' => '配送中',
   'yearly_statistics' => '年度统计',
-  'commission_given' => '释放的提成/佣金',
+  'commission_given' => '佣金',
   'Promotions' => '促销活动',
   'Campaign' => '活动',
   'order_section' => '订单管理',

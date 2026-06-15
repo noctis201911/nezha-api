@@ -15,7 +15,7 @@
                     </li>
 
                     <li class="list-inline-item">
-                        <a class="list-separator-link" href="{{route('vendor.shop.view')}}">{{translate('messages.profile')}}</a>
+                        <a class="list-separator-link" href="{{route('vendor.shop.view')}}">{{translate('messages.my_restaurant')}}</a>
                     </li>
 
                     <li class="list-inline-item">

@@ -1624,7 +1624,7 @@
   'ready_for_delivery' => '处于待取件交割台',
   'food_on_the_way' => '网格派送运载中',
   'yearly_statistics' => '年度商业版图演变',
-  'commission_given' => '释放的提成/佣金',
+  'commission_given' => '佣金',
   'Promotions' => '疯狂造节/活动矩阵',
   'Campaign' => '大促战场',
   'order_section' => '中央订单集散所',
