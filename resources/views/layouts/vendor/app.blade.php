@@ -522,7 +522,7 @@
     <script src="{{dynamicAsset('assets/admin/js/keyword-highlighted.js')}}"></script>
 
 <audio id="myAudio">
-    <source src="{{dynamicAsset('assets/admin/sound/new-order-voice.wav')}}" type="audio/wav">
+    <source src="{{dynamicAsset('assets/admin/sound/new-order-voice.mp3')}}" type="audio/mpeg">
 </audio>
 
 <script>
