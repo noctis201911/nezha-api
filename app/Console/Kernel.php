@@ -28,6 +28,9 @@ class Kernel extends ConsoleKernel
         // 哪吒: 每日清除超过保留期的顾客离线支付凭证PII(默认90天, 后台 nezha_payment_proof_retention_days 可调)。
         // 只抹 PII 字段+关联截图, 保留行/状态供审计; 不动订单/交易/链上记录。
         $schedule->command('nezha:purge-payment-proofs')->dailyAt('03:30')->withoutOverlapping();
+
+        // 哪吒: 每日清除已过期的本地生活UGC帖PII(contact_info + 上传图片), 保留帖子行/状态供审计。
+        $schedule->command('nezha:purge-locallife-pii')->dailyAt('03:40')->withoutOverlapping();
     }
 
     /**

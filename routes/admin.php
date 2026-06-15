@@ -1096,6 +1096,9 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('edit/{id}', [AdminLocalLifeController::class, 'edit'])->name('edit');
             Route::post('update/{id}', [AdminLocalLifeController::class, 'update'])->name('update');
             Route::post('status/{id}', [AdminLocalLifeController::class, 'statusToggle'])->name('status');
+            Route::post('approve/{id}', [AdminLocalLifeController::class, 'approve'])->name('approve');
+            Route::post('reject/{id}', [AdminLocalLifeController::class, 'reject'])->name('reject');
+            Route::post('ugc-toggle', [AdminLocalLifeController::class, 'ugcToggle'])->name('ugc-toggle');
             Route::delete('delete', [AdminLocalLifeController::class, 'destroy'])->name('delete');
         });
         Route::group(['prefix' => 'vehicle', 'as' => 'vehicle.', 'middleware' => ['module:deliveryman']], function () {

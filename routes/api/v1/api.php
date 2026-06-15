@@ -506,8 +506,9 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         Route::get('item', [CampaignController::class, 'get_item_campaigns']);
     });
 
+    // 公开: 游客也能看公开券(list不需登录,控制器已兼容游客); apply 仍需登录
+    Route::get('coupon/list', [UserCouponController::class, 'list']);
     Route::group(['prefix' => 'coupon', 'middleware' => 'auth:api'], function () {
-        Route::get('list', [UserCouponController::class, 'list']);
         Route::get('apply', [UserCouponController::class, 'apply']);
     });
 
@@ -529,6 +530,12 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     Route::group(['prefix' => 'local-life'], function () {
         Route::get('posts', [LocalLifeController::class, 'posts']);
         Route::get('posts/{id}', [LocalLifeController::class, 'postDetail']);
+    });
+
+    // 本地生活 UGC：发帖 / 我的发布（需登录；游客不能发，PII 仅本人可见）
+    Route::group(['prefix' => 'local-life', 'middleware' => 'auth:api'], function () {
+        Route::post('posts', [LocalLifeController::class, 'storePost']);
+        Route::get('my-posts', [LocalLifeController::class, 'myPosts']);
     });
 
     Route::get('vehicle/extra_charge', [ConfigController::class, 'extra_charge']);

@@ -9,13 +9,22 @@ class LocalLifePost extends Model
 {
     use HasFactory;
 
+    // status 值域: 0草稿 1已发布 2已下线 3待审核 4已驳回
+    public const STATUS_DRAFT     = 0;
+    public const STATUS_PUBLISHED = 1;
+    public const STATUS_OFFLINE   = 2;
+    public const STATUS_PENDING   = 3; // UGC 待审核
+    public const STATUS_REJECTED  = 4; // UGC 已驳回
+
     protected $fillable = [
+        'user_id',
         'title',
         'category',
         'tab',
         'description',
         'cover_emoji',
         'cover_color',
+        'images',
         'price_amd',
         'price_suffix',
         'is_free',
@@ -26,17 +35,25 @@ class LocalLifePost extends Model
         'contact_info',
         'expires_at',
         'status',
+        'reject_reason',
         'source',
     ];
 
     protected $casts = [
         'is_free'    => 'boolean',
         'is_urgent'  => 'boolean',
+        'images'     => 'array',
         'expires_at' => 'datetime',
     ];
 
     public function statusLabel()
     {
-        return ['草稿', '已发布', '已下线'][$this->status] ?? '草稿';
+        return [
+            self::STATUS_DRAFT     => '草稿',
+            self::STATUS_PUBLISHED => '已发布',
+            self::STATUS_OFFLINE   => '已下线',
+            self::STATUS_PENDING   => '待审核',
+            self::STATUS_REJECTED  => '已驳回',
+        ][$this->status] ?? '草稿';
     }
 }

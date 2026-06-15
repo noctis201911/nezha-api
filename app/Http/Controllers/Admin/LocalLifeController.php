@@ -6,25 +6,41 @@ use App\Http\Controllers\Controller;
 use App\Models\LocalLifePost;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class LocalLifeController extends Controller
 {
     public function list(Request $request)
     {
         $search = $request['search'];
+        $statusFilter = $request->input('status'); // 空=全部, 否则按 status 值筛
+
+        $posts = LocalLifePost::query();
+
         if ($request->has('search') && $search) {
             $key = explode(' ', $search);
-            $posts = LocalLifePost::where(function ($q) use ($key) {
+            $posts->where(function ($q) use ($key) {
                 foreach ($key as $value) {
                     $q->orWhere('title', 'like', "%{$value}%")
                         ->orWhere('category', 'like', "%{$value}%");
                 }
             });
-        } else {
-            $posts = new LocalLifePost();
         }
-        $posts = $posts->latest()->paginate(config('default_pagination'));
-        return view('admin-views.local-life.list', compact('posts', 'search'));
+
+        if ($statusFilter !== null && $statusFilter !== '') {
+            $posts->where('status', (int) $statusFilter);
+        }
+
+        // 待审核数（给页面顶部提示用）
+        $pendingCount = LocalLifePost::where('status', LocalLifePost::STATUS_PENDING)->count();
+        $ugcEnabled = (bool) (DB::table('business_settings')->where('key', 'locallife_ugc_enabled')->value('value'));
+
+        $posts = $posts->latest()->paginate(config('default_pagination'))->appends([
+            'search' => $search,
+            'status' => $statusFilter,
+        ]);
+
+        return view('admin-views.local-life.list', compact('posts', 'search', 'statusFilter', 'pendingCount', 'ugcEnabled'));
     }
 
     public function create()
@@ -79,13 +95,52 @@ class LocalLifeController extends Controller
         return redirect()->route('admin.local-life.list');
     }
 
-    // 草稿(0) <-> 已发布(1) 切换；已下线(2)切换则恢复为已发布
+    // 草稿(0) <-> 已发布(1) 切换；其它状态切换则恢复为已发布
     public function statusToggle($id)
     {
         $post = LocalLifePost::findOrFail($id);
-        $post->status = $post->status == 1 ? 0 : 1;
+        $post->status = $post->status == LocalLifePost::STATUS_PUBLISHED
+            ? LocalLifePost::STATUS_DRAFT
+            : LocalLifePost::STATUS_PUBLISHED;
         $post->save();
-        Toastr::success($post->status == 1 ? '已发布' : '已转为草稿');
+        Toastr::success($post->status == LocalLifePost::STATUS_PUBLISHED ? '已发布' : '已转为草稿');
+        return back();
+    }
+
+    // 审核通过：待审核(3) -> 已发布(1)，清掉历史驳回理由
+    public function approve($id)
+    {
+        $post = LocalLifePost::findOrFail($id);
+        $post->status = LocalLifePost::STATUS_PUBLISHED;
+        $post->reject_reason = null;
+        $post->save();
+        Toastr::success('已审核通过并发布');
+        return back();
+    }
+
+    // 审核驳回：-> 已驳回(4)，记录理由（对发帖用户在"我的发布"可见）
+    public function reject(Request $request, $id)
+    {
+        $request->validate([
+            'reject_reason' => 'nullable|string|max:255',
+        ]);
+        $post = LocalLifePost::findOrFail($id);
+        $post->status = LocalLifePost::STATUS_REJECTED;
+        $post->reject_reason = $request->reject_reason ?: '内容不符合本地生活信息墙规则';
+        $post->save();
+        Toastr::warning('已驳回该帖');
+        return back();
+    }
+
+    // 用户发帖入口总开关（真实影响开关，默认关；运营满意后手动开）
+    public function ugcToggle(Request $request)
+    {
+        $enable = $request->boolean('enable');
+        DB::table('business_settings')->updateOrInsert(
+            ['key' => 'locallife_ugc_enabled'],
+            ['value' => $enable ? '1' : '0', 'updated_at' => now()]
+        );
+        Toastr::success($enable ? '已开放用户发帖入口' : '已关闭用户发帖入口');
         return back();
     }
 

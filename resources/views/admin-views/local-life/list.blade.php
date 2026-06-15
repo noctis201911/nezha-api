@@ -5,12 +5,41 @@
 
 @section('content')
 <div class="content container-fluid">
+
+    {{-- 用户发帖入口总开关（真实影响开关，默认关） --}}
+    <div class="card mt-2">
+        <div class="card-body py-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div>
+                <h5 class="mb-1">用户发帖入口
+                    @if($ugcEnabled)
+                        <span class="badge badge-soft-success ml-1">已开放</span>
+                    @else
+                        <span class="badge badge-soft-secondary ml-1">未开放</span>
+                    @endif
+                </h5>
+                <small class="text-muted">开放后，登录顾客可在 H5「本地生活」自助发帖（默认进待审核，审核通过才公开）。关闭时入口显示"即将开放"。</small>
+            </div>
+            <form action="{{ route('admin.local-life.ugc-toggle') }}" method="post">
+                @csrf
+                <input type="hidden" name="enable" value="{{ $ugcEnabled ? 0 : 1 }}">
+                <button type="submit" class="btn {{ $ugcEnabled ? 'btn--danger' : 'btn--primary' }}">
+                    {{ $ugcEnabled ? '关闭发帖入口' : '开放发帖入口' }}
+                </button>
+            </form>
+        </div>
+    </div>
+
     <div class="card mt-2">
         <div class="card-header py-2 border-0">
             <div class="search--button-wrapper">
-                <h5 class="card-title">本地生活帖子<span class="badge badge-soft-dark ml-2">{{$posts->total()}}</span></h5>
+                <h5 class="card-title">本地生活帖子<span class="badge badge-soft-dark ml-2">{{$posts->total()}}</span>
+                    @if($pendingCount > 0)
+                        <span class="badge badge-warning ml-1">待审核 {{$pendingCount}}</span>
+                    @endif
+                </h5>
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <form id="search-form">
+                        <input type="hidden" name="status" value="{{ $statusFilter }}">
                         <div class="input--group input-group input-group-merge input-group-flush">
                             <input type="search" name="search" class="form-control" placeholder="按标题 / 分类搜索" value="{{ request()?->search ?? null }}">
                             <button type="submit" class="btn btn--secondary">
@@ -23,6 +52,19 @@
                     </a>
                 </div>
             </div>
+
+            {{-- 状态筛选 --}}
+            <div class="mt-2 d-flex flex-wrap gap-1">
+                @php
+                    $filters = ['' => '全部', '3' => '待审核', '1' => '已发布', '4' => '已驳回', '0' => '草稿', '2' => '已下线'];
+                @endphp
+                @foreach($filters as $val => $label)
+                    <a href="{{ route('admin.local-life.list', array_filter(['status' => $val, 'search' => $search])) }}"
+                       class="btn btn-sm {{ (string)$statusFilter === (string)$val ? 'btn--primary' : 'btn-outline-secondary' }}">
+                        {{ $label }}
+                    </a>
+                @endforeach
+            </div>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive datatable-custom">
@@ -31,12 +73,12 @@
                     <tr>
                         <th style="width:5%">序号</th>
                         <th style="width:24%">标题</th>
-                        <th style="width:15%">分类</th>
-                        <th style="width:9%">Tab</th>
-                        <th style="width:12%">价格</th>
+                        <th style="width:13%">分类</th>
+                        <th style="width:8%">Tab</th>
+                        <th style="width:8%">来源</th>
+                        <th style="width:11%">价格</th>
                         <th class="text-center" style="width:9%">状态</th>
-                        <th style="width:14%">创建时间</th>
-                        <th class="text-center" style="width:12%">操作</th>
+                        <th style="width:22%">操作</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -47,9 +89,19 @@
                                 @if($post->cover_emoji)<span class="mr-1">{{$post->cover_emoji}}</span>@endif
                                 {{Str::limit($post->title,28,'...')}}
                                 @if($post->is_urgent)<span class="badge badge-danger ml-1">急</span>@endif
+                                @if($post->status == 4 && $post->reject_reason)
+                                    <div><small class="text-danger">驳回理由：{{Str::limit($post->reject_reason,40,'...')}}</small></div>
+                                @endif
                             </td>
                             <td>{{$post->category}}</td>
                             <td>{{$post->tab}}</td>
+                            <td>
+                                @if($post->source == 'user')
+                                    <span class="badge badge-soft-info">用户</span>
+                                @else
+                                    <span class="badge badge-soft-secondary">平台</span>
+                                @endif
+                            </td>
                             <td>
                                 @if($post->is_free)
                                     <span class="badge badge-soft-success">免费</span>
@@ -60,22 +112,40 @@
                                 @endif
                             </td>
                             <td class="text-center">
-                                @php $cls = ['badge-secondary','badge-success','badge-dark'][$post->status] ?? 'badge-secondary'; @endphp
+                                @php $cls = ['badge-secondary','badge-success','badge-dark','badge-warning','badge-danger'][$post->status] ?? 'badge-secondary'; @endphp
                                 <label class="badge {{$cls}}">{{$post->statusLabel()}}</label>
                             </td>
-                            <td>{{$post->created_at}}</td>
-                            <td class="text-center">
-                                <div class="btn--container justify-content-center">
+                            <td>
+                                <div class="btn--container">
+                                    {{-- 待审核：通过 / 驳回 --}}
+                                    @if($post->status == 3)
+                                        <form action="{{route('admin.local-life.approve',$post->id)}}" method="post" class="d-inline">
+                                            @csrf
+                                            <button type="submit" title="审核通过并发布" class="btn btn-sm btn--success btn-outline-success action-btn">
+                                                <i class="tio-checkmark-circle"></i> 通过
+                                            </button>
+                                        </form>
+                                        <a class="btn btn-sm btn--warning btn-outline-warning action-btn" href="javascript:" title="驳回"
+                                            onclick="document.getElementById('reject-form-{{$post->id}}').classList.toggle('d-none')">
+                                            <i class="tio-clear-circle"></i> 驳回
+                                        </a>
+                                    @endif
+
                                     <a title="编辑" class="btn btn-sm btn--primary btn-outline-primary action-btn" href="{{route('admin.local-life.edit',$post->id)}}">
                                         <i class="tio-edit"></i>
                                     </a>
-                                    <form action="{{route('admin.local-life.status',$post->id)}}" method="post" class="d-inline">
-                                        @csrf
-                                        <button type="submit" title="{{$post->status==1?'转为草稿':'发布'}}"
-                                            class="btn btn-sm {{$post->status==1?'btn--warning btn-outline-warning':'btn--success btn-outline-success'}} action-btn">
-                                            <i class="{{$post->status==1?'tio-archive-outlined':'tio-publish'}}"></i>
-                                        </button>
-                                    </form>
+
+                                    {{-- 发布/下线切换：仅对非待审核/非驳回显示，避免和审核动作混淆 --}}
+                                    @if(in_array($post->status, [0,1,2]))
+                                        <form action="{{route('admin.local-life.status',$post->id)}}" method="post" class="d-inline">
+                                            @csrf
+                                            <button type="submit" title="{{$post->status==1?'转为草稿':'发布'}}"
+                                                class="btn btn-sm {{$post->status==1?'btn--warning btn-outline-warning':'btn--success btn-outline-success'}} action-btn">
+                                                <i class="{{$post->status==1?'tio-archive-outlined':'tio-publish'}}"></i>
+                                            </button>
+                                        </form>
+                                    @endif
+
                                     <a class="btn btn-sm btn--danger btn-outline-danger action-btn form-alert" href="javascript:"
                                         data-id="post-{{$post->id}}" data-message="确定删除这条帖子吗？" title="删除"><i class="tio-delete-outlined"></i></a>
                                     <form action="{{route('admin.local-life.delete')}}" method="post" id="post-{{$post->id}}">
@@ -83,6 +153,17 @@
                                         @csrf @method('delete')
                                     </form>
                                 </div>
+
+                                {{-- 驳回理由输入（默认隐藏） --}}
+                                @if($post->status == 3)
+                                    <form action="{{route('admin.local-life.reject',$post->id)}}" method="post" id="reject-form-{{$post->id}}" class="d-none mt-2">
+                                        @csrf
+                                        <div class="input-group input-group-sm">
+                                            <input type="text" name="reject_reason" class="form-control" maxlength="255" placeholder="驳回理由（可选，将展示给用户）">
+                                            <button type="submit" class="btn btn--warning">确认驳回</button>
+                                        </div>
+                                    </form>
+                                @endif
                             </td>
                         </tr>
                         @endforeach
