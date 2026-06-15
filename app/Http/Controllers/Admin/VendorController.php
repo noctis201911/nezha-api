@@ -586,7 +586,8 @@ class VendorController extends Controller
     public function updatePaymentInfo(Request $request, Restaurant $restaurant)
     {
         $validator = Validator::make($request->all(), [
-            'rmb_qr_image' => 'nullable|max:2048|image|mimes:' . IMAGE_FORMAT_FOR_VALIDATION,
+            'rmb_qr_image'    => 'nullable|max:2048|image|mimes:' . IMAGE_FORMAT_FOR_VALIDATION,
+            'wechat_qr_image' => 'nullable|max:2048|image|mimes:' . IMAGE_FORMAT_FOR_VALIDATION,
             'payee_name'   => 'nullable|string|max:100',
             'usdt_address' => 'nullable|string|max:191',
             'usdt_network' => 'nullable|string|max:50',
@@ -603,6 +604,15 @@ class VendorController extends Controller
                 old_image: $restaurant->rmb_qr_image,
                 format: 'png',
                 image: $request->file('rmb_qr_image')
+            );
+        }
+        // 哪吒外卖: 微信收款码 (独立于支付宝/人民币码). 同 rmb_qr 走 restaurant/payment_qr 目录, 随全表静态加密.
+        if ($request->has('wechat_qr_image')) {
+            $restaurant->wechat_qr_image = Helpers::update(
+                dir: 'restaurant/payment_qr/',
+                old_image: $restaurant->wechat_qr_image,
+                format: 'png',
+                image: $request->file('wechat_qr_image')
             );
         }
         $restaurant->payee_name   = $request->payee_name;

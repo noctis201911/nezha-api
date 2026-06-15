@@ -31,7 +31,7 @@
                 <div class="card-header">
                     <h5 class="card-title">
                         <span class="card-header-icon"><i class="tio-wallet"></i></span> &nbsp;
-                        <span>{{ translate('人民币收款 (微信/支付宝)') }}</span>
+                        <span>{{ translate('支付宝收款 (人民币)') }}</span>
                     </h5>
                 </div>
                 <div class="card-body">
@@ -42,7 +42,7 @@
                                    value="{{ $restaurant->payee_name }}" placeholder="{{ translate('如: 张三') }}">
                         </div>
                         <div class="col-md-6">
-                            <label class="input-label">{{ translate('收款码图片 (微信或支付宝收款二维码)') }}</label>
+                            <label class="input-label">{{ translate('支付宝收款码图片') }}</label>
                             <div class="custom-file">
                                 <input type="file" name="rmb_qr_image" id="rmb_qr_image" class="custom-file-input"
                                        accept=".jpg,.jpeg,.png,.webp">
@@ -53,13 +53,51 @@
                         <div class="col-12">
                             @if ($restaurant->rmb_qr_image_full_url)
                                 <div class="mt-2">
-                                    <label class="input-label">{{ translate('当前收款码') }}</label><br>
+                                    <label class="input-label">{{ translate('当前支付宝收款码') }}</label><br>
                                     <img src="{{ $restaurant->rmb_qr_image_full_url }}" alt="QR"
                                          style="max-width:200px;max-height:200px;border:1px solid #eee;border-radius:8px;"
                                          onerror="this.style.display='none';">
                                 </div>
                             @else
-                                <small class="text-danger">{{ translate('尚未上传人民币收款码') }}</small>
+                                <small class="text-danger">{{ translate('尚未上传支付宝收款码') }}</small>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <span class="card-header-icon"><i class="tio-comment"></i></span> &nbsp;
+                        <span>{{ translate('微信收款 (人民币)') }}</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-light border py-2 mb-3 small">
+                        <i class="tio-info-outined"></i>
+                        {{ translate('微信收款码与支付宝码分开上传。顾客在结算页选「微信」时显示此码; 留空则顾客无法用微信付款, 请提醒商家提供本人微信收款二维码。') }}
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="input-label">{{ translate('微信收款码图片') }}</label>
+                            <div class="custom-file">
+                                <input type="file" name="wechat_qr_image" id="wechat_qr_image" class="custom-file-input"
+                                       accept=".jpg,.jpeg,.png,.webp">
+                                <label class="custom-file-label" for="wechat_qr_image">{{ translate('选择图片') }}</label>
+                            </div>
+                            <small class="text-muted">{{ translate('支持 jpg/png/webp, 最大 2MB') }}</small>
+                        </div>
+                        <div class="col-12">
+                            @if ($restaurant->wechat_qr_image_full_url)
+                                <div class="mt-2">
+                                    <label class="input-label">{{ translate('当前微信收款码') }}</label><br>
+                                    <img src="{{ $restaurant->wechat_qr_image_full_url }}" alt="WeChat QR"
+                                         style="max-width:200px;max-height:200px;border:1px solid #eee;border-radius:8px;"
+                                         onerror="this.style.display='none';">
+                                </div>
+                            @else
+                                <small class="text-danger">{{ translate('尚未上传微信收款码') }}</small>
                             @endif
                         </div>
                     </div>

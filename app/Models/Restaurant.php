@@ -67,7 +67,7 @@ class Restaurant extends Model
 
     protected $appends = ['gst_status','gst_code','free_delivery_distance_status','free_delivery_distance_value',
         'logo_full_url','cover_photo_full_url','meta_image_full_url','tin_certificate_image_full_url','additional_documents_full_url',
-        'rmb_qr_image_full_url'];
+        'rmb_qr_image_full_url','wechat_qr_image_full_url'];
 
     /**
      * The attributes that should be hidden for arrays.
@@ -99,6 +99,22 @@ class Restaurant extends Model
         if (count($this->storage) > 0) {
             foreach ($this->storage as $storage) {
                 if ($storage['key'] == 'rmb_qr_image') {
+                    return Helpers::get_full_url('restaurant/payment_qr',$value,$storage['value']);
+                }
+            }
+        }
+
+        return Helpers::get_full_url('restaurant/payment_qr',$value,'public');
+    }
+    // 哪吒外卖: 商家本人微信收款码图片完整URL (独立于支付宝/人民币码 rmb_qr_image, 供后台 + 结算页前端显示)
+    public function getWechatQrImageFullUrlAttribute(){
+        $value = $this->wechat_qr_image;
+        if (!$value) {
+            return null;
+        }
+        if (count($this->storage) > 0) {
+            foreach ($this->storage as $storage) {
+                if ($storage['key'] == 'wechat_qr_image') {
                     return Helpers::get_full_url('restaurant/payment_qr',$value,$storage['value']);
                 }
             }
