@@ -688,13 +688,9 @@ class VendorController extends Controller
         }
         \App\CentralLogics\Helpers::businessUpdateOrInsert(['key' => 'nezha_rate_cny_to_amd'], ['value' => (string)$cnyToAmd]);
         \App\CentralLogics\Helpers::businessUpdateOrInsert(['key' => 'nezha_rate_usd_to_amd'], ['value' => (string)$usdToAmd]);
-        // 旧"美元兑人民币"仅预存佣金折算用, 仅在表单提交了该字段且合法时更新, 避免被默认值覆盖
-        if ($request->filled('nezha_usd_to_rmb_rate')) {
-            $rmb = (float)$request->input('nezha_usd_to_rmb_rate');
-            if ($rmb > 0 && $rmb <= 100) {
-                \App\CentralLogics\Helpers::businessUpdateOrInsert(['key' => 'nezha_usd_to_rmb_rate'], ['value' => (string)$rmb]);
-            }
-        }
+        // 美元兑人民币 = (1美元=?֏) / (1人民币=?֏), 自动派生, 永远与上面两个汇率自洽, 不再手填(消除三汇率打架)
+        $usdToRmb = round($usdToAmd / $cnyToAmd, 4);
+        \App\CentralLogics\Helpers::businessUpdateOrInsert(['key' => 'nezha_usd_to_rmb_rate'], ['value' => (string)$usdToRmb]);
         \Illuminate\Support\Facades\Cache::forget('business_settings_keys');
         \Illuminate\Support\Facades\Cache::forget('business_settings_all_data');
         Toastr::success(translate('汇率已更新: 1元=' . $cnyToAmd . '֏, 1美元=' . $usdToAmd . '֏'));

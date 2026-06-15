@@ -152,30 +152,45 @@
                 </p>
                 <form action="{{ route('admin.restaurant.update-rmb-rate') }}" method="post">
                     @csrf
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-3">
+                    <div class="row g-3 align-items-start">
+                        <div class="col-md-4">
                             <label class="input-label">{{ translate('1 元人民币 = ? ֏') }}</label>
                             <input type="number" step="0.01" min="1" max="100000" name="nezha_rate_cny_to_amd"
                                    class="form-control" value="{{ $cnyToAmd ?? 55 }}" placeholder="55" required>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label class="input-label">{{ translate('1 美元 = ? ֏') }}</label>
                             <input type="number" step="0.01" min="1" max="100000" name="nezha_rate_usd_to_amd"
                                    class="form-control" value="{{ $usdToAmd ?? 400 }}" placeholder="400" required>
                         </div>
-                        <div class="col-md-3">
-                            <label class="input-label">{{ translate('1 美元 = ? 元 (仅预存佣金折算)') }}</label>
-                            <input type="number" step="0.01" min="1" max="99" name="nezha_usd_to_rmb_rate"
-                                   class="form-control" value="{{ $rmbRate ?? 7.1 }}" placeholder="7.1">
-                        </div>
-                        <div class="col-md-3">
-                            <button type="submit" class="btn btn-primary btn-block">{{ translate('更新汇率') }}</button>
+                        <div class="col-md-4">
+                            <label class="input-label">{{ translate('1 美元 = ? 元 (自动算出, 不可填)') }}</label>
+                            <input type="text" id="usd-to-rmb-derived" class="form-control" readonly
+                                   value="{{ $rmbRate ?? 7.1 }}" style="background:#f1f3f5;cursor:not-allowed">
+                            <small class="text-muted">{{ translate('= (1美元=?֏) ÷ (1人民币=?֏), 自动保持自洽') }}</small>
                         </div>
                     </div>
-                    <div class="text-muted small pt-2">
-                        {{ translate('示例: 1元=55֏、1美元=400֏ → 5500֏ 订单 ≈ ¥100 / $13.75') }}
+                    <div class="d-flex justify-content-between align-items-center pt-3">
+                        <div class="text-muted small">
+                            {{ translate('示例: 1元=55֏、1美元=400֏ → 5500֏ 订单 ≈ ¥100 / $13.75') }}
+                        </div>
+                        <button type="submit" class="btn btn-primary">{{ translate('更新汇率') }}</button>
                     </div>
                 </form>
+                <script>
+                (function(){
+                    var cnyInput = document.querySelector('input[name="nezha_rate_cny_to_amd"]');
+                    var usdInput = document.querySelector('input[name="nezha_rate_usd_to_amd"]');
+                    var out = document.getElementById('usd-to-rmb-derived');
+                    if(!cnyInput || !usdInput || !out) return;
+                    function recalc(){
+                        var c = parseFloat(cnyInput.value), u = parseFloat(usdInput.value);
+                        out.value = (isFinite(c) && isFinite(u) && c > 0) ? (Math.round(u / c * 10000) / 10000) : '';
+                    }
+                    cnyInput.addEventListener('input', recalc);
+                    usdInput.addEventListener('input', recalc);
+                })();
+                </script>
             </div>
         </div>
 
@@ -233,33 +248,77 @@
                             <button type="submit" class="btn btn-success btn-block">{{ translate('提交') }}</button>
                         </div>
                     </div>
-                    <small class="text-muted">{{ translate('提示: 充值仅记录到本系统预存佣金账本, 实际收款请商家另行线下转账给平台。') }}</small>
+                    <small class="text-muted">{{ translate('提示: 充值金额按德拉姆(֏)填写; 仅记录到本系统预存佣金账本, 实际收款请商家另行线下转账给平台。') }}</small>
                 </form>
-                {{-- 换算小工具: 商家转了多少人民币 → 应充多少 USD --}}
+                {{-- 换算小工具: 三币种联动 (德拉姆 ֏ ⇄ 人民币 ¥ ⇄ 美元 $), 填任一框自动算另两框, 不提交 --}}
                 <div class="mt-3 p-3 bg-light rounded">
-                    <small class="text-muted d-block mb-2"><i class="tio-calculator"></i> {{ translate('换算小工具 (不提交): 商家转了多少人民币 → 应充多少 USD?') }}</small>
+                    <small class="text-muted d-block mb-2"><i class="tio-calculator"></i> {{ translate('换算小工具 (不提交, 仅帮你换算): 在任意一个框输入金额, 另两个自动换算') }}</small>
                     <div class="row g-2 align-items-center">
                         <div class="col-auto">
                             <div class="input-group input-group-sm">
-                                <div class="input-group-prepend"><span class="input-group-text">¥</span></div>
-                                <input type="number" step="0.01" min="0" id="rmb-helper-input" class="form-control" style="max-width:120px" placeholder="{{ translate('人民币金额') }}">
+                                <div class="input-group-prepend"><span class="input-group-text">֏</span></div>
+                                <input type="number" step="0.01" min="0" id="conv-amd" class="form-control" style="max-width:140px" placeholder="{{ translate('德拉姆') }}">
                             </div>
                         </div>
-                        <div class="col-auto text-muted">÷ {{ $rmbRate ?? 7.1 }} =</div>
-                        <div class="col-auto"><strong class="text-success" id="rmb-usd-result">—</strong> <small class="text-muted">USD</small></div>
+                        <div class="col-auto text-muted">=</div>
+                        <div class="col-auto">
+                            <div class="input-group input-group-sm">
+                                <div class="input-group-prepend"><span class="input-group-text">¥</span></div>
+                                <input type="number" step="0.01" min="0" id="conv-cny" class="form-control" style="max-width:140px" placeholder="{{ translate('人民币') }}">
+                            </div>
+                        </div>
+                        <div class="col-auto text-muted">=</div>
+                        <div class="col-auto">
+                            <div class="input-group input-group-sm">
+                                <div class="input-group-prepend"><span class="input-group-text">$</span></div>
+                                <input type="number" step="0.01" min="0" id="conv-usd" class="form-control" style="max-width:140px" placeholder="{{ translate('美元') }}">
+                            </div>
+                        </div>
                     </div>
+                    <small class="text-muted d-block mt-2">{{ translate('按当前平台汇率换算:') }} 1¥ = {{ $cnyToAmd ?? 55 }}֏, 1$ = {{ $usdToAmd ?? 400 }}֏</small>
                 </div>
                 <script>
                 (function(){
-                    var inp = document.getElementById('rmb-helper-input');
-                    var res = document.getElementById('rmb-usd-result');
-                    var rate = {{ $rmbRate ?? 7.1 }};
-                    if(inp && res) {
-                        inp.addEventListener('input', function(){
-                            var v = parseFloat(this.value);
-                            res.textContent = (!isNaN(v) && v > 0) ? (v / rate).toFixed(2) : '—';
-                        });
+                    var cnyToAmd = parseFloat('{{ $cnyToAmd ?? 55 }}') || 55;   // 1 人民币 = ? 德拉姆
+                    var usdToAmd = parseFloat('{{ $usdToAmd ?? 400 }}') || 400;  // 1 美元   = ? 德拉姆
+                    var amd = document.getElementById('conv-amd');
+                    var cny = document.getElementById('conv-cny');
+                    var usd = document.getElementById('conv-usd');
+                    if(!amd || !cny || !usd) return;
+                    var lock = false;
+                    function fmt(v){ return (!isFinite(v) || v <= 0) ? '' : (Math.round(v * 100) / 100); }
+                    function fromAmd(){
+                        if(lock) return; lock = true;
+                        var v = parseFloat(amd.value);
+                        if(isFinite(v) && v > 0){
+                            cny.value = fmt(v / cnyToAmd);
+                            usd.value = fmt(v / usdToAmd);
+                        } else { cny.value = ''; usd.value = ''; }
+                        lock = false;
                     }
+                    function fromCny(){
+                        if(lock) return; lock = true;
+                        var v = parseFloat(cny.value);
+                        if(isFinite(v) && v > 0){
+                            var a = v * cnyToAmd;
+                            amd.value = fmt(a);
+                            usd.value = fmt(a / usdToAmd);
+                        } else { amd.value = ''; usd.value = ''; }
+                        lock = false;
+                    }
+                    function fromUsd(){
+                        if(lock) return; lock = true;
+                        var v = parseFloat(usd.value);
+                        if(isFinite(v) && v > 0){
+                            var a = v * usdToAmd;
+                            amd.value = fmt(a);
+                            cny.value = fmt(a / cnyToAmd);
+                        } else { amd.value = ''; cny.value = ''; }
+                        lock = false;
+                    }
+                    amd.addEventListener('input', fromAmd);
+                    cny.addEventListener('input', fromCny);
+                    usd.addEventListener('input', fromUsd);
                 })();
                 </script>
             </div>
