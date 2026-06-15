@@ -536,6 +536,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     Route::group(['prefix' => 'local-life', 'middleware' => 'auth:api'], function () {
         Route::post('posts', [LocalLifeController::class, 'storePost']);
         Route::get('my-posts', [LocalLifeController::class, 'myPosts']);
+        Route::post('posts/{id}/report', [LocalLifeController::class, 'reportPost']);
     });
 
     Route::get('vehicle/extra_charge', [ConfigController::class, 'extra_charge']);

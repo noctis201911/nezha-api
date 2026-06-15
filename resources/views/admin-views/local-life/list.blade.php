@@ -36,6 +36,9 @@
                     @if($pendingCount > 0)
                         <span class="badge badge-warning ml-1">待审核 {{$pendingCount}}</span>
                     @endif
+                    @if(!empty($reportPendingTotal) && $reportPendingTotal > 0)
+                        <span class="badge badge-danger ml-1"><i class="tio-flag"></i> 待处理举报 {{$reportPendingTotal}}</span>
+                    @endif
                 </h5>
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <form id="search-form">
@@ -83,12 +86,18 @@
                     </thead>
                     <tbody>
                         @foreach($posts as $k=>$post)
+                        @php $rc = $reportCounts[$post->id] ?? 0; @endphp
                         <tr>
                             <td>{{$posts->firstItem()+$k}}</td>
                             <td>
                                 @if($post->cover_emoji)<span class="mr-1">{{$post->cover_emoji}}</span>@endif
                                 {{Str::limit($post->title,28,'...')}}
                                 @if($post->is_urgent)<span class="badge badge-danger ml-1">急</span>@endif
+                                @if($rc > 0)
+                                    <a href="{{route('admin.local-life.reports',$post->id)}}" class="badge badge-danger ml-1" title="查看举报">
+                                        <i class="tio-flag"></i> 举报 {{$rc}}
+                                    </a>
+                                @endif
                                 @if($post->status == 4 && $post->reject_reason)
                                     <div><small class="text-danger">驳回理由：{{Str::limit($post->reject_reason,40,'...')}}</small></div>
                                 @endif
@@ -128,6 +137,13 @@
                                         <a class="btn btn-sm btn--warning btn-outline-warning action-btn" href="javascript:" title="驳回"
                                             onclick="document.getElementById('reject-form-{{$post->id}}').classList.toggle('d-none')">
                                             <i class="tio-clear-circle"></i> 驳回
+                                        </a>
+                                    @endif
+
+                                    {{-- 举报：进入举报处理页 --}}
+                                    @if($rc > 0)
+                                        <a title="查看举报 ({{$rc}})" class="btn btn-sm btn--danger btn-outline-danger action-btn" href="{{route('admin.local-life.reports',$post->id)}}">
+                                            <i class="tio-flag"></i> {{$rc}}
                                         </a>
                                     @endif
 

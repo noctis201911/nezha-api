@@ -1,6 +1,6 @@
 # 哪吒外卖 — 数据保护与隐私政策 (Data Protection)
 
-**版本**: 0.98 (本地生活 UGC 帖 PII 到期清除已落地) 　**更新**: 2026-06-15
+**版本**: 0.99 (本地生活 UGC 加固②:违禁词/举报/免责 + 修复 local_life_posts 加密缺口) 　**更新**: 2026-06-15
 
 > 描述平台对用户个人信息(PII)与支付凭证的保护措施。区分**已实施**与**规划中(组③数据安全加固)**,如实陈述。
 
@@ -23,9 +23,10 @@
 - **(2026-06-14)离线支付付款截图文件上传(端到端落地)**:顾客可在下单页/订单详情上传付款截图(人民币方式**必填**、USDT 方式**可选**)。文件存于 public 磁盘 `offline_payment/` 目录,`payment_info` 内记**完整相对路径**(`offline_payment/xxx.webp`)。**该截图为高敏 PII**,已确认被上述两道既有机制完整覆盖:① 随**全表静态加密**(at-rest,见下文);② 到期由 `nezha:purge-payment-proofs` **连同截图文件一并删除**(以 `--dry-run` 实测:回填 120 天前的测试行,命中并标记删除 `offline_payment/...webp`)。后端仅接受图片扩展名(png/jpg/jpeg/webp/gif),从源头杜绝"清除/展示判定盲区"。截图在顾客端与后台订单详情可点开查看。
 - **(2026-06-14)后台管理员两步验证(2FA/TOTP)**:可选开启(opt-in),登录在密码之外需认证器 App 动态码;含 8 个一次性恢复码;认证器丢失可经 SSH `php artisan nezha:2fa-disable <email>` 应急关闭。
 - **(2026-06-14)代码库密钥泄露扫描**:已核查前后端 git 全历史,`.env`/密钥从未入库,`.gitignore` 已屏蔽 .env/OAuth key/凭据文件,历史中无已知机密命中。
-- **(2026-06-14)数据库 PII 静态加密(at-rest)**:对应用库全部 150 张 InnoDB 表启用 MySQL 表空间加密(`ENCRYPTION='Y'` + `keyring_file` 插件,`early-plugin-load` 启动加载),覆盖姓名/电话/邮箱/地址/坐标/证件号/USDT 地址等全部 PII 字段。透明加密,应用搜索/派单不受影响(已验证读写正常 + API 200)。密钥置于 `/www/server/mysql-keyring/`(在数据目录与备份目录之外)。**诚实边界**:防的是磁盘/数据文件/备份被盗;密钥与数据同在一台机器,**防不了**服务器被攻破或宿主机层面访问;MySQL 5.7 下 redo/undo log 不被加密、binlog 加密不支持(本机 binlog 当前已关闭,少一个明文漏点)。
+- **(2026-06-14)数据库 PII 静态加密(at-rest)**:对应用库全部 150 张 InnoDB 表启用 MySQL 表空间加密(`ENCRYPTION='Y'` + `keyring_file` 插件,`early-plugin-load` 启动加载),覆盖姓名/电话/邮箱/地址/坐标/证件号/USDT 地址等全部 PII 字段。透明加密,应用搜索/派单不受影响(已验证读写正常 + API 200)。密钥置于 `/www/server/mysql-keyring/`(在数据目录与备份目录之外)。**诚实边界**:防的是磁盘/数据文件/备份被盗;密钥与数据同在一台机器,**防不了**服务器被攻破或宿主机层面访问;MySQL 5.7 下 redo/undo log 不被加密、binlog 加密不支持(本机 binlog 当前已关闭,少一个明文漏点)。**新表注意**:5.7 下新建 InnoDB 表**不会自动继承**全库加密,迁移须显式 `ALTER TABLE ... ENCRYPTION='Y'`——`local_life_posts`(窗口④建)曾因此漏加密,已于 2026-06-15 修复(见下方 UGC 加固条)。
 - **(2026-06-14)加密备份**:每日自动 `mysqldump` 经 AES-256-CBC(PBKDF2)加密落盘到 `/www/backup/database/nezha-enc/`,密钥存 `/root/.nezha/backup.key`(在备份目录之外),保留最近 14 份;明文备份不落盘,恢复方法见 `/root/nezha-backup/README-RESTORE.txt` 与 ADMIN_GUIDE 6.3。
-- **(2026-06-15)本地生活 UGC 帖 PII 保护**:顾客自助发帖(`local_life_posts`,`source='user'`)的**联系方式(contact_info)为 PII**——① 列表接口白名单**永不含** contact_info;② 详情接口仅对持有效 token 的登录顾客返回,游客一律置 null;③ 帖子默认 `status=待审核`,审核通过前不公开;④ 随**全表静态加密**(at-rest)。**到期清除**:发帖时设 `expires_at=+30天`,计划任务 `nezha:purge-locallife-pii` 每日 03:40 抹除已过期 UGC 帖的 contact_info + 删除上传图片文件,**保留帖子行/状态供审计**(`--dry-run` 可预演)。发帖入口总开关 `locallife_ugc_enabled` **默认关**;每用户每日发帖上限(`locallife_ugc_daily_limit` 默认 5)防刷。L1-1:本地生活仅信息墙,发帖表单/接口**不含**任何支付/押金/代收/下单/担保字段。
+- **(2026-06-15)本地生活 UGC 帖 PII 保护**:顾客自助发帖(`local_life_posts`,`source='user'`)的**联系方式(contact_info)为 PII**——① 列表接口白名单**永不含** contact_info;② 详情接口仅对持有效 token 的登录顾客返回,游客一律置 null;③ 帖子默认 `status=待审核`,审核通过前不公开;④ 静态加密(at-rest)——**注**:`local_life_posts` 建表时漏带 `ENCRYPTION`,2026-06-15 已 `ALTER ... ENCRYPTION='Y'` 补加密(见下条)。**到期清除**:发帖时设 `expires_at=+30天`,计划任务 `nezha:purge-locallife-pii` 每日 03:40 抹除已过期 UGC 帖的 contact_info + 删除上传图片文件,**保留帖子行/状态供审计**(`--dry-run` 可预演)。发帖入口总开关 `locallife_ugc_enabled` **默认关**;每用户每日发帖上限(`locallife_ugc_daily_limit` 默认 5)防刷。L1-1:本地生活仅信息墙,发帖表单/接口**不含**任何支付/押金/代收/下单/担保字段。
+- **(2026-06-15)本地生活 UGC 加固②(违禁词/举报/反滥用/免责 + 修复加密缺口)**:① **违禁词过滤**——顾客发帖及后台录入均扫 title+description+contact_info,命中即拒(422,不回显命中词),词库 `business_settings.locallife_banned_words` 后台可配;② **顾客举报**——新表 `local_life_reports`(`POST /api/v1/local-life/posts/{id}/report`,**auth:api 禁匿名**),理由白名单+「其他」必填说明+去重+每日上限 `locallife_report_daily_limit`(默认20);后台举报数徽章 + 下线帖/驳回举报;③ **反滥用**——最小发帖间隔 `locallife_ugc_min_interval_sec`(默认60s)+ 24h 同标题重复拦截;④ **平台免责声明**——列表/详情常驻短提示 + 发帖必勾同意《本地生活信息发布规则》,文案 `business_settings.locallife_disclaimer`/`locallife_terms` 可配。**🔴 L1-7 加密缺口修复**:核查发现 `local_life_posts`(含 contact_info PII)实际**未加密**(5.7 新表不继承全库加密,与本文档前述声称不符)→ 已 `ALTER TABLE local_life_posts ENCRYPTION='Y'` 补加密;新建 `local_life_reports`(`detail` 可能含联系方式 PII)显式 `ENCRYPTION='Y'`,两表均确认 `ENCRYPTION="Y"`。`local_life_reports.detail` 视为 PII(随表加密)。**L1-1**:违禁词/举报/免责全程不引入任何支付/押金/代收/下单/担保字段。
 
 ## 3. 规划中 (组③ 数据安全加固 — 尚未实施,实施后本节升级为"已实施")
 - **传输**:强制 HSTS;敏感 API 增加短期令牌 + 速率限制。
@@ -37,6 +38,7 @@
 ## 4. 数据保留与删除
 - 支付凭证:默认保留 90 天后自动删除(**已实施 2026-06-14**,后台可调天数)。
 - 本地生活 UGC 帖联系方式+图片:默认 30 天到期后自动清除(**已实施 2026-06-15**,`nezha:purge-locallife-pii` 每日 03:40),保留帖子行/状态供审计。
+- 本地生活举报记录(`local_life_reports`,`detail` 偶含 PII):随表静态加密,暂随业务保留供审计,后续可纳入到期清理(参照 merchant_leads 处理)。
 - 链上交易记录:合规要求留存 ≥ 5 年(见 `AML-policy.md`)。
 - 账户数据:账户存续期间保留,注销后按政策清理。
 - 数据库备份:每日加密备份(AES-256),保留最近 14 份(**已实施 2026-06-14**)。
