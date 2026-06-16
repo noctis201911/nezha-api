@@ -16,7 +16,7 @@ class MerchantLeadController extends Controller
         $validator = Validator::make($request->all(), [
             'store_name'   => 'required|string|max:120',
             'contact_name' => 'required|string|max:60',
-            'phone'        => 'required|string|max:40',
+            'phone'        => 'required|string|max:120',
             'wechat'       => 'nullable|string|max:60',
             'address'      => 'nullable|string|max:255',
             'category'     => 'nullable|string|max:60',
@@ -56,7 +56,7 @@ class MerchantLeadController extends Controller
             $body = "新的商家入驻申请\n\n"
                 . "店铺名称：{$lead->store_name}\n"
                 . "联系人：{$lead->contact_name}\n"
-                . "电话：{$lead->phone}\n"
+                . "邮箱：{$lead->phone}\n"
                 . "微信：" . ($lead->wechat ?: '-') . "\n"
                 . "店铺地址：" . ($lead->address ?: '-') . "\n"
                 . "经营品类：" . ($lead->category ?: '-') . "\n"

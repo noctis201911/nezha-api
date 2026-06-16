@@ -11,7 +11,7 @@
                 <h5 class="card-title">商家入驻申请<span class="badge badge-soft-dark ml-2">{{$leads->total()}}</span></h5>
                 <form id="search-form">
                     <div class="input--group input-group input-group-merge input-group-flush">
-                        <input type="search" name="search" class="form-control" placeholder="按店名 / 联系人 / 电话搜索" value="{{ request()?->search ?? null }}">
+                        <input type="search" name="search" class="form-control" placeholder="按店名 / 联系人 / 邮箱搜索" value="{{ request()?->search ?? null }}">
                         <button type="submit" class="btn btn--secondary">
                             <i class="tio-search"></i>
                         </button>
@@ -27,7 +27,7 @@
                         <th style="width:5%">序号</th>
                         <th style="width:18%">店铺名称</th>
                         <th style="width:12%">联系人</th>
-                        <th style="width:15%">电话</th>
+                        <th style="width:15%">邮箱</th>
                         <th style="width:12%">品类</th>
                         <th class="text-center" style="width:10%">状态</th>
                         <th style="width:13%">提交时间</th>
