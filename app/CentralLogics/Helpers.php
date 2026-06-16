@@ -5173,6 +5173,19 @@ class Helpers
         if (! in_array($extension, $allowedExtensions)) {
             throw new InvalidUploadException('File type not allowed.');
         }
+
+        // 哪吒安全加固: 扩展名白名单之外再做内容嗅探(finfo MIME, 非客户端声明),
+        // 挡住伪装成合法扩展名的 HTML/SVG/PHP/JS 文件(防存储型XSS/避免内容嗅探被滥用).
+        $detectedMime = strtolower((string) $image->getMimeType());
+        $dangerousMimes = ['text/html', 'application/xhtml+xml', 'image/svg+xml', 'application/x-php', 'text/x-php', 'application/x-httpd-php', 'application/javascript', 'text/javascript', 'application/x-javascript'];
+        if (in_array($detectedMime, $dangerousMimes, true)) {
+            throw new InvalidUploadException('File type not allowed.');
+        }
+        // 图片扩展名的文件其真实内容必须是图片(挡住 shell.png 这类非图片伪装).
+        $imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+        if (in_array($extension, $imageExts, true) && strncmp($detectedMime, 'image/', 6) !== 0) {
+            throw new InvalidUploadException('File type not allowed.');
+        }
     }
 
     public static function extensionFromMimeType(string $mimeType): string
