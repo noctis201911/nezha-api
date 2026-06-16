@@ -8,14 +8,21 @@
             @else
             @php($zone_name=translate('All'))
         @endif
+            @php($__cnyRate = (float)(\App\Models\BusinessSetting::where('key','nezha_rate_cny_to_amd')->first()?->value ?? 0))
+            @php($__usdRate = (float)(\App\Models\BusinessSetting::where('key','nezha_rate_usd_to_amd')->first()?->value ?? 0))
+            @php($__fxOk = ($__cnyRate > 0 && $__usdRate > 0))
+            @php($__commAmd = array_sum($commission))
+            @php($__sellAmd = array_sum($total_sell))
             <div class="d-flex flex-wrap justify-content-center align-items-center">
                 <span class="h5 m-0 mr-3 fz--11 d-flex align-items-center mb-2 mb-md-0">
                     <span class="legend-indicator bg-0661CB"></span>
-                    <span>{{translate('messages.admin_commission')}}</span> <span>:</span> <span>{{\App\CentralLogics\Helpers::format_currency(array_sum($commission))}}</span>
+                    <span>{{translate('messages.admin_commission')}}</span> <span>:</span> <span>{{\App\CentralLogics\Helpers::format_currency($__commAmd)}}</span>
+                    @if($__fxOk)<small class="text-muted ml-1" style="font-weight:400;">(≈ ¥{{number_format($__commAmd/$__cnyRate,2)}} / ${{number_format($__commAmd/$__usdRate,2)}})</small>@endif
                 </span>
                 <span class="h5 m-0 fz--11 d-flex align-items-center mb-2 mb-md-0">
                     <span class="legend-indicator bg-sell-green"></span>
-                    <span>{{translate('messages.total_sell')}}</span> <span>:</span> <span>{{\App\CentralLogics\Helpers::format_currency(array_sum($total_sell))}}</span>
+                    <span>{{translate('messages.total_sell')}}</span> <span>:</span> <span>{{\App\CentralLogics\Helpers::format_currency($__sellAmd)}}</span>
+                    @if($__fxOk)<small class="text-muted ml-1" style="font-weight:400;">(≈ ¥{{number_format($__sellAmd/$__cnyRate,2)}} / ${{number_format($__sellAmd/$__usdRate,2)}})</small>@endif
                 </span> &nbsp;&nbsp;
         @if (\App\CentralLogics\Helpers::subscription_check())
         <span class="h5 m-0 fz--11 d-flex align-items-center mb-2 mb-md-0">
