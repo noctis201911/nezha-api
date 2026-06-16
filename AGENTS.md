@@ -33,3 +33,4 @@
 ---
 ## 认领区（动手前登记，干完划掉）
 <!-- 格式： - [ ] 窗口X 正在改 <文件/页面>（YYYY-MM-DD HH:MM） -->
+- [ ] 窗口(F-4) 正在改 OrderLogic.php / Admin·Vendor OrderController / vendor order-view·_sidebar / routes·docs —— 直付单退款通知商家+留痕（2026-06-17）
