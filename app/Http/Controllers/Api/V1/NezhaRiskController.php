@@ -41,7 +41,14 @@ class NezhaRiskController extends Controller
         if ($result['action'] === 'reject') {
             $contact = (string) (BusinessSetting::where('key', 'nezha_risk_contact_info')->first()?->value ?? '');
             $msg = $result['message'] . ($contact !== '' ? '（客服：' . $contact . '）' : '');
-            return response()->json(['risk_action' => 'reject', 'message' => $msg], 200);
+            // 哪吒: 附 reject_code + limit(德拉姆) + contact, 让前端弹窗精确告知"超单笔上限"并给客服入口.
+            return response()->json([
+                'risk_action' => 'reject',
+                'message'     => $msg,
+                'reject_code' => $result['reject_code'] ?? null,
+                'limit'       => isset($result['limit']) ? (float) $result['limit'] : null,
+                'contact'     => $contact,
+            ], 200);
         }
 
         return response()->json(['risk_action' => 'review', 'message' => $result['message']], 200);

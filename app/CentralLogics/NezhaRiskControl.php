@@ -83,7 +83,8 @@ class NezhaRiskControl
         // ── 规则1: 单笔上限 → 拒单 (优先级最高, 命中即返回; 不被人工放行豁免) ──
         if ($singleLimit > 0 && $amount > $singleLimit) {
             $hits[] = ['rule' => 'single_order_limit', 'detail' => "单笔 \${$amount} 超过上限 \${$singleLimit}"];
-            return ['action' => 'reject', 'hit_rules' => $hits, 'message' => '订单金额超过单笔上限，请联系客服'];
+            // 哪吒: 附结构化拒单码 + 上限值(德拉姆), 供前端弹窗按渠道精确展示(¥/$换算前端算), 不硬编码.
+            return ['action' => 'reject', 'hit_rules' => $hits, 'message' => '订单金额超过单笔上限，请联系客服', 'reject_code' => 'single_order_limit', 'limit' => $singleLimit];
         }
 
         $userId = $ctx['user_id'] ?? null;
