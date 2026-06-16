@@ -49,43 +49,22 @@ class OfflinePaymentMethodController extends Controller
     {
         $request->validate([
             'method_name' => 'required|unique:offline_payment_methods|max:255',
-            'input_name' => 'required|array',
-            'input_data' => 'required|array',
-            'customer_input' => 'required|array',
-        ],[
-            'input_name.required' => translate('Payment_information_details_required'),
-            'input_data.required' => translate('Payment_information_details_required'),
-            'customer_input.required' => translate('Customer_input_information_required')
+            'field_label' => 'required|array|min:1',
+        ], [
+            'field_label.required' => translate('Payment_information_details_required'),
         ]);
 
-        $method_fields = [];
-        if($request->has('input_name'))
-        {
-            foreach ($request->input_name as $key => $field_name) {
-                $method_fields[] = [
-                    'input_name' => strtolower(str_replace("'", '', preg_replace('/[^a-zA-Z0-9\']/', '_', $request->input_name[$key]))),
-                    'input_data' => $request->input_data[$key],
-                ];
-            }
-        }
-
-        $method_informations = [];
-        if($request->has('customer_input'))
-        {
-            foreach ($request->customer_input as $key => $field_name) {
-                $method_informations[] = [
-                    'customer_input' => strtolower(str_replace("'", '', preg_replace('/[^a-zA-Z0-9\']/', '_', $request->customer_input[$key]))),
-                    'customer_placeholder' => $request->customer_placeholder[$key],
-                    'is_required' => isset($request['is_required']) && isset($request['is_required'][$key]) ? 1 : 0,
-                ];
-            }
+        $method_fields = $this->buildMethodFields($request);
+        if (empty($method_fields)) {
+            Toastr::error(translate('Payment_information_details_required'));
+            return back()->withInput();
         }
 
         $this->OfflinePaymentMethod->insert([
             'method_name' => $request->method_name,
-            'method_fields' => json_encode($method_fields),
-            'method_informations' => json_encode($method_informations),
-            'status'=>1,
+            'method_fields' => json_encode($method_fields, JSON_UNESCAPED_UNICODE),
+            'method_informations' => $request->filled('payment_note') ? $request->payment_note : '[]',
+            'status' => 1,
             'created_at' => Carbon::now(),
         ]);
 
@@ -112,46 +91,50 @@ class OfflinePaymentMethodController extends Controller
     {
         $request->validate([
             'method_name' => 'required|max:255|unique:offline_payment_methods,method_name,'.$request->id,
-            'input_name' => 'required|array',
-            'input_data' => 'required|array',
-            'customer_input' => 'required|array',
-        ],[
-            'input_name.required' => translate('Payment_information_details_required'),
-            'input_data.required' => translate('Payment_information_details_required'),
-            'customer_input.required' => translate('Customer_input_information_required')
+            'field_label' => 'required|array|min:1',
+        ], [
+            'field_label.required' => translate('Payment_information_details_required'),
         ]);
-        $method_fields = [];
-        if($request->has('input_name'))
-        {
-            foreach ($request->input_name as $key => $field_name) {
-                $method_fields[] = [
-                    'input_name' => strtolower(str_replace(' ', "_", $request->input_name[$key])),
-                    'input_data' => $request->input_data[$key],
-                ];
-            }
+
+        $method_fields = $this->buildMethodFields($request);
+        if (empty($method_fields)) {
+            Toastr::error(translate('Payment_information_details_required'));
+            return back()->withInput();
         }
 
-        $method_informations = [];
-        if($request->has('customer_input'))
-        {
-            foreach ($request->customer_input as $key => $field_name) {
-                $method_informations[] = [
-                    'customer_input' => strtolower(str_replace(' ', "_", $request->customer_input[$key])),
-                    'customer_placeholder' => $request->customer_placeholder[$key],
-                    'is_required' => isset($request['is_required']) && isset($request['is_required'][$key]) ? 1 : 0,
-                ];
-            }
-        }
-
-        $this->OfflinePaymentMethod->where('id', $request->id)->update([
+        $update = [
             'method_name' => $request->method_name,
-            'method_fields' => json_encode($method_fields),
-            'method_informations' => json_encode($method_informations),
-            'created_at' => Carbon::now(),
-        ]);
+            'method_fields' => json_encode($method_fields, JSON_UNESCAPED_UNICODE),
+        ];
+        if ($request->has('payment_note')) {
+            $update['method_informations'] = $request->filled('payment_note') ? $request->payment_note : '[]';
+        }
+        $this->OfflinePaymentMethod->where('id', $request->id)->update($update);
 
         Toastr::success(translate('offline_payment_method_update_successfully'));
         return to_route('admin.business-settings.offline');
+    }
+
+    /** 哪吒: 从表单 field_label[]/field_type[]/field_required[] 构建 canonical method_fields
+     *  (input_field_name/input_type/is_required), 与顾客端 Api/V1/OrderController 读取严格一致。 */
+    private function buildMethodFields(Request $request): array
+    {
+        $labels = $request->input('field_label', []);
+        $types  = $request->input('field_type', []);
+        $reqs   = $request->input('field_required', []);
+        $phs    = $request->input('field_placeholder', []);
+        $out = [];
+        foreach ($labels as $i => $label) {
+            $label = trim((string) $label);
+            if ($label === '') continue;
+            $out[] = [
+                'input_field_name' => $label,
+                'input_type' => (isset($types[$i]) && $types[$i] === 'file') ? 'file' : 'text',
+                'placeholder' => isset($phs[$i]) ? trim((string) $phs[$i]) : '',
+                'is_required' => (isset($reqs[$i]) && (string) $reqs[$i] === '1') ? 1 : 0,
+            ];
+        }
+        return $out;
     }
 
 
