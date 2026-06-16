@@ -44,3 +44,26 @@
 - [ ] D 并发爬坡找拐点+崩溃点(对照上方基线看有无回归)
 - [ ] E 缓存头 / F 慢查询+OOM重启
 - [ ] 临时脚本删干净 + 确认机器 load 恢复
+
+---
+
+## 2026-06-17 修复轮 (修正首轮根因 + 已实施修复)
+
+首轮结论被证伪: 首轮说瓶颈=Next单fork SSR渲染CPU 是错的(只看吞吐曲线没profile CPU去向)。压测时profile发现打/home时吃满CPU的是 php-fpm 不是 next-server(next-server仅13%CPU)。
+
+真根因(全站性): 前端 src/pages/_document.js 的 getInitialProps 每个SSR页面每次请求都 fetch /api/v1/config/get-analytic-scripts (且该接口返回空数组纯空跑), 无缓存 => 把php-fpm打爆。这才是~10rps天花板真因, 与Next单核无关。教训记入轴D: 饱和时必profile CPU到底在哪个进程, 别只看吞吐就归因渲染。
+
+已实施修复 (均服务器配置·非git·已备份·BT面板改站点设置可能覆盖需留意):
+1. API fastcgi微缓存(核心): 新增 extension/api.nezha.am/nezha_apicache.conf + proxy.conf加fastcgi_cache_path区。仅缓存白名单 config 与 config/get-analytic-scripts 60s, 默认no_cache=1 fail-safe + 仅GET/HEAD + 不ignore Set-Cookie(三重保险,订单认证端点永不缓存,已验customer/info→302 BYPASS)。config已验全局(带不带token一致/en=zh/无Set-Cookie)。
+2. php-fpm max_children 50→30, max_spare 20→15 (php-fpm.conf, 防3.8GB机swap, L2)。
+3. 前端proxy_cache加language-aware键 (cache_key追加 cookie_languageSetting): 根治既有语言串味——全局proxy_cache一直缓存餐厅HTML但键不含语言, zh/en用户最长60s串味; 已验en/zh现分桶。
+4. cluster试了并还原: 改ecosystem cluster -i 2实测吞吐零提升(瓶颈在后端非NextCPU), 已还原fork/1省内存。next start+pm2 cluster端口共享对CLI本就不灵。
+
+修复后实测(/home localhost压测):
+- 并发8: 9.9rps/p50 716ms → 177rps/p50 35ms (18倍)
+- 并发16: 5.8rps崩溃/p95 5982ms → 221rps/p95 94ms (38倍), load 3.35→0.62
+- 全站每个SSR页都受益(_document全站调用)。
+
+回滚: 删nezha_apicache.conf + proxy.conf去掉fastcgi_cache_path行 + 前端proxy去掉proxy_cache_key行 + php-fpm.conf还原.bak, 各 nginx -t 后 reload / php-fpm reload。备份均在原文件旁 .bak.时间戳。
+
+剩余建议(未做,待用户): 根治应在代码层——_document不该每请求空跑get-analytic-scripts(缓存或删,因返回空数组); 但改前端需构建,当时构建门被别窗口WIP卡住故走nginx层。下次构建顺手修_document后可撤掉API fastcgi缓存。
