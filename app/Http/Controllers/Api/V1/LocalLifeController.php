@@ -84,6 +84,12 @@ class LocalLifeController extends Controller
             $query->where('tab', $tab);
         }
 
+        // 子类精确筛选（前端「找服务/上门服务」子图标）：有则在 tab 基础上再按 category 收窄
+        $category = $request->input('category');
+        if ($category !== null && trim($category) !== '') {
+            $query->where('category', $category);
+        }
+
         $total = $query->count();
         $posts = $query->orderBy('created_at', 'desc')
             ->skip(($offset - 1) * $limit)
