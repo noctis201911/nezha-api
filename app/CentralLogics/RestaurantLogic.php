@@ -130,7 +130,24 @@ class RestaurantLogic
                 });
             });
             if($all_restaurant_default_status == '1' && (!isset($additional_data['sort_by']) || $additional_data['sort_by'] == 'default')) {
-                $query = self::addOrdersCountIfMissing($query)->orderBy('orders_count', 'desc');
+                if ($additional_data['filter'] == 'all') {
+                    // 综合排序(综合分): 营业中优先(open 已在前置 orderBy 强制沉底关店),再按综合分降序。
+                    // 综合分 = 0.45×距离(近) + 0.30×评分(高) + 0.25×销量(多); 归一化用绝对阈值(距离8000m封顶/销量50单封顶/评分除以5)以保证分页排序稳定(不能用相对min-max,否则每页归一不同会乱序)。
+                    // 权重/阈值如需调整改下方 orderByRaw 即可(L3实现细节)。无评价店评分计0分,仍靠距离+销量参与排序。
+                    $query = self::addOrdersCountIfMissing($query)
+                        ->selectSub(function ($q) {
+                            $q->selectRaw('AVG(reviews.rating)')
+                                ->from('reviews')
+                                ->join('food', 'food.id', '=', 'reviews.food_id')
+                                ->where('reviews.status', 1)
+                                ->whereColumn('food.restaurant_id', 'restaurants.id')
+                                ->groupBy('food.restaurant_id');
+                        }, 'nz_comp_rating')
+                        ->orderByRaw('(0.45 * GREATEST(0, 1 - distance / 8000) + 0.30 * COALESCE(nz_comp_rating, 0) / 5 + 0.25 * LEAST(1, orders_count / 50)) DESC');
+                } else {
+                    // 其它筛选(销量popular/好评率top_rated/距离near_by/delivery等)各有自己的主排序; 默认块这里只补订单量做稳定并列项, 不套综合分(否则销量等会被综合分打破并列,看起来与综合排序雷同)。
+                    $query = self::addOrdersCountIfMissing($query)->orderBy('orders_count', 'desc');
+                }
             } elseif(!isset($additional_data['sort_by']) || $additional_data['sort_by'] == 'default') {
 
                 if($all_restaurant_sort_by_temp_closed == 'remove'){
