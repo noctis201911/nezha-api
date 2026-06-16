@@ -24,6 +24,19 @@
             {{ translate('哪吒外卖收款方式: 顾客付款直接付进商家本人的下列账户, 平台不经手资金。请如实填写本店真实收款信息。') }}
         </div>
 
+        <style>
+            /* 哪吒: 汉化 Bootstrap custom-file 默认英文按钮 "Browse" */
+            .content .custom-file-label::after { content: "{{ translate('选择图片') }}"; }
+            /* 收款码未上传时的占位框 (替代孤零零的红字, 与已上传二维码预览同尺寸) */
+            .content .qr-empty-box {
+                display: flex; align-items: center; justify-content: center;
+                width: 130px; height: 130px;
+                border: 1px dashed #d0d5dd; border-radius: 8px;
+                color: #98a2b3; font-size: 12px; line-height: 1.5;
+                text-align: center; background: #fafbfc; padding: 8px;
+            }
+        </style>
+
         <form action="{{ route('admin.restaurant.update-payment-info', [$restaurant->id]) }}" method="post"
               enctype="multipart/form-data">
             @csrf
@@ -46,7 +59,7 @@
                             <div class="custom-file">
                                 <input type="file" name="rmb_qr_image" id="rmb_qr_image" class="custom-file-input"
                                        accept=".jpg,.jpeg,.png,.webp">
-                                <label class="custom-file-label" for="rmb_qr_image">{{ translate('选择图片') }}</label>
+                                <label class="custom-file-label" for="rmb_qr_image">{{ translate('未选择文件') }}</label>
                             </div>
                             <small class="text-muted">{{ translate('支持 jpg/png/webp, 最大 2MB') }}</small>
                         </div>
@@ -55,10 +68,12 @@
                                 <label class="input-label d-block mb-1" id="rmb_qr_label">{{ translate('当前支付宝收款码') }}</label>
                                 <div style="display:inline-block;background:#fff;padding:6px;border:1px solid #eee;border-radius:8px;line-height:0;">
                                     <img id="rmb_qr_current" src="{{ $restaurant->rmb_qr_image_full_url ?? '' }}" alt="QR"
-                                         style="display:block;max-width:120px;max-height:120px;" onerror="this.style.display='none';">
+                                         style="display:block;max-width:120px;max-height:120px;" onerror="var b=document.getElementById('rmb_qr_box'),e=document.getElementById('rmb_qr_empty');if(b)b.style.display='none';if(e)e.style.display='';">
                                 </div>
                             </div>
-                            <small class="text-danger" id="rmb_qr_empty" style="{{ $restaurant->rmb_qr_image_full_url ? 'display:none;' : '' }}">{{ translate('尚未上传支付宝收款码') }}</small>
+                            <div id="rmb_qr_empty" style="{{ $restaurant->rmb_qr_image_full_url ? 'display:none;' : '' }}">
+                                <div class="qr-empty-box">{{ translate('尚未上传支付宝收款码') }}</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -83,7 +98,7 @@
                                 <div class="custom-file">
                                     <input type="file" name="wechat_qr_image" id="wechat_qr_image" class="custom-file-input"
                                            accept=".jpg,.jpeg,.png,.webp">
-                                    <label class="custom-file-label" for="wechat_qr_image">{{ translate('选择图片') }}</label>
+                                    <label class="custom-file-label" for="wechat_qr_image">{{ translate('未选择文件') }}</label>
                                 </div>
                                 <small class="text-muted">{{ translate('支持 jpg/png/webp, 最大 2MB') }}</small>
                             </div>
@@ -93,10 +108,12 @@
                                 <label class="input-label d-block mb-1" id="wechat_qr_label">{{ translate('当前微信收款码') }}</label>
                                 <div style="display:inline-block;background:#fff;padding:6px;border:1px solid #eee;border-radius:8px;line-height:0;">
                                     <img id="wechat_qr_current" src="{{ $restaurant->wechat_qr_image_full_url ?? '' }}" alt="WeChat QR"
-                                         style="display:block;max-width:120px;max-height:120px;" onerror="this.style.display='none';">
+                                         style="display:block;max-width:120px;max-height:120px;" onerror="var b=document.getElementById('wechat_qr_box'),e=document.getElementById('wechat_qr_empty');if(b)b.style.display='none';if(e)e.style.display='';">
                                 </div>
                             </div>
-                            <small class="text-danger" id="wechat_qr_empty" style="{{ $restaurant->wechat_qr_image_full_url ? 'display:none;' : '' }}">{{ translate('尚未上传微信收款码') }}</small>
+                            <div id="wechat_qr_empty" style="{{ $restaurant->wechat_qr_image_full_url ? 'display:none;' : '' }}">
+                                <div class="qr-empty-box">{{ translate('尚未上传微信收款码') }}</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -150,7 +167,7 @@
         </form>
         <script>
         (function () {
-            var DEF = @json(translate('选择图片'));
+            var DEF = @json(translate('未选择文件'));
             var SEL = @json(translate('新选择的收款码 (点保存后生效)'));
             // 选图后: 直接把"当前收款码"那张图替换成所选图(原地预览), 不另起预览框
             function wire(inputId, boxId, imgId, labelId, emptyId) {
