@@ -35,27 +35,30 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="input-label">{{ translate('收款人姓名 (顾客转账时核对用)') }}</label>
-                            <input type="text" name="payee_name" class="form-control"
-                                   value="{{ $restaurant->payee_name }}" placeholder="{{ translate('如: 张三') }}">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="input-label">{{ translate('支付宝收款码图片') }}</label>
-                            <div class="custom-file">
-                                <input type="file" name="rmb_qr_image" id="rmb_qr_image" class="custom-file-input"
-                                       accept=".jpg,.jpeg,.png,.webp">
-                                <label class="custom-file-label" for="rmb_qr_image">{{ translate('选择图片') }}</label>
+                    <div class="row g-3 align-items-start">
+                        <div class="col-md-7">
+                            <div class="form-group mb-3">
+                                <label class="input-label">{{ translate('收款人姓名 (顾客转账时核对用)') }}</label>
+                                <input type="text" name="payee_name" class="form-control"
+                                       value="{{ $restaurant->payee_name }}" placeholder="{{ translate('如: 张三') }}">
                             </div>
-                            <small class="text-muted">{{ translate('支持 jpg/png/webp, 最大 2MB') }}</small>
+                            <div class="form-group mb-0">
+                                <label class="input-label">{{ translate('支付宝收款码图片') }}</label>
+                                <div class="custom-file">
+                                    <input type="file" name="rmb_qr_image" id="rmb_qr_image" class="custom-file-input"
+                                           accept=".jpg,.jpeg,.png,.webp">
+                                    <label class="custom-file-label" for="rmb_qr_image">{{ translate('选择图片') }}</label>
+                                </div>
+                                <small class="text-muted">{{ translate('支持 jpg/png/webp, 最大 2MB') }}</small>
+                            </div>
                         </div>
-                        <div class="col-12">
-                            <div class="mt-2" id="rmb_qr_box" style="{{ $restaurant->rmb_qr_image_full_url ? '' : 'display:none;' }}">
-                                <label class="input-label" id="rmb_qr_label">{{ translate('当前支付宝收款码') }}</label><br>
-                                <img id="rmb_qr_current" src="{{ $restaurant->rmb_qr_image_full_url ?? '' }}" alt="QR"
-                                     style="max-width:200px;max-height:200px;border:1px solid #eee;border-radius:8px;"
-                                     onerror="this.style.display='none';">
+                        <div class="col-md-5">
+                            <div id="rmb_qr_box" style="{{ $restaurant->rmb_qr_image_full_url ? '' : 'display:none;' }}">
+                                <label class="input-label d-block" id="rmb_qr_label">{{ translate('当前支付宝收款码') }}</label>
+                                <div style="display:inline-block;background:#fff;padding:8px;border:1px solid #eee;border-radius:8px;line-height:0;">
+                                    <img id="rmb_qr_current" src="{{ $restaurant->rmb_qr_image_full_url ?? '' }}" alt="QR"
+                                         style="display:block;max-width:180px;max-height:180px;" onerror="this.style.display='none';">
+                                </div>
                             </div>
                             <small class="text-danger" id="rmb_qr_empty" style="{{ $restaurant->rmb_qr_image_full_url ? 'display:none;' : '' }}">{{ translate('尚未上传支付宝收款码') }}</small>
                         </div>
@@ -75,22 +78,25 @@
                         <i class="tio-info-outined"></i>
                         {{ translate('微信收款码与支付宝码分开上传。顾客在结算页选「微信」时显示此码; 留空则顾客无法用微信付款, 请提醒商家提供本人微信收款二维码。') }}
                     </div>
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="input-label">{{ translate('微信收款码图片') }}</label>
-                            <div class="custom-file">
-                                <input type="file" name="wechat_qr_image" id="wechat_qr_image" class="custom-file-input"
-                                       accept=".jpg,.jpeg,.png,.webp">
-                                <label class="custom-file-label" for="wechat_qr_image">{{ translate('选择图片') }}</label>
+                    <div class="row g-3 align-items-start">
+                        <div class="col-md-7">
+                            <div class="form-group mb-0">
+                                <label class="input-label">{{ translate('微信收款码图片') }}</label>
+                                <div class="custom-file">
+                                    <input type="file" name="wechat_qr_image" id="wechat_qr_image" class="custom-file-input"
+                                           accept=".jpg,.jpeg,.png,.webp">
+                                    <label class="custom-file-label" for="wechat_qr_image">{{ translate('选择图片') }}</label>
+                                </div>
+                                <small class="text-muted">{{ translate('支持 jpg/png/webp, 最大 2MB') }}</small>
                             </div>
-                            <small class="text-muted">{{ translate('支持 jpg/png/webp, 最大 2MB') }}</small>
                         </div>
-                        <div class="col-12">
-                            <div class="mt-2" id="wechat_qr_box" style="{{ $restaurant->wechat_qr_image_full_url ? '' : 'display:none;' }}">
-                                <label class="input-label" id="wechat_qr_label">{{ translate('当前微信收款码') }}</label><br>
-                                <img id="wechat_qr_current" src="{{ $restaurant->wechat_qr_image_full_url ?? '' }}" alt="WeChat QR"
-                                     style="max-width:200px;max-height:200px;border:1px solid #eee;border-radius:8px;"
-                                     onerror="this.style.display='none';">
+                        <div class="col-md-5">
+                            <div id="wechat_qr_box" style="{{ $restaurant->wechat_qr_image_full_url ? '' : 'display:none;' }}">
+                                <label class="input-label d-block" id="wechat_qr_label">{{ translate('当前微信收款码') }}</label>
+                                <div style="display:inline-block;background:#fff;padding:8px;border:1px solid #eee;border-radius:8px;line-height:0;">
+                                    <img id="wechat_qr_current" src="{{ $restaurant->wechat_qr_image_full_url ?? '' }}" alt="WeChat QR"
+                                         style="display:block;max-width:180px;max-height:180px;" onerror="this.style.display='none';">
+                                </div>
                             </div>
                             <small class="text-danger" id="wechat_qr_empty" style="{{ $restaurant->wechat_qr_image_full_url ? 'display:none;' : '' }}">{{ translate('尚未上传微信收款码') }}</small>
                         </div>
@@ -106,30 +112,34 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="input-label">{{ translate('USDT 网络') }}</label>
-                            <select name="usdt_network" class="form-control">
-                                <option value="">{{ translate('-- 选择网络 --') }}</option>
-                                <option value="TRC20" {{ $restaurant->usdt_network == 'TRC20' ? 'selected' : '' }}>TRC20 (Tron)</option>
-                                <option value="BSC" {{ $restaurant->usdt_network == 'BSC' ? 'selected' : '' }}>BSC (BEP20)</option>
-                            </select>
+                    <div class="row g-3 align-items-start">
+                        <div class="col-md-7">
+                            <div class="form-group mb-3">
+                                <label class="input-label">{{ translate('USDT 网络') }}</label>
+                                <select name="usdt_network" class="form-control">
+                                    <option value="">{{ translate('-- 选择网络 --') }}</option>
+                                    <option value="TRC20" {{ $restaurant->usdt_network == 'TRC20' ? 'selected' : '' }}>TRC20 (Tron)</option>
+                                    <option value="BSC" {{ $restaurant->usdt_network == 'BSC' ? 'selected' : '' }}>BSC (BEP20)</option>
+                                </select>
+                            </div>
+                            <div class="form-group mb-0">
+                                <label class="input-label">{{ translate('USDT 收款地址') }}</label>
+                                <input type="text" name="usdt_address" class="form-control"
+                                       value="{{ $restaurant->usdt_address }}"
+                                       placeholder="{{ translate('如: TXxxxxx... 或 0xXxxx...') }}">
+                            </div>
                         </div>
-                        <div class="col-md-8">
-                            <label class="input-label">{{ translate('USDT 收款地址') }}</label>
-                            <input type="text" name="usdt_address" class="form-control"
-                                   value="{{ $restaurant->usdt_address }}"
-                                   placeholder="{{ translate('如: TXxxxxx... 或 0xXxxx...') }}">
+                        <div class="col-md-5">
+                            <div id="usdt_qr_box" style="{{ $restaurant->usdt_address ? '' : 'display:none;' }}">
+                                <label class="input-label d-block">{{ translate('USDT 收款二维码 (顾客扫此码转账)') }}</label>
+                                <div style="display:inline-block;max-width:186px;background:#fff;padding:8px;border:1px solid #eee;border-radius:8px;line-height:0;">
+                                    @if ($restaurant->usdt_address)
+                                        {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(170)->margin(1)->generate($restaurant->usdt_address) !!}
+                                    @endif
+                                </div>
+                                <div><small class="text-muted" id="usdt_qr_hint" style="display:none;">{{ translate('地址已修改，保存后二维码会更新') }}</small></div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="mt-3" id="usdt_qr_box" style="{{ $restaurant->usdt_address ? '' : 'display:none;' }}">
-                        <label class="input-label">{{ translate('USDT 收款二维码 (顾客扫此码转账)') }}</label>
-                        <div style="max-width:186px;background:#fff;padding:8px;border:1px solid #eee;border-radius:8px;display:inline-block;line-height:0;">
-                            @if ($restaurant->usdt_address)
-                                {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(170)->margin(1)->generate($restaurant->usdt_address) !!}
-                            @endif
-                        </div>
-                        <div><small class="text-muted" id="usdt_qr_hint" style="display:none;">{{ translate('地址已修改，保存后二维码会更新') }}</small></div>
                     </div>
                 </div>
             </div>
