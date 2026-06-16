@@ -251,7 +251,7 @@
                             @if($__fxSync['status']==='skipped')
                                 ⚠️ {{ translate('每周自动对齐已暂停, 等你确认') }}：{{ $__fxSync['detail'] ?? '' }}
                             @else
-                                🕒 {{ translate('上次自动对齐') }}：{{ $__fxSync['at'] ?? '' }} · {{ translate('每周一自动按市场中间价更新') }}
+                                🕒 {{ translate('上次自动对齐') }}：{{ $__fxSync['at'] ?? '' }} · {{ translate('每天自动按市场中间价更新') }}
                             @endif
                         </div>
                     @endif

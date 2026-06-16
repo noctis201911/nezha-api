@@ -87,9 +87,9 @@ return Application::configure(basePath: dirname(__DIR__))
     // —— 升级到 L12 后旧 Kernel 的 schedule() 已不被框架调用(commands: 未启用/无 withSchedule)。
     // 命令本身仍由 L11+ 自动发现 app/Console/Commands 注册。
     ->withSchedule(function (Schedule $schedule) {
-        // 每周一 04:10 从公开汇率源自动对齐结算汇率(顾客↔商家直付的事实结算汇率)。
+        // 每天 04:10 从公开汇率源自动对齐结算汇率(顾客↔商家直付的事实结算汇率)。
         // 用户已批准自动化(L2, 贴市场中间价不加缓冲)；带护栏，状态写入 business_settings.nezha_fx_last_sync。
-        $schedule->command('nezha:sync-fx-rate')->weeklyOn(1, '04:10')->withoutOverlapping();
+        $schedule->command('nezha:sync-fx-rate')->dailyAt('04:10')->withoutOverlapping();
 
         // ⚠️ 注意: app/Console/Kernel.php 里那 3 个每日 PII 清除任务(purge-payment-proofs / purge-locallife-pii
         //    / purge-merchant-leads, L1-7 合规)自 L12 升级后未在运行。重新挂入前需用户确认(首次运行会一次性

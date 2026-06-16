@@ -9,11 +9,11 @@ use App\CentralLogics\Helpers;
 use Carbon\Carbon;
 
 /**
- * 哪吒 - 每周自动对齐结算汇率 (nezha_rate_usd_to_amd / nezha_rate_cny_to_amd)。
+ * 哪吒 - 每天自动对齐结算汇率 (nezha_rate_usd_to_amd / nezha_rate_cny_to_amd)。
  *
  * 背景: 平台 B 方案 — 商家按德拉姆(֏)标价, 顾客按此汇率折算成 ¥/USDT 直付商家。
  * 这两个值是【事实结算汇率】, 直接决定顾客实付、商家实收。手动维护容易放旧 →
- * 商家按过期价收钱。本命令每周从公开汇率源拉市场中间价自动对齐(用户已选: 贴市场、不加缓冲)。
+ * 商家按过期价收钱。本命令每天从公开汇率源拉市场中间价自动对齐(用户已选: 贴市场、不加缓冲)。
  *
  * 合规等级: L2(业务参数, 已获用户批准自动化)。平台仍全程不碰资金(L1-1未变);
  * 只是把"顾客↔商家直付"用的公开换算率保持新鲜, 不引入任何换汇/提现入口(L1-3未变)。
@@ -28,7 +28,7 @@ class SyncFxRate extends Command
 {
     protected $signature = 'nezha:sync-fx-rate {--dry-run : 只报告将写入什么, 不实际更新} {--force : 跳过"单周突变"阈值护栏(越界/取数失败护栏仍生效)}';
 
-    protected $description = '哪吒: 每周从公开汇率源对齐结算汇率(usd_to_amd/cny_to_amd), 带护栏(取数失败/越界/突变则不改+记录告警)。';
+    protected $description = '哪吒: 每天从公开汇率源对齐结算汇率(usd_to_amd/cny_to_amd), 带护栏(取数失败/越界/突变则不改+记录告警)。';
 
     // 合理区间护栏(防坏数据)。AMD/USD 历史约 380-420; CNY/AMD 约 50-60。给宽但能挡住明显坏值。
     const USD_AMD_MIN = 250.0;
