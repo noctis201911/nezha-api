@@ -49,6 +49,7 @@
                                 <label class="custom-file-label" for="rmb_qr_image">{{ translate('选择图片') }}</label>
                             </div>
                             <small class="text-muted">{{ translate('支持 jpg/png/webp, 最大 2MB') }}</small>
+                            <div class="mt-2"><img id="rmb_qr_preview" alt="preview" style="display:none;max-width:160px;max-height:160px;border:1px solid #eee;border-radius:8px;"></div>
                         </div>
                         <div class="col-12">
                             @if ($restaurant->rmb_qr_image_full_url)
@@ -87,6 +88,7 @@
                                 <label class="custom-file-label" for="wechat_qr_image">{{ translate('选择图片') }}</label>
                             </div>
                             <small class="text-muted">{{ translate('支持 jpg/png/webp, 最大 2MB') }}</small>
+                            <div class="mt-2"><img id="wechat_qr_preview" alt="preview" style="display:none;max-width:160px;max-height:160px;border:1px solid #eee;border-radius:8px;"></div>
                         </div>
                         <div class="col-12">
                             @if ($restaurant->wechat_qr_image_full_url)
@@ -137,6 +139,29 @@
                 </div>
             </div>
         </form>
+        <script>
+        (function () {
+            var DEF = @json(translate('选择图片'));
+            function wire(inputId, previewId) {
+                var input = document.getElementById(inputId);
+                if (!input) return;
+                var box = input.closest(".custom-file");
+                var label = box ? box.querySelector(".custom-file-label") : null;
+                var preview = document.getElementById(previewId);
+                input.addEventListener("change", function () {
+                    if (input.files && input.files[0]) {
+                        if (label) label.textContent = input.files[0].name;
+                        if (preview) { preview.src = URL.createObjectURL(input.files[0]); preview.style.display = "block"; }
+                    } else {
+                        if (label) label.textContent = DEF;
+                        if (preview) preview.style.display = "none";
+                    }
+                });
+            }
+            wire("rmb_qr_image", "rmb_qr_preview");
+            wire("wechat_qr_image", "wechat_qr_preview");
+        })();
+        </script>
 
         {{-- 哪吒外卖: 平台美元兑人民币汇率 (顾客付款面板显示"应付 $X ≈ ¥Y") --}}
         <div class="card mb-3">
