@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AccountTransactionController;
+use App\Http\Controllers\Admin\NezhaDepositController;
 use App\Http\Controllers\Admin\AddonCategoryController;
 use App\Http\Controllers\Admin\AddOnController;
 use App\Http\Controllers\Admin\AdminEarningReportController;
@@ -123,6 +124,13 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
 
         Route::get('export-account-transaction', [AccountTransactionController::class, 'export_account_transaction'])->name('export-account-transaction');
         Route::post('search-account-transaction', [AccountTransactionController::class, 'search_account_transaction'])->name('search-account-transaction');
+
+        // 哪吒 B方案 组4: 商家预存佣金(充值/扣佣)管理
+        Route::group(['prefix' => 'nezha-deposit', 'as' => 'nezha-deposit.'], function () {
+            Route::get('/', [NezhaDepositController::class, 'index'])->name('index');
+            Route::get('transactions', [NezhaDepositController::class, 'transactions'])->name('transactions');
+            Route::post('store-recharge', [NezhaDepositController::class, 'store_recharge'])->name('store-recharge');
+        });
 
         // Route::resource('provide-deliveryman-earnings', ProvideDMEarningController::class)->middleware('module:provide_dm_earning');
         Route::middleware('module:provide_dm_earning')->group(function () {

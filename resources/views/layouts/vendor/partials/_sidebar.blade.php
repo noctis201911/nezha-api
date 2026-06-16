@@ -59,6 +59,14 @@
 
                     <!-- End Dashboards -->
 
+                    <!-- 哪吒 预存佣金 -->
+                    <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/nezha-deposit*')?'active':''}}">
+                        <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{route('vendor.nezha-deposit.index')}}" title="{{translate('预存佣金')}}">
+                            <i class="tio-wallet nav-icon"></i>
+                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{translate('预存佣金')}}</span>
+                        </a>
+                    </li>
+
                     <!-- POS -->
 
                     @if(\App\CentralLogics\Helpers::employee_module_permission_check('pos'))

@@ -97,6 +97,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('nezha:purge-payment-proofs')->dailyAt('03:30')->withoutOverlapping();
         $schedule->command('nezha:purge-locallife-pii')->dailyAt('03:40')->withoutOverlapping();
         $schedule->command('nezha:purge-merchant-leads')->dailyAt('03:50')->withoutOverlapping();
+
+        // 每天 09:00 检查商家预存佣金, 低于商家自设阈值(或为负)发提醒邮件(商家可在商家后台自助开关/设阈值/设邮箱)。
+        $schedule->command('nezha:check-deposit-alerts')->dailyAt('09:00')->withoutOverlapping();
     })
 
     ->create();

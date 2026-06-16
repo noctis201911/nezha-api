@@ -1477,6 +1477,14 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                         </li>
                     @endif
                     <!-- End account -->
+                    @if (Helpers::module_permission_check('account'))
+                        <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-deposit*') ? 'active' : '' }}">
+                            <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{ route('admin.nezha-deposit.index') }}" title="{{ translate('佣金充值管理') }}">
+                                <i class="tio-wallet nav-icon"></i>
+                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('佣金充值管理') }}</span>
+                            </a>
+                        </li>
+                    @endif
                     <!-- withdraw -->
                     @if (Helpers::module_permission_check('withdraw_list'))
                         <li

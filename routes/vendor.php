@@ -26,6 +26,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Vendor\SubscriptionController;
 use App\Http\Controllers\Vendor\VendorTaxReportController;
 use App\Http\Controllers\Vendor\WalletController;
+use App\Http\Controllers\Vendor\NezhaDepositController;
 use App\Http\Controllers\Vendor\WalletMethodController;
 
 Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
@@ -196,6 +197,12 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
             Route::get('disbursement-list', [WalletController::class, 'getDisbursementList'])->name('getDisbursementList');
             Route::get('export', [WalletController::class, 'getDisbursementExport'])->name('export');
 
+        });
+
+        // 哪吒 B方案 组4: 商家预存佣金余额 + 低额邮件告警自助设置
+        Route::group(['prefix' => 'nezha-deposit', 'as' => 'nezha-deposit.'], function () {
+            Route::get('/', [NezhaDepositController::class, 'index'])->name('index');
+            Route::post('update-alert', [NezhaDepositController::class, 'update_alert'])->name('update-alert');
         });
 
         Route::group(['prefix' => 'withdraw-method', 'as' => 'wallet-method.', 'middleware' => ['module:wallet_method','subscription:wallet']], function () {
