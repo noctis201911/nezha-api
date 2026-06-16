@@ -243,6 +243,18 @@
                         </div>
                         <button type="submit" class="btn btn-primary">{{ translate('更新汇率') }}</button>
                     </div>
+                    @php
+                        $__fxSync = json_decode(\App\Models\BusinessSetting::where('key','nezha_fx_last_sync')->value('value') ?? '', true);
+                    @endphp
+                    @if(is_array($__fxSync) && !empty($__fxSync['status']) && $__fxSync['status'] !== 'dry-run')
+                        <div class="mt-2 small {{ $__fxSync['status']==='skipped' ? 'text-danger font-weight-bold' : 'text-muted' }}">
+                            @if($__fxSync['status']==='skipped')
+                                ⚠️ {{ translate('每周自动对齐已暂停, 等你确认') }}：{{ $__fxSync['detail'] ?? '' }}
+                            @else
+                                🕒 {{ translate('上次自动对齐') }}：{{ $__fxSync['at'] ?? '' }} · {{ translate('每周一自动按市场中间价更新') }}
+                            @endif
+                        </div>
+                    @endif
                 </form>
                 <script>
                 (function(){
