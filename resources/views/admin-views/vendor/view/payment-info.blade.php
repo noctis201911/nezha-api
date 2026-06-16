@@ -27,7 +27,7 @@
         <form action="{{ route('admin.restaurant.update-payment-info', [$restaurant->id]) }}" method="post"
               enctype="multipart/form-data">
             @csrf
-            <div class="card mb-3">
+            <div class="card mb-2">
                 <div class="card-header">
                     <h5 class="card-title">
                         <span class="card-header-icon"><i class="tio-wallet"></i></span> &nbsp;
@@ -35,29 +35,27 @@
                     </h5>
                 </div>
                 <div class="card-body">
+                    <div class="form-group mb-2">
+                        <label class="input-label">{{ translate('收款人姓名 (顾客转账时核对用)') }}</label>
+                        <input type="text" name="payee_name" class="form-control"
+                               value="{{ $restaurant->payee_name }}" placeholder="{{ translate('如: 张三') }}">
+                    </div>
                     <div class="row g-3 align-items-start">
                         <div class="col-md-7">
-                            <div class="form-group mb-3">
-                                <label class="input-label">{{ translate('收款人姓名 (顾客转账时核对用)') }}</label>
-                                <input type="text" name="payee_name" class="form-control"
-                                       value="{{ $restaurant->payee_name }}" placeholder="{{ translate('如: 张三') }}">
+                            <label class="input-label">{{ translate('支付宝收款码图片') }}</label>
+                            <div class="custom-file">
+                                <input type="file" name="rmb_qr_image" id="rmb_qr_image" class="custom-file-input"
+                                       accept=".jpg,.jpeg,.png,.webp">
+                                <label class="custom-file-label" for="rmb_qr_image">{{ translate('选择图片') }}</label>
                             </div>
-                            <div class="form-group mb-0">
-                                <label class="input-label">{{ translate('支付宝收款码图片') }}</label>
-                                <div class="custom-file">
-                                    <input type="file" name="rmb_qr_image" id="rmb_qr_image" class="custom-file-input"
-                                           accept=".jpg,.jpeg,.png,.webp">
-                                    <label class="custom-file-label" for="rmb_qr_image">{{ translate('选择图片') }}</label>
-                                </div>
-                                <small class="text-muted">{{ translate('支持 jpg/png/webp, 最大 2MB') }}</small>
-                            </div>
+                            <small class="text-muted">{{ translate('支持 jpg/png/webp, 最大 2MB') }}</small>
                         </div>
                         <div class="col-md-5">
                             <div id="rmb_qr_box" style="{{ $restaurant->rmb_qr_image_full_url ? '' : 'display:none;' }}">
-                                <label class="input-label d-block" id="rmb_qr_label">{{ translate('当前支付宝收款码') }}</label>
-                                <div style="display:inline-block;background:#fff;padding:8px;border:1px solid #eee;border-radius:8px;line-height:0;">
+                                <label class="input-label d-block mb-1" id="rmb_qr_label">{{ translate('当前支付宝收款码') }}</label>
+                                <div style="display:inline-block;background:#fff;padding:6px;border:1px solid #eee;border-radius:8px;line-height:0;">
                                     <img id="rmb_qr_current" src="{{ $restaurant->rmb_qr_image_full_url ?? '' }}" alt="QR"
-                                         style="display:block;max-width:180px;max-height:180px;" onerror="this.style.display='none';">
+                                         style="display:block;max-width:120px;max-height:120px;" onerror="this.style.display='none';">
                                 </div>
                             </div>
                             <small class="text-danger" id="rmb_qr_empty" style="{{ $restaurant->rmb_qr_image_full_url ? 'display:none;' : '' }}">{{ translate('尚未上传支付宝收款码') }}</small>
@@ -66,7 +64,7 @@
                 </div>
             </div>
 
-            <div class="card mb-3">
+            <div class="card mb-2">
                 <div class="card-header">
                     <h5 class="card-title">
                         <span class="card-header-icon"><i class="tio-comment"></i></span> &nbsp;
@@ -92,10 +90,10 @@
                         </div>
                         <div class="col-md-5">
                             <div id="wechat_qr_box" style="{{ $restaurant->wechat_qr_image_full_url ? '' : 'display:none;' }}">
-                                <label class="input-label d-block" id="wechat_qr_label">{{ translate('当前微信收款码') }}</label>
-                                <div style="display:inline-block;background:#fff;padding:8px;border:1px solid #eee;border-radius:8px;line-height:0;">
+                                <label class="input-label d-block mb-1" id="wechat_qr_label">{{ translate('当前微信收款码') }}</label>
+                                <div style="display:inline-block;background:#fff;padding:6px;border:1px solid #eee;border-radius:8px;line-height:0;">
                                     <img id="wechat_qr_current" src="{{ $restaurant->wechat_qr_image_full_url ?? '' }}" alt="WeChat QR"
-                                         style="display:block;max-width:180px;max-height:180px;" onerror="this.style.display='none';">
+                                         style="display:block;max-width:120px;max-height:120px;" onerror="this.style.display='none';">
                                 </div>
                             </div>
                             <small class="text-danger" id="wechat_qr_empty" style="{{ $restaurant->wechat_qr_image_full_url ? 'display:none;' : '' }}">{{ translate('尚未上传微信收款码') }}</small>
@@ -104,7 +102,7 @@
                 </div>
             </div>
 
-            <div class="card mb-3">
+            <div class="card mb-2">
                 <div class="card-header">
                     <h5 class="card-title">
                         <span class="card-header-icon"><i class="tio-bitcoin"></i></span> &nbsp;
@@ -131,10 +129,10 @@
                         </div>
                         <div class="col-md-5">
                             <div id="usdt_qr_box" style="{{ $restaurant->usdt_address ? '' : 'display:none;' }}">
-                                <label class="input-label d-block">{{ translate('USDT 收款二维码 (顾客扫此码转账)') }}</label>
-                                <div style="display:inline-block;max-width:186px;background:#fff;padding:8px;border:1px solid #eee;border-radius:8px;line-height:0;">
+                                <label class="input-label d-block mb-1">{{ translate('USDT 收款二维码 (顾客扫此码转账)') }}</label>
+                                <div style="display:inline-block;max-width:140px;background:#fff;padding:6px;border:1px solid #eee;border-radius:8px;line-height:0;">
                                     @if ($restaurant->usdt_address)
-                                        {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(170)->margin(1)->generate($restaurant->usdt_address) !!}
+                                        {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(130)->margin(1)->generate($restaurant->usdt_address) !!}
                                     @endif
                                 </div>
                                 <div><small class="text-muted" id="usdt_qr_hint" style="display:none;">{{ translate('地址已修改，保存后二维码会更新') }}</small></div>
@@ -144,7 +142,7 @@
                 </div>
             </div>
 
-            <div class="card mb-3">
+            <div class="card mb-2">
                 <div class="card-body text-right">
                     <button type="submit" class="btn btn-primary">{{ translate('保存收款信息') }}</button>
                 </div>
