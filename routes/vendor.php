@@ -239,6 +239,9 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
         Route::group(['prefix' => 'order', 'as' => 'order.' , 'middleware' => ['module:regular_order']], function () {
             Route::get('list/{status}', [OrderController::class, 'list'])->name('list');
             Route::put('status-update/{id}', [OrderController::class, 'status'])->name('status-update');
+            // 哪吒 B方案: 商家自营「确认收款 / 拒收」离线支付
+            Route::put('confirm-offline-payment/{id}', [OrderController::class, 'confirm_offline_payment'])->name('confirm-offline-payment');
+            Route::put('deny-offline-payment/{id}', [OrderController::class, 'deny_offline_payment'])->name('deny-offline-payment');
             Route::post('search', [OrderController::class, 'search'])->name('search');
             Route::post('add-to-cart', [OrderController::class, 'add_to_cart'])->name('add-to-cart');
             Route::post('remove-from-cart', [OrderController::class, 'remove_from_cart'])->name('remove-from-cart');

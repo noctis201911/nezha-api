@@ -86,6 +86,15 @@ class OrderController extends Controller
             ->when($status == 'dine_in', function ($query) {
                 return $query->where('order_type', 'dine_in');
             })
+            // 哪吒 B方案: 「待确认收款」视图 = 本店 pending 且离线支付待核验的单。
+            // 这是补掉单根因 —— 此前 pending+offline 单被 NotDigitalOrder 隐藏, 商家完全看不到。
+            ->when($status == 'offline_pending', function ($query) {
+                return $query->where('order_status', 'pending')
+                    ->where('payment_method', 'offline_payment')
+                    ->whereHas('offline_payments', function ($q) {
+                        $q->where('status', 'pending');
+                    });
+            })
             // ->when($status == 'assinged', function($query){
             //     return $query->whereNotIn('order_status',['failed','canceled', 'refund_requested', 'refunded','delivered','refund_request_canceled'])->whereNotNull('delivery_man_id');
             // })
@@ -124,14 +133,18 @@ class OrderController extends Controller
                 });
             })
             ->Notpos()
-            ->NotDigitalOrder()
+            // 哪吒: 仅「待确认收款」视图放开 NotDigitalOrder(它会隐藏 pending+offline 单); 其余视图行为不变。
+            ->when($status != 'offline_pending', function ($query) {
+                return $query->NotDigitalOrder();
+            })
             ->hasSubscriptionToday()
             ->where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())
             ->orderBy('schedule_at', 'desc')
             ->paginate(config('default_pagination'));
 
         $st = $status;
-        $status = translate('messages.' . $status);
+        // 哪吒: offline_pending 无翻译 key, 直接给中文标题避免显示英文键名。
+        $status = $status == 'offline_pending' ? '待确认收款' : translate('messages.' . $status);
         return view('vendor-views.order.list', compact('orders', 'status', 'st'));
     }
 
@@ -168,7 +181,13 @@ class OrderController extends Controller
         }])->where(['id' => $id, 'restaurant_id' => Helpers::get_restaurant_id()])
 
             ->Notpos()
-            ->NotDigitalOrder()
+            // 哪吒: 等价于 NotDigitalOrder(排除 pending+digital), 但放开本店 offline_payment 单 ——
+            // 商家需在 pending 阶段看到该单并「确认收款」(B方案 §4)。本查询已按 id+restaurant_id 限定为本店单, 不外泄。
+            ->where(function ($q) {
+                $q->whereNotIn('payment_method', ['digital_payment', 'offline_payment'])
+                  ->orWhereNot('order_status', 'pending')
+                  ->orWhere('payment_method', 'offline_payment');
+            })
             ->when($status == 'all', function ($query) use ($data) {
                 return $query->where(function ($q1) use ($data) {
                     $q1->whereNotIn('order_status', (config('order_confirmation_model') == 'restaurant' || $data) ? [''] : ['pending'])
@@ -205,6 +224,68 @@ class OrderController extends Controller
             Toastr::info('No more orders!');
             return back();
         }
+    }
+
+    /**
+     * 哪吒 B方案 — 商家自营「确认收款」。
+     * 商家在自己账户收到顾客转账(人民币/USDT)后, 对本店该订单确认收款,
+     * 订单 pending -> confirmed, 顾客收到「支付已验证」通知, 商家即可出餐。
+     *
+     * 合规(INVARIANTS L1-1): 商家确认的是"我已在自己账户收到顾客货款", 钱全程不经平台。
+     * 强校验: 只能确认【本店】【离线支付】【offline_payments.status=pending】的单(防越权/防重复确认)。
+     */
+    public function confirm_offline_payment(Request $request, $id)
+    {
+        $order = Order::with('offline_payments')
+            ->where(['id' => $id, 'restaurant_id' => Helpers::get_restaurant_id()])
+            ->first();
+
+        if (!$order) {
+            Toastr::error(translate('messages.order_not_found'));
+            return back();
+        }
+        if ($order->payment_method != 'offline_payment' || !$order->offline_payments || $order->offline_payments->status != 'pending') {
+            // 已被(商家自己/admin/其他端)处理过, 或本就不是待核验离线单 —— 幂等保护, 不重复执行。
+            Toastr::warning(translate('messages.Payment_status_updated'));
+            return back();
+        }
+
+        \App\CentralLogics\OrderLogic::confirm_offline_payment($order, 'vendor', auth('vendor')->id() ?? auth('vendor_employee')->id());
+
+        Toastr::success(translate('messages.Payment_status_updated'));
+        return back();
+    }
+
+    /**
+     * 哪吒 B方案 — 商家「拒收 / 打回」离线支付。
+     * 商家未在账户收到款 / 凭证有问题时, 标记 denied + 备注, 顾客收到通知可重传凭证或取消。
+     * 不改订单主状态(仍 pending), 钱不经平台。强校验同上。
+     */
+    public function deny_offline_payment(Request $request, $id)
+    {
+        $request->validate([
+            'note' => 'required|string|max:255',
+        ], [
+            'note.required' => translate('messages.Add_Offline_Payment_Rejection_Note'),
+        ]);
+
+        $order = Order::with('offline_payments')
+            ->where(['id' => $id, 'restaurant_id' => Helpers::get_restaurant_id()])
+            ->first();
+
+        if (!$order) {
+            Toastr::error(translate('messages.order_not_found'));
+            return back();
+        }
+        if ($order->payment_method != 'offline_payment' || !$order->offline_payments || $order->offline_payments->status != 'pending') {
+            Toastr::warning(translate('messages.Payment_status_updated'));
+            return back();
+        }
+
+        \App\CentralLogics\OrderLogic::deny_offline_payment($order, $request->note, 'vendor', auth('vendor')->id() ?? auth('vendor_employee')->id());
+
+        Toastr::success(translate('messages.Payment_status_updated'));
+        return back();
     }
 
     public function status(Request $request)

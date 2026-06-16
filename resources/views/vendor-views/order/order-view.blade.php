@@ -310,6 +310,54 @@
                                             </span>
                                         @endif
                                     </h6>
+
+                                    {{-- 哪吒 B方案: 商家自营「确认收款」操作。仅离线支付 + 待核验时显示。 --}}
+                                    @if ($order->payment_method == 'offline_payment' && $order?->offline_payments->status == 'pending')
+                                        <div class="mt-3 p-3" style="background:#FFF7E6;border-radius:12px;">
+                                            <p class="mb-2" style="color:#8a6d3b;font-size:13px;line-height:1.6;">
+                                                {{ translate('messages.For_offline_payments_please_verify_if_the_payments_are_safely_received_to_your_account_Customer_id_not_liable_if_you_confirm_and_deliver_the_orders_without_checking_payments_transactions') }}
+                                            </p>
+                                            <div class="d-flex flex-wrap" style="gap:8px;">
+                                                <form action="{{ route('vendor.order.confirm-offline-payment', ['id' => $order['id']]) }}" method="post"
+                                                    onsubmit="return confirm('请确认：您已在自己的账户收到本单顾客的付款？确认后将通知顾客并可开始出餐。');">
+                                                    @csrf
+                                                    @method('PUT')
+                                                    <button type="submit" class="btn btn-success btn-sm" style="border-radius:8px;">
+                                                        确认收款（我已收到顾客付款）
+                                                    </button>
+                                                </form>
+                                                <button type="button" class="btn btn-outline-danger btn-sm" style="border-radius:8px;"
+                                                    data-toggle="modal" data-target="#nzDenyOffline-{{ $order['id'] }}">
+                                                    未收到 / 打回
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {{-- 拒收备注弹窗 --}}
+                                        <div class="modal fade" id="nzDenyOffline-{{ $order['id'] }}" tabindex="-1" role="dialog" aria-hidden="true">
+                                            <div class="modal-dialog modal-dialog-centered" role="document">
+                                                <div class="modal-content" style="border-radius:12px;">
+                                                    <form action="{{ route('vendor.order.deny-offline-payment', ['id' => $order['id']]) }}" method="post">
+                                                        @csrf
+                                                        @method('PUT')
+                                                        <div class="modal-header">
+                                                            <h5 class="modal-title">打回 / 未收到付款</h5>
+                                                            <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <p style="font-size:13px;color:#666;">请填写打回原因（将通知顾客，让其重新上传付款凭证或联系客服）：</p>
+                                                            <textarea name="note" required maxlength="255" rows="3" class="form-control" style="border-radius:8px;"
+                                                                placeholder="例如：未在账户查到这笔到账，请核对转账金额/收款码后重新上传凭证"></textarea>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                            <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">取消</button>
+                                                            <button type="submit" class="btn btn--danger btn-sm">确认打回</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    @endif
                                 @endif
                                 <!-- offline_payment -->
 

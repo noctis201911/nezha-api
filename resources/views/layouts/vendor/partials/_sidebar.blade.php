@@ -119,6 +119,18 @@
                                         </span>
                                     </a>
                                 </li>
+                                {{-- 哪吒 B方案: 「待确认收款」—— 顾客已下单+上传付款凭证、等商家确认收款的离线单。补掉单根因。 --}}
+                                <li class="nav-item {{Request::is('restaurant-panel/order/list/offline_pending')?'active':'' }} @yield('offline_pending')">
+                                    <a class="nav-link " href="{{route('vendor.order.list',['offline_pending'])}}" title="待确认收款">
+                                        <span class="tio-circle nav-indicator-icon"></span>
+                                        <span class="text-truncate sidebar--badge-container">
+                                            待确认收款
+                                            <span class="badge badge-soft-danger badge-pill ml-1">
+                                                {{\App\Models\Order::where(['order_status'=>'pending','payment_method'=>'offline_payment','restaurant_id'=>\App\CentralLogics\Helpers::get_restaurant_id()])->whereHas('offline_payments', function($q){$q->where('status','pending');})->Notpos()->HasSubscriptionToday()->count()}}
+                                            </span>
+                                        </span>
+                                    </a>
+                                </li>
                                 <li class="nav-item {{Request::is('restaurant-panel/order/list/pending')?'active':'' }} @yield('pending')">
                                     <a class="nav-link " href="{{route('vendor.order.list',['pending'])}}" title="{{translate('messages.pending')}}">
                                         <span class="tio-circle nav-indicator-icon"></span>

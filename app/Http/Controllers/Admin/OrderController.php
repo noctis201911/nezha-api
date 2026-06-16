@@ -1526,25 +1526,8 @@ class OrderController extends Controller
     {
         $order = Order::findOrFail($request->id);
         if ($request->verify == 'yes') {
-            $order->payment_status = 'paid';
-            $order->confirmed = now();
-            $order->order_status = 'confirmed';
-            $order->save();
-            $order->offline_payments()->update([
-                'status' => 'verified'
-            ]);
-
-            $payment_method_name = data_get(json_decode($order->offline_payments->payment_info, true), 'method_name', $order->payment_method);
-            if ($order->payment_method == 'partial_payment') {
-                $order->payments()->where('payment_status', 'unpaid')->update([
-                    'payment_method' => $payment_method_name,
-                    'payment_status' => 'paid',
-                ]);
-            }
-
-            // $order->payment_method = $payment_method_name;
-            // $order->save();
-            $this->sent_notification_on_offline_payment('approved', $order->id);
+            // 哪吒: 确认收款动作统一走 OrderLogic, 与商家自营确认共用同一实现(避免逻辑漂移)。
+            \App\CentralLogics\OrderLogic::confirm_offline_payment($order, 'admin', auth('admin')->id());
         } elseif ($request->verify == 'switched_to_cod') {
             $order->offline_payments()->update([
                 'status' => 'verified'
@@ -1566,12 +1549,8 @@ class OrderController extends Controller
             }
             Helpers::send_order_notification($order);
         } else {
-            $order->offline_payments()->update([
-                'status' => 'denied',
-                'note' => $request->note ?? null
-            ]);
-
-            $this->sent_notification_on_offline_payment('denied', $order->id);
+            // 哪吒: 拒收/打回动作统一走 OrderLogic(与商家自营拒收共用)。
+            \App\CentralLogics\OrderLogic::deny_offline_payment($order, $request->note ?? null, 'admin', auth('admin')->id());
         }
 
         Toastr::success(translate('Payment_status_updated'));
@@ -1580,54 +1559,8 @@ class OrderController extends Controller
 
 
 
-    private function sent_notification_on_offline_payment($status, $id)
-    {
-        $order = Order::findOrfail($id);
-        if ($status == 'approved') {
-            Helpers::send_order_notification($order);
-
-            $notification_text = 'offline_verified';
-            $notification_title = translate('messages.Your_Offline_payment_was_approved');
-            $mail_sattus = Helpers::get_mail_status('offline_payment_approve_mail_status_user');
-            $mail_sattus_type = 'approved';
-            $notification_status = Helpers::getNotificationStatusData('customer', 'customer_offline_payment_approve');
-
-
-            if ($order->restaurant->restaurant_model == 'subscription' && isset($order->restaurant->restaurant_sub)) {
-                if ($order->restaurant->restaurant_sub->max_order != "unlimited" && $order->restaurant->restaurant_sub->max_order > 0) {
-                    $order->restaurant->restaurant_sub()->decrement('max_order', 1);
-                }
-            }
-        } else {
-            $notification_text = 'offline_denied';
-            $notification_title = translate('messages.Your_Offline_payment_was_rejected');
-            $mail_sattus_type = 'denied';
-            $mail_sattus = Helpers::get_mail_status('offline_payment_deny_mail_status_user');
-            $notification_status = Helpers::getNotificationStatusData('customer', 'customer_offline_payment_deny');
-        }
-        try {
-
-              $fcm_token = ($order->is_guest == 0 ? $order?->customer?->cm_firebase_token : $order?->guest?->fcm_token) ?? null;
-                $message = Helpers::getOrderPushNotificationMessage($order, $notification_text, 'user' ,$order->customer ? $order?->customer?->current_language_key : 'en');
-                if ($message && isset($fcm_token)) {
-                    $data= Helpers::makeDataForPushNotification(title:$notification_title, message:$message,orderId: $order->id, type: 'order_status', orderStatus: $order->order_status);
-                    Helpers::send_push_notif_to_device($fcm_token, $data);
-                    Helpers::insertDataOnNotificationTable($data , 'user', $order->user_id);
-                }
-
-
-
-
-            if ($order?->customer?->email && config('mail.status') && $mail_sattus == '1' && $notification_status?->mail_status == 'active') {
-                Mail::to($order?->customer?->getRawOriginal('email'))->send(new \App\Mail\UserOfflinePaymentMail($order?->customer?->f_name . ' ' . $order?->customer?->l_name, $mail_sattus_type));
-            }
-        } catch (\Exception $e) {
-            Toastr::error(translate('Failed_to_Send_Email'));
-            info($e->getMessage());
-            return true;
-        }
-        return true;
-    }
+    // 哪吒: sent_notification_on_offline_payment() 已迁移到 OrderLogic::notify_offline_payment_result(),
+    // 供 admin 后台核验与商家自营确认共用单一来源(避免逻辑漂移)。原方法删除。
 
 
 

@@ -671,4 +671,141 @@ class OrderLogic
         return true;
     }
 
+    /**
+     * 哪吒 B方案 — 离线支付「确认收款」统一动作。
+     * admin 后台核验(后备) 与 商家自营确认(主路径) 共用此方法, 避免两端逻辑漂移。
+     *
+     * 状态机: pending + offline_payment  ->  payment_status=paid / order_status=confirmed / offline_payments=verified。
+     *
+     * 合规(INVARIANTS L1-1 平台全程不碰资金): 本动作只改"谁来核验 + 订单可见性/状态",
+     * 顾客货款全程直付商家本人账户, 平台不归集、不代收代付, 这里不触碰任何资金流转。
+     * 收款人 = 商家本人(收款码后台代录, 商家无自助改码入口, business-flow §8)。
+     *
+     * @param  Order        $order
+     * @param  string       $confirmer_type  'admin' | 'vendor'  (留痕用)
+     * @param  int|null     $confirmer_id    操作人 id (留痕用)
+     * @return Order
+     */
+    public static function confirm_offline_payment($order, $confirmer_type = 'admin', $confirmer_id = null)
+    {
+        $before_status = $order->order_status;
+
+        $order->payment_status = 'paid';
+        $order->confirmed = now();
+        $order->order_status = 'confirmed';
+        $order->save();
+        $order->offline_payments()->update([
+            'status' => 'verified',
+        ]);
+
+        $payment_method_name = data_get(json_decode($order->offline_payments->payment_info, true), 'method_name', $order->payment_method);
+        if ($order->payment_method == 'partial_payment') {
+            $order->payments()->where('payment_status', 'unpaid')->update([
+                'payment_method' => $payment_method_name,
+                'payment_status' => 'paid',
+            ]);
+        }
+
+        self::notify_offline_payment_result($order, 'approved');
+        self::log_offline_payment_action($order, 'offline_confirmed', $before_status, $order->order_status, $confirmer_type, $confirmer_id);
+
+        return $order;
+    }
+
+    /**
+     * 哪吒 B方案 — 离线支付「拒收 / 打回」统一动作 (admin 与 商家共用)。
+     * 仅把 offline_payments 标记为 denied + 备注, 不改订单主状态(顾客可据备注重传凭证或取消)。
+     * @param  Order        $order
+     * @param  string|null  $note            拒收原因(展示给顾客)
+     * @param  string       $confirmer_type  'admin' | 'vendor'
+     * @param  int|null     $confirmer_id
+     * @return Order
+     */
+    public static function deny_offline_payment($order, $note = null, $confirmer_type = 'admin', $confirmer_id = null)
+    {
+        $order->offline_payments()->update([
+            'status' => 'denied',
+            'note'   => $note,
+        ]);
+
+        self::notify_offline_payment_result($order, 'denied');
+        self::log_offline_payment_action($order, 'offline_denied', $order->order_status, $order->order_status, $confirmer_type, $confirmer_id);
+
+        return $order;
+    }
+
+    /**
+     * 给顾客发离线支付核验结果通知(推送 + 邮件)。
+     * 由 Admin\OrderController::sent_notification_on_offline_payment 迁移而来, 作为 admin/vendor 单一来源。
+     */
+    private static function notify_offline_payment_result($order, $status)
+    {
+        $order = Order::findOrFail($order->id);
+        if ($status == 'approved') {
+            Helpers::send_order_notification($order);
+
+            $notification_text  = 'offline_verified';
+            $notification_title = translate('messages.Your_Offline_payment_was_approved');
+            $mail_sattus        = Helpers::get_mail_status('offline_payment_approve_mail_status_user');
+            $mail_sattus_type   = 'approved';
+            $notification_status = Helpers::getNotificationStatusData('customer', 'customer_offline_payment_approve');
+
+            if ($order->restaurant->restaurant_model == 'subscription' && isset($order->restaurant->restaurant_sub)) {
+                if ($order->restaurant->restaurant_sub->max_order != "unlimited" && $order->restaurant->restaurant_sub->max_order > 0) {
+                    $order->restaurant->restaurant_sub()->decrement('max_order', 1);
+                }
+            }
+        } else {
+            $notification_text  = 'offline_denied';
+            $notification_title = translate('messages.Your_Offline_payment_was_rejected');
+            $mail_sattus_type   = 'denied';
+            $mail_sattus        = Helpers::get_mail_status('offline_payment_deny_mail_status_user');
+            $notification_status = Helpers::getNotificationStatusData('customer', 'customer_offline_payment_deny');
+        }
+
+        try {
+            $fcm_token = ($order->is_guest == 0 ? $order?->customer?->cm_firebase_token : $order?->guest?->fcm_token) ?? null;
+            $message = Helpers::getOrderPushNotificationMessage($order, $notification_text, 'user', $order->customer ? $order?->customer?->current_language_key : 'en');
+            if ($message && isset($fcm_token)) {
+                $data = Helpers::makeDataForPushNotification(title: $notification_title, message: $message, orderId: $order->id, type: 'order_status', orderStatus: $order->order_status);
+                Helpers::send_push_notif_to_device($fcm_token, $data);
+                Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id);
+            }
+            if ($order?->customer?->email && config('mail.status') && $mail_sattus == '1' && $notification_status?->mail_status == 'active') {
+                Mail::to($order?->customer?->getRawOriginal('email'))->send(new \App\Mail\UserOfflinePaymentMail($order?->customer?->f_name . ' ' . $order?->customer?->l_name, $mail_sattus_type));
+            }
+        } catch (\Exception $e) {
+            info('notify_offline_payment_result failed: ' . $e->getMessage());
+        }
+        return true;
+    }
+
+    /**
+     * 留痕: 谁在何时确认/拒收了离线支付 (写入 logs 表, 供审计/异常确认排查)。
+     * 永不因留痕失败影响主流程(try/catch 吞掉)。
+     */
+    private static function log_offline_payment_action($order, $action_type, $before, $after, $confirmer_type, $confirmer_id)
+    {
+        try {
+            \App\Models\Log::create([
+                'logable_id'     => $order->id,
+                'logable_type'   => \App\Models\Order::class,
+                'action_type'    => $action_type,
+                'model'          => 'Order',
+                'model_id'       => $order->id,
+                'action_details' => json_encode([
+                    'offline_payment' => $action_type,
+                    'by_type'         => $confirmer_type,
+                    'by_id'           => $confirmer_id,
+                    'at'              => now()->toDateTimeString(),
+                ]),
+                'before_state'   => $before,
+                'after_state'    => $after,
+                'restaurant_id'  => $order->restaurant_id,
+            ]);
+        } catch (\Throwable $e) {
+            info('log_offline_payment_action failed: ' . $e->getMessage());
+        }
+    }
+
 }
