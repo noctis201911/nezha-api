@@ -1309,6 +1309,8 @@ class BusinessSettingsController extends Controller
             }
         }
 
+        $this->clear_data_settings_cache($key_data);
+
         return true;
     }
 
@@ -1322,8 +1324,26 @@ class BusinessSettingsController extends Controller
         );
         $data->value = $status;
         $data->save();
+        $this->clear_data_settings_cache($key_data);
 
         return true;
+    }
+
+    private function clear_data_settings_cache($key)
+    {
+        $locales = ['en', 'zh', 'zh-cn', 'zh-CN', 'zh_CN', ''];
+        try {
+            $sys = json_decode(\Illuminate\Support\Facades\DB::table('business_settings')->where('key', 'system_language')->value('value'), true) ?? [];
+            foreach ($sys as $l) {
+                if (!empty($l['code'])) {
+                    $locales[] = $l['code'];
+                }
+            }
+        } catch (\Throwable $e) {
+        }
+        foreach (array_unique($locales) as $loc) {
+            \Illuminate\Support\Facades\Cache::forget('data_settings_' . $key . '_' . $loc);
+        }
     }
 
     public function terms_and_conditions()
