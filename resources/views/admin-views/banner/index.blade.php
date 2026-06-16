@@ -273,7 +273,7 @@
                                 "entries": "#datatableEntries",
                                 "isResponsive": false,
                                 "isShowPaging": false,
-                                "paging": false,
+                                "paging": false
                                }'>
                             <thead class="thead-light">
                                 <tr>
