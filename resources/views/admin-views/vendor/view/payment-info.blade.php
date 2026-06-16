@@ -49,19 +49,15 @@
                                 <label class="custom-file-label" for="rmb_qr_image">{{ translate('选择图片') }}</label>
                             </div>
                             <small class="text-muted">{{ translate('支持 jpg/png/webp, 最大 2MB') }}</small>
-                            <div class="mt-2"><img id="rmb_qr_preview" alt="preview" style="display:none;max-width:160px;max-height:160px;border:1px solid #eee;border-radius:8px;"></div>
                         </div>
                         <div class="col-12">
-                            @if ($restaurant->rmb_qr_image_full_url)
-                                <div class="mt-2">
-                                    <label class="input-label">{{ translate('当前支付宝收款码') }}</label><br>
-                                    <img src="{{ $restaurant->rmb_qr_image_full_url }}" alt="QR"
-                                         style="max-width:200px;max-height:200px;border:1px solid #eee;border-radius:8px;"
-                                         onerror="this.style.display='none';">
-                                </div>
-                            @else
-                                <small class="text-danger">{{ translate('尚未上传支付宝收款码') }}</small>
-                            @endif
+                            <div class="mt-2" id="rmb_qr_box" style="{{ $restaurant->rmb_qr_image_full_url ? '' : 'display:none;' }}">
+                                <label class="input-label" id="rmb_qr_label">{{ translate('当前支付宝收款码') }}</label><br>
+                                <img id="rmb_qr_current" src="{{ $restaurant->rmb_qr_image_full_url ?? '' }}" alt="QR"
+                                     style="max-width:200px;max-height:200px;border:1px solid #eee;border-radius:8px;"
+                                     onerror="this.style.display='none';">
+                            </div>
+                            <small class="text-danger" id="rmb_qr_empty" style="{{ $restaurant->rmb_qr_image_full_url ? 'display:none;' : '' }}">{{ translate('尚未上传支付宝收款码') }}</small>
                         </div>
                     </div>
                 </div>
@@ -88,19 +84,15 @@
                                 <label class="custom-file-label" for="wechat_qr_image">{{ translate('选择图片') }}</label>
                             </div>
                             <small class="text-muted">{{ translate('支持 jpg/png/webp, 最大 2MB') }}</small>
-                            <div class="mt-2"><img id="wechat_qr_preview" alt="preview" style="display:none;max-width:160px;max-height:160px;border:1px solid #eee;border-radius:8px;"></div>
                         </div>
                         <div class="col-12">
-                            @if ($restaurant->wechat_qr_image_full_url)
-                                <div class="mt-2">
-                                    <label class="input-label">{{ translate('当前微信收款码') }}</label><br>
-                                    <img src="{{ $restaurant->wechat_qr_image_full_url }}" alt="WeChat QR"
-                                         style="max-width:200px;max-height:200px;border:1px solid #eee;border-radius:8px;"
-                                         onerror="this.style.display='none';">
-                                </div>
-                            @else
-                                <small class="text-danger">{{ translate('尚未上传微信收款码') }}</small>
-                            @endif
+                            <div class="mt-2" id="wechat_qr_box" style="{{ $restaurant->wechat_qr_image_full_url ? '' : 'display:none;' }}">
+                                <label class="input-label" id="wechat_qr_label">{{ translate('当前微信收款码') }}</label><br>
+                                <img id="wechat_qr_current" src="{{ $restaurant->wechat_qr_image_full_url ?? '' }}" alt="WeChat QR"
+                                     style="max-width:200px;max-height:200px;border:1px solid #eee;border-radius:8px;"
+                                     onerror="this.style.display='none';">
+                            </div>
+                            <small class="text-danger" id="wechat_qr_empty" style="{{ $restaurant->wechat_qr_image_full_url ? 'display:none;' : '' }}">{{ translate('尚未上传微信收款码') }}</small>
                         </div>
                     </div>
                 </div>
@@ -130,6 +122,15 @@
                                    placeholder="{{ translate('如: TXxxxxx... 或 0xXxxx...') }}">
                         </div>
                     </div>
+                    <div class="mt-3" id="usdt_qr_box" style="{{ $restaurant->usdt_address ? '' : 'display:none;' }}">
+                        <label class="input-label">{{ translate('USDT 收款二维码 (顾客扫此码转账)') }}</label>
+                        <div style="max-width:186px;background:#fff;padding:8px;border:1px solid #eee;border-radius:8px;display:inline-block;line-height:0;">
+                            @if ($restaurant->usdt_address)
+                                {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(170)->margin(1)->generate($restaurant->usdt_address) !!}
+                            @endif
+                        </div>
+                        <div><small class="text-muted" id="usdt_qr_hint" style="display:none;">{{ translate('地址已修改，保存后二维码会更新') }}</small></div>
+                    </div>
                 </div>
             </div>
 
@@ -142,24 +143,40 @@
         <script>
         (function () {
             var DEF = @json(translate('选择图片'));
-            function wire(inputId, previewId) {
+            var SEL = @json(translate('新选择的收款码 (点保存后生效)'));
+            // 选图后: 直接把"当前收款码"那张图替换成所选图(原地预览), 不另起预览框
+            function wire(inputId, boxId, imgId, labelId, emptyId) {
                 var input = document.getElementById(inputId);
                 if (!input) return;
-                var box = input.closest(".custom-file");
-                var label = box ? box.querySelector(".custom-file-label") : null;
-                var preview = document.getElementById(previewId);
+                var cf = input.closest(".custom-file");
+                var fileLabel = cf ? cf.querySelector(".custom-file-label") : null;
+                var box = document.getElementById(boxId);
+                var img = document.getElementById(imgId);
+                var label = document.getElementById(labelId);
+                var empty = document.getElementById(emptyId);
                 input.addEventListener("change", function () {
                     if (input.files && input.files[0]) {
-                        if (label) label.textContent = input.files[0].name;
-                        if (preview) { preview.src = URL.createObjectURL(input.files[0]); preview.style.display = "block"; }
+                        if (fileLabel) fileLabel.textContent = input.files[0].name;
+                        if (img) { img.src = URL.createObjectURL(input.files[0]); img.style.display = "inline-block"; }
+                        if (box) box.style.display = "";
+                        if (label) label.textContent = SEL;
+                        if (empty) empty.style.display = "none";
                     } else {
-                        if (label) label.textContent = DEF;
-                        if (preview) preview.style.display = "none";
+                        if (fileLabel) fileLabel.textContent = DEF;
                     }
                 });
             }
-            wire("rmb_qr_image", "rmb_qr_preview");
-            wire("wechat_qr_image", "wechat_qr_preview");
+            wire("rmb_qr_image", "rmb_qr_box", "rmb_qr_current", "rmb_qr_label", "rmb_qr_empty");
+            wire("wechat_qr_image", "wechat_qr_box", "wechat_qr_current", "wechat_qr_label", "wechat_qr_empty");
+            // USDT: 改地址时提示二维码需保存后更新(二维码服务端按已存地址生成)
+            var usdt = document.querySelector('input[name="usdt_address"]');
+            var usdtHint = document.getElementById("usdt_qr_hint");
+            if (usdt && usdtHint) {
+                var orig = usdt.value;
+                usdt.addEventListener("input", function () {
+                    usdtHint.style.display = (usdt.value !== orig) ? "block" : "none";
+                });
+            }
         })();
         </script>
 
