@@ -168,7 +168,7 @@ class AdminEarningReportController extends Controller
         return response()->json([
             'categories' => $months->map(function ($m) use ($filter, $dateFormat, $singleDayCustom) {
                 if ($filter === 'this_week') {
-                    return Carbon::parse($m)->format('D');
+                    return ['周日','周一','周二','周三','周四','周五','周六'][Carbon::parse($m)->dayOfWeek];
                 }
                 if ($filter === 'this_month') {
                     return Carbon::parse($m)->format('j');
@@ -178,10 +178,10 @@ class AdminEarningReportController extends Controller
                         return Carbon::parse($m)->format('d M Y');
                     }
                     if ($dateFormat === '%Y') return $m;
-                    if ($dateFormat === '%Y-%m') return Carbon::parse($m . '-01')->format('M');
+                    if ($dateFormat === '%Y-%m') return Carbon::parse($m . '-01')->month . '月';
                     if ($dateFormat === '%Y-%m-%d') return Carbon::parse($m)->format('j');
                 }
-                return Carbon::parse($m . '-01')->format('M');
+                return Carbon::parse($m . '-01')->month . '月';
             }),
             'earning_series' => $earningSeries,
             'expense_series' => $expenseSeries
