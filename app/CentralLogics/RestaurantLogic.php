@@ -100,6 +100,18 @@ class RestaurantLogic
             ->when($additional_data['filter'] =='near_by_restaurants', function($q){
                 return $q->orderBy('distance');
             })
+            // 好评率排序(前端"好评率"筛选 filter_data=top_rated): 按已审核(status=1)评价的平均星级从高到低,
+            // 与卡片显示的 avg_rating 同口径(同样只算 status=1); 无评价者 avg 为 NULL, MySQL DESC 下自动沉底。
+            ->when($additional_data['filter'] =='top_rated', function($q){
+                return $q->selectSub(function ($query) {
+                    $query->selectRaw('AVG(reviews.rating)')
+                        ->from('reviews')
+                        ->join('food', 'food.id', '=', 'reviews.food_id')
+                        ->where('reviews.status', 1)
+                        ->whereColumn('food.restaurant_id', 'restaurants.id')
+                        ->groupBy('food.restaurant_id');
+                }, 'nz_rating_avg')->orderBy('nz_rating_avg', 'desc');
+            })
             ->when(isset($key) , function($query)use($key){
                 $query->where(function ($q) use ($key) {
                     foreach ($key as $value) {
