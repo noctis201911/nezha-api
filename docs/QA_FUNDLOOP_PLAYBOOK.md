@@ -44,7 +44,7 @@
 | F-1 | 无 `offline_payments` 行的 offline 单，`confirm_offline_payment` 第~700行 `$order->offline_payments->payment_info` 读 null 属性 → fatal | `OrderLogic::confirm_offline_payment` | 🟡 健壮性 | ✅ 已修 2026-06-16(nullsafe+空串守卫)，仿真回归通过 |
 | F-2 | 扣佣无 `max(0,…)` 下限：gate 在下单时拦、扣佣在 delivered 时滞后，堆叠多单后余额可被扣成负 | `OrderLogic.php` `deposit_balance = (…) - $comission_amount`（~232行） | 🟡 业务策略 | 待用户拍板：clamp 到0+单列欠款，还是接受负为商家欠款 |
 | F-3 | 扣佣/返还对 `deposit_balance` 读-改-写无 `lockForUpdate`，同商家并发送达/退款会 lost-update（少扣一笔佣金） | `create_transaction`/`refund_order` | 🟡 并发正确性 | ✅ 已修 2026-06-16(扣佣/返还改 lockForUpdate 读最新余额)，仿真回归通过 |
-| F-4 | `refund_before_delivered`（取消路径）缺 `is_direct_pay` 护栏：已确认(paid)的 offline 单被取消时，错误冲减 `adminWallet->digital_received`（直付从没加过）；且若 `wallet_add_refund` 开，会用平台钱包退款给顾客 = 平台碰钱 **L1-1 风险** | `OrderLogic::refund_before_delivered` | 🟡（潜在🔴） | 当前 `wallet_add_refund=0` 故 L1 部分休眠；建议补 `!$isDirectPay` 护栏与 `refund_order` 对齐 |
+| F-4 | `refund_before_delivered`（取消路径）缺 `is_direct_pay` 护栏：已确认(paid)的 offline 单被取消时，错误冲减 `adminWallet->digital_received`（直付从没加过）；且若 `wallet_add_refund` 开，会用平台钱包退款给顾客 = 平台碰钱 **L1-1 风险** | `OrderLogic::refund_before_delivered` | 🟡（潜在🔴） | ✅ 已修 2026-06-16(加 offline_payment 直付 no-op 护栏，与 refund_order 对齐)；仿真最坏情况 wallet_add_refund=1 下平台 digital_received 不变+无钱包退款+COD 未误伤，零落库通过。遗留: 取消直付单后"商家退顾客"无留痕，待后续 |
 
 > 修复任一条须遵守 INVARIANTS：F-4 触及 L1-1，改前停下问用户 + 记 CHANGELOG。
 
@@ -58,3 +58,5 @@
 - **2026-06-16 首次建立+首跑（代码trace + 只读探针）**：闭环代码路径完整接通，账面设计对称（扣佣↔返还基于流水、直付单不碰平台现金桶、退款幂等守门）。**线上闭环从未真跑通**（扣佣开关关、0 delivered offline 单、0 commission_deduction、offline_payments 表空、仅1笔 pending 测试单 #100003）。事务回滚仿真脚本已就绪但**因属生产 money-write 被安全拦截，待用户批准后再跑**。发现隐患 F-1~F-4（见 §3）。
 
 - **2026-06-16 修 F-1+F-3**：F-1 加 nullsafe `?->` + `?? ''` 守卫防无凭证行 confirm fatal；F-3 扣佣/退款返还改 `lockForUpdate()` 读最新余额，串行化同商家并发、防 lost-update。事务回滚仿真回归全 PASS、零落库（单线程结果与改前一致）。F-2(扣穿成负)待业务拍板、F-4(取消路径 L1-1)待批准后再动。
+
+- **2026-06-16 修 F-4a(L1-1)**：`refund_before_delivered` 开头加直付 no-op 护栏(offline_payment→return true)，与 `refund_order` 对齐，堵死①错误冲减 digital_received ②`wallet_add_refund` 开时平台垫钱退顾客(L1-1)。事务回滚仿真最坏情况 wallet_add_refund=1 下平台不碰钱、COD 未误伤、零落库通过。已记 `docs/compliance/CHANGELOG.md`。顾客自助取消路径经查不可达(只能取消 pending 单)无需改。

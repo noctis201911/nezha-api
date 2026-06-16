@@ -339,6 +339,11 @@ class OrderLogic
         return true;
     }
     public static function refund_before_delivered($order){
+        // 哪吒 B方案 L1-1 (F-4a): 直付单(offline_payment)平台从未收款, 取消退款由商家直接退原付款人,
+        // 平台不动 digital_received、不走平台钱包(与 refund_order 的 !$isDirectPay 护栏对齐, 防平台垫钱碰钱)。
+        if ($order->payment_method == 'offline_payment') {
+            return true;
+        }
         $adminWallet = AdminWallet::firstOrNew(
             ['admin_id' => Admin::where('role_id', 1)->first()->id]
         );
