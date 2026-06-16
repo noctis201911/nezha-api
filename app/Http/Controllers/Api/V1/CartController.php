@@ -25,9 +25,9 @@ class CartController extends Controller
         $is_guest = $request->user ? 0 : 1;
         $carts = Cart::where('user_id', $user_id)->where('is_guest',$is_guest)->get()
         ->map(function ($data) {
-            $data->add_on_ids = json_decode($data->add_on_ids,true);
-            $data->add_on_qtys = json_decode($data->add_on_qtys,true);
-            $data->variations = json_decode($data->variations,true);
+            $data->add_on_ids = is_string($data->add_on_ids) ? json_decode($data->add_on_ids,true) : $data->add_on_ids;
+            $data->add_on_qtys = is_string($data->add_on_qtys) ? json_decode($data->add_on_qtys,true) : $data->add_on_qtys;
+            $data->variations = is_string($data->variations) ? json_decode($data->variations,true) : $data->variations;
 			$data->item = Helpers::cart_product_data_formatting($data->item, $data->variations,$data->add_on_ids,
             $data->add_on_qtys, false, app()->getLocale());
 			return $data;
@@ -69,9 +69,9 @@ class CartController extends Controller
             // 幂等：商品已在购物车时不再报 403(污染顾客 console),直接返回当前购物车列表(与加购成功同结构),前端据此刷新;数量增减走 update 接口,不受影响
             $carts = Cart::where('user_id', $user_id)->where('is_guest',$is_guest)->get()
             ->map(function ($data) {
-                $data->add_on_ids = json_decode($data->add_on_ids,true);
-                $data->add_on_qtys = json_decode($data->add_on_qtys,true);
-                $data->variations = json_decode($data->variations,true);
+                $data->add_on_ids = is_string($data->add_on_ids) ? json_decode($data->add_on_ids,true) : $data->add_on_ids;
+                $data->add_on_qtys = is_string($data->add_on_qtys) ? json_decode($data->add_on_qtys,true) : $data->add_on_qtys;
+                $data->variations = is_string($data->variations) ? json_decode($data->variations,true) : $data->variations;
                 $data->item = Helpers::cart_product_data_formatting($data->item, $data->variations,$data->add_on_ids,
                 $data->add_on_qtys, false, app()->getLocale());
                 return $data;
@@ -134,9 +134,9 @@ class CartController extends Controller
 
         $carts = Cart::where('user_id', $user_id)->where('is_guest',$is_guest)->get()
         ->map(function ($data) {
-            $data->add_on_ids = json_decode($data->add_on_ids,true);
-            $data->add_on_qtys = json_decode($data->add_on_qtys,true);
-            $data->variations = json_decode($data->variations,true);
+            $data->add_on_ids = is_string($data->add_on_ids) ? json_decode($data->add_on_ids,true) : $data->add_on_ids;
+            $data->add_on_qtys = is_string($data->add_on_qtys) ? json_decode($data->add_on_qtys,true) : $data->add_on_qtys;
+            $data->variations = is_string($data->variations) ? json_decode($data->variations,true) : $data->variations;
 			$data->item = Helpers::cart_product_data_formatting($data->item, $data->variations,$data->add_on_ids,
             $data->add_on_qtys, false, app()->getLocale());
             return $data;
@@ -194,9 +194,9 @@ class CartController extends Controller
 
         $carts = Cart::where('user_id', $user_id)->where('is_guest',$is_guest)->get()
         ->map(function ($data) {
-            $data->add_on_ids = json_decode($data->add_on_ids,true);
-            $data->add_on_qtys = json_decode($data->add_on_qtys,true);
-            $data->variations = json_decode($data->variations,true);
+            $data->add_on_ids = is_string($data->add_on_ids) ? json_decode($data->add_on_ids,true) : $data->add_on_ids;
+            $data->add_on_qtys = is_string($data->add_on_qtys) ? json_decode($data->add_on_qtys,true) : $data->add_on_qtys;
+            $data->variations = is_string($data->variations) ? json_decode($data->variations,true) : $data->variations;
 			$data->item = Helpers::cart_product_data_formatting($data->item, $data->variations,$data->add_on_ids,
             $data->add_on_qtys, false, app()->getLocale());
             return $data;
@@ -223,9 +223,9 @@ class CartController extends Controller
 
         $carts = Cart::where('user_id', $user_id)->where('is_guest',$is_guest)->get()
         ->map(function ($data) {
-            $data->add_on_ids = json_decode($data->add_on_ids,true);
-            $data->add_on_qtys = json_decode($data->add_on_qtys,true);
-            $data->variations = json_decode($data->variations,true);
+            $data->add_on_ids = is_string($data->add_on_ids) ? json_decode($data->add_on_ids,true) : $data->add_on_ids;
+            $data->add_on_qtys = is_string($data->add_on_qtys) ? json_decode($data->add_on_qtys,true) : $data->add_on_qtys;
+            $data->variations = is_string($data->variations) ? json_decode($data->variations,true) : $data->variations;
 			$data->item = Helpers::cart_product_data_formatting($data->item, $data->variations,$data->add_on_ids,
             $data->add_on_qtys, false, app()->getLocale());
             return $data;
@@ -255,9 +255,9 @@ class CartController extends Controller
 
         $carts = Cart::where('user_id', $user_id)->where('is_guest',$is_guest)->get()
         ->map(function ($data) {
-            $data->add_on_ids = json_decode($data->add_on_ids,true);
-            $data->add_on_qtys = json_decode($data->add_on_qtys,true);
-            $data->variations = json_decode($data->variations,true);
+            $data->add_on_ids = is_string($data->add_on_ids) ? json_decode($data->add_on_ids,true) : $data->add_on_ids;
+            $data->add_on_qtys = is_string($data->add_on_qtys) ? json_decode($data->add_on_qtys,true) : $data->add_on_qtys;
+            $data->variations = is_string($data->variations) ? json_decode($data->variations,true) : $data->variations;
 			$data->item = Helpers::cart_product_data_formatting($data->item, $data->variations,$data->add_on_ids,
             $data->add_on_qtys, false, app()->getLocale());
             return $data;
@@ -332,9 +332,9 @@ class CartController extends Controller
 
         $carts = Cart::where('user_id', $user_id)->where('is_guest',0)->get()
         ->map(function ($data) {
-            $data->add_on_ids = json_decode($data->add_on_ids,true);
-            $data->add_on_qtys = json_decode($data->add_on_qtys,true);
-            $data->variations = json_decode($data->variations,true);
+            $data->add_on_ids = is_string($data->add_on_ids) ? json_decode($data->add_on_ids,true) : $data->add_on_ids;
+            $data->add_on_qtys = is_string($data->add_on_qtys) ? json_decode($data->add_on_qtys,true) : $data->add_on_qtys;
+            $data->variations = is_string($data->variations) ? json_decode($data->variations,true) : $data->variations;
 			$data->item = Helpers::cart_product_data_formatting($data->item, $data->variations,$data->add_on_ids,
             $data->add_on_qtys, false, app()->getLocale());
             return $data;
