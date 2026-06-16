@@ -24,14 +24,14 @@
 - 留痕模型：app/Models/NezhaRefundRecord.php；护栏 app/CentralLogics/NezhaRefundControl.php。
 
 🟡 关于"商家怎么退款 / 要不要客户联系方式"（已查清，直接用，别再加新字段）：
-- 顾客联系方式**每单已存** orders.delivery_address JSON：contact_person_name / contact_person_number / contact_person_email。
+- 🔴 注册不采集手机号(邮箱/Google/Apple 登录, users.phone 是 StackFood 遗留列、真实注册留空)；但**收货地址表单必填电话**(前端 ValidationSchemaForAddAddress), 故**配送单 delivery_address 里有顾客填的电话**(为配送/呼叫用, 非注册字段), 另含 contact_person_name / contact_person_email。注册顾客必有邮箱(登录身份); 游客无账号邮箱、只有地址里必填的电话。
 - 顾客付款时上传的**付款凭证截图**已存（offline_payments），商家订单页已能预览——截图上能看到付款人。
 - 退款怎么走：
   · USDT → 退回链上**原 from 地址**（地址在原 tx 里，无需联系方式；L1-3）。
   · 微信/支付宝(人民币) → 商家在自己微信/支付宝里：原收款记录若支持「原路退回/退款」就一键退；
     若不支持(个人收款码常见) → 商家用顾客的微信/支付宝账号**重新转账**退回，账号来自
-    ①付款凭证截图 ②按 delivery_address 里的电话联系顾客索取。
-- 结论：**不需要新增"客户联系方式"字段**。要做的是把"已有的电话/邮箱 + 付款凭证截图 + 原路信息"在商家退款卡上**展示出来**，让商家据此原路退。
+    ①付款凭证截图 ②按订单里的邮箱/地址电话联系顾客索取(注册顾客优先用邮箱)。
+- 结论：**不需要新增"客户联系方式"字段**。商家退款卡上展示"已有的邮箱(注册顾客必有) +（配送单）地址电话 + 付款凭证截图 + 原路信息"即可。
 
 要做：
 1) 当 admin 取消/退款一个直付单(offline_payment)时，无论 nezha_refund_control_status 开关如何，
