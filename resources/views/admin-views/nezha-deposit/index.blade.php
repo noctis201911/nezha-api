@@ -40,12 +40,23 @@
         </div>
     </div>
 
+    @php
+        $sortLink = function ($col, $label) use ($sort, $dir) {
+            $nextDir = ($sort === $col && $dir === 'asc') ? 'desc' : 'asc';
+            $url = route('admin.nezha-deposit.index', array_merge(request()->except(['sort', 'dir', 'page']), ['sort' => $col, 'dir' => $nextDir]));
+            $arrow = $sort === $col ? ($dir === 'asc' ? ' ▲' : ' ▼') : ' <span style="opacity:.3">↕</span>';
+            return '<a href="' . $url . '" class="text-reset text-decoration-none">' . e($label) . $arrow . '</a>';
+        };
+    @endphp
+
     <div class="card">
         <div class="card-header flex-between flex-wrap gap-2">
             <h5 class="card-title mb-0">{{ translate('各商家预存佣金') }}</h5>
             <div class="d-flex gap-2">
                 <a href="{{ route('admin.nezha-deposit.transactions') }}" class="btn btn-sm btn-outline-primary">{{ translate('全部流水') }}</a>
                 <form action="{{ route('admin.nezha-deposit.index') }}" method="GET" class="d-flex gap-1">
+                    <input type="hidden" name="sort" value="{{ $sort }}">
+                    <input type="hidden" name="dir" value="{{ $dir }}">
                     <input type="search" name="search" value="{{ $search }}" class="form-control form-control-sm" placeholder="{{ translate('搜索商家名') }}">
                     <button class="btn btn-sm btn-primary">{{ translate('messages.search') }}</button>
                 </form>
@@ -56,21 +67,18 @@
                 <table class="table table-hover table-borderless table-thead-bordered table-align-middle card-table">
                     <thead class="thead-light">
                         <tr>
-                            <th>{{ translate('商家') }}</th>
-                            <th class="text-right">{{ translate('当前余额') }}</th>
-                            <th class="text-right">{{ translate('累计充值') }}</th>
-                            <th class="text-right">{{ translate('累计扣佣') }}</th>
-                            <th class="text-right">{{ translate('累计退还') }}</th>
-                            <th>{{ translate('上次充值') }}</th>
+                            <th>{!! $sortLink('name', translate('商家')) !!}</th>
+                            <th class="text-right">{!! $sortLink('balance', translate('当前余额')) !!}</th>
+                            <th class="text-right">{!! $sortLink('recharge', translate('累计充值')) !!}</th>
+                            <th class="text-right">{!! $sortLink('deduction', translate('累计扣佣')) !!}</th>
+                            <th class="text-right">{!! $sortLink('reversal', translate('累计退还')) !!}</th>
+                            <th>{!! $sortLink('last_recharge', translate('上次充值')) !!}</th>
                             <th class="text-center">{{ translate('messages.action') }}</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse($restaurants as $r)
-                            @php
-                                $bal = (float) ($balances[$r->vendor_id] ?? 0);
-                                $st = $stats[$r->vendor_id] ?? null;
-                            @endphp
+                            @php $bal = (float) $r->bal; @endphp
                             <tr>
                                 <td>
                                     <span class="d-block font-weight-bold">{{ $r->name }}</span>
@@ -83,10 +91,10 @@
                                         <span class="font-weight-bold">{{ \App\CentralLogics\Helpers::format_currency($bal) }}</span>
                                     @endif
                                 </td>
-                                <td class="text-right text-success">{{ \App\CentralLogics\Helpers::format_currency($st->total_recharge ?? 0) }}</td>
-                                <td class="text-right">{{ \App\CentralLogics\Helpers::format_currency($st->total_deduction ?? 0) }}</td>
-                                <td class="text-right">{{ \App\CentralLogics\Helpers::format_currency($st->total_reversal ?? 0) }}</td>
-                                <td><small>{{ ($st && $st->last_recharge) ? \Carbon\Carbon::parse($st->last_recharge)->format('Y-m-d H:i') : '—' }}</small></td>
+                                <td class="text-right text-success">{{ \App\CentralLogics\Helpers::format_currency($r->total_recharge ?? 0) }}</td>
+                                <td class="text-right">{{ \App\CentralLogics\Helpers::format_currency($r->total_deduction ?? 0) }}</td>
+                                <td class="text-right">{{ \App\CentralLogics\Helpers::format_currency($r->total_reversal ?? 0) }}</td>
+                                <td><small>{{ $r->last_recharge ? \Carbon\Carbon::parse($r->last_recharge)->format('Y-m-d H:i') : '—' }}</small></td>
                                 <td class="text-center text-nowrap">
                                     <button type="button" class="btn btn-sm btn-primary recharge-btn"
                                         data-id="{{ $r->id }}" data-name="{{ $r->name }}"

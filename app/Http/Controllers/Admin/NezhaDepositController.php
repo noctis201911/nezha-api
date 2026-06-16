@@ -17,25 +17,43 @@ use Brian2694\Toastr\Facades\Toastr;
  */
 class NezhaDepositController extends Controller
 {
-    // 充值佣金一览
+    // 充值佣金一览(支持按 当前余额/累计充值/扣佣/退还/上次充值/商家名 排序)
     public function index(Request $request)
     {
         $search = $request->get('search');
-        $restaurants = Restaurant::with('vendor')
-            ->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%"))
-            ->orderBy('name')
-            ->paginate(25)
-            ->appends(['search' => $search]);
+        $sort = $request->get('sort', 'name');
+        $dir = strtolower($request->get('dir', 'asc')) === 'desc' ? 'desc' : 'asc';
 
-        $vendorIds = $restaurants->pluck('vendor_id')->filter()->values()->all();
-        $balances = RestaurantWallet::whereIn('vendor_id', $vendorIds)->pluck('deposit_balance', 'vendor_id');
-        $stats = RestaurantDepositTransaction::whereIn('vendor_id', $vendorIds)
-            ->selectRaw("vendor_id,
-                SUM(CASE WHEN type='recharge' THEN amount ELSE 0 END) as total_recharge,
-                SUM(CASE WHEN type='commission_deduction' THEN commission ELSE 0 END) as total_deduction,
-                SUM(CASE WHEN type='refund_reversal' THEN commission ELSE 0 END) as total_reversal,
-                MAX(CASE WHEN type='recharge' THEN created_at ELSE NULL END) as last_recharge")
-            ->groupBy('vendor_id')->get()->keyBy('vendor_id');
+        $rechargeSub = "(SELECT COALESCE(SUM(amount),0) FROM restaurant_deposit_transactions d WHERE d.vendor_id = restaurants.vendor_id AND d.type='recharge')";
+        $deductSub   = "(SELECT COALESCE(SUM(commission),0) FROM restaurant_deposit_transactions d WHERE d.vendor_id = restaurants.vendor_id AND d.type='commission_deduction')";
+        $reversalSub = "(SELECT COALESCE(SUM(commission),0) FROM restaurant_deposit_transactions d WHERE d.vendor_id = restaurants.vendor_id AND d.type='refund_reversal')";
+        $lastSub     = "(SELECT MAX(created_at) FROM restaurant_deposit_transactions d WHERE d.vendor_id = restaurants.vendor_id AND d.type='recharge')";
+
+        $query = Restaurant::query()
+            ->leftJoin('restaurant_wallets as rw', 'rw.vendor_id', '=', 'restaurants.vendor_id')
+            ->when($search, fn ($q) => $q->where('restaurants.name', 'like', "%{$search}%"))
+            ->select('restaurants.*')
+            ->selectRaw('COALESCE(rw.deposit_balance,0) as bal')
+            ->selectRaw("{$rechargeSub} as total_recharge")
+            ->selectRaw("{$deductSub} as total_deduction")
+            ->selectRaw("{$reversalSub} as total_reversal")
+            ->selectRaw("{$lastSub} as last_recharge");
+
+        $sortMap = [
+            'name'          => 'restaurants.name',
+            'balance'       => 'bal',
+            'recharge'      => 'total_recharge',
+            'deduction'     => 'total_deduction',
+            'reversal'      => 'total_reversal',
+            'last_recharge' => 'last_recharge',
+        ];
+        $sortCol = $sortMap[$sort] ?? 'restaurants.name';
+        $query->orderBy(DB::raw($sortCol), $dir);
+        if ($sort !== 'name') {
+            $query->orderBy('restaurants.name', 'asc'); // 次级稳定排序
+        }
+
+        $restaurants = $query->paginate(25)->appends($request->all());
 
         $summary = [
             'total_balance'   => (float) RestaurantWallet::sum('deposit_balance'),
@@ -44,7 +62,7 @@ class NezhaDepositController extends Controller
             'total_deduction' => (float) RestaurantDepositTransaction::where('type', 'commission_deduction')->sum('commission'),
         ];
 
-        return view('admin-views.nezha-deposit.index', compact('restaurants', 'balances', 'stats', 'summary', 'search'));
+        return view('admin-views.nezha-deposit.index', compact('restaurants', 'summary', 'search', 'sort', 'dir'));
     }
 
     // 预存佣金流水
