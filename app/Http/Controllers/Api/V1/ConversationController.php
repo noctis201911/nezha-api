@@ -57,6 +57,9 @@ class ConversationController extends Controller
         if($request->conversation_id){
             $conversation = Conversation::find($request->conversation_id);
 
+            if(!$conversation || ($conversation->sender_id != $sender->id && $conversation->receiver_id != $sender->id)){
+                return response()->json(['errors' => [['code' => 'conversation', 'message' => translate('messages.not_found')]]], 403);
+            }
             if($conversation->sender_id == $sender->id){
                 $receiver_id = $conversation->receiver_id;
                 $receiver = UserInfo::find($receiver_id);
@@ -396,6 +399,9 @@ class ConversationController extends Controller
         }
 
         if(isset($conversation)){
+            if($conversation->sender_id != $user->id && $conversation->receiver_id != $user->id){
+                return response()->json(['errors' => [['code' => 'conversation', 'message' => translate('messages.not_found')]]], 403);
+            }
             if($conversation->sender_type == 'vendor' && $conversation->sender){
                 $vd = Vendor::find($conversation->sender->vendor_id);
                 $order = Order::where('user_id',$user->user_id)->where('restaurant_id', $vd?->restaurants[0]?->id)->whereIn('order_status', ['pending','accepted','confirmed','processing','handover','picked_up'])->count();
@@ -483,6 +489,9 @@ class ConversationController extends Controller
         if($request->conversation_id){
             $conversation = Conversation::find($request->conversation_id);
 
+            if(!$conversation || ($conversation->sender_id != $sender->id && $conversation->receiver_id != $sender->id)){
+                return response()->json(['errors' => [['code' => 'conversation', 'message' => translate('messages.not_found')]]], 403);
+            }
             if($conversation->sender_id == $sender->id){
                 $receiver_id = $conversation->receiver_id;
                 $receiver = UserInfo::find($receiver_id);

@@ -125,7 +125,7 @@ class CustomerController extends Controller
             'created_at' => now(),
             'updated_at' => now()
         ];
-        DB::table('customer_addresses')->where('id', $id)->update($address);
+        DB::table('customer_addresses')->where(['id' => $id, 'user_id' => $request?->user()?->id])->update($address);
         return response()->json(['message' => translate('messages.address_updated'), 'zone_id' => $zone->id], 200);
     }
 

@@ -1208,7 +1208,11 @@ class OrderController extends Controller
                 ]
             ], 403);
         }
-        $order = Order::find($request->order_id);
+        $nezha_uid = $request->user ? $request->user->id : $request['guest_id'];
+        $order = Order::where('id', $request->order_id)->where('user_id', $nezha_uid)
+            ->when(!isset($request->user), function($query){ $query->where('is_guest', 1); })
+            ->when(isset($request->user), function($query){ $query->where('is_guest', 0); })
+            ->first();
 
         $offline_payment_info = [];
         $method = OfflinePaymentMethod::where(['id'=>$request->method_id,'status'=>1])->first();
@@ -1304,7 +1308,11 @@ class OrderController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
         $info= OfflinePayments::where('order_id' , $request->order_id)->first();
-        $order= Order::find($request->order_id);
+        $nezha_uid = $request->user ? $request->user->id : $request['guest_id'];
+        $order= Order::where('id', $request->order_id)->where('user_id', $nezha_uid)
+            ->when(!isset($request->user), function($query){ $query->where('is_guest', 1); })
+            ->when(isset($request->user), function($query){ $query->where('is_guest', 0); })
+            ->first();
 
         if(!$info || !$order ) {
             return response()->json([

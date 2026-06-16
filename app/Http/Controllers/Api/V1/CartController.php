@@ -159,7 +159,10 @@ class CartController extends Controller
 
         $user_id = $request->user ? $request->user->id : $request['guest_id'];
         $is_guest = $request->user ? 0 : 1;
-        $cart = Cart::find($request->cart_id);
+        $cart = Cart::where('id', $request->cart_id)->where('user_id', $user_id)->where('is_guest', $is_guest)->first();
+        if(!$cart){
+            return response()->json(['errors' => [['code' => 'cart', 'message' => translate('messages.not_found')]]], 404);
+        }
         $item = $cart->item_type === 'App\Models\Food' ? Food::find($cart->item_id) : ItemCampaign::find($cart->item_id);
         if($item->maximum_cart_quantity && ($request->quantity>$item->maximum_cart_quantity)){
             return response()->json([
@@ -218,8 +221,10 @@ class CartController extends Controller
         $user_id = $request->user ? $request->user->id : $request['guest_id'];
         $is_guest = $request->user ? 0 : 1;
 
-        $cart = Cart::find($request->cart_id);
-        $cart->delete();
+        $cart = Cart::where('id', $request->cart_id)->where('user_id', $user_id)->where('is_guest', $is_guest)->first();
+        if($cart){
+            $cart->delete();
+        }
 
         $carts = Cart::where('user_id', $user_id)->where('is_guest',$is_guest)->get()
         ->map(function ($data) {
