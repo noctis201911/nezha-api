@@ -668,7 +668,7 @@ class CustomerAuthController extends Controller
                 return response()->json(['errors' => Helpers::error_processor($validator)], 403);
             }
 
-            $client = new Client();
+            $client = new Client(['connect_timeout' => 5, 'timeout' => 8]); // 超时保护:防Google/FB验证接口卡死致登录无限挂起
             $token = $request['token'];
             $email = $request['email'];
             $unique_id = $request['unique_id'];
