@@ -813,6 +813,9 @@ class OrderController extends Controller
                 ]);
             }
 
+            // 哪吒 F-4: 直付单退款 -> 通知商家原路退款 + 留痕(无视退款护栏开关, 直付单必建记录)。平台不碰钱。
+            OrderLogic::record_direct_pay_refund_pending($order, 'admin', auth('admin')->id(), $request->admin_note ?? null);
+
             Helpers::increment_order_count($order->restaurant);
 
             if ($order->delivery_man) {
@@ -865,6 +868,9 @@ class OrderController extends Controller
 
             Helpers::increment_order_count($order->restaurant);
             OrderLogic::refund_before_delivered($order);
+
+            // 哪吒 F-4: 直付单取消 -> 通知商家原路退款 + 留痕(平台不碰钱, 仅通知/留痕)。
+            OrderLogic::record_direct_pay_refund_pending($order, 'admin', auth('admin')->id(), $request->reason ?? $request->note ?? null);
         }
         $order->order_status = $request->order_status;
         if ($request->order_status == 'processing') {

@@ -139,6 +139,18 @@
                                         </span>
                                     </a>
                                 </li>
+                                {{-- 哪吒 F-4: 「待退款」—— 平台已取消/退款的直付单, 等商家原路退还顾客。 --}}
+                                <li class="nav-item {{Request::is('restaurant-panel/order/list/refund_pending')?'active':'' }} @yield('refund_pending')">
+                                    <a class="nav-link " href="{{route('vendor.order.list',['refund_pending'])}}" title="待退款">
+                                        <span class="tio-circle nav-indicator-icon"></span>
+                                        <span class="text-truncate sidebar--badge-container">
+                                            待退款
+                                            <span class="badge badge-soft-warning badge-pill ml-1">
+                                                {{\App\Models\NezhaRefundRecord::where('restaurant_id',\App\CentralLogics\Helpers::get_restaurant_id())->where('status','pending_merchant_refund')->count()}}
+                                            </span>
+                                        </span>
+                                    </a>
+                                </li>
                                 <li class="nav-item {{Request::is('restaurant-panel/order/list/pending')?'active':'' }} @yield('pending')">
                                     <a class="nav-link " href="{{route('vendor.order.list',['pending'])}}" title="{{translate('messages.pending')}}">
                                         <span class="tio-circle nav-indicator-icon"></span>

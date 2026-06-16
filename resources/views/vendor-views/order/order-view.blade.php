@@ -361,6 +361,49 @@
                                 @endif
                                 <!-- offline_payment -->
 
+                                {{-- 哪吒 F-4: 待商家退款卡。平台已取消/退款本直付单, 商家需原路退还原付款人, 退款后点「标记已退款」。平台不碰钱。 --}}
+                                @php($nzRefundRec = \App\Models\NezhaRefundRecord::where('order_id', $order->id)->where('status', 'pending_merchant_refund')->latest('id')->first())
+                                @if ($nzRefundRec)
+                                    @php($nzAddr = $order->delivery_address ? json_decode($order->delivery_address, true) : [])
+                                    <div class="mt-3 p-3" style="background:#FFF7E6;border:1px solid #FFE0A3;border-radius:12px;">
+                                        <h6 class="mb-2" style="color:#C4193E;font-weight:700;">待您退款（平台已取消/退款本单）</h6>
+                                        <p class="mb-2" style="font-size:13px;color:#8a6d3b;line-height:1.7;">
+                                            请在您自己的收款账户里，按<strong>原路</strong>退还顾客的付款。平台不经手资金、仅记录。退款完成后点下方「标记已退款」。
+                                        </p>
+                                        <div style="font-size:13px;color:#333;line-height:1.9;">
+                                            <div>应退金额：<strong>{{ Helpers::format_currency($nzRefundRec->refund_amount) }}</strong></div>
+                                            <div>原付款渠道：<strong>@if ($nzRefundRec->payment_channel === 'usdt') USDT（{{ $nzRefundRec->chain ?? '链上' }}）@elseif ($nzRefundRec->payment_channel === 'rmb') 微信 / 支付宝（人民币）@else 见付款凭证 @endif</strong></div>
+                                            @if ($nzRefundRec->payment_channel === 'usdt')
+                                                <div style="word-break:break-all;">须退回的原地址：<strong>{{ $nzRefundRec->locked_to_address ?: '原始交易反查未果，请按付款凭证里的来源地址退回' }}</strong></div>
+                                            @endif
+                                            @if (!empty($nzAddr['contact_person_name']))<div>顾客：{{ $nzAddr['contact_person_name'] }}</div>@endif
+                                            @if (!empty($nzAddr['contact_person_number']))<div>顾客电话（配送填写）：<a href="tel:{{ $nzAddr['contact_person_number'] }}">{{ $nzAddr['contact_person_number'] }}</a></div>@endif
+                                            @if (!empty($nzAddr['contact_person_email']))<div>顾客邮箱：{{ $nzAddr['contact_person_email'] }}</div>@endif
+                                            <div style="color:#999;">退款联系优先用邮箱（注册顾客必有）。付款人见上方「付款凭证」截图；个人收款码不支持原路退回时，可按凭证里的账号重新转账退回。</div>
+                                        </div>
+                                        <button type="button" class="btn btn-success btn-sm mt-3" style="border-radius:8px;" data-toggle="modal" data-target="#nzMarkRefunded-{{ $order['id'] }}">标记已退款</button>
+                                    </div>
+
+                                    <div class="modal fade" id="nzMarkRefunded-{{ $order['id'] }}" tabindex="-1" role="dialog" aria-hidden="true">
+                                        <div class="modal-dialog modal-dialog-centered" role="document">
+                                            <div class="modal-content" style="border-radius:12px;">
+                                                <form action="{{ route('vendor.order.mark-refunded', ['id' => $order['id']]) }}" method="post" onsubmit="return confirm('请确认：您已在自己的账户按原路退还本单顾客的付款？');">
+                                                    @csrf
+                                                    @method('PUT')
+                                                    <div class="modal-header"><h5 class="modal-title">标记已退款</h5><button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button></div>
+                                                    <div class="modal-body">
+                                                        @if ($nzRefundRec->payment_channel === 'usdt')
+                                                            <div class="form-group"><label style="font-size:13px;">USDT 退款交易哈希（选填，便于平台链上核对）</label><input type="text" name="refund_tx_hash" maxlength="120" class="form-control" style="border-radius:8px;" placeholder="0x... / TRC20 txid"></div>
+                                                        @endif
+                                                        <div class="form-group mb-0"><label style="font-size:13px;">备注（选填）</label><textarea name="note" maxlength="255" rows="2" class="form-control" style="border-radius:8px;" placeholder="例如：已微信原路退回 / 已转回顾客支付宝"></textarea></div>
+                                                    </div>
+                                                    <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">取消</button><button type="submit" class="btn btn-success btn-sm">确认已退款</button></div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endif
+
                                 <h6>
                                     <span>{{ translate('Order Type') }} :</span>
                                     <strong

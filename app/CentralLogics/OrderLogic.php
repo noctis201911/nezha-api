@@ -817,4 +817,85 @@ class OrderLogic
         }
     }
 
+
+    /**
+     * 哪吒 F-4 — 直付单(offline_payment)退款/取消时, 平台「通知商家退款 + 留痕」。
+     *
+     * 背景(B方案 L1-1): 直付单顾客的钱直付商家本人账户, 平台不碰钱。退款=商家原路退回原付款人,
+     * 全程在平台外。本方法只做【通知/留痕/状态流转】, 绝不引入平台代退/平台钱包退款(item 4)。
+     *
+     * 行为(无视 nezha_refund_control_status 开关, 直付单必建记录):
+     *   1) 仅对【已付款/已确认收款】的直付单建记录(未付款无款可退)。
+     *   2) 幂等: 同单已有 pending_merchant_refund/merchant_refunded 记录则跳过(防 admin 重复点)。
+     *   3) 算应退额(≤原单), 用 NezhaRefundControl::lock_route 取原路通道/USDT原地址(纯检测, 不依赖开关)。
+     *   4) 建 NezhaRefundRecord(status=pending_merchant_refund) 留痕(L1-2/L1-3/L1-4)。
+     *   5) 推送商家(vendor firebase_token) 提醒去原路退款 + 写 log。
+     * 全程 try/catch, 留痕/通知失败绝不阻断 admin 的退款/取消主流程。
+     */
+    public static function record_direct_pay_refund_pending($order, $confirmer_type = 'admin', $confirmer_id = null, $reasonNote = null)
+    {
+        try {
+            if ($order->payment_method != 'offline_payment') {
+                return; // 仅直付单走本闭环
+            }
+            $op = \App\Models\OfflinePayments::where('order_id', $order->id)->first();
+            $paidish = ($order->payment_status == 'paid') || ($op && $op->status == 'verified');
+            if (!$paidish) {
+                return; // 从未真正付款/确认收款的单无款可退, 不建记录
+            }
+            $exists = \App\Models\NezhaRefundRecord::where('order_id', $order->id)
+                ->whereIn('status', ['pending_merchant_refund', 'merchant_refunded'])
+                ->exists();
+            if ($exists) {
+                return; // 幂等
+            }
+
+            $refundAmount = round(
+                $order->order_amount - $order->delivery_charge - $order->dm_tips - $order->additional_charge - $order->extra_packaging_amount,
+                config('round_up_to_digit')
+            );
+            if ($refundAmount < 0) { $refundAmount = 0; }
+            if ($refundAmount > $order->order_amount) { $refundAmount = $order->order_amount; }
+
+            $route = \App\CentralLogics\NezhaRefundControl::lock_route($order); // 纯通道/原地址检测, 不依赖退款护栏开关
+
+            \App\Models\NezhaRefundRecord::create([
+                'order_id'            => $order->id,
+                'refund_id'           => optional(\App\Models\Refund::where('order_id', $order->id)->first())->id,
+                'restaurant_id'       => $order->restaurant_id,
+                'user_id'             => $order->user_id,
+                'guest_id'            => $order->is_guest ? (string) $order->user_id : null,
+                'payment_channel'     => $route['channel'] ?? 'other',
+                'order_amount'        => $order->order_amount,
+                'refund_amount'       => $refundAmount,
+                'reason_note'         => $reasonNote,
+                'route_locked_note'   => $route['note'] ?? null,
+                'chain'               => $route['chain'] ?? null,
+                'original_tx_hash'    => $route['original_tx_hash'] ?? null,
+                'locked_to_address'   => $route['locked_to_address'] ?? null,
+                'chain_verify_status' => ($route['channel'] ?? '') === 'usdt' ? 'unverified' : 'na',
+                'risk_action'         => 'pass',
+                'status'              => 'pending_merchant_refund',
+                'operator_id'         => $confirmer_id,
+            ]);
+
+            // 推送商家: 去自己账户按原路退还原付款人。失败不阻断。
+            try {
+                $vendorToken = $order->restaurant?->vendor?->firebase_token;
+                if ($vendorToken) {
+                    $channelText = (($route['channel'] ?? '') === 'usdt') ? 'USDT 退回原地址' : '微信/支付宝原路退回';
+                    $title = '有一笔直付单需要您退款';
+                    $msg   = '订单 #' . $order->id . ' 已被平台取消/退款，请按原路退还顾客付款（' . $channelText . '），退款后在「订单→待退款」标记已退款。';
+                    $data = Helpers::makeDataForPushNotification(title: $title, message: $msg, orderId: $order->id, type: 'order_status', orderStatus: 'refunded');
+                    Helpers::send_push_notif_to_device($vendorToken, $data);
+                }
+            } catch (\Throwable $e) {
+                info('record_direct_pay_refund_pending push failed: ' . $e->getMessage());
+            }
+
+            self::log_offline_payment_action($order, 'direct_pay_refund_pending', $order->order_status, $order->order_status, $confirmer_type, $confirmer_id);
+        } catch (\Throwable $e) {
+            info('record_direct_pay_refund_pending failed: order=' . ($order->id ?? '?') . ' ' . $e->getMessage());
+        }
+    }
 }

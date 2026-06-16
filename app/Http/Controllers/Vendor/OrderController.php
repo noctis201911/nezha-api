@@ -95,6 +95,12 @@ class OrderController extends Controller
                         $q->where('status', 'pending');
                     });
             })
+            // 哪吒 F-4: 「待退款」视图 = 本店有 pending_merchant_refund 留痕的单(平台已取消/退款, 等商家原路退款)。
+            ->when($status == 'refund_pending', function ($query) {
+                return $query->whereIn('id', function ($sub) {
+                    $sub->select('order_id')->from('nezha_refund_records')->where('status', 'pending_merchant_refund');
+                });
+            })
             // ->when($status == 'assinged', function($query){
             //     return $query->whereNotIn('order_status',['failed','canceled', 'refund_requested', 'refunded','delivered','refund_request_canceled'])->whereNotNull('delivery_man_id');
             // })
@@ -133,8 +139,8 @@ class OrderController extends Controller
                 });
             })
             ->Notpos()
-            // 哪吒: 仅「待确认收款」视图放开 NotDigitalOrder(它会隐藏 pending+offline 单); 其余视图行为不变。
-            ->when($status != 'offline_pending', function ($query) {
+            // 哪吒: 「待确认收款」+「待退款」视图放开 NotDigitalOrder(它会隐藏 pending+offline 单); 其余视图行为不变。
+            ->when(!in_array($status, ['offline_pending', 'refund_pending'], true), function ($query) {
                 return $query->NotDigitalOrder();
             })
             ->hasSubscriptionToday()
@@ -143,8 +149,8 @@ class OrderController extends Controller
             ->paginate(config('default_pagination'));
 
         $st = $status;
-        // 哪吒: offline_pending 无翻译 key, 直接给中文标题避免显示英文键名。
-        $status = $status == 'offline_pending' ? '待确认收款' : translate('messages.' . $status);
+        // 哪吒: offline_pending / refund_pending 无翻译 key, 直接给中文标题避免显示英文键名。
+        $status = $status == 'offline_pending' ? '待确认收款' : ($status == 'refund_pending' ? '待退款' : translate('messages.' . $status));
         return view('vendor-views.order.list', compact('orders', 'status', 'st'));
     }
 
@@ -285,6 +291,45 @@ class OrderController extends Controller
         \App\CentralLogics\OrderLogic::deny_offline_payment($order, $request->note, 'vendor', auth('vendor')->id() ?? auth('vendor_employee')->id());
 
         Toastr::success(translate('messages.Payment_status_updated'));
+        return back();
+    }
+
+    /**
+     * 哪吒 F-4 — 商家「标记已退款」直付单。
+     * 平台取消/退款直付单后生成 pending_merchant_refund 留痕; 商家在自己账户原路退还原付款人后,
+     * 在此标记已退款(可选填 USDT 退款 tx hash / 备注), 记录转 merchant_refunded。
+     *
+     * 合规(L1-1): 平台全程不碰钱, 本动作仅更新留痕状态, 不触发任何资金记账。
+     * 强校验(轴A 对象级鉴权): 只能标记【本店】且【pending_merchant_refund】的记录(防越权/防重复)。
+     */
+    public function mark_refunded(Request $request, $id)
+    {
+        $order = Order::where(['id' => $id, 'restaurant_id' => Helpers::get_restaurant_id()])->first();
+        if (!$order) {
+            Toastr::error(translate('messages.order_not_found'));
+            return back();
+        }
+        $record = \App\Models\NezhaRefundRecord::where('order_id', $order->id)
+            ->where('restaurant_id', Helpers::get_restaurant_id())
+            ->where('status', 'pending_merchant_refund')
+            ->latest('id')
+            ->first();
+        if (!$record) {
+            Toastr::warning(translate('messages.Payment_status_updated'));
+            return back();
+        }
+        $record->status = 'merchant_refunded';
+        $record->merchant_refunded_at = now();
+        $record->merchant_refund_note = $request->note ? mb_substr($request->note, 0, 255) : null;
+        if ($record->payment_channel === 'usdt' && $request->refund_tx_hash) {
+            $record->refund_tx_hash = trim($request->refund_tx_hash);
+            if (in_array($record->chain_verify_status, ['na', null], true)) {
+                $record->chain_verify_status = 'unverified';
+            }
+        }
+        $record->save();
+
+        Toastr::success(translate('已标记为已退款，感谢您的原路退还。'));
         return back();
     }
 
