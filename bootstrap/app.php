@@ -91,9 +91,12 @@ return Application::configure(basePath: dirname(__DIR__))
         // 用户已批准自动化(L2, 贴市场中间价不加缓冲)；带护栏，状态写入 business_settings.nezha_fx_last_sync。
         $schedule->command('nezha:sync-fx-rate')->dailyAt('04:10')->withoutOverlapping();
 
-        // ⚠️ 注意: app/Console/Kernel.php 里那 3 个每日 PII 清除任务(purge-payment-proofs / purge-locallife-pii
-        //    / purge-merchant-leads, L1-7 合规)自 L12 升级后未在运行。重新挂入前需用户确认(首次运行会一次性
-        //    不可逆删除超期 PII 积压)，建议先 --dry-run。暂不在此挂入。
+        // 🔴 L1-7 PII 到期删: 这 3 个每日清除任务原只定义在已失效的 app/Console/Kernel.php 里, 自 L12 升级后
+        //    一直未运行。2026-06-16 经用户批准 + 三任务 --dry-run 实测命中 0(无超期积压, 接回零删除最安全的时机)后
+        //    迁来此处正式接回每日调度。只抹超期 PII 字段+关联文件, 保留行/状态供审计; 不动订单/交易/链上记录。
+        $schedule->command('nezha:purge-payment-proofs')->dailyAt('03:30')->withoutOverlapping();
+        $schedule->command('nezha:purge-locallife-pii')->dailyAt('03:40')->withoutOverlapping();
+        $schedule->command('nezha:purge-merchant-leads')->dailyAt('03:50')->withoutOverlapping();
     })
 
     ->create();
