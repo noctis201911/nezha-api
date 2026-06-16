@@ -81,15 +81,29 @@
                                             <td>
                                                 <div class="d-flex flex-column gap-1">
                                                     @foreach ($method->method_fields as $item)
-                                                        <div>{{ ucwords(str_replace('_',' ',$item['input_name'])) }} : {{ $item['input_data'] }}</div>
+                                                        @php
+                                                            $label = $item['input_field_name'] ?? ($item['input_name'] ?? '');
+                                                            $val = $item['input_data'] ?? ($item['input_type'] ?? '');
+                                                            $req = (isset($item['is_required']) && (int)$item['is_required']) ? ' ('.translate('required').')' : '';
+                                                        @endphp
+                                                        <div>{{ ucwords(str_replace('_',' ',$label)) }}{{ $val !== '' ? ' : '.$val : '' }}{{ $req }}</div>
                                                     @endforeach
                                                 </div>
                                             </td>
                                             <td>
-                                                @foreach ($method->method_informations as $info_key=>$item)
-                                                    {{ ucwords(str_replace('_',' ',$item['customer_input'])) }}
-                                                    {{ count($method->method_informations) > ($info_key+1) ?'|':'' }}
-                                                @endforeach
+                                                @php $infos = $method->method_informations; $rawInfo = $method->getRawOriginal('method_informations'); @endphp
+                                                @if (is_array($infos) && count($infos))
+                                                    @foreach ($infos as $info_key=>$item)
+                                                        @if (is_array($item))
+                                                            {{ ucwords(str_replace('_',' ',$item['customer_input'] ?? '')) }}
+                                                            {{ count($infos) > ($info_key+1) ?'|':'' }}
+                                                        @else
+                                                            {{ $item }}
+                                                        @endif
+                                                    @endforeach
+                                                @elseif (!empty($rawInfo) && !in_array(trim($rawInfo), ['[]','{}','null','""']))
+                                                    <div class="text-break" style="white-space:pre-line;max-width:320px">{{ $rawInfo }}</div>
+                                                @endif
                                             </td>
 
                                             <td>
