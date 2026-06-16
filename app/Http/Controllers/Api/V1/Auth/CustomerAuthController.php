@@ -402,6 +402,13 @@ class CustomerAuthController extends Controller
     public function guest_request(Request $request)
     {
         $guest = new Guest();
+        // 哪吒安全(H2): 游客 id 改为 JS 安全整数范围内的随机大数, 杜绝顺序枚举
+        // (原自增 id 被当凭证→可枚举他人游客订单/购物车). 上限 < 2^53 保证前端 Number/JSON 不丢精度.
+        // incrementing=false: 让 save() 走普通 insert 保留我们设的 id(否则 lastInsertId 在显式 id 下会被覆盖).
+        $guest->incrementing = false;
+        do {
+            $guest->id = random_int(100000000000000, 8000000000000000);
+        } while (Guest::where('id', $guest->id)->exists());
         $guest->ip_address = $request->ip();
         $guest->fcm_token = $request->fcm_token;
 

@@ -805,6 +805,9 @@ class ConversationController extends Controller
 
         if($conversation){
 
+            if($conversation->sender_id != $delivery_man->id && $conversation->receiver_id != $delivery_man->id){
+                return response()->json(['errors' => [['code' => 'conversation', 'message' => translate('messages.not_found')]]], 403);
+            }
             if($conversation->sender_type == 'vendor' && $conversation->sender){
                 $vd = Vendor::find($conversation->sender->vendor_id);
                 $order = Order::where('delivery_man_id',$dm->id)->where('restaurant_id', $vd?->restaurants[0]?->id)->whereIn('order_status', ['pending','accepted','confirmed','processing','handover','picked_up'])->count();
