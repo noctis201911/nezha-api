@@ -17,7 +17,7 @@
     <!-- Favicon -->
     @php($logo=\App\Models\BusinessSetting::where(['key'=>'icon'])->first()->value)
     {{-- A5: 删除空 href 的冗余 favicon link(避免空href向当前页发请求);真 favicon 见下一行 --}}
-    <link rel="icon" type="image/x-icon" href="{{dynamicStorage('storage/app/public/business/'.$logo??'')}}">
+    <link rel="icon" type="image/x-icon" href="{{ asset(dynamicStorage('storage/app/public/business/'.$logo??'')) }}">
     <!-- Font -->
     <link href="{{dynamicAsset('assets/admin/css/fonts.css')}}" rel="stylesheet">
     <!-- CSS Implementing Plugins -->
