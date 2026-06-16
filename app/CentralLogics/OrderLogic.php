@@ -229,7 +229,9 @@ class OrderLogic
                     // 注: 服务费(向客户收)不在此扣; 佣金率沿用现成 admin_commission/餐馆 comission(后台可调)。
                     $nezha_deposit_mode = BusinessSetting::where('key','nezha_deposit_mode_status')->first()?->value;
                     if($nezha_deposit_mode == 1 && $comission_amount > 0){
-                        $vendorWallet->deposit_balance = ($vendorWallet->deposit_balance ?? 0) - $comission_amount;
+                        // F-3 防并发 lost-update: 事务内 lockForUpdate 读最新余额, 串行化同商家并发扣减; 由函数末尾 $vendorWallet->save() 落库。
+                        $freshBalance = (float) (RestaurantWallet::where('vendor_id', $order->restaurant->vendor->id)->lockForUpdate()->value('deposit_balance') ?? 0);
+                        $vendorWallet->deposit_balance = $freshBalance - $comission_amount;
                         \App\Models\RestaurantDepositTransaction::insert([
                             'vendor_id'     => $order->restaurant->vendor->id,
                             'restaurant_id' => $order->restaurant->id,
@@ -414,7 +416,9 @@ class OrderLogic
                 $deducted = \App\Models\RestaurantDepositTransaction::where('order_id',$order->id)
                     ->where('type','commission_deduction')->sum('commission');
                 if($deducted > 0){
-                    $vendorWallet->deposit_balance = ($vendorWallet->deposit_balance ?? 0) + $deducted;
+                    // F-3 防并发 lost-update: 同扣减, lockForUpdate 读最新余额后返还; 由函数末尾 save() 落库。
+                    $freshBalance = (float) (RestaurantWallet::where('vendor_id', $order->restaurant->vendor->id)->lockForUpdate()->value('deposit_balance') ?? 0);
+                    $vendorWallet->deposit_balance = $freshBalance + $deducted;
                     \App\Models\RestaurantDepositTransaction::insert([
                         'vendor_id'     => $order->restaurant->vendor->id,
                         'restaurant_id' => $order->restaurant->id,
@@ -698,7 +702,7 @@ class OrderLogic
             'status' => 'verified',
         ]);
 
-        $payment_method_name = data_get(json_decode($order->offline_payments->payment_info, true), 'method_name', $order->payment_method);
+        $payment_method_name = data_get(json_decode($order->offline_payments?->payment_info ?? '', true), 'method_name', $order->payment_method); // F-1 防无凭证行时 null->payment_info fatal
         if ($order->payment_method == 'partial_payment') {
             $order->payments()->where('payment_status', 'unpaid')->update([
                 'payment_method' => $payment_method_name,
