@@ -79,6 +79,17 @@ class CartController extends Controller
             return response()->json($carts, 200);
         }
 
+        // 哪吒: 单店购物车守卫 — 新商品餐厅与购物车现有餐厅不同时, 清空旧车再加(防跨店混车致结算 get-Tax 403/金额异常)。
+        // 正常前端加购走 CartClearModal 先确认并清空(此时服务器车已空, 不触发本守卫); 本守卫兜底"快捷加购/本地车与服务器车不同步"漏网的跨店情形, 保证服务器侧购物车始终单店。
+        $existFirst = Cart::where('user_id', $user_id)->where('is_guest', $is_guest)->first();
+        if ($existFirst) {
+            $existClass = $existFirst->item_type;
+            $existItem  = class_exists($existClass) ? $existClass::find($existFirst->item_id) : null;
+            $existRestId = $existItem?->restaurant_id;
+            if ($existRestId && $item->restaurant_id && $existRestId != $item->restaurant_id) {
+                Cart::where('user_id', $user_id)->where('is_guest', $is_guest)->delete();
+            }
+        }
         if($item?->maximum_cart_quantity && ($request->quantity>$item->maximum_cart_quantity)){
             return response()->json([
                 'errors' => [
