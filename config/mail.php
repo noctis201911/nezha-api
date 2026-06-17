@@ -15,6 +15,13 @@ return [
 
     'default' => env('MAIL_MAILER', 'smtp'),
 
+    // 哪吒(2026-06-17): 邮件总开关。原 StackFood config/mail.php 无 'status' 键，
+    // 致 config('mail.status')=NULL -> 前端 is_mail_active=false -> 找回密码走兜底死胡同，
+    // 且全平台事务邮件被掐。.env 已配 Gmail SMTP；此处置 true 启用。
+    // ConfigServiceProvider 仅在后台 mail_config 填满时才覆盖本数组(当前为空)，故本键生效。
+    // 详见 docs/compliance/CHANGELOG.md。
+    'status' => env('MAIL_STATUS', true),
+
     /*
     |--------------------------------------------------------------------------
     | Mailer Configurations
