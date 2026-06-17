@@ -30,14 +30,14 @@
 | 7 容灾 / 备份恢复 | **从没演练过"从备份恢复"**（没演练≈没备份） | 备份在生成(cron 每天 04:17 加密备份 + /www/backup 有文件)，但恢复演练 = 0 | 🟡 中（建议提到最高：唯一"出事不可逆"的盲区） |
 | 8 兼容 / 多端真机 | 无 Android / 老机型 / 弱网 矩阵化 QA | 零散真机已修(iOS PWA 安全区 / touch 模糊等)，无系统矩阵 | 🟡 中 |
 
-一次性运维加固里**真没做**的（详见第三节）：① 站外 uptime 监控　② root/admin 密码轮换。
+一次性运维加固里**真没做**的（详见第三节）：root/admin 密码轮换（站外 uptime 监控 ✅ 2026-06-17 已完成，见第三节）。
 
 ## 二、需要真人、AI 只能打第一遍底稿
 - **法律 / 政策审校**：用户协议·隐私·退款政策在亚美尼亚 + B 支付模式下是否站得住 → **真律师**。（locallife PII 同意采集已标"律师审校前绝不可开"）
 - **专业渗透测试**：真实收钱上线前理想请人做 pentest。AI 可做第一遍 = 第 3 层「应用层安全QA」，**不替代专业**。
 
 ## 三、一次性运维加固待办（不是反复跑的 QA，是该做一次的事）
-- [ ] **站外 uptime 监控**（如 UptimeRobot，免费）：现有看门狗 nzwatch 从服务器自己发邮件，**服务器/网络全挂时发不出告警**，需要站外探针补这个盲区。
+- [x] **站外 uptime 监控**（2026-06-17 完成）：用 **HetrixTools 免费档**（商用可用、1 分钟间隔、4 个欧洲拨测点 ams/fra/lon/waw、邮件告警）从站外拨测 4 个公开入口——①前端首页 `https://nezha.am/home`（关键词 `__NEXT_DATA__`）②商家登录页 `https://api.nezha.am/login/restaurant`（HTTP 200）③后端 API `https://api.nezha.am/api/v1/config`（关键词 `business_name`）④餐厅列表非空 `https://api.nezha.am/api/v1/restaurants/get-restaurants/all?offset=1&limit=10`（关键词 `"restaurants":[{`，防"能开但列表空"假活）。告警发 noctis201914@gmail.com，已用"Up→Down 跌落"探针实测邮件送达。补的正是 nzwatch 自身盲区（服务器/网络全挂时它发不出告警）。
 - [ ] **root / admin 密码轮换**：memory `[[dev-script-exhaust-blindspot]]` 记着"视为已泄露待轮换"，至今未轮换。
 - [x] **PII 清除任务**（06-17 确证已挂回）：`bootstrap/app.php` 已挂 3 个 purge 任务(03:30/40/50) + cron `* * * * * artisan schedule:run` 在跑；06-16 dry-run 均 0 命中后经用户批准接回（memory `[[nezha-laravel12-scheduler-unwired]]`）。
 
