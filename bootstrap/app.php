@@ -56,6 +56,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->group('api', [
+            \App\Http\Middleware\QueryCountGuard::class,
             SubstituteBindings::class,
         ]);
 

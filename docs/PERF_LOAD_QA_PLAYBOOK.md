@@ -67,3 +67,49 @@
 回滚: 删nezha_apicache.conf + proxy.conf去掉fastcgi_cache_path行 + 前端proxy去掉proxy_cache_key行 + php-fpm.conf还原.bak, 各 nginx -t 后 reload / php-fpm reload。备份均在原文件旁 .bak.时间戳。
 
 剩余建议(未做,待用户): 根治应在代码层——_document不该每请求空跑get-analytic-scripts(缓存或删,因返回空数组); 但改前端需构建,当时构建门被别窗口WIP卡住故走nginx层。下次构建顺手修_document后可撤掉API fastcgi缓存。
+
+
+---
+
+## G轴: N+1 / 查询数随规模膨胀 (2026-06-17 系统化收口)
+
+> 触发: "商品/列表刷新慢" 且 HTTP 200 输出正确; 或任何 "之前快、数据多了变慢"。
+> 由来: products/popular 0.5s 排查。N+1 穿透了之前**全部** QA(体验/安全/资金/本地化)——因它们都问 "这一个请求对不对", 而 N+1 输出完全正确(发 1 条还是 700 条 SQL 返回的 JSON 一模一样), 只表现为延迟, 且只在数据量上来后才显。products/popular 只列有评价的商品, 31 条 demo 评价 2026-06-16 13:18 同秒批量灌入; 灌入前热门列表近空→N+1 触发 0 次→看不见, 灌入后→31 商品 × ~24 查询→慢。
+> 教训: **快照式 "功能通不通" QA 天生抓不到 N+1; 必须 measure(数查询), 且任何大批量播种/导入数据后要重跑本轴**(数据量改变什么 bug 可见)。
+
+### 检测法 (measure, 不是读码)
+N+1 读码基本读不出(循环里访问关系每行都 "合理"), 靠**数每接口发多少 SQL + 按形状归类找重复最多那条**:
+- 工具: tinker 里经 `app(\Illuminate\Contracts\Http\Kernel::class)->handle($req)` 逐接口派发, `DB::enableQueryLog()` 数查询; 每接口**事务包裹 rollback**(有的接口写访客日志, 别污染生产); CLI 需 `define('DOMAIN_POINTED_DIRECTORY','public')` 否则 dynamicAsset 假 500 截断计数。
+- 形状归类: `preg_replace('/\d+/','N',$query)` 后计数; **某形状重复次数 ≈ 响应条目数 = N+1 指纹**。
+- 判级: 单形状重复 >=8 = RED; >=4 = YEL。
+
+### 2026-06-17 首次全读接口扫描结果 (基线/回归对照)
+系统性根因 = `getVariationsAttribute` 访问器在 variations 列空时逐商品查 newVariations/newVariationOptions; + getDeliveryFee 逐商品查 Zone。凡嵌商品的接口全中招:
+
+| 接口 | 总查询(量级) | 重复指纹 |
+|---|---|---|
+| banners | ~164(实)/389(扫) | variations x98 |
+| restaurants/popular·latest·recommended·get-restaurants | ~260 | variations x80 |
+| campaigns/basic | ~251 | variations x63 |
+| restaurants/details, categories/restaurants/{id} | ~100 | variations x38 |
+| products/popular·most-reviewed (variations 已修) | ~77 | **zones x31** (getDeliveryFee) |
+| categories | ~34 | count(*) food x14 (逐分类数菜) |
+
+products/popular 的 variations N+1 已修(commit cd28c77, product_data_formatting loadMissing); **其余嵌商品接口走 restaurant_data_formatting / campaign / banner 等别的格式化函数, 尚未修, 仍中招**(待用户拍板逐个收口)。
+
+### 修复模式
+格式化循环前 `$collection->loadMissing([关联...])` 批量预加载 + category/addon/tax 预建 id→model 映射; 改后**整段 JSON md5 逐字段对比改前 = 零差异**才算没回归。
+- 🔴 坑1: 同名列遮蔽关系——Food 有 `rating` 列遮蔽 `rating()` 关系, eager-load 后须 `getRelation('rating')` 取(`$item->rating` 会返回列值致 first() on null)。
+- 🔴 坑2: `getVariationsAttribute` 访问器需预加载 `newVariations`+`newVariationOptions` 才不逐商品查。
+- 空 whereIn 仍发 `where 0=1` 空查询: 用 eager 标志走空 map 取 0 条, 别 fallback 查库。
+
+### 常驻护栏 (catch 未来回归)
+`app/Http/Middleware/QueryCountGuard.php` (挂 api 组): 单 API 请求 SQL 数 > 阈值(默认 120, `.env NEZHA_QUERY_WARN_THRESHOLD` 可调, <=0 关) 记 `Log::warning('[N+1-guard] ...')` 到 laravel.log, **只记不抛**。
+- 为何不用 `Model::preventLazyLoading()`: 单台生产、无独立 dev/staging, 它只在非生产生效=这里没处跑; 且 APP_ENV 万一配错会全站抛异常。日志式护栏可安全常驻生产。
+- 巡检: `grep '[N+1-guard]' /www/wwwroot/api.nezha.am/storage/logs/laravel.log`。各接口修复后可把阈值调低以更灵敏。
+- 回滚: bootstrap/app.php api 组去掉 QueryCountGuard 行(.bak 在旁) + 删中间件文件。
+
+### 复跑清单 (并入本 playbook)
+- [ ] 重跑全读接口查询数扫描(尤其**大批量播种/导入数据后**)
+- [ ] 对照上方基线看有无新 N+1 / 已修的有没有回退
+- [ ] `grep '[N+1-guard]'` 看护栏近期告警
