@@ -1824,8 +1824,63 @@ class Helpers
         return true;
     }
 
+    public static function sendTelegramOrderAlert($order)
+    {
+        try {
+            if (!$order || !in_array($order->order_status, ['pending', 'confirmed'])) {
+                return;
+            }
+            $token = self::get_business_settings('telegram_bot_token', false);
+            $chatId = $order?->restaurant?->telegram_chat_id;
+            if (!$token || !is_string($token) || !$chatId) {
+                return;
+            }
+            if (!\Illuminate\Support\Facades\Cache::add('tg_alert_' . $order->id, 1, now()->addDay())) {
+                return;
+            }
+            $typeMap = ['delivery' => '配送', 'take_away' => '自取', 'dine_in' => '堂食'];
+            $otype = $typeMap[$order->order_type] ?? $order->order_type;
+            $itemStr = '';
+            try {
+                $items = [];
+                foreach (($order->details ?? []) as $d) {
+                    $fd = is_string($d->food_details) ? json_decode($d->food_details, true) : (array) $d->food_details;
+                    $items[] = ($fd['name'] ?? '商品') . ' x' . $d->quantity;
+                }
+                if (count($items)) {
+                    $itemStr = implode('，', array_slice($items, 0, 8)) . (count($items) > 8 ? ' 等' : '');
+                }
+            } catch (\Throwable $e) {
+                $itemStr = '';
+            }
+            $total = number_format((float) $order->order_amount, 0);
+            $time = $order->created_at ? $order->created_at->format('H:i') : '';
+            $text = "🔔 哪吒新订单\n单号 #{$order->id}\n类型：{$otype}\n合计：{$total}֏\n"
+                . ($itemStr ? "商品：{$itemStr}\n" : '')
+                . ($time ? "时间：{$time}\n" : '')
+                . "—— 详情请登录商家后台查看";
+            $ch = curl_init('https://api.telegram.org/bot' . $token . '/sendMessage');
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_CONNECTTIMEOUT => 3,
+                CURLOPT_TIMEOUT => 4,
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => http_build_query([
+                    'chat_id' => $chatId,
+                    'text' => $text,
+                    'disable_web_page_preview' => true,
+                ]),
+            ]);
+            curl_exec($ch);
+            curl_close($ch);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('telegram order alert failed: ' . $e->getMessage());
+        }
+    }
+
     public static function sentRestaurantNotification($order)
     {
+        try { self::sendTelegramOrderAlert($order); } catch (\Throwable $e) {}
         $message = self::getOrderPushNotificationMessage($order, 'restaurant_order_notification', 'restaurant', lang: $order?->restaurant?->vendor?->current_language_key);
         $restaurant_push_notification_status = self::getRestaurantNotificationStatusData($order?->restaurant?->id, 'restaurant_order_notification');
         if ($message == null || $restaurant_push_notification_status?->push_notification_status != 'active') {
