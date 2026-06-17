@@ -639,6 +639,8 @@ trait PlaceNewOrder
         }
 
         $carts = Cart::where('user_id', $order->user_id)->where('is_guest', $order->is_guest)
+            // 哪吒[多店购物车]: 算税只取本次结算餐厅的车项(登录账号后端车可并存多家),防多店撞「单一餐厅」校验
+            ->where('restaurant_id', $order->restaurant_id)
             ->when(isset($request->is_buy_now) && $request->is_buy_now == 1 && $request->cart_id, function ($query) use ($request) {
                 return $query->where('id', $request->cart_id);
             })
