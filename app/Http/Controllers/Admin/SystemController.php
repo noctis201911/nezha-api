@@ -19,7 +19,10 @@ class SystemController extends Controller
 
     public function restaurant_data()
     {
-        $new_order = DB::table('orders')->where(['checked' => 0])->count();
+        // 哪吒: 计数对齐后台「全部订单」列表口径(Eloquent 走 ZoneScope 全局作用域 + Notpos), 只取未读 checked=0;
+        // 原裸 DB::table 会把 POS 单 / 跨 zone 单(列表 Notpos+ZoneScope 隐藏的) 也数进去 -> 报幽灵数+点进去对不上。
+        // 同类修复见 DashboardController::restaurant_data(commit e2633db) 与 QA_PLAYBOOK O 轴。
+        $new_order = \App\Models\Order::where('checked', 0)->Notpos()->count();
         return response()->json([
             'success' => 1,
             'data' => ['new_order' => $new_order]
