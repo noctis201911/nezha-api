@@ -61,22 +61,32 @@ class CategoryController extends Controller
 
 
             if(count($zone_id) > 0){
+                // N+1 fix: 原逐分类各发 count()+sum() 两条查询(分类多则线性爆). 改为预取子分类映射 + 一条 groupBy 分组查询.
+                $__nz_topIds = collect($categories)->pluck('id')->all();
+                $__nz_childMap = [];
+                foreach (Category::whereIn('parent_id', $__nz_topIds)->get(['id', 'parent_id']) as $__nz_c) {
+                    $__nz_childMap[$__nz_c->parent_id][] = $__nz_c->id;
+                }
+                $__nz_allCatIds = $__nz_topIds;
+                foreach ($__nz_childMap as $__nz_kids) { $__nz_allCatIds = array_merge($__nz_allCatIds, $__nz_kids); }
+                $__nz_allCatIds = array_values(array_unique($__nz_allCatIds));
+                $__nz_agg = Food::active()
+                    ->whereHas('restaurant', function ($query) use ($zone_id) {
+                        $query->whereIn('zone_id', $zone_id);
+                    })
+                    ->whereIn('category_id', $__nz_allCatIds)
+                    ->selectRaw('category_id, count(*) as cnt, coalesce(sum(order_count), 0) as ord')
+                    ->groupBy('category_id')
+                    ->get()
+                    ->keyBy('category_id');
                 foreach ($categories as $category) {
-                        $productCountQuery = Food::active()
-                        ->whereHas('restaurant', function ($query) use ($zone_id) {
-                            $query->whereIn('zone_id', $zone_id);
-                        })
-                        ->whereHas('category',function($q)use($category){
-                            return $q->whereId($category->id)->orWhere('parent_id', $category->id);
-                        })
-                        ->withCount('orders');
-
-                        $productCount = $productCountQuery->count();
-                        $orderCount = $productCountQuery->sum('order_count');
-
-                        $category['products_count'] = $productCount;
-                        $category['order_count'] = $orderCount;
-                    // unset($category['childes']);
+                    $__nz_ids = array_merge([$category->id], $__nz_childMap[$category->id] ?? []);
+                    $__nz_pc = 0; $__nz_oc = 0;
+                    foreach ($__nz_ids as $__nz_cid) {
+                        if ($__nz_row = $__nz_agg->get($__nz_cid)) { $__nz_pc += (int) $__nz_row->cnt; $__nz_oc += (int) $__nz_row->ord; }
+                    }
+                    $category['products_count'] = $__nz_pc;
+                    $category['order_count'] = $__nz_oc ? (string) $__nz_oc : 0;
                 }
                 if($category_list_default_status  != 1 &&  $category_list_sort_by_general == 'order_count'){
 

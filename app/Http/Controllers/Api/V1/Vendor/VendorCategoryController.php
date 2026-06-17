@@ -33,21 +33,31 @@ class VendorCategoryController extends Controller
                 });
             }) ->orderBy('priority','desc') ->get();
 
+                // N+1 fix: 原逐分类各发 count()+sum() 两条查询. 改为预取子分类映射 + 一条 groupBy 分组查询.
+                $__nz_rid = $request['vendor']->restaurants[0]->id;
+                $__nz_topIds = collect($categories)->pluck('id')->all();
+                $__nz_childMap = [];
+                foreach (Category::whereIn('parent_id', $__nz_topIds)->get(['id', 'parent_id']) as $__nz_c) {
+                    $__nz_childMap[$__nz_c->parent_id][] = $__nz_c->id;
+                }
+                $__nz_allCatIds = $__nz_topIds;
+                foreach ($__nz_childMap as $__nz_kids) { $__nz_allCatIds = array_merge($__nz_allCatIds, $__nz_kids); }
+                $__nz_allCatIds = array_values(array_unique($__nz_allCatIds));
+                $__nz_agg = Food::active()
+                    ->where('restaurant_id', $__nz_rid)
+                    ->whereIn('category_id', $__nz_allCatIds)
+                    ->selectRaw('category_id, count(*) as cnt, coalesce(sum(order_count), 0) as ord')
+                    ->groupBy('category_id')
+                    ->get()
+                    ->keyBy('category_id');
                 foreach ($categories as $category) {
-                        $productCountQuery = Food::active()
-                            ->where('restaurant_id', $request['vendor']->restaurants[0]->id)
-
-                        ->whereHas('category',function($q)use($category){
-                            return $q->whereId($category->id)->orWhere('parent_id', $category->id);
-                        })
-                        ->withCount('orders');
-
-                        $productCount = $productCountQuery->count();
-                        $orderCount = $productCountQuery->sum('order_count');
-
-                        $category['products_count'] = $productCount;
-                        $category['order_count'] = $orderCount;
-                    // unset($category['childes']);
+                    $__nz_ids = array_merge([$category->id], $__nz_childMap[$category->id] ?? []);
+                    $__nz_pc = 0; $__nz_oc = 0;
+                    foreach ($__nz_ids as $__nz_cid) {
+                        if ($__nz_row = $__nz_agg->get($__nz_cid)) { $__nz_pc += (int) $__nz_row->cnt; $__nz_oc += (int) $__nz_row->ord; }
+                    }
+                    $category['products_count'] = $__nz_pc;
+                    $category['order_count'] = $__nz_oc ? (string) $__nz_oc : 0;
                 }
                 return response()->json($categories, 200);
         } catch (\Exception $e) {

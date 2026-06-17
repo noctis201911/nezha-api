@@ -661,11 +661,19 @@ class Restaurant extends Model
 
         static::retrieved(function () {
             $current_date = date('Y-m-d');
-            // $check_daily_subscription_validity_check= Helpers::get_business_settings('check_daily_subscription_validity_check');
-            $check_daily_subscription_validity_check = BusinessSetting::where('key','check_daily_subscription_validity_check')->first()?->value;
-            if(!$check_daily_subscription_validity_check){
-                Helpers::insert_business_settings_key('check_daily_subscription_validity_check', $current_date);
-                $check_daily_subscription_validity_check= $current_date;
+            // N+1 fix: 原每取一个餐厅都 uncached 查一次本 setting(还带 storage+translations), 列表页逐餐厅爆.
+            // 用请求级容器缓存(php-fpm 每请求新建容器=请求级, 不跨请求泄漏)收敛为每请求一次;
+            // DB 仍是跨请求真相源, 每日清理逻辑不变(命中后更新缓存使本请求后续不再重复跑).
+            $__nz_svk = 'nz_subval_check';
+            if (app()->bound($__nz_svk)) {
+                $check_daily_subscription_validity_check = app($__nz_svk);
+            } else {
+                $check_daily_subscription_validity_check = BusinessSetting::where('key','check_daily_subscription_validity_check')->first()?->value;
+                if(!$check_daily_subscription_validity_check){
+                    Helpers::insert_business_settings_key('check_daily_subscription_validity_check', $current_date);
+                    $check_daily_subscription_validity_check= $current_date;
+                }
+                app()->instance($__nz_svk, $check_daily_subscription_validity_check);
             }
 
             if($check_daily_subscription_validity_check != $current_date){
@@ -689,6 +697,7 @@ class Restaurant extends Model
                 Helpers::businessUpdateOrInsert(['key' => 'check_daily_subscription_validity_check'], [
                     'value' => $current_date,
                 ]);
+                app()->instance($__nz_svk, $current_date);
 
             }
         });
