@@ -338,6 +338,97 @@ class OrderLogic
         }
         return true;
     }
+    /**
+     * 哪吒 B方案 — 配送/自取单「收尾结算」统一入口（顾客「确认收货」A + handover 超时自动兜底 C 共用）。
+     *
+     * 背景: B方案平台不配送(顾客自叫 Yandex/自取), 既无骑手点「已送达」, 商家也不知 Yandex 何时送达,
+     * 故收尾触发方只能是「顾客确认」或「超时兜底」。本方法把订单推到 delivered 并触发**恰好一次**佣金结算。
+     *
+     * 幂等闸(防顾客/商家/兜底任一路径重复或并发多记佣金): 直接查 order_transaction 是否已存在,
+     * 仅当不存在时调 create_transaction —— 先到先记、余者跳过(与商家端 status() 的 `$order->transaction==null` 同闸)。
+     * L1-1: 直付单 create_transaction 内 is_direct_pay 分支不碰 total_earning/digital_received(平台不碰钱), 仅记应收佣金。
+     *
+     * @param  \App\Models\Order  $order
+     * @param  string             $finalized_by  'customer'(顾客确认) | 'auto'(超时兜底) —— 仅留痕用
+     * @param  int|null           $by_id         顾客 user_id（游客/自动为 null）
+     * @return bool  true=本次完成收尾; false=不允许收尾(非 handover/picked_up / 已 delivered / 订阅单 / 建流水失败)
+     */
+    public static function settle_delivered($order, $finalized_by = 'customer', $by_id = null)
+    {
+        // 订阅单有独立交付生命周期, 不走顾客确认/超时兜底。
+        if ($order->subscription_id != null) {
+            return false;
+        }
+        // 仅「商家已出餐交付(handover/picked_up)且尚未送达」的单可收尾。
+        if ($order->delivered != null || !in_array($order->order_status, ['handover', 'picked_up'], true)) {
+            return false;
+        }
+
+        $order->loadMissing(['details', 'restaurant', 'restaurant.vendor', 'customer']);
+        $before_status = $order->order_status;
+
+        // 幂等闸: 查 DB(非缓存关系)看本单是否已记过流水, 防重复/并发多扣一次佣金。
+        $already_settled = OrderTransaction::where('order_id', $order->id)->exists();
+        if (!$already_settled) {
+            $unpaid_payment = OrderPayment::where('payment_status', 'unpaid')->where('order_id', $order->id)->first()?->payment_method;
+            $unpaid_pay_method = $unpaid_payment ?: 'digital_payment';
+
+            if ($order->payment_method == 'cash_on_delivery' || $unpaid_pay_method == 'cash_on_delivery') {
+                $ol = self::create_transaction(order: $order, received_by: 'restaurant', status: null);
+            } else {
+                $ol = self::create_transaction(order: $order, received_by: 'admin', status: null);
+            }
+            if (!$ol) {
+                return false; // 建流水失败则不推进状态(与商家端一致, 不留半收尾状态)
+            }
+        }
+
+        $order->payment_status = 'paid';
+        self::update_unpaid_order_payment(order_id: $order->id, payment_method: $order->payment_method);
+
+        $order->order_status = 'delivered';
+        $order->delivered = now();
+        $order->save();
+
+        // 销量/计数(与商家端 delivered 分支一致)
+        $order->details->each(function ($item) {
+            if ($item->food) {
+                $item->food->increment('order_count');
+            }
+        });
+        $order->customer ? $order->customer->increment('order_count') : '';
+        $order->restaurant ? $order->restaurant->increment('order_count') : '';
+
+        try {
+            Helpers::send_order_notification($order);
+        } catch (\Throwable $e) {
+            info('settle_delivered notify failed: ' . $e->getMessage());
+        }
+
+        // 留痕(审计: 谁/何时把单收尾为已送达)
+        try {
+            \App\Models\Log::create([
+                'logable_id'     => $order->id,
+                'logable_type'   => \App\Models\Order::class,
+                'action_type'    => 'delivery_settled',
+                'model'          => 'Order',
+                'model_id'       => $order->id,
+                'action_details' => json_encode([
+                    'finalized_by' => $finalized_by,
+                    'by_id'        => $by_id,
+                    'at'           => now()->toDateTimeString(),
+                ]),
+                'before_state'   => $before_status,
+                'after_state'    => 'delivered',
+                'restaurant_id'  => $order->restaurant_id,
+            ]);
+        } catch (\Throwable $e) {
+            info('settle_delivered log failed: ' . $e->getMessage());
+        }
+
+        return true;
+    }
+
     public static function refund_before_delivered($order){
         // 哪吒 B方案 L1-1 (F-4a): 直付单(offline_payment)平台从未收款, 取消退款由商家直接退原付款人,
         // 平台不动 digital_received、不走平台钱包(与 refund_order 的 !$isDirectPay 护栏对齐, 防平台垫钱碰钱)。

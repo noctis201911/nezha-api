@@ -915,6 +915,55 @@ class OrderController extends Controller
         ], 403);
     }
 
+    /**
+     * 哪吒 B方案 — 顾客「确认收货」(方案A)。
+     * 平台不配送(顾客自叫 Yandex/自取), 顾客最清楚何时收到 → 由顾客点确认来收尾订单。
+     * 触发与商家「已送达」等价的收尾(OrderLogic::settle_delivered: delivered + 佣金结算恰好一次)。
+     * 轴A 对象级鉴权: 仅能确认归属请求者本人的单(登录按 user->id; 游客按 guest_id + is_guest=1)。
+     */
+    public function confirm_delivery(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'order_id' => 'required',
+            'guest_id' => $request->user ? 'nullable' : 'required',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
+        }
+
+        $user_id = $request->user ? $request->user->id : $request['guest_id'];
+        $order = Order::where(['id' => $request['order_id'], 'user_id' => $user_id])
+            ->when(!isset($request->user), function ($query) {
+                $query->where('is_guest', 1);
+            })
+            ->when(isset($request->user), function ($query) {
+                $query->where('is_guest', 0);
+            })
+            ->Notpos()->first();
+
+        if (!$order) {
+            return response()->json(['errors' => [['code' => 'order', 'message' => translate('messages.not_found')]]], 404);
+        }
+        if ($order->subscription_id != null) {
+            // 订阅单不走顾客确认收货
+            return response()->json(['errors' => [['code' => 'order', 'message' => translate('messages.not_found')]]], 403);
+        }
+        if ($order->delivered != null || $order->order_status == 'delivered') {
+            return response()->json(['errors' => [['code' => 'order', 'message' => translate('messages.order_already_delivered')]]], 403);
+        }
+        if (!in_array($order->order_status, ['handover', 'picked_up'], true)) {
+            // 商家尚未出餐交付, 还不能确认收货
+            return response()->json(['errors' => [['code' => 'order', 'message' => translate('messages.you_can_confirm_after_handover')]]], 403);
+        }
+
+        $ok = OrderLogic::settle_delivered($order, 'customer', $request->user ? $request->user->id : null);
+        if (!$ok) {
+            return response()->json(['errors' => [['code' => 'order', 'message' => translate('messages.faield_to_create_order_transaction')]]], 403);
+        }
+
+        return response()->json(['message' => translate('messages.order_received_successfully')], 200);
+    }
+
     public function refund_reasons(){
         $refund_reasons=RefundReason::where('status',1)->get();
         return response()->json([

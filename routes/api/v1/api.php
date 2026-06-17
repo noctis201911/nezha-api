@@ -473,6 +473,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
             Route::post('get-Tax', [OrderController::class, 'getTaxFromCart']);
             Route::post('check-restaurant-validation', [OrderController::class, 'check_restaurant_validation']);
             Route::put('cancel', [OrderController::class, 'cancel_order']);
+            Route::put('confirm-delivery', [OrderController::class, 'confirm_delivery']); // 哪吒B方案: 顾客确认收货收尾(A)
             Route::post('refund-request', [OrderController::class, 'refund_request']);
             Route::get('refund-reasons', [OrderController::class, 'refund_reasons']);
             Route::get('track', [OrderController::class, 'track_order']);

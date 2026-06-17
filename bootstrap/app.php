@@ -104,6 +104,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // 🔴 L1-6 制裁名单筛查: 每天 04:30 从 OFAC 公开 SDN 名单拉「数字货币地址」入本地表(nezha_sanction_addresses),
         //    供 USDT 付款来源地址实时比对。带护栏: 取数/解析失败则保留旧名单不动(失败安全), 状态写 nezha_sanction_last_sync。
         $schedule->command('nezha:sync-sanction-list')->dailyAt('04:30')->withoutOverlapping();
+
+        // 哪吒 B方案 收尾兜底(C): handover 超过 N 小时(默认24h, business_settings.nezha_auto_finalize_handover_hours)
+        //   无人「确认收货」的配送/自取单, 自动判为已送达并结算佣金(恰好一次)。开关 nezha_auto_finalize_handover_status(默认1开)。
+        //   背景: 平台不配送、无骑手点送达、商家不知Yandex何时送达 → 顾客忘点会永远卡 handover, 佣金永不入账。每小时跑一次。
+        $schedule->command('nezha:auto-finalize-handover')->hourly()->withoutOverlapping();
     })
 
     ->create();
