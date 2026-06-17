@@ -155,4 +155,73 @@ class NezhaRiskController extends Controller
 
         return back();
     }
+
+    /**
+     * 制裁筛查「未决(反查不出来源)」记录 —— 人工核实来源地址后放行并确认收款 (L1-6 人工复核闸口).
+     *
+     * 仅适用于 sanction_inconclusive 的待复核记录(命中 reject 的是 status=auto、不进本队列, 无法经此放行)。
+     * 动作: 以 allow_inconclusive=true 重新走 confirm_offline_payment ——
+     *   - 重新筛查若此时反查出【命中制裁名单】→ 仍自动拒收(本方法捕获异常、不放行, 把记录转 rejected);
+     *   - 仍查不出 / 或已可反查且干净 → 越过"暂挂"完成确认收款(放行出餐), 记录转 approved。
+     * 即: 人工只能放行"查不出", 永远不能放行"已命中"。要求填核实备注(合规留痕: 管理员声明已在区块浏览器核对来源)。
+     */
+    public function release_inconclusive(Request $request, $id)
+    {
+        $rec = NezhaRiskRecord::findOrFail($id);
+
+        $isInconclusive = collect($rec->hit_rules ?? [])
+            ->contains(fn ($h) => ($h['rule'] ?? '') === 'sanction_inconclusive');
+        if ($rec->action !== 'review' || $rec->status !== 'pending' || !$isInconclusive) {
+            Toastr::warning(translate('该记录不是待复核的制裁筛查未决项, 无法经此放行。'));
+            return back();
+        }
+
+        // 合规留痕: 必须填写核实说明(管理员声明已核对来源地址)
+        $note = trim((string) $request->input('note', ''));
+        if ($note === '') {
+            Toastr::error(translate('请先在备注填写来源地址核实结论(如已在区块浏览器核对该地址不在制裁名单), 再放行。'));
+            return back();
+        }
+
+        $order = \App\Models\Order::with('offline_payments')->find($rec->order_id);
+        if (!$order) {
+            Toastr::error(translate('关联订单不存在。'));
+            return back();
+        }
+        if ($order->payment_method !== 'offline_payment' || !$order->offline_payments || $order->offline_payments->status !== 'pending') {
+            // 订单已被其它途径处理(已确认/已拒收), 仅收尾本复核记录, 不再重复确认。
+            $rec->status          = 'approved';
+            $rec->reviewed_by     = auth('admin')->id();
+            $rec->reviewed_at     = now();
+            $rec->review_note     = $note;
+            $rec->disposal_result = '订单已被其它途径处理(非待确认收款), 复核记录归档。';
+            $rec->save();
+            Toastr::warning(translate('订单已不是待确认收款状态, 已归档本复核记录。'));
+            return back();
+        }
+
+        try {
+            \App\CentralLogics\OrderLogic::confirm_offline_payment($order, 'admin', auth('admin')->id(), true);
+        } catch (\App\Exceptions\SanctionScreenException $e) {
+            // 重新筛查这次反查出【命中制裁名单】→ 已自动拒收, 不予放行。
+            $rec->status          = 'rejected';
+            $rec->reviewed_by     = auth('admin')->id();
+            $rec->reviewed_at     = now();
+            $rec->review_note     = $note;
+            $rec->disposal_result = '重新筛查命中制裁名单, 已自动拒收, 不予放行(L1-6)。';
+            $rec->save();
+            Toastr::error(translate('重新筛查发现来源命中制裁名单, 已拒收, 不予放行。'));
+            return back();
+        }
+
+        $rec->status          = 'approved';
+        $rec->reviewed_by     = auth('admin')->id();
+        $rec->reviewed_at     = now();
+        $rec->review_note     = $note;
+        $rec->disposal_result = '人工核实来源地址后放行并确认收款(制裁筛查未决人工复核)。';
+        $rec->save();
+
+        Toastr::success(translate('已人工放行并确认收款。'));
+        return back();
+    }
 }

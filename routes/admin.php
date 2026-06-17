@@ -481,6 +481,8 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::post('approve/{id}', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'approve'])->name('approve');
             Route::post('reject/{id}', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'reject'])->name('reject');
             Route::post('refund/{id}', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'refund'])->name('refund');
+            // L1-6 制裁筛查未决(反查不出来源): 人工核实来源后放行并确认收款(重新筛查, 真命中仍拦)
+            Route::post('release-inconclusive/{id}', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'release_inconclusive'])->name('release-inconclusive');
         });
 
         // 哪吒 退款机制② 退款留痕/审核

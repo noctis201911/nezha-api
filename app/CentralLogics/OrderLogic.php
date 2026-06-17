@@ -695,12 +695,14 @@ class OrderLogic
      * @param  int|null     $confirmer_id    操作人 id (留痕用)
      * @return Order
      */
-    public static function confirm_offline_payment($order, $confirmer_type = 'admin', $confirmer_id = null)
+    public static function confirm_offline_payment($order, $confirmer_type = 'admin', $confirmer_id = null, $allow_inconclusive = false)
     {
         // 🔴 L1-6 制裁名单筛查(机制②): 确认收款 = 放行出餐的闸口。USDT 付款先反查链上来源地址,
         //    命中 OFAC SDN/黑名单 → 拒收 + 留痕 + 不放行(平台不与受制裁主体交易)。
         //    放在任何状态变更之前: 命中时订单保持未确认, 仅标记 denied, 失败也在安全侧。
         //    非 USDT / 反查不出地址(无 tx 或 API 不可达)不硬拦 —— 后者写 review 记录待人工复核。
+        //    $allow_inconclusive=true: 仅用于 admin「人工核实来源后放行」—— 越过"反查不出→暂挂",
+        //    但【真命中 reject 仍照拦】(下面 reject 分支不受影响), 即人工只能放行"查不出", 不能放行"已命中"。
         if (\App\CentralLogics\NezhaSanctionScreen::enabled()) {
             $screen = \App\CentralLogics\NezhaSanctionScreen::screen_order($order);
             if (($screen['action'] ?? 'pass') === 'reject') {
@@ -717,7 +719,7 @@ class OrderLogic
             if (($screen['action'] ?? 'pass') === 'inconclusive') {
                 // 反查不出来源地址(无 tx / 链上 API 不可达): 先留一条待人工复核记录(去重)。
                 \App\CentralLogics\NezhaSanctionScreen::record_inconclusive($order, $screen);
-                if (\App\CentralLogics\NezhaSanctionScreen::inconclusive_action() === 'hold') {
+                if (!$allow_inconclusive && \App\CentralLogics\NezhaSanctionScreen::inconclusive_action() === 'hold') {
                     // fail-closed(默认): 不放行出餐, 中止本次确认。订单保持 pending、offline_payments 仍 pending,
                     //   来源核实 / API 恢复后可重新「确认收款」再次筛查; 不标 denied(非拒收, 是暂挂待复核)。
                     info(['nezha_sanction hold(inconclusive)', 'order' => $order->id, 'detail' => $screen['detail'] ?? '']);

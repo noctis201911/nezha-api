@@ -68,12 +68,22 @@
                                         @endforeach
                                     </td>
                                     <td>
+                                        @php
+                                            $isInc = collect($r->hit_rules ?? [])->contains(fn ($h) => ($h['rule'] ?? '') === 'sanction_inconclusive');
+                                        @endphp
                                         <form method="post">
                                             @csrf
-                                            <input type="text" name="note" class="form-control form-control-sm mb-1" placeholder="{{ translate('处置备注(选填)') }}">
-                                            <button formaction="{{ route('admin.nezha-risk.approve', $r->id) }}" class="btn btn-sm btn-success mr-1" onclick="return confirm('{{ translate('确认放行该顾客?') }}')">{{ translate('放行') }}</button>
-                                            <button formaction="{{ route('admin.nezha-risk.refund', $r->id) }}" class="btn btn-sm btn-info mr-1" onclick="return confirm('{{ translate('记录原路退款指令?') }}')">{{ translate('退款(原路)') }}</button>
-                                            <button formaction="{{ route('admin.nezha-risk.reject', $r->id) }}" class="btn btn-sm btn-danger" onclick="return confirm('{{ translate('确认清退该订单?') }}')">{{ translate('清退') }}</button>
+                                            @if ($isInc)
+                                                <input type="text" name="note" class="form-control form-control-sm mb-1" placeholder="{{ translate('核实结论(必填): 已在区块浏览器核对来源地址不在制裁名单') }}">
+                                                <button formaction="{{ route('admin.nezha-risk.release-inconclusive', $r->id) }}" class="btn btn-sm btn-warning mr-1" onclick="return confirm('{{ translate('确认已核实该笔付款来源地址不在制裁名单, 放行并确认收款? (重新筛查若命中仍会拦)') }}')">{{ translate('核实放行+确认收款') }}</button>
+                                                <button formaction="{{ route('admin.nezha-risk.reject', $r->id) }}" class="btn btn-sm btn-danger" onclick="return confirm('{{ translate('确认清退该订单?') }}')">{{ translate('清退') }}</button>
+                                                <small class="d-block text-muted mt-1">{{ translate('来源反查未决: 请先核实来源地址再放行; 一键会重新链上筛查, 此时若命中制裁名单仍自动拒收。') }}</small>
+                                            @else
+                                                <input type="text" name="note" class="form-control form-control-sm mb-1" placeholder="{{ translate('处置备注(选填)') }}">
+                                                <button formaction="{{ route('admin.nezha-risk.approve', $r->id) }}" class="btn btn-sm btn-success mr-1" onclick="return confirm('{{ translate('确认放行该顾客?') }}')">{{ translate('放行') }}</button>
+                                                <button formaction="{{ route('admin.nezha-risk.refund', $r->id) }}" class="btn btn-sm btn-info mr-1" onclick="return confirm('{{ translate('记录原路退款指令?') }}')">{{ translate('退款(原路)') }}</button>
+                                                <button formaction="{{ route('admin.nezha-risk.reject', $r->id) }}" class="btn btn-sm btn-danger" onclick="return confirm('{{ translate('确认清退该订单?') }}')">{{ translate('清退') }}</button>
+                                            @endif
                                         </form>
                                     </td>
                                 </tr>
