@@ -775,7 +775,7 @@ class Helpers
 
         if ($multi_data == true) {
             foreach ($data as $item) {
-                $item['foods'] = $item->foods()->active()->take(50)->get(["id", "image", "name", "price", "variations", "add_ons", "category_id", "restaurant_id", "veg", "status"]);
+                $item['foods'] = $item->foods()->active()->with(['newVariations', 'newVariationOptions'])->take(50)->get(["id", "image", "name", "price", "variations", "add_ons", "category_id", "restaurant_id", "veg", "status"]);
                 $item['price_starts_from'] = (float) $item->foods()->active()->min('price');
                 $item->load('cuisine');
                 // $item['coupons'] = $item->coupon_valid;
@@ -865,7 +865,7 @@ class Helpers
                 unset($data['closeing_time']);
             }
 
-            $data['foods'] = $data->foods()->active()->take(50)->get(["id", "image", "name", "price", "variations", "add_ons", "category_id", "restaurant_id", "veg", "status"]);
+            $data['foods'] = $data->foods()->active()->with(['newVariations', 'newVariationOptions'])->take(50)->get(["id", "image", "name", "price", "variations", "add_ons", "category_id", "restaurant_id", "veg", "status"]);
             $restaurant_id = (string) $data->id;
             $data['coupons'] = Coupon::Where(function ($q) use ($restaurant_id) {
                 $q->Where('coupon_type', 'restaurant_wise')->whereJsonContains('data', [$restaurant_id])
@@ -3991,7 +3991,15 @@ class Helpers
         if (! request()->header('latitude') || ! request()->header('longitude')) {
             return 'out_of_range';
         }
-        $zone = Zone::where('id', $restaurant->zone_id)->whereContains('coordinates', new Point(request()->header('latitude') && request()->header('longitude'), POINT_SRID))->first();
+        // N+1 fix: getDeliveryFee 在商品/餐厅列表里被逐条调用, 同一(zone_id,lat,lng)重复查 Zone.
+        // 用请求级容器缓存(php-fpm 每请求新建容器, 不跨请求泄漏/无脏数据)收敛重复查询.
+        $__nz_zk = 'nz_zone_cache_' . $restaurant->zone_id . '_' . request()->header('latitude') . '_' . request()->header('longitude');
+        if (app()->bound($__nz_zk)) {
+            $zone = app($__nz_zk)[0];
+        } else {
+            $zone = Zone::where('id', $restaurant->zone_id)->whereContains('coordinates', new Point(request()->header('latitude') && request()->header('longitude'), POINT_SRID))->first();
+            app()->instance($__nz_zk, [$zone]);
+        }
         if (! $zone) {
             return 'out_of_range';
         }
