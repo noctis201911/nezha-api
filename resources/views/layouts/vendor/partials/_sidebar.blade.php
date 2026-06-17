@@ -670,7 +670,7 @@
                         </li>
                     @endif
 
-                    @if(\App\CentralLogics\Helpers::employee_module_permission_check('disbursement'))
+                    @if(false) {{-- 哪吒外卖 B方案隐藏「打款报表」: 平台不向商家打款(INVARIANTS L1-5,提现/打款腿已拔),此报表恒空且误导;保留路由 vendor.report.disbursement-report,恢复直付台账时把 false 改回 \App\CentralLogics\Helpers::employee_module_permission_check('disbursement') 即可 --}}
                         <li class="navbar-vertical-aside-has-menu {{ Request::is('restaurant-panel/report/disbursement-report') ? 'active' : '' }}">
                             <a class="nav-link " href="{{ route('vendor.report.disbursement-report') }}"
                                title="{{ translate('messages.disbursement_report') }}">
@@ -725,7 +725,7 @@
                             </a>
                         </li>
                     @endif
-                    @if(\App\CentralLogics\Helpers::employee_module_permission_check('earning_report'))
+                    @if(false) {{-- 哪吒外卖 B方案隐藏「收入报表」: 直付单不记 total_earning(INVARIANTS L1-5),此报表恒空且误导;保留路由 vendor.report.restaurant-earning-report,如改造成真实销售额视图再放出(把 false 改回 \App\CentralLogics\Helpers::employee_module_permission_check('earning_report')) --}}
                         <li class="navbar-vertical-aside-has-menu @yield('restaurant_earning_report')">
                             <a class="nav-link " href="{{ route('vendor.report.restaurant-earning-report') }}"
                                title="{{ translate('messages.Restaurant_Earning_Report') }}">
