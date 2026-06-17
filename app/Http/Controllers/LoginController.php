@@ -102,8 +102,13 @@ class LoginController extends Controller
         $locale = $locals[$role];
         App::setLocale($locale);
 
-        $custome_recaptcha = new CaptchaBuilder;
-        $custome_recaptcha->build();
+        $custome_recaptcha = new CaptchaBuilder(null, new \Gregwar\Captcha\PhraseBuilder(5, '23456789ABCDEFGHJKLMNPRSTUVWXYZ'));
+        $custome_recaptcha->setBackgroundColor(245, 245, 245);
+        $custome_recaptcha->setTextColor(40, 40, 40);
+        $custome_recaptcha->setMaxBehindLines(0);
+        $custome_recaptcha->setMaxFrontLines(0);
+        $custome_recaptcha->setDistortion(true);
+        $custome_recaptcha->build(200, 60);
         Session::put('six_captcha', $custome_recaptcha->getPhrase());
 
         $email =  null;
@@ -287,8 +292,13 @@ class LoginController extends Controller
 
     public function reloadCaptcha()
     {
-        $custome_recaptcha = new CaptchaBuilder;
-        $custome_recaptcha->build();
+        $custome_recaptcha = new CaptchaBuilder(null, new \Gregwar\Captcha\PhraseBuilder(5, '23456789ABCDEFGHJKLMNPRSTUVWXYZ'));
+        $custome_recaptcha->setBackgroundColor(245, 245, 245);
+        $custome_recaptcha->setTextColor(40, 40, 40);
+        $custome_recaptcha->setMaxBehindLines(0);
+        $custome_recaptcha->setMaxFrontLines(0);
+        $custome_recaptcha->setDistortion(true);
+        $custome_recaptcha->build(200, 60);
         Session::put('six_captcha', $custome_recaptcha->getPhrase());
 
         return response()->json([
