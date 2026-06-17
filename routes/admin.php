@@ -19,6 +19,7 @@ use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\ContactMessages;
 use App\Http\Controllers\Admin\MerchantLeadController;
 use App\Http\Controllers\Admin\LocalLifeController as AdminLocalLifeController;
+use App\Http\Controllers\Admin\LocalLifeCategoryController;
 use App\Http\Controllers\Admin\ConversationController;
 use App\Http\Controllers\Admin\CouponController;
 use App\Http\Controllers\Admin\CuisineController;
@@ -1118,6 +1119,16 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::post('offline/{id}', [AdminLocalLifeController::class, 'offlinePost'])->name('offline');
             Route::post('report-dismiss/{reportId}', [AdminLocalLifeController::class, 'dismissReport'])->name('report-dismiss');
             Route::delete('delete', [AdminLocalLifeController::class, 'destroy'])->name('delete');
+            // 类目管理（金刚区类目，后台可增删改排序）
+            Route::group(['prefix' => 'categories', 'as' => 'categories.'], function () {
+                Route::get('list', [LocalLifeCategoryController::class, 'list'])->name('list');
+                Route::get('create', [LocalLifeCategoryController::class, 'create'])->name('create');
+                Route::post('store', [LocalLifeCategoryController::class, 'store'])->name('store');
+                Route::get('edit/{id}', [LocalLifeCategoryController::class, 'edit'])->name('edit');
+                Route::post('update/{id}', [LocalLifeCategoryController::class, 'update'])->name('update');
+                Route::post('status/{id}', [LocalLifeCategoryController::class, 'statusToggle'])->name('status');
+                Route::delete('delete', [LocalLifeCategoryController::class, 'destroy'])->name('delete');
+            });
         });
         Route::group(['prefix' => 'vehicle', 'as' => 'vehicle.', 'middleware' => ['module:deliveryman']], function () {
             Route::get('list', [VehicleController::class, 'list'])->name('list');

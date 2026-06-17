@@ -5,11 +5,15 @@
 @php
     $isEdit = isset($post) && $post;
     $action = $isEdit ? route('admin.local-life.update', $post->id) : route('admin.local-life.store');
-    $categories = [
-        '租房合租', '找工作', '二手闲置', '养车出行', '装修维修',
-        '找服务·教育培训', '找服务·签证法律', '找服务·接送拼车',
-        '上门服务·家政保洁', '上门服务·搬家', '上门服务·维修水电', '免费·赠送',
-    ];
+    // 类目改读后台「本地生活类目」表（启用中的）；表空时回退旧常量，保证表单永远有选项
+    $categories = \App\Models\LocalLifeCategory::where('status', true)->orderBy('sort_order')->orderBy('id')->pluck('name')->toArray();
+    if (empty($categories)) {
+        $categories = ['租房合租', '找工作', '二手闲置', '养车出行', '装修维修', '免费·赠送'];
+    }
+    // 编辑旧帖时其分类可能已不在启用列表，补进去免得下拉选不中
+    if ($isEdit && $post->category && !in_array($post->category, $categories, true)) {
+        $categories[] = $post->category;
+    }
     $tabs = ['推荐', '租房', '招聘', '二手', '免费', '服务'];
     $val = fn($field, $default = '') => old($field, $isEdit ? $post->$field : $default);
 @endphp

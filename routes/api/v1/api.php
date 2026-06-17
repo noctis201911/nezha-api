@@ -532,6 +532,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     Route::group(['prefix' => 'local-life'], function () {
         Route::get('posts', [LocalLifeController::class, 'posts']);
         Route::get('posts/{id}', [LocalLifeController::class, 'postDetail']);
+        Route::get('categories', [LocalLifeController::class, 'categories']);
     });
 
     // 本地生活 UGC：发帖 / 我的发布（需登录；游客不能发，PII 仅本人可见）

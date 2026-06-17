@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\LocalLifePost;
+use App\Models\LocalLifeCategory;
 use App\Models\LocalLifeReport;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -54,6 +55,10 @@ class LocalLifeController extends Controller
         '大麻', '冰毒', '代孕', '枪支', '仿真枪', '迷药',
         // 外站强引流
         '加微信群', '引流到Telegram', '私域导流',
+        // 签证/移民诈骗（敏感类目「移民」「签证」加强审核）
+        '包过签', '保证过签', '100%过签', '百分百过签', '拒签全退', '拒签退全款', '包入籍', '包拿绿卡', '包拿身份', '黑户洗白', '假学历证', '假资产证明', '假银行流水',
+        // 按摩/SPA 涉黄（敏感类目「按摩」加强审核）
+        '大保健', '莞式', '楼凤', '一条龙服务', '性服务', '裸聊', '裸体按摩',
     ];
 
     // 免责短提示（列表/详情底部常驻；后台 locallife_disclaimer 可覆盖）
@@ -148,6 +153,36 @@ class LocalLifeController extends Controller
     /* ============================ 需登录(auth:api) ============================ */
 
     /**
+     * 接口 F：本地生活类目列表（公开只读）
+     * GET /api/v1/local-life/categories
+     * 返回后台启用中的类目（前端金刚区按此动态渲染；加新类目无需改前端）。
+     */
+    public function categories(Request $request)
+    {
+        $cats = LocalLifeCategory::where('status', true)
+            ->orderBy('sort_order')->orderBy('id')
+            ->get(['name', 'emoji', 'color', 'tab', 'is_sensitive'])
+            ->map(function ($c) {
+                return [
+                    'name'         => $c->name,
+                    'emoji'        => $c->emoji,
+                    'color'        => $c->color,
+                    'tab'          => $c->tab,
+                    'is_sensitive' => (bool) $c->is_sensitive,
+                ];
+            });
+        return response()->json(['categories' => $cats], 200);
+    }
+
+    /** 发帖类目白名单：后台启用中的类目名 ∪ 旧常量（兼容历史帖；表空时回退常量） */
+    private function categoryNames(): array
+    {
+        $db = LocalLifeCategory::activeNames();
+        $names = array_values(array_unique(array_merge($db, self::CATEGORIES)));
+        return $names ?: self::CATEGORIES;
+    }
+
+    /**
      * 接口 C：用户发帖
      * POST /api/v1/local-life/posts  (auth:api)
      * 落库 status=3(待审核)、source='user'、user_id=当前用户、expires_at=+30天。
@@ -175,7 +210,7 @@ class LocalLifeController extends Controller
 
         $validator = Validator::make($request->all(), [
             'title'          => 'required|string|max:200',
-            'category'       => ['required', 'string', 'in:' . implode(',', self::CATEGORIES)],
+            'category'       => ['required', 'string', 'in:' . implode(',', $this->categoryNames())],
             'tab'            => ['required', 'string', 'in:' . implode(',', self::TABS)],
             'description'    => 'nullable|string|max:2000',
             'contact_info'   => 'required|string|max:200',

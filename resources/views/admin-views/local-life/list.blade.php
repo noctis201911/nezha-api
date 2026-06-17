@@ -5,6 +5,7 @@
 
 @section('content')
 <div class="content container-fluid">
+@php $sensitiveCats = \App\Models\LocalLifeCategory::sensitiveNames(); @endphp
 
     {{-- 用户发帖入口总开关（真实影响开关，默认关） --}}
     <div class="card mt-2">
@@ -107,7 +108,11 @@
                                     <div><small class="text-danger">驳回理由：{{Str::limit($post->reject_reason,40,'...')}}</small></div>
                                 @endif
                             </td>
-                            <td>{{$post->category}}</td>
+                            <td>{{$post->category}}
+                                @if(in_array($post->category, $sensitiveCats, true))
+                                    <span class="badge badge-warning ml-1" title="敏感类目，请重点审核"><i class="tio-warning"></i> 敏感</span>
+                                @endif
+                            </td>
                             <td>{{$post->tab}}</td>
                             <td>
                                 @if($post->source == 'user')
