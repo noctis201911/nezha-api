@@ -715,8 +715,15 @@ class OrderLogic
                 throw new \App\Exceptions\SanctionScreenException($screen['detail'] ?? '付款来源地址命中制裁名单，已拒收。');
             }
             if (($screen['action'] ?? 'pass') === 'inconclusive') {
-                // 非阻断: 反查不出来源地址, 留一条待人工复核, 流程继续。
+                // 反查不出来源地址(无 tx / 链上 API 不可达): 先留一条待人工复核记录(去重)。
                 \App\CentralLogics\NezhaSanctionScreen::record_inconclusive($order, $screen);
+                if (\App\CentralLogics\NezhaSanctionScreen::inconclusive_action() === 'hold') {
+                    // fail-closed(默认): 不放行出餐, 中止本次确认。订单保持 pending、offline_payments 仍 pending,
+                    //   来源核实 / API 恢复后可重新「确认收款」再次筛查; 不标 denied(非拒收, 是暂挂待复核)。
+                    info(['nezha_sanction hold(inconclusive)', 'order' => $order->id, 'detail' => $screen['detail'] ?? '']);
+                    throw new \App\Exceptions\SanctionScreenException('付款来源地址暂无法完成制裁筛查（来源待人工核对），暂不能确认收款。请稍后重试或联系平台。');
+                }
+                // fail-open: 已留痕, 放行继续。
             }
         }
 

@@ -42,6 +42,7 @@ class NezhaRiskController extends Controller
         'nezha_sanction_screen_status'      => '1',
         'nezha_sanction_source_url'         => 'https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.XML',
         'nezha_sanction_last_sync'          => '',
+        'nezha_sanction_inconclusive_action' => 'hold',   // 反查不出来源时: hold=拦截待人工(默认) / allow=放行+留痕
     ];
 
     /** 人工审核队列 */

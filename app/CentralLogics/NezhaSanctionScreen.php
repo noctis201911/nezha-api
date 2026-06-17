@@ -39,6 +39,17 @@ class NezhaSanctionScreen
         return (string) self::cfg('nezha_sanction_screen_status', '1') === '1';
     }
 
+    /**
+     * 反查不出来源地址(无 tx / 链上 API 不可达)时的处置策略:
+     *   'hold'  (默认, fail-closed) — 不放行出餐, 中止确认转人工复核(更符合制裁筛查通用准则)。
+     *   'allow' (fail-open)        — 自动放行出餐, 仅留一条待人工复核记录。
+     * 后台「风控设置→制裁名单筛查」可调。
+     */
+    public static function inconclusive_action(): string
+    {
+        return (string) self::cfg('nezha_sanction_inconclusive_action', 'hold') === 'allow' ? 'allow' : 'hold';
+    }
+
     /** 地址类型: evm(0x+40hex) / tron(T 开头 base58) / other. */
     public static function kind(string $address): string
     {
@@ -186,11 +197,20 @@ class NezhaSanctionScreen
 
     /**
      * 反查不出 from 地址(无 tx / API 不可达) → 写一条 review 审计记录待人工复核.
-     * 非阻断: 不影响本次确认流程, 仅留痕提醒人工事后核对来源地址是否涉制裁.
+     * hold 策略下确认会被中止(订单留 pending 可重试), 商家/admin 可能多次点确认 →
+     * 去重: 同订单已有 pending 的 sanction_inconclusive 记录则复用, 不重复刷队列.
      * @return int 记录 id
      */
     public static function record_inconclusive($order, array $screen): int
     {
+        $existing = NezhaRiskRecord::where('order_id', $order->id)
+            ->where('status', 'pending')
+            ->where('hit_rules', 'like', '%sanction_inconclusive%')
+            ->first();
+        if ($existing) {
+            return $existing->id;
+        }
+
         $isGuest = (int) ($order->is_guest ?? 0) === 1;
 
         $rec = new NezhaRiskRecord();

@@ -163,6 +163,14 @@
                             <input type="text" name="nezha_sanction_source_url" class="form-control" maxlength="255" value="{{ $cfg['nezha_sanction_source_url'] ?? '' }}" placeholder="https://sanctionslistservice.ofac.treas.gov/...">
                             <small class="text-muted">{{ translate('每天 04:30 自动从此源拉取数字货币地址入库; 取数/解析失败会保留旧名单不动。') }}</small>
                         </div>
+                        <div class="col-md-6">
+                            <label class="input-label">{{ translate('来源地址反查不出时') }}</label>
+                            <select name="nezha_sanction_inconclusive_action" class="form-control">
+                                <option value="hold" {{ ($cfg['nezha_sanction_inconclusive_action'] ?? 'hold') == 'hold' ? 'selected' : '' }}>{{ translate('拦截待人工 (查不出不放行, 转人工复核 · 更稳健, 默认)') }}</option>
+                                <option value="allow" {{ ($cfg['nezha_sanction_inconclusive_action'] ?? 'hold') == 'allow' ? 'selected' : '' }}>{{ translate('放行 + 留痕 (查不出仍出餐, 仅记录待人工事后核)') }}</option>
+                            </select>
+                            <small class="text-muted">{{ translate('无交易哈希 / 链上服务暂不可达, 导致来源地址反查失败时的处置。未配置 Tron/BSC API key 时公共端点可能限流, 选「拦截」可能误挂合法 USDT 单(顾客需等人工或重试)。') }}</small>
+                        </div>
                     </div>
                     <div class="mt-2">
                         <small class="text-muted">
