@@ -1357,6 +1357,19 @@ class OrderController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
+            // 哪吒(#3): 凭证上传/保存失败 → 后端兜底回滚刚建的订单(防 pending/unpaid 无凭证孤儿单)。
+            // 比前端 onError 可靠: place 成功后前端已导航到订单详情、CheckoutPage 卸载致 react-query 的 onError 不触发(实测孤儿单残留)。
+            try {
+                $order->loadMissing('details');
+                if (in_array($order->order_status, ['pending', 'failed'], true)) {
+                    $order->order_status = 'canceled';
+                    $order->canceled = now();
+                    $order->canceled_by = 'system';
+                    $order->cancellation_reason = '付款凭证上传失败，订单已自动回滚';
+                    $order->save();
+                    \App\CentralLogics\Helpers::decreaseSellCount(order_details: $order->details);
+                }
+            } catch (\Throwable $ex) { info('offline_payment rollback-cancel failed: '.$ex->getMessage()); }
             return response()->json([ 'payment' => $e->getMessage()], 403);
         }
     }
