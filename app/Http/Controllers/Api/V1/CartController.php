@@ -79,17 +79,7 @@ class CartController extends Controller
             return response()->json($carts, 200);
         }
 
-        // 哪吒: 单店购物车守卫 — 新商品餐厅与购物车现有餐厅不同时, 清空旧车再加(防跨店混车致结算 get-Tax 403/金额异常)。
-        // 正常前端加购走 CartClearModal 先确认并清空(此时服务器车已空, 不触发本守卫); 本守卫兜底"快捷加购/本地车与服务器车不同步"漏网的跨店情形, 保证服务器侧购物车始终单店。
-        $existFirst = Cart::where('user_id', $user_id)->where('is_guest', $is_guest)->first();
-        if ($existFirst) {
-            $existClass = $existFirst->item_type;
-            $existItem  = class_exists($existClass) ? $existClass::find($existFirst->item_id) : null;
-            $existRestId = $existItem?->restaurant_id;
-            if ($existRestId && $item->restaurant_id && $existRestId != $item->restaurant_id) {
-                Cart::where('user_id', $user_id)->where('is_guest', $is_guest)->delete();
-            }
-        }
+        // 哪吒[多店购物车]: 已移除“切店清空”守卫,允许同一用户购物车并存多家餐厅的商品;下单时由 place_order 按 restaurant_id 过滤,各店各自成单,互不影响。
         if($item?->maximum_cart_quantity && ($request->quantity>$item->maximum_cart_quantity)){
             return response()->json([
                 'errors' => [
@@ -120,6 +110,7 @@ class CartController extends Controller
         $cart = new Cart();
         $cart->user_id = $user_id;
         $cart->item_id = $request->item_id;
+        $cart->restaurant_id = $item?->restaurant_id;
         $cart->is_guest = $is_guest;
         $cart->add_on_ids = json_encode($request->add_on_ids);
         $cart->add_on_qtys = json_encode($request->add_on_qtys);
@@ -251,7 +242,12 @@ class CartController extends Controller
         $user_id = $request->user ? $request->user->id : $request['guest_id'];
         $is_guest = $request->user ? 0 : 1;
 
-        $carts = Cart::where('user_id', $user_id)->where('is_guest',$is_guest)->get();
+        // 哪吒[多店购物车]: 传 restaurant_id 时只清该店的车(餐厅抽屉「清空」按钮),不传则清全部(向后兼容)
+        $cartQuery = Cart::where('user_id', $user_id)->where('is_guest',$is_guest);
+        if ($request->filled('restaurant_id')) {
+            $cartQuery->where('restaurant_id', $request['restaurant_id']);
+        }
+        $carts = $cartQuery->get();
 
         foreach($carts as $cart){
             $cart->delete();
@@ -321,6 +317,7 @@ class CartController extends Controller
                 $cart = new Cart();
                 $cart->user_id =$request->user->id;
                 $cart->item_id = $single_item['item_id'];
+                $cart->restaurant_id = $item?->restaurant_id;
                 $cart->is_guest = 0;
                 $cart->add_on_ids = json_encode($single_item['add_on_ids']);
                 $cart->add_on_qtys = json_encode($single_item['add_on_qtys']);

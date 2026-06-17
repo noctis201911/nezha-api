@@ -12,6 +12,7 @@ class Cart extends Model
     protected $casts = [
         'user_id' => 'integer',
         'item_id' => 'integer',
+        'restaurant_id' => 'integer',
         'is_guest' => 'boolean',
         'price' => 'float',
         'quantity' => 'integer',
@@ -22,6 +23,7 @@ class Cart extends Model
     protected $fillable = [
         'user_id',
         'item_id',
+        'restaurant_id',
         'is_guest',
         'add_on_ids',
         'add_on_qtys',

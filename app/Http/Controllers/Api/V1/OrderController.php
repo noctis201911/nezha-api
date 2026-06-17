@@ -245,6 +245,8 @@ class OrderController extends Controller
 
 
         $carts = Cart::where('user_id', $order->user_id)->where('is_guest',$order->is_guest)
+            // 哪吒[多店购物车]: 只取本次下单餐厅的车项,防止多店共存购物车把别家商品混入同一订单/下单后误删别家车
+            ->where('restaurant_id', $request['restaurant_id'])
             ->when(isset($request->is_buy_now) && $request->is_buy_now == 1 && $request->cart_id, function ($query) use ($request) {
                 return $query->where('id',$request->cart_id);
             })
