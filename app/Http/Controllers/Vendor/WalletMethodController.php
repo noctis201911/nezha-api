@@ -16,20 +16,12 @@ class WalletMethodController extends Controller
 {
     public function index(Request $request)
     {
-        $key = explode(' ', $request['search']);
-        $withdrawal_methods = WithdrawalMethod::ofStatus(1)->get();
-        $vendor_withdrawal_methods = DisbursementWithdrawalMethod::where('restaurant_id', Helpers::get_restaurant_id())
-            ->when( isset($key) , function($query) use($key){
-                $query->where(function ($q) use ($key) {
-                    foreach ($key as $value) {
-                        $q->orWhere('method_name', 'like', "%{$value}%");
-                    }
-                });
-            }
-            )
-            ->latest()->paginate(config('default_pagination'));
-
-        return view('vendor-views.wallet-method.index', compact('withdrawal_methods','vendor_withdrawal_methods'));
+        // 哪吒外卖 B方案: 平台不经手资金(INVARIANTS L1-1), 提现打款腿已拔除(L1-5),
+        // StackFood 原版"提现方式管理"在直付模式下已无意义。商家收款方式由超管(平台)
+        // 代为登记在 restaurant 表, 此页改为只读"我的收款方式"核对页, 让商家核对平台
+        // 给自己设置的收款信息是否正确(如有误需联系平台修改, 防误改导致收不到款)。
+        $restaurant = \App\Models\Restaurant::find(Helpers::get_restaurant_id());
+        return view('vendor-views.wallet-method.index', compact('restaurant'));
     }
 
     public function store(Request $request)
