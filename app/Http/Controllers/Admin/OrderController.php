@@ -1532,6 +1532,11 @@ class OrderController extends Controller
     {
         $order = Order::findOrFail($request->id);
         if ($request->verify == 'yes') {
+            // 哪吒 H3(QA 2026-06-18): 已结束的单不可被"确认收款"复活。
+            if (in_array($order->order_status, ['canceled', 'failed', 'refunded', 'refund_requested', 'refund_request_canceled'], true)) {
+                Toastr::warning(translate('messages.this_order_has_ended_cannot_confirm_payment'));
+                return back();
+            }
             // 哪吒: 确认收款动作统一走 OrderLogic, 与商家自营确认共用同一实现(避免逻辑漂移)。
             try {
                 \App\CentralLogics\OrderLogic::confirm_offline_payment($order, 'admin', auth('admin')->id());

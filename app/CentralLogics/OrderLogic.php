@@ -958,14 +958,14 @@ class OrderLogic
      *   5) 推送商家(vendor firebase_token) 提醒去原路退款 + 写 log。
      * 全程 try/catch, 留痕/通知失败绝不阻断 admin 的退款/取消主流程。
      */
-    public static function record_direct_pay_refund_pending($order, $confirmer_type = 'admin', $confirmer_id = null, $reasonNote = null)
+    public static function record_direct_pay_refund_pending($order, $confirmer_type = 'admin', $confirmer_id = null, $reasonNote = null, $treatProofAsPaid = false)
     {
         try {
             if ($order->payment_method != 'offline_payment') {
                 return; // 仅直付单走本闭环
             }
             $op = \App\Models\OfflinePayments::where('order_id', $order->id)->first();
-            $paidish = ($order->payment_status == 'paid') || ($op && $op->status == 'verified');
+            $paidish = ($order->payment_status == 'paid') || ($op && $op->status == 'verified') || ($treatProofAsPaid && $op);  // 哪吒 B方案: 已提交凭证(钱已直付商家)即视为已付款
             if (!$paidish) {
                 return; // 从未真正付款/确认收款的单无款可退, 不建记录
             }

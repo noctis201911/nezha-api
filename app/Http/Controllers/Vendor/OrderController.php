@@ -250,6 +250,11 @@ class OrderController extends Controller
             Toastr::error(translate('messages.order_not_found'));
             return back();
         }
+        // 哪吒 H3(QA 2026-06-18): 已结束的单(顾客取消/拒收/退款)不可被"确认收款"复活。
+        if (in_array($order->order_status, ['canceled', 'failed', 'refunded', 'refund_requested', 'refund_request_canceled'], true)) {
+            Toastr::warning(translate('messages.this_order_has_ended_cannot_confirm_payment'));
+            return back();
+        }
         if ($order->payment_method != 'offline_payment' || !$order->offline_payments || $order->offline_payments->status != 'pending') {
             // 已被(商家自己/admin/其他端)处理过, 或本就不是待核验离线单 —— 幂等保护, 不重复执行。
             Toastr::warning(translate('messages.Payment_status_updated'));

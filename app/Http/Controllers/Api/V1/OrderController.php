@@ -893,6 +893,30 @@ class OrderController extends Controller
             Helpers::increment_order_count($order->restaurant); //for subscription package order increase
 
 
+            // 哪吒 B方案(QA 2026-06-18): 直付单且顾客已提交付款凭证(=钱已直付商家本人) ——
+            //   (1) 清理 offline_payments->canceled(防"已取消单仍被确认收款"复活, H3)
+            //   (2) 生成「待退款」留痕 + 通知商家原路退款(平台不碰钱 L1-1)
+            //   (3) 给顾客发"请联系商家原路退款"通知(平台/admin 退不了直付的钱)。
+            $nezha_offline_proof = $order->payment_method == 'offline_payment'
+                ? \App\Models\OfflinePayments::where('order_id', $order->id)->whereIn('status', ['pending', 'verified', 'denied'])->first()
+                : null;
+            if ($nezha_offline_proof) {
+                \App\Models\OfflinePayments::where('order_id', $order->id)->update(['status' => 'canceled']);
+                \App\CentralLogics\OrderLogic::record_direct_pay_refund_pending($order, 'customer', $order->user_id, '顾客取消订单，已支付款项需商家原路退回', true);
+                try {
+                    $nezha_zh = stripos(($order->customer?->current_language_key ?: 'zh'), 'zh') === 0;
+                    $nezha_ntitle = $nezha_zh ? '订单已取消' : 'Order canceled';
+                    $nezha_nmsg = $nezha_zh
+                        ? '你的订单 #' . $order->id . ' 已取消。你此前直接支付给商家的款项，请联系商家按原路退回（平台不经手此款）。'
+                        : 'Your order #' . $order->id . ' is canceled. For the amount paid directly to the restaurant, please contact the restaurant for an original-route refund.';
+                    $nezha_fcm = $order->is_guest == 0 ? $order?->customer?->cm_firebase_token : null;
+                    $nezha_ndata = Helpers::makeDataForPushNotification(title: $nezha_ntitle, message: $nezha_nmsg, orderId: $order->id, type: 'order_status', orderStatus: 'canceled');
+                    if ($nezha_fcm) { Helpers::send_push_notif_to_device($nezha_fcm, $nezha_ndata); }
+                    if ($order->is_guest == 0) { Helpers::insertDataOnNotificationTable($nezha_ndata, 'user', $order->user_id); }
+                } catch (\Throwable $e) { info('nezha cancel refund-notice failed: ' . $e->getMessage()); }
+                return response()->json(['message' => translate('messages.order_canceled_contact_restaurant_for_refund')], 200);
+            }
+
             $wallet_status= BusinessSetting::where('key','wallet_status')->first()?->value;
             $refund_to_wallet= BusinessSetting::where('key', 'wallet_add_refund')->first()?->value;
 
