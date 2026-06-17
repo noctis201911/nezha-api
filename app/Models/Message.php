@@ -3,12 +3,14 @@
 namespace App\Models;
 
 use App\CentralLogics\Helpers;
+use App\Traits\SerializesLocalDates;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Message extends Model
 {
-    use HasFactory;
+    // 聊天消息时间序列化为裸埃里温墙钟，避免前端 moment 按浏览器时区偏移（见 trait）。
+    use HasFactory, SerializesLocalDates;
 
     protected $casts = [
         'conversation_id' => 'integer',
