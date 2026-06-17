@@ -367,7 +367,10 @@
 
 
 <script>
+    var nzCaptchaLoading = false;
     $(document).on('click','.reloadCaptcha', function(){
+        if (nzCaptchaLoading) return;
+        nzCaptchaLoading = true;
         $.ajax({
             url: "{{ route('reload-captcha') }}",
             type: "GET",
@@ -382,6 +385,7 @@
             complete: function () {
                 $('#loading').hide()
                 $('.capcha-spin').removeClass('active')
+                nzCaptchaLoading = false;
             }
         });
     });

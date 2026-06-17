@@ -4,25 +4,8 @@
 </div>
 <div class="col-6 bg-white rounded d-flex">
     <img src="<?php echo $custome_recaptcha->inline(); ?>" class="rounded w-100" />
-    <div class="p-3 pr-0"  id="reloadCaptcha">
+    <div class="p-3 pr-0 capcha-spin reloadCaptcha" id="reloadCaptcha">
         <i class="tio-cached"></i>
     </div>
 </div>
-<script>
-    $("#reloadCaptcha").click(function() {
-        $.ajax({
-            url: "{{ route('reload-captcha') }}",
-            type: "GET",
-            dataType: 'json',
-            beforeSend: function () {
-                $('#loading').show()
-            },
-            success: function(data) {
-                $('#reload-captcha').html(data.view);
-            },
-            complete: function () {
-                $('#loading').hide()
-            }
-        });
-    })
-</script>
+{{-- 哪吒: 刷新处理器只在 login.blade 里委托绑定一次(.reloadCaptcha); 此局部模板不再自带 <script>, 否则每次 AJAX 注入都会重复绑定, 致一次点击发多个并发请求、图与答案竞态错位 --}}
