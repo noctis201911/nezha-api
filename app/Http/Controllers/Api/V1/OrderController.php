@@ -260,6 +260,11 @@ class OrderController extends Controller
         if(isset($request->is_buy_now) && $request->is_buy_now == 1){
             $carts = $request['cart'];
         }
+        // 哪吒[游客车]: 游客购物车只在前端(redux/localStorage), 后端无对应行; 下单改用前端传的 cart。
+        // 仅 item_id/数量/规格来自请求, 价格由下方循环按 DB(Food)重算 → 不可篡改; cart 已在结算页按选中餐厅过滤。
+        elseif (!$request->user && is_array($request['cart'] ?? null) && count($request['cart']) > 0){
+            $carts = $request['cart'];
+        }
 
         if(count($carts) == 0 ){
             return response()->json([
@@ -605,8 +610,13 @@ class OrderController extends Controller
             }
 
             if(!isset($request->is_buy_now) || (isset($request->is_buy_now) && $request->is_buy_now == 0 )){
-                foreach ($carts as $cart) {
-                    $cart->delete();
+                if (!$request->user) {
+                    // 哪吒[游客车]: $carts 是前端传的数组(非模型)无法逐个 delete; 按 user+restaurant 查询清后端残留行(若有), 前端会清本地车
+                    \App\Models\Cart::where('user_id', $order->user_id)->where('is_guest', 1)->where('restaurant_id', $request['restaurant_id'])->delete();
+                } else {
+                    foreach ($carts as $cart) {
+                        $cart->delete();
+                    }
                 }
             }
 
