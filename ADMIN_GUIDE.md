@@ -518,6 +518,23 @@
 - **2026-06-17 已补的 key**（`user_type='user'`，`status=1`，各含 `zh` / `zh-CN` / `en`）：`order_pending_message`、`order_confirmation_msg`、`order_processing_message`、`order_handover_message`（出餐）、`out_for_delivery_message`、`order_delivered_message`、`delivery_boy_delivered_message`、`delivery_boy_assign_message`、`order_cancled_message`、`order_refunded_message`、`refund_request_canceled`、`offline_order_accept_message`、`offline_order_deny_message`。
 - **文案可用占位符**（`Helpers::text_variable_data_format`）：`{restaurantName}`、`{orderId}`、`{userName}`、`{otp}`（= 取餐号）、`{tokenNumber}`、`{tableNumber}`。⚠️ 值为空时不替换、会原样显示，别用没传值的占位符。
 
+### 9.7 商家端推送文案与送达现状（2026-06-17）
+
+商家端通知文案同样存 `notification_messages`（`user_type='restaurant'`）。2026-06-17 已补 3 条会用到的 key：`restaurant_order_notification`（新订单）、`restaurant_account_block` / `restaurant_account_unblock`（平台暂停 / 恢复店铺）。一键重建：`php artisan db:seed --class=NezhaRestaurantNotificationMessageSeeder`。
+
+- **故意没补**的 restaurant key：提现批准 / 驳回（`restaurant_withdraw_*`—— B 方案平台不碰钱、无提现，填了会与合规模型冲突、误导商家）、活动 / 广告 / 订阅类（MVP 未启用）。
+- vendor 语言是 `zh`（注意：不是顾客的 `zh-CN`），文案基础列存中文兜底 + `zh` / `en` 译文。
+
+🔴 **重要：补了文案 ≠ 商家就能收到新订单推送。** 新订单的 FCM 发送在 `Helpers::sentRestaurantNotification()`，当前 B 方案下三条送达渠道都还没通：
+
+| 渠道 | 现状 | 要通需要 |
+|---|---|---|
+| FCM 设备推送 | ❌ 所有 vendor `firebase_token` 为空 | 商家在网页端授权浏览器通知后、前端把 token 上报到后端 |
+| FCM 网页 topic 推送 | ❌ 发送条件写死 `order_confirmation_model=='deliveryman'` + 支付 `cash_on_delivery`，与实际（`restaurant` + offline_payment）不符，整段不触发 | 改 `sentRestaurantNotification()` 的门槛条件（属机制改动，需评估后再动） |
+| Telegram 新单提醒（哪吒自建，最现成） | ⚠️ 平台 `telegram_bot_token` 已配，但**没有一家餐厅填 `telegram_chat_id`** | 给每家店的 `restaurants.telegram_chat_id` 填上其 Telegram chat id |
+
+- **最快通路 = Telegram**：哪吒已内置 `sendTelegramOrderAlert()`，新单（pending / confirmed）即推一张中文卡片（单号 / 类型 / 合计 / 商品 / 时间），独立于上面 FCM 那些门槛。只要把每家店的 `telegram_chat_id` 填上即生效，**无需改代码**。
+
 ## 10. 佣金充值管理（商家预存佣金）
 
 **入口**：后台左侧栏「交易管理」区 →「佣金充值管理」（`/admin/nezha-deposit`）。
