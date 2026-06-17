@@ -2933,7 +2933,7 @@
             });
             @if ($order->restaurant)
                 $.get({
-                    url: '{{ url('/') }}/admin/zone/get-coordinates/{{ $order->restaurant->zone_id }}',
+                    url: '{{ route('vendor.zone.get-coordinates', ['id' => $order->restaurant->zone_id]) }}',
                     dataType: 'json',
                     success: function(data) {
                         zonePolygon = new google.maps.Polygon({

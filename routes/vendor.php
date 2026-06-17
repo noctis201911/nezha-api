@@ -31,6 +31,9 @@ use App\Http\Controllers\Vendor\WalletMethodController;
 
 Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
     Route::group(['middleware' => ['vendor' ,'maintenance','actch:admin_panel']], function () {
+        // 哪吒(QA): vendor 订单页地图画配送区边界需 zone 坐标; 复用 admin ZoneController::get_coordinates(zone 边界非敏感),
+        // 原 vendor blade 直调 /admin/zone/... 被 admin 中间件 401(实测商家详情 console 报错)。
+        Route::get('zone/get-coordinates/{id}', [\App\Http\Controllers\Admin\ZoneController::class, 'get_coordinates'])->name('zone.get-coordinates');
 
         Route::get('lang/{locale}', [LanguageController::class, 'lang'])->name('lang');
 

@@ -997,7 +997,7 @@
   'customer_information' => '买家底表',
   'paid' => '已支付 (Paid)',
   'home_delivery' => '上门派送',
-  'unpaid' => '待结清/坏账',
+  'unpaid' => '待付款',
   'handover' => '商品交接',
   'order_filter' => '订单漏斗',
   'out_for_delivery' => '骑手已取餐',
