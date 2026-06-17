@@ -443,6 +443,47 @@ class ConversationController extends Controller
         return response()->json($data, 200);
     }
 
+    // 顾客「全部已读」：把本人参与的全部会话(商家+客服)标记已读。
+    // 作用域按本人 UserInfo.id 派生(无越权)；逐会话镜像 messages() 的单会话已读逻辑。
+    public function mark_all_read(Request $request)
+    {
+        $user = UserInfo::where('user_id', $request?->user()?->id)->first();
+        if (!$user) {
+            return response()->json(['conversations_cleared' => 0, 'messages_marked' => 0], 200);
+        }
+
+        $conversations = Conversation::with('last_message')
+            ->where(function ($q) use ($user) {
+                $q->where('sender_id', $user->id)->orWhere('receiver_id', $user->id);
+            })->get();
+
+        $cleared = 0;
+        foreach ($conversations as $conversation) {
+            // 仅当最后一条来自对方时清未读计数(unread_message_count 是单计数器，
+            // 最后一条是顾客自己发的代表对方未读，不能在此清零)
+            $lastmessage = $conversation->last_message;
+            if ($lastmessage && $lastmessage->sender_id != $user->id && $conversation->unread_message_count) {
+                $conversation->unread_message_count = 0;
+                $conversation->save();
+                $cleared++;
+            }
+        }
+
+        $conversationIds = $conversations->pluck('id')->all();
+        $marked = 0;
+        if (count($conversationIds)) {
+            $marked = Message::whereIn('conversation_id', $conversationIds)
+                ->where('sender_id', '!=', $user->id)
+                ->where('is_seen', 0)
+                ->update(['is_seen' => 1]);
+        }
+
+        return response()->json([
+            'conversations_cleared' => $cleared,
+            'messages_marked' => $marked,
+        ], 200);
+    }
+
     public function dm_messages_store(Request $request)
     {
 
