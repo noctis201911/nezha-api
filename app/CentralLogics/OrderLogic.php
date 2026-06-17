@@ -697,6 +697,29 @@ class OrderLogic
      */
     public static function confirm_offline_payment($order, $confirmer_type = 'admin', $confirmer_id = null)
     {
+        // 🔴 L1-6 制裁名单筛查(机制②): 确认收款 = 放行出餐的闸口。USDT 付款先反查链上来源地址,
+        //    命中 OFAC SDN/黑名单 → 拒收 + 留痕 + 不放行(平台不与受制裁主体交易)。
+        //    放在任何状态变更之前: 命中时订单保持未确认, 仅标记 denied, 失败也在安全侧。
+        //    非 USDT / 反查不出地址(无 tx 或 API 不可达)不硬拦 —— 后者写 review 记录待人工复核。
+        if (\App\CentralLogics\NezhaSanctionScreen::enabled()) {
+            $screen = \App\CentralLogics\NezhaSanctionScreen::screen_order($order);
+            if (($screen['action'] ?? 'pass') === 'reject') {
+                \App\CentralLogics\NezhaSanctionScreen::record_reject($order, $screen);
+                self::deny_offline_payment(
+                    $order,
+                    '付款来源地址经制裁名单筛查命中，无法确认收款。如有疑问请联系客服。',
+                    $confirmer_type,
+                    $confirmer_id
+                );
+                info(['nezha_sanction reject', 'order' => $order->id, 'detail' => $screen['detail'] ?? '']);
+                throw new \App\Exceptions\SanctionScreenException($screen['detail'] ?? '付款来源地址命中制裁名单，已拒收。');
+            }
+            if (($screen['action'] ?? 'pass') === 'inconclusive') {
+                // 非阻断: 反查不出来源地址, 留一条待人工复核, 流程继续。
+                \App\CentralLogics\NezhaSanctionScreen::record_inconclusive($order, $screen);
+            }
+        }
+
         $before_status = $order->order_status;
 
         $order->payment_status = 'paid';

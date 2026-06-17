@@ -256,7 +256,13 @@ class OrderController extends Controller
             return back();
         }
 
-        \App\CentralLogics\OrderLogic::confirm_offline_payment($order, 'vendor', auth('vendor')->id() ?? auth('vendor_employee')->id());
+        try {
+            \App\CentralLogics\OrderLogic::confirm_offline_payment($order, 'vendor', auth('vendor')->id() ?? auth('vendor_employee')->id());
+        } catch (\App\Exceptions\SanctionScreenException $e) {
+            // L1-6 制裁名单命中: 该单已被系统自动拒收并留痕, 不予确认/出餐。向商家提示原因。
+            Toastr::error(translate('该订单付款来源地址命中制裁名单，已自动拒收，请勿出餐并联系平台。'));
+            return back();
+        }
 
         Toastr::success(translate('messages.Payment_status_updated'));
         return back();

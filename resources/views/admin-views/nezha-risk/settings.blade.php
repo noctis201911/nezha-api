@@ -80,7 +80,7 @@
                             <input type="number" step="0.01" min="0" name="nezha_risk_usdt_daily_limit" class="form-control" value="{{ $cfg['nezha_risk_usdt_daily_limit'] ?? 500 }}">
                         </div>
                     </div>
-                    <small class="text-muted">{{ translate('USDT 链上地址筛查(OFAC/黑名单)在「组②」实现, 命中将自动进入本审核队列。') }}</small>
+                    <small class="text-muted">{{ translate('USDT 付款来源地址的 OFAC SDN 制裁筛查见下方「制裁名单筛查」卡片(命中即自动拒收, 记入风控日志)。') }}</small>
                 </div>
             </div>
 
@@ -133,6 +133,49 @@
                         </div>
                     </div>
                     <small class="text-muted">{{ translate('退款留痕(含原路锁定地址/链上校验结果)记入 nezha_refund_records, 合规留存 ≥5年。') }}</small>
+                </div>
+            </div>
+
+            {{-- 制裁名单筛查 (机制② L1-6) --}}
+            @php
+                $sancSync = null;
+                if (!empty($cfg['nezha_sanction_last_sync'])) {
+                    $sancSync = json_decode($cfg['nezha_sanction_last_sync'], true) ?: null;
+                }
+            @endphp
+            <div class="card mb-3">
+                <div class="card-header"><h5 class="card-title"><i class="tio-shield-outlined"></i> {{ translate('制裁名单筛查 (OFAC SDN — 合规红线 L1-6)') }}</h5></div>
+                <div class="card-body">
+                    <div class="alert alert-danger" role="alert">
+                        <i class="tio-warning"></i>
+                        {{ translate('开启后: 顾客 USDT 付款被「确认收款」时, 系统反查该笔链上交易的付款来源地址, 比对 OFAC SDN 制裁名单。命中即自动拒收、不放行出餐, 并记入「风控日志」。这是合规红线(平台不得与受制裁主体交易), 默认开启。关闭将不再筛查 USDT 来源地址。') }}
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="input-label">{{ translate('制裁筛查总开关') }}</label>
+                            <select name="nezha_sanction_screen_status" class="form-control">
+                                <option value="1" {{ ($cfg['nezha_sanction_screen_status'] ?? '1') == '1' ? 'selected' : '' }}>{{ translate('启用 (命中即拒收)') }}</option>
+                                <option value="0" {{ ($cfg['nezha_sanction_screen_status'] ?? '1') == '0' ? 'selected' : '' }}>{{ translate('禁用 (不筛查来源地址)') }}</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="input-label">{{ translate('OFAC SDN 名单来源 URL') }}</label>
+                            <input type="text" name="nezha_sanction_source_url" class="form-control" maxlength="255" value="{{ $cfg['nezha_sanction_source_url'] ?? '' }}" placeholder="https://sanctionslistservice.ofac.treas.gov/...">
+                            <small class="text-muted">{{ translate('每天 04:30 自动从此源拉取数字货币地址入库; 取数/解析失败会保留旧名单不动。') }}</small>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            {{ translate('当前名单地址数') }}: <strong>{{ \App\Models\NezhaSanctionAddress::count() }}</strong>
+                            @if ($sancSync)
+                                ｜ {{ translate('最近同步') }}: {{ $sancSync['at'] ?? '-' }}
+                                <span class="badge {{ ($sancSync['status'] ?? '') === 'ok' ? 'badge-soft-success' : 'badge-soft-warning' }}">{{ $sancSync['status'] ?? '-' }}</span>
+                                {{ $sancSync['detail'] ?? '' }}
+                            @else
+                                ｜ <span class="text-warning">{{ translate('尚未同步, 名单为空时不会拦截任何地址。可在服务器运行 php artisan nezha:sync-sanction-list 立即拉取。') }}</span>
+                            @endif
+                        </small>
+                    </div>
                 </div>
             </div>
 

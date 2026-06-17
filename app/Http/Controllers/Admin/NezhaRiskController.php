@@ -38,6 +38,10 @@ class NezhaRiskController extends Controller
         'nezha_refund_usdt_verify_status'   => '1',
         'nezha_refund_bscscan_api_key'      => '',
         'nezha_refund_trongrid_api_key'     => '',
+        // 制裁筛查 (机制② L1-6) — USDT 付款来源地址比对 OFAC SDN, 命中即拒收
+        'nezha_sanction_screen_status'      => '1',
+        'nezha_sanction_source_url'         => 'https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.XML',
+        'nezha_sanction_last_sync'          => '',
     ];
 
     /** 人工审核队列 */
@@ -59,7 +63,10 @@ class NezhaRiskController extends Controller
     {
         $status = $request->get('status', 'all');
         $query = NezhaRiskRecord::with(['user', 'restaurant'])->orderBy('id', 'desc');
-        if ($status !== 'all') {
+        if ($status === 'sanction') {
+            // 制裁筛查相关记录(命中 sanction / 未决 sanction_inconclusive)
+            $query->where('hit_rules', 'like', '%sanction%');
+        } elseif ($status !== 'all') {
             $query->where('status', $status);
         }
         $records = $query->paginate(30)->appends(['status' => $status]);

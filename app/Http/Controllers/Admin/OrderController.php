@@ -1533,7 +1533,13 @@ class OrderController extends Controller
         $order = Order::findOrFail($request->id);
         if ($request->verify == 'yes') {
             // 哪吒: 确认收款动作统一走 OrderLogic, 与商家自营确认共用同一实现(避免逻辑漂移)。
-            \App\CentralLogics\OrderLogic::confirm_offline_payment($order, 'admin', auth('admin')->id());
+            try {
+                \App\CentralLogics\OrderLogic::confirm_offline_payment($order, 'admin', auth('admin')->id());
+            } catch (\App\Exceptions\SanctionScreenException $e) {
+                // L1-6 制裁名单命中: 已自动拒收+留痕, 不放行出餐。向管理员展示拒收原因(可在「风控日志」查详情)。
+                Toastr::error(translate('付款来源地址命中制裁名单，已自动拒收(详见 风控中心→风控日志)。'));
+                return back();
+            }
         } elseif ($request->verify == 'switched_to_cod') {
             $order->offline_payments()->update([
                 'status' => 'verified'

@@ -100,6 +100,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // 每天 09:00 检查商家预存佣金, 低于商家自设阈值(或为负)发提醒邮件(商家可在商家后台自助开关/设阈值/设邮箱)。
         $schedule->command('nezha:check-deposit-alerts')->dailyAt('09:00')->withoutOverlapping();
+
+        // 🔴 L1-6 制裁名单筛查: 每天 04:30 从 OFAC 公开 SDN 名单拉「数字货币地址」入本地表(nezha_sanction_addresses),
+        //    供 USDT 付款来源地址实时比对。带护栏: 取数/解析失败则保留旧名单不动(失败安全), 状态写 nezha_sanction_last_sync。
+        $schedule->command('nezha:sync-sanction-list')->dailyAt('04:30')->withoutOverlapping();
     })
 
     ->create();

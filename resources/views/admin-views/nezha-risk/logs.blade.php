@@ -11,7 +11,7 @@
         </div>
 
         @php
-            $statuses = ['all' => '全部', 'pending' => '待审', 'approved' => '已放行', 'rejected' => '已清退', 'cleared' => '已退款', 'auto' => '自动拒单'];
+            $statuses = ['all' => '全部', 'sanction' => '制裁命中', 'pending' => '待审', 'approved' => '已放行', 'rejected' => '已清退', 'cleared' => '已退款', 'auto' => '自动拒单'];
             $statusBadge = [
                 'pending'  => 'badge-soft-warning',
                 'approved' => 'badge-soft-success',
