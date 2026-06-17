@@ -92,6 +92,8 @@ class OrderController extends Controller
             ], 404);
         }
         $order['saver_delivery_time'] = $this->get_saver_delivery_time($order);
+        // 哪吒B方案: 商家出餐(handover)后向顾客暴露取餐号(复用订单otp; 顾客下单时已经 OrderVerificationMail 收到该码作配送验证码, 非新增泄露)。出餐前为空字符串, 前端显示"等待商家出餐"。供顾客自取或交给 Yandex 骑手到店向商家核对。
+        $order['pickup_code'] = in_array($order->order_status, ['handover', 'picked_up', 'delivered'], true) ? (string) $order->otp : '';
         return response()->json($order, 200);
     }
 
