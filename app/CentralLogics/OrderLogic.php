@@ -873,11 +873,14 @@ class OrderLogic
     private static function notify_offline_payment_result($order, $status)
     {
         $order = Order::findOrFail($order->id);
+        // 哪吒(#5): 通知标题按顾客语言本地化(与 sentUserNotification 一致); 否则 translate() 用 app locale(确认时多为 en)把英文标题烘焙进推送/站内信.
+        $cust_lang = $order->customer ? ($order?->customer?->current_language_key ?: 'en') : 'en';
+        $isZh = $cust_lang && stripos($cust_lang, 'zh') === 0;
         if ($status == 'approved') {
             Helpers::send_order_notification($order);
 
             $notification_text  = 'offline_verified';
-            $notification_title = translate('messages.Your_Offline_payment_was_approved');
+            $notification_title = $isZh ? '收款已确认' : translate('messages.Your_Offline_payment_was_approved');
             $mail_sattus        = Helpers::get_mail_status('offline_payment_approve_mail_status_user');
             $mail_sattus_type   = 'approved';
             $notification_status = Helpers::getNotificationStatusData('customer', 'customer_offline_payment_approve');
@@ -889,7 +892,7 @@ class OrderLogic
             }
         } else {
             $notification_text  = 'offline_denied';
-            $notification_title = translate('messages.Your_Offline_payment_was_rejected');
+            $notification_title = $isZh ? '收款未通过' : translate('messages.Your_Offline_payment_was_rejected');
             $mail_sattus_type   = 'denied';
             $mail_sattus        = Helpers::get_mail_status('offline_payment_deny_mail_status_user');
             $notification_status = Helpers::getNotificationStatusData('customer', 'customer_offline_payment_deny');
