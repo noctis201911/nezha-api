@@ -101,6 +101,18 @@
             </div>
         </div>
     </div>
+    <!-- 哪吒: 新订单非阻塞提示条 (响一次不反复弹窗) -->
+    <div id="nz-new-order-toast" style="display:none;position:fixed;right:20px;bottom:20px;z-index:100000;background:#fff;border:1px solid #f0f0f0;border-left:4px solid #C4193E;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.15);padding:14px 16px;min-width:248px;max-width:320px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+            <div style="font-size:22px;line-height:1;">&#128276;</div>
+            <div style="flex:1;">
+                <div style="font-weight:600;color:#1f1f1f;font-size:15px;margin-bottom:2px;"><span id="nz-new-order-count">0</span> 个新订单待处理</div>
+                <div style="color:#8a8a8a;font-size:12px;">点「立即接单」直接进待处理列表</div>
+            </div>
+            <button type="button" id="nz-new-order-close" aria-label="关闭" style="border:none;background:none;color:#bbb;font-size:20px;line-height:1;cursor:pointer;padding:0;">&times;</button>
+        </div>
+        <button type="button" id="nz-new-order-go" style="margin-top:10px;width:100%;background:#C4193E;color:#fff;border:none;border-radius:8px;padding:9px 0;font-size:14px;font-weight:600;cursor:pointer;">立即接单</button>
+    </div>
     <div class="modal fade" id="popup-modal-msg">
         <div class="modal-dialog modal-dialog-centered" role="document">
             <div class="modal-content">
@@ -530,7 +542,7 @@
     let audio = document.getElementById("myAudio");
 
     function playAudio() {
-        audio.play();
+        try { var p = audio.play(); if (p && p.catch) { p.catch(function(){}); } } catch(e){}
     }
 
     function pauseAudio() {
@@ -850,26 +862,67 @@
     @endif
 
     @if(\App\CentralLogics\Helpers::employee_module_permission_check('order') && $order_notification_type == 'manual')
-        setInterval(function () {
-            $.get({
-                url: '{{route('vendor.get-restaurant-data')}}',
-                dataType: 'json',
-                success: function (response) {
-                    let data = response.data;
-                    if (data.new_pending_order > 0) {
-                        order_type = 'pending';
-                        playAudio();
-                        $('#popup-modal').appendTo("body").modal('show');
+        (function(){
+            var SEEN_KEY = 'nz_seen_order_ids_v1';
+            var toast    = document.getElementById('nz-new-order-toast');
+            var countEl  = document.getElementById('nz-new-order-count');
+            var goBtn    = document.getElementById('nz-new-order-go');
+            var closeBtn = document.getElementById('nz-new-order-close');
+            var pendingListUrl = '{{url('/')}}/restaurant-panel/order/list/pending';
+            var dismissed = false;
+            var memSeen = new Set();
+
+            function loadSeen(){
+                try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); }
+                catch(e){ return memSeen; }
+            }
+            function saveSeen(set){
+                memSeen = set;
+                try {
+                    var arr = Array.from(set);
+                    if (arr.length > 200) { arr = arr.slice(arr.length - 200); }
+                    localStorage.setItem(SEEN_KEY, JSON.stringify(arr));
+                } catch(e){}
+            }
+            function showToast(count){
+                if (countEl) { countEl.textContent = count; }
+                if (toast) { toast.style.display = 'block'; }
+            }
+            function hideToast(){
+                if (toast) { toast.style.display = 'none'; }
+            }
+            if (goBtn) { goBtn.addEventListener('click', function(){ location.href = pendingListUrl; }); }
+            if (closeBtn) { closeBtn.addEventListener('click', function(){ dismissed = true; hideToast(); }); }
+
+            function poll(){
+                $.get({
+                    url: '{{route('vendor.get-restaurant-data')}}',
+                    dataType: 'json',
+                    success: function (response) {
+                        var data = response.data || {};
+                        var ids = [].concat(data.new_pending_order_ids || [], data.new_confirmed_order_ids || []).map(String);
+                        var total = (data.new_pending_order || 0) + (data.new_confirmed_order || 0);
+
+                        if (total === 0) { hideToast(); dismissed = false; return; }
+
+                        var seen = loadSeen();
+                        var freshIds = ids.filter(function(id){ return !seen.has(id); });
+
+                        if (freshIds.length > 0) {
+                            playAudio();
+                            dismissed = false;
+                            freshIds.forEach(function(id){ seen.add(id); });
+                            saveSeen(seen);
+                            showToast(total);
+                        } else if (!dismissed) {
+                            showToast(total);
+                        }
                     }
-                    else if(data.new_confirmed_order > 0)
-                    {
-                        order_type = 'confirmed';
-                        playAudio();
-                        $('#popup-modal').appendTo("body").modal('show');
-                    }
-                },
-            });
-        }, 10000);
+                });
+            }
+            poll();
+            setInterval(poll, 6000);
+        })();
         @endif
 
         $(document).on('click', '.check-order', function () {

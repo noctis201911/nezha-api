@@ -97,12 +97,14 @@ class DashboardController extends Controller
         {
             $new_pending_order = $new_pending_order->where('order_type', 'take_away');
         }
-        $new_pending_order = $new_pending_order->count();
-        $new_confirmed_order = DB::table('orders')->where(['checked' => 0])->where('restaurant_id', $restaurant?->id)->whereIn('order_status',['confirmed', 'accepted'])->whereNotNull('confirmed')->count();
+        $new_pending_order_ids = $new_pending_order->pluck('id')->values();
+        $new_pending_order = $new_pending_order_ids->count();
+        $new_confirmed_order_ids = DB::table('orders')->where(['checked' => 0])->where('restaurant_id', $restaurant?->id)->whereIn('order_status',['confirmed', 'accepted'])->whereNotNull('confirmed')->pluck('id')->values();
+        $new_confirmed_order = $new_confirmed_order_ids->count();
 
         return response()->json([
             'success' => 1,
-            'data' => ['new_pending_order' => $new_pending_order, 'new_confirmed_order' => $new_confirmed_order]
+            'data' => ['new_pending_order' => $new_pending_order, 'new_confirmed_order' => $new_confirmed_order, 'new_pending_order_ids' => $new_pending_order_ids, 'new_confirmed_order_ids' => $new_confirmed_order_ids]
         ]);
     }
 
