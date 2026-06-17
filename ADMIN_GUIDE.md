@@ -484,6 +484,19 @@
 - 商家把某单推进状态（接单/出餐），已授权的顾客手机应收到通知。
 - 后端发送逻辑在 `app/CentralLogics/Helpers.php::sendNotificationToHttp`（FCM HTTP v1，OAuth2 服务账号鉴权）。
 
+### 9.6 推送文案（notification_messages 表 / 2026-06-17 修复并补齐）
+
+顾客端每次订单状态变化（下单 / 接单 / 备餐 / **出餐** / 完成 / 取消 / 离线付款确认或拒收 / 退款）要推给顾客的**文字内容**，存在数据库 `notification_messages` 表（`user_type='user'`），多语言译文放 `translations` 表。**这跟 9.1～9.5 的 FCM「发送通道」是两回事**：通道是「怎么发」，本表是「发什么字」。两者缺一不可。
+
+- 🔴 **此表为空 = 所有状态推送静默失效**（2026-06-17 修复）：表曾被导库 / 迁移洗空过一次，导致 `Helpers::order_status_update_message()` 取不到文案返回 null，`sentUserNotification()` 里的 `if ($value && $user_fcm)` 不成立 → **FCM 推送和站内信都不发**。商家点「出餐」顾客端零提醒，根因就在这里（不是通道坏了）。
+- **怎么补 / 改文案（两条路）**：
+  - ① **后台页**（推荐用于日常改文案）：后台 →「通知」→「Push Notification Messages」（路由 `notification-messages`），按 key 填，含语言 tab，保存即 `firstOrNew` 落库。
+  - ② **一键补默认值**（表被洗空时重建，**推荐用于灾后恢复**）：`php artisan db:seed --class=NezhaUserNotificationMessageSeeder`（幂等，可反复跑，不会重复插）。seeder 在 `database/seeders/`，含全部订单状态的中英文默认文案。
+- 🔴 **locale 关键坑（务必知道）**：推送查找文案用的是**顾客的 `current_language_key`**，本项目真实顾客是 `en` 与 `zh-CN`（**不是**后台系统语言码 `zh`）。所以：基础 `message` 列存**中文兜底**（覆盖 zh-CN 顾客及任何没对上的语言），译文按 `en` / `zh-CN` 存。**后台语言 tab 只有 `zh`，单靠它填的译文 zh-CN 顾客匹配不到**，会落回中文兜底列（结果仍是中文，但要明白这层机制——别奇怪「我在 zh tab 改了，zh-CN 顾客怎么没变」）。要改 zh-CN 顾客看到的中文，请改**基础/default 那一栏**（= `message` 列）或重跑 seeder。
+- **出餐（handover）文案约定**：推送里**不塞取餐号**——取餐号顾客在 App「消息中心」查（出餐后 track 接口才返回，见 commit bdc1b02）。推送只负责「**提醒去看**」，文案如「您在「{restaurantName}」的订单已出餐，请在 App 查看取餐号并尽快前往取餐。」
+- **2026-06-17 已补的 key**（`user_type='user'`，`status=1`，各含 `zh` / `zh-CN` / `en`）：`order_pending_message`、`order_confirmation_msg`、`order_processing_message`、`order_handover_message`（出餐）、`out_for_delivery_message`、`order_delivered_message`、`delivery_boy_delivered_message`、`delivery_boy_assign_message`、`order_cancled_message`、`order_refunded_message`、`refund_request_canceled`、`offline_order_accept_message`、`offline_order_deny_message`。
+- **文案可用占位符**（`Helpers::text_variable_data_format`）：`{restaurantName}`、`{orderId}`、`{userName}`、`{otp}`（= 取餐号）、`{tokenNumber}`、`{tableNumber}`。⚠️ 值为空时不替换、会原样显示，别用没传值的占位符。
+
 ## 10. 佣金充值管理（商家预存佣金）
 
 **入口**：后台左侧栏「交易管理」区 →「佣金充值管理」（`/admin/nezha-deposit`）。
