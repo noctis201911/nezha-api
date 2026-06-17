@@ -221,6 +221,26 @@ class Helpers
     {
         $storage = [];
         if ($multi_data == true) {
+            // --- N+1 fix (perf): batch eager-load relations + prebuild id->model maps so the loop stops firing per-item queries ---
+            $__nz_items = $data instanceof \Illuminate\Database\Eloquent\Collection ? $data : (is_iterable($data) ? \Illuminate\Database\Eloquent\Collection::make($data) : null);
+            $__nz_catMap = collect(); $__nz_addonMap = collect(); $__nz_taxMap = collect(); $__nz_eager = false;
+            if ($__nz_items && $__nz_items->isNotEmpty() && $__nz_items->first() instanceof \Illuminate\Database\Eloquent\Model) {
+                $__nz_eager = true;
+                $__nz_items->loadMissing([
+                    'restaurant.discount', 'restaurant.cuisine', 'restaurant.restaurant_config', 'restaurant.restaurant_sub',
+                    'tags', 'nutritions', 'allergies', 'taxVats', 'newVariations', 'newVariationOptions',
+                    'rating' => function ($q) { $q->where('status', 1); },
+                ]);
+                $__nz_catIds = []; $__nz_addonIds = []; $__nz_taxIds = [];
+                foreach ($__nz_items as $__nz_it) {
+                    foreach (json_decode($__nz_it?->category_ids) ?: [] as $__nz_c) { if (isset($__nz_c->id)) $__nz_catIds[] = $__nz_c->id; }
+                    foreach (json_decode($__nz_it['add_ons'] ?? '[]') ?: [] as $__nz_a) { $__nz_addonIds[] = $__nz_a; }
+                    foreach ($__nz_it->taxVats as $__nz_tv) { $__nz_taxIds[] = $__nz_tv->tax_id; }
+                }
+                if ($__nz_catIds) { $__nz_catMap = Category::whereIn('id', array_unique($__nz_catIds))->get()->keyBy('id'); }
+                if ($__nz_addonIds) { $__nz_addonMap = AddOn::whereIn('id', array_unique($__nz_addonIds))->active()->get()->keyBy('id'); }
+                if ($__nz_taxIds) { $__nz_taxMap = \Modules\TaxModule\Entities\Tax::whereIn('id', array_unique($__nz_taxIds))->get(['id', 'name', 'tax_rate'])->keyBy('id'); }
+            }
             foreach ($data as $item) {
                 $variations = [];
                 if ($item->title) {
@@ -247,7 +267,7 @@ class Helpers
                 $item['recommended'] = (int) $item->recommended;
                 $categories = [];
                 foreach (json_decode($item?->category_ids) as $value) {
-                    $categories[] = ['id' => (string) $value->id, 'position' => $value->position ?? 1, 'category_name' => Category::find($value->id)?->name];
+                    $categories[] = ['id' => (string) $value->id, 'position' => $value->position ?? 1, 'category_name' => ($__nz_catMap->get($value->id) ?? Category::find($value->id))?->name];
                 }
                 $item['category_ids'] = $categories;
                 if ($maxDiscount) {
@@ -256,7 +276,7 @@ class Helpers
                     $item['discount_type'] = $discount_data['original_discount_type'];
                 }
 
-                $item['add_ons'] = self::addon_data_formatting(AddOn::whereIn('id', json_decode($item['add_ons'] ?? '[]'))->active()->get(), true, $trans, $local);
+                $item['add_ons'] = self::addon_data_formatting(($__nz_eager ? $__nz_addonMap->only(json_decode($item['add_ons'] ?? '[]') ?: [])->values() : AddOn::whereIn('id', json_decode($item['add_ons'] ?? '[]'))->active()->get()), true, $trans, $local);
                 $item['tags'] = $item->tags;
                 $item['variations'] = json_decode($item['variations'], true);
                 $item['restaurant_name'] = $item->restaurant->name;
@@ -268,7 +288,7 @@ class Helpers
                 $item['schedule_order'] = $item->restaurant->schedule_order;
                 $item['tax'] = 0;
                 try {
-                    $reviewsInfo = $item->rating()->where('status', 1)->first();
+                    $reviewsInfo = $item->relationLoaded('rating') ? $item->getRelation('rating')->first() : $item->rating()->where('status', 1)->first();
                 } catch (\Exception $e) {
                     $reviewsInfo = null;
                 }
@@ -283,15 +303,15 @@ class Helpers
 
                 $item['free_delivery'] = (int) $item->restaurant->free_delivery ?? 0;
                 $item['halal_tag_status'] = (int) $item->restaurant->restaurant_config?->halal_tag_status ?? 0;
-                $item['nutritions_name'] = $item?->nutritions ? Nutrition::whereIn('id', $item?->nutritions->pluck('id'))->pluck('nutrition') : null;
-                $item['allergies_name'] = $item?->allergies ? Allergy::whereIn('id', $item?->allergies->pluck('id'))->pluck('allergy') : null;
+                $item['nutritions_name'] = $item?->nutritions ? $item->nutritions->pluck('nutrition')->values() : null;
+                $item['allergies_name'] = $item?->allergies ? $item->allergies->pluck('allergy')->values() : null;
 
                 if (self::getDeliveryFee($item->restaurant) == 'free_delivery') {
                     $item['free_delivery'] = (int) 1;
                 }
 
                 $cuisine = [];
-                $cui = $item->restaurant->load('cuisine');
+                $cui = $item->restaurant->relationLoaded('cuisine') ? $item->restaurant : $item->restaurant->load('cuisine');
                 if (isset($cui->cuisine)) {
                     foreach ($cui->cuisine as $cu) {
                         $cuisine[] = ['id' => (int) $cu->id, 'name' => $cu->name, 'image' => $cu->image];
@@ -300,9 +320,9 @@ class Helpers
 
                 $item['cuisines'] = $cuisine;
 
-                $item['tax_data'] = $item?->taxVats ? $item?->taxVats()->pluck('tax_id')->toArray() : [];
+                $item['tax_data'] = $item?->taxVats ? ($item->relationLoaded('taxVats') ? $item->taxVats->pluck('tax_id')->toArray() : $item?->taxVats()->pluck('tax_id')->toArray()) : [];
 
-                $item['tax_data'] = \Modules\TaxModule\Entities\Tax::whereIn('id', $item['tax_data'])->get(['id', 'name', 'tax_rate']);
+                $item['tax_data'] = $__nz_eager ? $__nz_taxMap->only($item['tax_data'])->values() : \Modules\TaxModule\Entities\Tax::whereIn('id', $item['tax_data'])->get(['id', 'name', 'tax_rate']);
                 unset($item['taxVats']);
 
                 unset($item['restaurant']);
