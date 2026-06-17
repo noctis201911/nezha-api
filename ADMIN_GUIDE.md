@@ -512,6 +512,7 @@
 顾客端每次订单状态变化（下单 / 接单 / 备餐 / **出餐** / 完成 / 取消 / 离线付款确认或拒收 / 退款）要推给顾客的**文字内容**，存在数据库 `notification_messages` 表（`user_type='user'`），多语言译文放 `translations` 表。**这跟 9.1～9.5 的 FCM「发送通道」是两回事**：通道是「怎么发」，本表是「发什么字」。两者缺一不可。
 
 - 🔴 **此表为空 = 所有状态推送静默失效**（2026-06-17 修复）：表曾被导库 / 迁移洗空过一次，导致 `Helpers::order_status_update_message()` 取不到文案返回 null，`sentUserNotification()` 里的 `if ($value && $user_fcm)` 不成立 → **FCM 推送和站内信都不发**。商家点「出餐」顾客端零提醒，根因就在这里（不是通道坏了）。
+- 🟢 **站内信不再依赖推送授权 + 标题本地化（2026-06-17 二次修复, commit 39ae06a）**：原 `sentUserNotification()` 把「FCM 推送」和「站内信入库」一起关在 `if ($value && $user_fcm)` 里。但 **iOS Safari/Chrome 不支持 Web Push**，iOS 顾客拿不到 FCM token，于是出餐后连消息中心都没有记录、零提醒。现已拆开：**FCM 推送只在有 token 时发；站内信对所有登录顾客一律入库**（游客 `is_guest` 不入），保证 iOS / 没开推送权限的顾客也能在 App「消息中心」看到出餐等提醒。同时修了**推送标题**——原 `translate('Order_Notification')` 无中文译文恒回退英文「Order Notification」并烘焙进推送+站内信，现按顾客 `current_language_key` 直接给「订单通知」/「退款被拒」（前台 toast 与后台 SW 都从 `data.title` 取，一处修两端生效）。
 - **怎么补 / 改文案（两条路）**：
   - ① **后台页**（推荐用于日常改文案）：后台 →「通知」→「Push Notification Messages」（路由 `notification-messages`），按 key 填，含语言 tab，保存即 `firstOrNew` 落库。
   - ② **一键补默认值**（表被洗空时重建，**推荐用于灾后恢复**）：`php artisan db:seed --class=NezhaUserNotificationMessageSeeder`（幂等，可反复跑，不会重复插）。seeder 在 `database/seeders/`，含全部订单状态的中英文默认文案。
