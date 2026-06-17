@@ -1970,15 +1970,28 @@ class Helpers
     {
         $status = ($order->order_status == 'delivered' && $order->delivery_man) ? 'delivery_boy_delivered' : $order->order_status;
         $user_fcm = $order->is_guest ? $order?->guest?->fcm_token : $order?->customer?->cm_firebase_token;
-        $value = self::getOrderPushNotificationMessage($order, $status, 'user', $order->customer ? $order?->customer?->current_language_key : 'en');
+        $lang = $order->customer ? ($order?->customer?->current_language_key ?: 'en') : 'en';
+        $value = self::getOrderPushNotificationMessage($order, $status, 'user', $lang);
 
-        // $notificationKey = $order->order_status == 'refund_request_canceled' ? 'customer_refund_request_rejaction'  : 'customer_order_notification';
-        // $customer_push_notification_status = Helpers::getNotificationStatusData('customer', $notificationKey);
-        if ($value && $user_fcm) {
-            $title = $order->order_status == 'refund_request_canceled' ? translate('messages.Refund_Rejected') : translate('Order_Notification');
+        if ($value) {
+            // 标题本地化: translate('Order_Notification') 无 zh 译文会回退成英文 "Order Notification" 并烘焙进推送+站内信,
+            // 故按顾客 current_language_key 直接给中文标题, 与前端消息中心(按 type 显示)保持一致
+            $isZh = $lang && stripos($lang, 'zh') === 0;
+            if ($order->order_status == 'refund_request_canceled') {
+                $title = $isZh ? '退款被拒' : 'Refund Rejected';
+            } else {
+                $title = $isZh ? '订单通知' : 'Order Notification';
+            }
             $data = self::makeDataForPushNotification(title: $title, message: $value, orderId: $order->id, type: 'order_status', orderStatus: $order->order_status);
-            self::send_push_notif_to_device($user_fcm, $data);
-            self::insertDataOnNotificationTable($data, 'user', $order->user_id);
+
+            // 实际 FCM 推送只在有 token 时发 (iOS Safari/Chrome 不支持 Web Push, 多数顾客无 token)
+            if ($user_fcm) {
+                self::send_push_notif_to_device($user_fcm, $data);
+            }
+            // 站内信不再依赖 token: 登录顾客一律入库, 保证 iOS/未授权推送的顾客出餐后也能在消息中心看到提醒
+            if (!$order->is_guest && $order->user_id) {
+                self::insertDataOnNotificationTable($data, 'user', $order->user_id);
+            }
         }
 
         return true;
