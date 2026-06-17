@@ -535,6 +535,18 @@
 
 - **最快通路 = Telegram**：哪吒已内置 `sendTelegramOrderAlert()`，新单（pending / confirmed）即推一张中文卡片（单号 / 类型 / 合计 / 商品 / 时间），独立于上面 FCM 那些门槛。只要把每家店的 `telegram_chat_id` 填上即生效，**无需改代码**。
 
+### 9.8 启用商家 Telegram 接单提醒（操作步骤）
+
+让某家店在手机上即时收到新订单（最稳的商家提醒渠道，独立于网页 / App 推送）：
+1. 让商家用手机 Telegram 搜索并打开机器人 **&#64;Nz_order_bot**，点「开始 / Start」，随便发一句（如「你好」）。
+2. 后台进该餐厅：左侧「餐厅」→ 打开餐厅 →「**设置**」标签 → 找到「**Telegram 接单提醒**」卡片。
+3. 点「**查看最近联系机器人的会话**」→ 列出刚给机器人发过消息的会话及其 chat id → 点对应那条的「**填入**」（或手动把 chat id 粘进输入框）。
+4. 点「保存」。完成。之后该店每来一笔新订单（pending / 确认），机器人私聊推一张卡片：单号 / 类型 / 合计 / 商品 / 时间。
+- 留空 = 不发；每笔订单只推一次（已去重）。
+- 群发：把机器人拉进店员群、填该群的 chat id（负数）即可，全店都能收到。
+- 目前仅平台运营在后台设置；商家端自助绑定后续可做。
+- 实现：`Helpers::sendTelegramOrderAlert()`（发送）+ 后台「设置」页卡片（`admin.restaurant.update-telegram` / `admin.restaurant.telegram-recent-chats`）+ 字段 `restaurants.telegram_chat_id`。
+
 ## 10. 佣金充值管理（商家预存佣金）
 
 **入口**：后台左侧栏「交易管理」区 →「佣金充值管理」（`/admin/nezha-deposit`）。

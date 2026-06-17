@@ -317,6 +317,9 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
                 Route::post('update-rmb-rate', [VendorController::class, 'updateRmbRate'])->name('update-rmb-rate');
                 Route::post('discount/{restaurant}', [VendorController::class, 'discountSetup'])->name('discount');
                 Route::post('update-settings/{restaurant}', [VendorController::class, 'updateRestaurantSettings'])->name('update-settings');
+                // 哪吒外卖: Telegram 接单提醒——设置商家 chat_id + 查最近联系机器人的会话
+                Route::post('update-telegram/{restaurant}', [VendorController::class, 'updateTelegramChatId'])->name('update-telegram');
+                Route::get('telegram-recent-chats', [VendorController::class, 'telegramRecentChats'])->name('telegram-recent-chats');
                 Route::delete('clear-discount/{restaurant}', [VendorController::class, 'cleardiscount'])->name('clear-discount');
                 Route::get('view/{restaurant}/{tab?}/{sub_tab?}', [VendorController::class, 'view'])->name('view');
                 Route::get('pending/list', [VendorController::class, 'pending'])->name('pending');

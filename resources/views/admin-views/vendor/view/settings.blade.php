@@ -29,7 +29,65 @@
                 @include('admin-views.vendor.view.partials._header', ['restaurant' => $restaurant])
             </div>
         </div>
+                {{-- 哪吒外卖: Telegram 接单提醒设置 --}}
         <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <span class="card-header-icon"><i class="tio-chat"></i></span> &nbsp;
+                    <span>Telegram 接单提醒</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">商家在手机 Telegram 关注机器人 <b>&#64;Nz_order_bot</b> 后，把它的 chat id 填到下面，新订单会即时推送到商家手机（独立于 App 推送，最稳）。留空则不发送。</p>
+                <form action="{{ route('admin.restaurant.update-telegram', [$restaurant->id]) }}" method="post" class="row g-2 align-items-end">
+                    @csrf
+                    <div class="col-sm-6 col-md-5">
+                        <label class="input-label">Telegram chat id</label>
+                        <input type="text" name="telegram_chat_id" class="form-control"
+                               value="{{ $restaurant->telegram_chat_id }}" placeholder="例如 123456789（纯数字，群组可带负号）">
+                    </div>
+                    <div class="col-sm-12 col-md-5">
+                        <button type="submit" class="btn btn-primary">{{ translate('messages.save') }}</button>
+                        <button type="button" class="btn btn-outline-secondary" id="tg-recent-btn">查看最近联系机器人的会话</button>
+                    </div>
+                </form>
+                <div id="tg-recent-box" class="mt-3 small" style="display:none;">
+                    <div class="text-muted mb-1">最近给 <b>&#64;Nz_order_bot</b> 发过消息的会话（点「填入」把 chat id 写进上面输入框）：</div>
+                    <ul id="tg-recent-list" class="list-unstyled mb-0"></ul>
+                </div>
+                <script>
+                    (function () {
+                        var btn = document.getElementById('tg-recent-btn');
+                        if (!btn) return;
+                        btn.addEventListener('click', function () {
+                            var box = document.getElementById('tg-recent-box');
+                            var list = document.getElementById('tg-recent-list');
+                            box.style.display = 'block';
+                            list.innerHTML = '<li class="text-muted">加载中…</li>';
+                            fetch("{{ route('admin.restaurant.telegram-recent-chats') }}", { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                                .then(function (r) { return r.json(); })
+                                .then(function (d) {
+                                    if (!d.ok) { list.innerHTML = '<li class="text-danger">' + (d.msg || '获取失败') + '</li>'; return; }
+                                    if (!d.chats || !d.chats.length) { list.innerHTML = '<li class="text-muted">暂无（让商家先给 &#64;Nz_order_bot 发一条消息，再点此刷新）</li>'; return; }
+                                    list.innerHTML = '';
+                                    d.chats.forEach(function (c) {
+                                        var li = document.createElement('li');
+                                        li.className = 'mb-1';
+                                        var code = document.createElement('code'); code.textContent = c.id;
+                                        var span = document.createElement('span'); span.textContent = ' · ' + (c.name || '') + ' ';
+                                        var a = document.createElement('a'); a.href = 'javascript:'; a.className = 'ml-2'; a.textContent = '填入';
+                                        a.addEventListener('click', function () { document.querySelector('input[name=telegram_chat_id]').value = c.id; });
+                                        li.appendChild(code); li.appendChild(span); li.appendChild(a);
+                                        list.appendChild(li);
+                                    });
+                                })
+                                .catch(function () { list.innerHTML = '<li class="text-danger">网络错误</li>'; });
+                        });
+                    })();
+                </script>
+            </div>
+        </div>
+<div class="card mb-3">
             <div class="card-header">
                 <h5 class="card-title">
                     <span class="card-header-icon"><i class="tio-fastfood"></i></span> &nbsp;

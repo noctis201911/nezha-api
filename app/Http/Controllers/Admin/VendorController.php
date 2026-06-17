@@ -1247,6 +1247,53 @@ class VendorController extends Controller
 
     }
 
+    // 哪吒外卖: 后台为商家设置 Telegram 接单提醒 chat_id (配合 Helpers::sendTelegramOrderAlert)
+    public function updateTelegramChatId(Restaurant $restaurant, Request $request)
+    {
+        $request->validate([
+            'telegram_chat_id' => 'nullable|string|max:64|regex:/^-?\d+$/',
+        ], [
+            'telegram_chat_id.regex' => 'Telegram chat id 应为纯数字(群组可带负号)',
+        ]);
+        $restaurant->telegram_chat_id = $request->filled('telegram_chat_id') ? trim($request->input('telegram_chat_id')) : null;
+        $restaurant->save();
+        Toastr::success('Telegram 接单提醒设置已更新');
+
+        return back();
+    }
+
+    // 哪吒外卖: 读取最近给机器人发过消息的会话(只读,供后台找 chat_id) — getUpdates
+    public function telegramRecentChats(Request $request)
+    {
+        $token = Helpers::get_business_settings('telegram_bot_token', false);
+        if (! $token || ! is_string($token)) {
+            return response()->json(['ok' => false, 'msg' => '平台未配置 Telegram 机器人 token', 'chats' => []]);
+        }
+        $chats = [];
+        try {
+            $ctx = stream_context_create(['http' => ['timeout' => 5]]);
+            $raw = @file_get_contents('https://api.telegram.org/bot' . $token . '/getUpdates', false, $ctx);
+            $upd = json_decode($raw, true);
+            foreach (($upd['result'] ?? []) as $it) {
+                $c = $it['message']['chat'] ?? ($it['channel_post']['chat'] ?? ($it['my_chat_member']['chat'] ?? null));
+                if ($c && isset($c['id'])) {
+                    $name = trim(($c['title'] ?? '') . ' ' . ($c['first_name'] ?? '') . ' ' . ($c['last_name'] ?? ''));
+                    if (! empty($c['username'])) {
+                        $name .= ' (@' . $c['username'] . ')';
+                    }
+                    $chats[(string) $c['id']] = $name !== '' ? $name : ('chat ' . $c['id']);
+                }
+            }
+        } catch (\Throwable $e) {
+        }
+        $list = [];
+        foreach ($chats as $id => $name) {
+            $list[] = ['id' => $id, 'name' => $name];
+        }
+
+        return response()->json(['ok' => true, 'chats' => $list, 'bot' => '@Nz_order_bot']);
+    }
+
     public function updateRestaurantSettings(Restaurant $restaurant, Request $request)
     {
 
