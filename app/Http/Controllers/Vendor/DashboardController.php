@@ -85,26 +85,58 @@ class DashboardController extends Controller
 
     public function restaurant_data()
     {
-        $restaurant =Helpers::get_restaurant_data();
-        $new_pending_order = DB::table('orders')->where(['checked' => 0])->where('restaurant_id', $restaurant?->id)->where('order_status','pending');
+        $restaurant = Helpers::get_restaurant_data();
+        $rid = $restaurant?->id;
 
-        $data =0;
-        if (($restaurant->restaurant_model == 'subscription'  && $restaurant?->restaurant_sub?->self_delivery == 1)  || ($restaurant->restaurant_model == 'commission' &&  $restaurant->self_delivery_system == 1) ){
-        $data =1;
+        $data = 0;
+        if (($restaurant->restaurant_model == 'subscription'  && $restaurant?->restaurant_sub?->self_delivery == 1)  || ($restaurant->restaurant_model == 'commission' &&  $restaurant->self_delivery_system == 1)) {
+            $data = 1;
         }
 
-        if(config('order_confirmation_model') != 'restaurant' && !$data)
-        {
-            $new_pending_order = $new_pending_order->where('order_type', 'take_away');
+        // 哪吒: 横幅计数逐字复刻侧栏徽标口径(_sidebar.blade.php), 只取未读 checked=0, 保证横幅集合 ⊆ 徽标可见集合,
+        // 根除"横幅报数/列表却空"的幽灵单死胡同(原用裸 DB::table 不套 NotDigitalOrder 等作用域)。
+        // 待确认收款(离线已传凭证待核验)
+        $offline_ids = \App\Models\Order::where(['order_status' => 'pending', 'payment_method' => 'offline_payment', 'restaurant_id' => $rid])
+            ->where('checked', 0)
+            ->whereHas('offline_payments', function ($q) { $q->where('status', 'pending'); })
+            ->Notpos()->HasSubscriptionToday()->pluck('id')->values();
+
+        // 待处理
+        $pending_q = \App\Models\Order::where(['order_status' => 'pending', 'restaurant_id' => $rid])
+            ->where('checked', 0)
+            ->Notpos()->NotDigitalOrder()->HasSubscriptionToday()->OrderScheduledIn(30);
+        if (!(config('order_confirmation_model') == 'restaurant' || $data)) {
+            $pending_q = $pending_q->whereIn('order_type', ['take_away', 'dine_in']);
         }
-        $new_pending_order_ids = $new_pending_order->pluck('id')->values();
-        $new_pending_order = $new_pending_order_ids->count();
-        $new_confirmed_order_ids = DB::table('orders')->where(['checked' => 0])->where('restaurant_id', $restaurant?->id)->whereIn('order_status',['confirmed', 'accepted'])->whereNotNull('confirmed')->pluck('id')->values();
-        $new_confirmed_order = $new_confirmed_order_ids->count();
+        $pending_ids = $pending_q->pluck('id')->values();
+
+        // 已确认
+        $confirmed_ids = \App\Models\Order::whereIn('order_status', ['confirmed'])
+            ->where(['restaurant_id' => $rid])->where('checked', 0)->whereNotNull('confirmed')
+            ->NotDigitalOrder()->Notpos()->HasSubscriptionToday()->OrderScheduledIn(30)->pluck('id')->values();
+
+        $new_offline_order   = $offline_ids->count();
+        $new_pending_order   = $pending_ids->count();
+        $new_confirmed_order = $confirmed_ids->count();
+
+        // 智能落点 + 计数对齐: 横幅一次只聚焦"最该先处理"的那个非空桶, 计数与未读id 都取该桶,
+        // 保证横幅数字 == 点进去那个列表的单数(避免再现"横幅数 vs 列表数对不上")。优先级: 离线待收款(B方案主流) > 待处理 > 已确认。
+        $target = 'pending'; $target_label = '待处理'; $target_ids = collect([]);
+        if ($new_offline_order > 0)       { $target = 'offline_pending'; $target_label = '待收款'; $target_ids = $offline_ids; }
+        elseif ($new_pending_order > 0)   { $target = 'pending';         $target_label = '待处理'; $target_ids = $pending_ids; }
+        elseif ($new_confirmed_order > 0) { $target = 'confirmed';       $target_label = '待处理'; $target_ids = $confirmed_ids; }
 
         return response()->json([
             'success' => 1,
-            'data' => ['new_pending_order' => $new_pending_order, 'new_confirmed_order' => $new_confirmed_order, 'new_pending_order_ids' => $new_pending_order_ids, 'new_confirmed_order_ids' => $new_confirmed_order_ids]
+            'data' => [
+                'new_pending_order'   => $new_pending_order,
+                'new_confirmed_order' => $new_confirmed_order,
+                'new_offline_order'   => $new_offline_order,
+                'new_total'           => $target_ids->count(),
+                'new_order_ids'       => $target_ids->values(),
+                'target'              => $target,
+                'target_label'        => $target_label,
+            ]
         ]);
     }
 

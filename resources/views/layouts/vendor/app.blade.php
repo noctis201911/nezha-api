@@ -106,8 +106,8 @@
         <div style="display:flex;align-items:flex-start;gap:10px;">
             <div style="font-size:22px;line-height:1;">&#128276;</div>
             <div style="flex:1;">
-                <div style="font-weight:600;color:#1f1f1f;font-size:15px;margin-bottom:2px;"><span id="nz-new-order-count">0</span> 个新订单待处理</div>
-                <div style="color:#8a8a8a;font-size:12px;">点「立即接单」直接进待处理列表</div>
+                <div style="font-weight:600;color:#1f1f1f;font-size:15px;margin-bottom:2px;"><span id="nz-new-order-count">0</span> 个新订单<span id="nz-new-order-label">待处理</span></div>
+                <div style="color:#8a8a8a;font-size:12px;">点「立即接单」直接进对应订单列表</div>
             </div>
             <button type="button" id="nz-new-order-close" aria-label="关闭" style="border:none;background:none;color:#bbb;font-size:20px;line-height:1;cursor:pointer;padding:0;">&times;</button>
         </div>
@@ -866,9 +866,11 @@
             var SEEN_KEY = 'nz_seen_order_ids_v1';
             var toast    = document.getElementById('nz-new-order-toast');
             var countEl  = document.getElementById('nz-new-order-count');
+            var labelEl  = document.getElementById('nz-new-order-label');
             var goBtn    = document.getElementById('nz-new-order-go');
             var closeBtn = document.getElementById('nz-new-order-close');
-            var pendingListUrl = '{{url('/')}}/restaurant-panel/order/list/pending';
+            var listBase = '{{url('/')}}/restaurant-panel/order/list/';
+            var currentTarget = 'pending';
             var dismissed = false;
             var memSeen = new Set();
 
@@ -884,14 +886,15 @@
                     localStorage.setItem(SEEN_KEY, JSON.stringify(arr));
                 } catch(e){}
             }
-            function showToast(count){
+            function showToast(count, label){
                 if (countEl) { countEl.textContent = count; }
+                if (labelEl && label) { labelEl.textContent = label; }
                 if (toast) { toast.style.display = 'block'; }
             }
             function hideToast(){
                 if (toast) { toast.style.display = 'none'; }
             }
-            if (goBtn) { goBtn.addEventListener('click', function(){ location.href = pendingListUrl; }); }
+            if (goBtn) { goBtn.addEventListener('click', function(){ location.href = listBase + currentTarget; }); }
             if (closeBtn) { closeBtn.addEventListener('click', function(){ dismissed = true; hideToast(); }); }
 
             function poll(){
@@ -900,11 +903,13 @@
                     dataType: 'json',
                     success: function (response) {
                         var data = response.data || {};
-                        var ids = [].concat(data.new_pending_order_ids || [], data.new_confirmed_order_ids || []).map(String);
-                        var total = (data.new_pending_order || 0) + (data.new_confirmed_order || 0);
+                        var ids = (data.new_order_ids || []).map(String);
+                        var total = data.new_total || 0;
+                        currentTarget = data.target || 'pending';
 
                         if (total === 0) { hideToast(); dismissed = false; return; }
 
+                        var label = data.target_label || '待处理';
                         var seen = loadSeen();
                         var freshIds = ids.filter(function(id){ return !seen.has(id); });
 
@@ -913,9 +918,9 @@
                             dismissed = false;
                             freshIds.forEach(function(id){ seen.add(id); });
                             saveSeen(seen);
-                            showToast(total);
+                            showToast(total, label);
                         } else if (!dismissed) {
-                            showToast(total);
+                            showToast(total, label);
                         }
                     }
                 });
