@@ -19,7 +19,12 @@ class BannerController extends Controller
         $zone_id = json_decode($request->header('zoneId'), true);
 
         $bannersCacheKey = 'banners_' . md5(json_encode($zone_id));
-        $campaignsCacheKey = 'campaigns_' . md5(json_encode([$zone_id, $longitude, $latitude]));
+        // Coarsen coords to ~1km grid for the cache key. Exact GPS made every request a unique
+        // key -> cache always missed -> per-request recompute of campaign formatting (~8 queries
+        // per restaurant) -> N+1 (banners was the top N+1-guard hit, 155x). Distance stays within ~1km.
+        $lonBucket = round((float) $longitude, 2);
+        $latBucket = round((float) $latitude, 2);
+        $campaignsCacheKey = 'campaigns_' . md5(json_encode([$zone_id, $lonBucket, $latBucket]));
 
         // 只有"非空结果"才长缓存20分钟; 算出来是空就只缓存1分钟。
         // 否则某次"瞬时空"(例: 午夜活动按 end_time 短暂跌出 running())会被锁存整整20分钟,
@@ -43,7 +48,7 @@ class BannerController extends Controller
         });
 
         $campaigns = $rememberNonEmpty($campaignsCacheKey, function () use ($zone_id, $longitude, $latitude) {
-            return Campaign::whereHas('restaurants', function ($query) use ($zone_id) {
+            $rawCampaigns = Campaign::whereHas('restaurants', function ($query) use ($zone_id) {
                 $query->whereIn('zone_id', $zone_id)->Active()->where('campaign_status', 'confirmed');
             })->with('restaurants', function ($query) use ($zone_id, $longitude, $latitude) {
                 return $query->WithOpen($longitude, $latitude)
@@ -54,16 +59,22 @@ class BannerController extends Controller
                 ->running()
                 ->active()
                 ->get();
+
+            // Cache the FORMATTED result, not the raw collection. restaurant_data_formatting runs
+            // ~8 queries per restaurant; doing it outside the cache meant it re-ran on every request
+            // (the real banners N+1, was top N+1-guard hit 155x). Now it runs only on a cache miss
+            // (~once per 1km cell per 20min). Distance/delivery accuracy stays within the ~1km bucket.
+            try {
+                return Helpers::basic_campaign_data_formatting($rawCampaigns, true);
+            } catch (\Exception $e) {
+                info($e->getMessage());
+                return [];
+            }
         });
 
-        try {
-            return response()->json([
-                'campaigns' => Helpers::basic_campaign_data_formatting($campaigns, true),
-                'banners' => $banners
-            ], 200);
-        } catch (\Exception $e) {
-            info($e->getMessage());
-            return response()->json([], 200);
-        }
+        return response()->json([
+            'campaigns' => $campaigns,
+            'banners' => $banners
+        ], 200);
     }
 }
