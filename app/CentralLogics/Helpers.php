@@ -5442,4 +5442,24 @@ class Helpers
 
     }
 
+
+    public static function mask_email($email)
+    {
+        $email = (string) $email;
+        if ($email === '' || strpos($email, '@') === false) return $email;
+        [$lp, $dm] = explode('@', $email, 2);
+        $L = mb_strlen($lp);
+        if ($L <= 4) return mb_substr($lp, 0, 1) . str_repeat('*', max(1, $L - 1)) . '@' . $dm;
+        $start = intdiv($L - 4, 2);
+        return mb_substr($lp, 0, $start) . '****' . mb_substr($lp, $start + 4) . '@' . $dm;
+    }
+
+    public static function mask_phone($phone)
+    {
+        $p = (string) $phone;
+        $L = mb_strlen($p);
+        if ($L === 0) return $p;
+        if ($L <= 6) return mb_substr($p, 0, 1) . str_repeat('*', max(1, $L - 1));
+        return mb_substr($p, 0, 4) . str_repeat('*', max(1, $L - 8)) . mb_substr($p, -4);
+    }
 }

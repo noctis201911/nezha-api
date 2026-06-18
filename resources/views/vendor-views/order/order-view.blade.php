@@ -377,9 +377,9 @@
                                                 <div style="word-break:break-all;">须退回的原地址：<strong>{{ $nzRefundRec->locked_to_address ?: '原始交易反查未果，请按付款凭证里的来源地址退回' }}</strong></div>
                                             @endif
                                             @if (!empty($nzAddr['contact_person_name']))<div>顾客：{{ $nzAddr['contact_person_name'] }}</div>@endif
-                                            @if (!empty($nzAddr['contact_person_number']))<div>顾客电话（配送填写）：<a href="tel:{{ $nzAddr['contact_person_number'] }}">{{ $nzAddr['contact_person_number'] }}</a></div>@endif
-                                            @if (!empty($nzAddr['contact_person_email']))<div>顾客邮箱：{{ $nzAddr['contact_person_email'] }}</div>@endif
-                                            <div style="color:#999;">退款联系优先用邮箱（注册顾客必有）。付款人见上方「付款凭证」截图；个人收款码不支持原路退回时，可按凭证里的账号重新转账退回。</div>
+                                            @if (!empty($nzAddr['contact_person_number']))<div>顾客电话（配送填写）：{{ \App\CentralLogics\Helpers::mask_phone($nzAddr['contact_person_number']) }}</div>@endif
+                                            @if (!empty($nzAddr['contact_person_email']))<div>顾客邮箱：{{ \App\CentralLogics\Helpers::mask_email($nzAddr['contact_person_email']) }}</div>@endif
+                                            <div style="color:#999;">退款如需联系顾客请用站内聊天（顾客邮箱/手机已脱敏保护隐私）。付款人见上方「付款凭证」截图；个人收款码不支持原路退回时，可按凭证里的账号重新转账退回。</div>
                                         </div>
                                         <button type="button" class="btn btn-success btn-sm mt-3" style="border-radius:8px;" data-toggle="modal" data-target="#nzMarkRefunded-{{ $order['id'] }}">标记已退款</button>
                                     </div>
@@ -1220,16 +1220,14 @@
                                 {{ translate('Orders') }}
                             </span>
                             <span class="d-block">
-                                <a class="text--title font-semibold" href="tel:{{ $order->customer['phone'] }}">
-                                    <strong>
-                                        {{ $order->customer['phone'] }}
-                                    </strong>
-                                </a>
+                                <strong class="text--title font-semibold">
+                                    {{ \App\CentralLogics\Helpers::mask_phone($order->customer['phone']) }}
+                                </strong>
                             </span>
                             <span class="d-block">
                                 <strong class="text--title font-semibold">
                                 </strong>
-                                {{ $order->customer['email'] }}
+                                {{ \App\CentralLogics\Helpers::mask_email($order->customer['email']) }}
                             </span>
                         </div>
                     </div>
