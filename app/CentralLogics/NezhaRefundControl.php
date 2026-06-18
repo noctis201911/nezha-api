@@ -125,7 +125,7 @@ class NezhaRefundControl
 
         $single = (float) self::cfg('nezha_refund_single_limit', 100);
         if ($single > 0 && $refundAmount > $single) {
-            $hits[] = ['rule' => 'single_limit', 'detail' => "单笔退款 \${$refundAmount} 超过上限 \${$single}"];
+            $hits[] = ['rule' => 'single_limit', 'detail' => "单笔退款 ֏{$refundAmount} 超过上限 ֏{$single}"];
         }
 
         // 单商家今日已退累计 + 笔数(已 approved/recorded 的退款记录)
@@ -137,7 +137,7 @@ class NezhaRefundControl
 
         $dailyTotal = (float) self::cfg('nezha_refund_daily_total_limit', 300);
         if ($dailyTotal > 0 && ($todayTotal + $refundAmount) > $dailyTotal) {
-            $hits[] = ['rule' => 'daily_total', 'detail' => '单日累计 $' . round($todayTotal + $refundAmount, 2) . " 超过 \${$dailyTotal}"];
+            $hits[] = ['rule' => 'daily_total', 'detail' => '单日累计 ֏' . round($todayTotal + $refundAmount, 2) . " 超过 ֏{$dailyTotal}"];
         }
         $dailyCount = (int) self::cfg('nezha_refund_daily_count_limit', 5);
         if ($dailyCount > 0 && ($todayCount + 1) > $dailyCount) {
