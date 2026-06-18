@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\ServiceProvider;
 
 // ini_set('memory_limit', '512M');
@@ -42,6 +43,9 @@ class AppServiceProvider extends ServiceProvider
         Request::macro('isAny', function (array $patterns) {
             return collect($patterns)->contains(fn ($pattern) => Request::is($pattern));
         });
+
+        // 哪吒(2026-06-18): 发件用 noreply@nezha.am(只发不收), 客户回复统一进运营 Gmail
+        Mail::alwaysReplyTo('noctis201914@gmail.com');
 
 
         if (!App::runningInConsole()) {
