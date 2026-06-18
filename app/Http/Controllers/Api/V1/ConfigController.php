@@ -471,8 +471,8 @@ class ConfigController extends Controller
     public function get_zone(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'lat' => 'required',
-            'lng' => 'required',
+            'lat' => 'required|numeric',
+            'lng' => 'required|numeric',
         ]);
 
         if ($validator->errors()->count() > 0) {
@@ -649,8 +649,8 @@ class ConfigController extends Controller
     public function geocode_api(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'lat' => 'required',
-            'lng' => 'required',
+            'lat' => 'required|numeric',
+            'lng' => 'required|numeric',
         ]);
 
         if ($validator->errors()->count() > 0) {
