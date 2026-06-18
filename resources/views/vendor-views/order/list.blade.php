@@ -4,6 +4,47 @@
 
 @push('css_or_js')
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    {{-- 手机端(<768px)把订单表格重排为卡片, 操作按钮直接露出; PC/平板(>=768px)不命中本媒体查询, 表格原样不变 --}}
+    <style>
+        @media (max-width: 767.98px) {
+            #datatable thead { display: none; }
+            #datatable, #datatable tbody { display: block; width: 100%; }
+            #datatable tr.class-all {
+                display: block;
+                background: #fff;
+                border: 1px solid #eef0f3;
+                border-radius: 12px;
+                box-shadow: 0 1px 4px rgba(0,0,0,.04);
+                margin-bottom: 12px;
+                padding: 4px 14px;
+            }
+            #datatable tr.class-all td {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 12px;
+                width: 100%;
+                border: 0;
+                border-bottom: 1px solid #f3f4f6;
+                padding: 9px 0;
+                text-align: right;
+                white-space: normal;
+            }
+            #datatable tr.class-all td::before {
+                content: attr(data-label);
+                font-weight: 600;
+                color: #8a94a6;
+                text-align: left;
+                flex: 0 0 auto;
+                white-space: nowrap;
+            }
+            #datatable tr.class-all td:first-child { display: none; }      /* 序号在卡片里无意义, 隐藏 */
+            #datatable tr.class-all td:last-child { border-bottom: 0; }
+            #datatable tr.class-all td > * { text-align: right; }
+            #datatable tr.class-all td .btn--container { justify-content: flex-end; }
+            #datatable tr.class-all td .action-btn { width: 40px; height: 40px; }  /* 加大点击热区 */
+        }
+    </style>
 @endpush
 
 @section('content')
@@ -129,10 +170,10 @@
                     <tbody id="set-rows">
                     @foreach($orders as $key=>$order)
                         <tr class="status-{{$order['order_status']}} class-all">
-                            <td class="">
+                            <td class="" data-label="{{translate('messages.sl')}}">
                                 {{$key+$orders->firstItem()}}
                             </td>
-                            <td class="table-column-pl-0">
+                            <td class="table-column-pl-0" data-label="{{translate('messages.Order_ID')}}">
                                 <a href="{{route('vendor.order.details',['id'=>$order['id']])}}" class="text-hover">{{$order['id']}}
                                     @if ($order->is_pos == 1)
                                     <span class="text--warning font-500">({{ translate('POS') }})</span>
@@ -143,7 +184,7 @@
                                 <span class="text-info fs-12 d-block font-500">({{ translate('Edited') }})</span>
                                 @endif
                             </td>
-                            <td>
+                            <td data-label="{{translate('messages.order_date')}}">
                                 <span class="d-block">
                                     {{ Carbon\Carbon::parse($order['created_at'])->locale(app()->getLocale())->translatedFormat('d M Y') }}
                                 </span>
@@ -161,14 +202,14 @@
                                     $type = $deliveryTypes[$order->delivery_type] ?? $deliveryTypes['standard'];
                                 @endphp
 
-                                <td class="text-capitalize text-center">
+                                <td class="text-capitalize text-center" data-label="{{translate('messages.delivery_type')}}">
                                     @if($type)
                                         <span class="badge {{ $type['class'] }}">
                                             {{ translate($type['label']) }}
                                         </span>
                                     @endif
                                 </td>
-                            <td>
+                            <td data-label="{{translate('messages.customer_information')}}">
                                 @if($order->is_guest)
                                      <?php
                                         $customer_details = json_decode($order['delivery_address'],true);
@@ -190,7 +231,7 @@
                                         class="badge badge--pending">{{translate('messages.Walk_In_Customer')}}</label>
                                 @endif
                             </td>
-                            <td>
+                            <td data-label="{{translate('messages.total_amount')}}">
 
 
                                 <div class="text-right mw-85px">
@@ -213,7 +254,7 @@
                                 </div>
 
                             </td>
-                            <td class="text-capitalize text-center">
+                            <td class="text-capitalize text-center" data-label="{{translate('messages.order_status')}}">
                                 @if (isset($order->subscription)  && $order->subscription->status != 'canceled' )
                                     @php
                                         $order->order_status = $order->subscription_log ? $order->subscription_log->order_status : $order->order_status;
@@ -262,7 +303,7 @@
                                     @endif
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="{{translate('messages.actions')}}">
                                 <div class="btn--container justify-content-center">
                                     <a class="btn action-btn btn--warning btn-outline-warning" href="{{route('vendor.order.details',['id'=>$order['id']])}}"><i class="tio-visible-outlined"></i></a>
                                     <a class="btn action-btn btn--primary btn-outline-primary" target="_blank" href="{{route('vendor.order.generate-invoice',[$order['id']])}}"><i class="tio-print"></i></a>
