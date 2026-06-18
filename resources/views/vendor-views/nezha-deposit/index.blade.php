@@ -107,8 +107,14 @@
                             <tr>
                                 <td><small>{{ \Carbon\Carbon::parse($t->created_at)->format('Y-m-d H:i') }}</small></td>
                                 <td>{{ $label }}</td>
-                                <td class="text-right {{ $t->amount < 0 ? 'text-danger' : 'text-success' }}">{{ \App\CentralLogics\Helpers::format_currency($t->amount) }}</td>
-                                <td class="text-right {{ $t->balance_after < 0 ? 'text-danger font-weight-bold' : '' }}">{{ \App\CentralLogics\Helpers::format_currency($t->balance_after) }}</td>
+                                <td class="text-right {{ $t->amount < 0 ? 'text-danger' : 'text-success' }}">
+                                    {{ \App\CentralLogics\Helpers::format_currency($t->amount) }}
+                                    <div class="small text-muted">{{ $nezhaConv($t->amount) }}</div>
+                                </td>
+                                <td class="text-right {{ $t->balance_after < 0 ? 'text-danger font-weight-bold' : '' }}">
+                                    {{ \App\CentralLogics\Helpers::format_currency($t->balance_after) }}
+                                    <div class="small text-muted">{{ $nezhaConv($t->balance_after) }}</div>
+                                </td>
                                 <td>{{ $t->order_id ? ('#'.$t->order_id) : '—' }}</td>
                                 <td><small>{{ $t->note }}</small></td>
                             </tr>
