@@ -2365,4 +2365,5 @@
   'New_Order_Notification' => 'New Order Notification',
   'New order alert, confirm to proceed' => 'New order alert, confirm to proceed',
   'The order amount field is required.' => 'The order amount field is required.',
+  'order_received_successfully' => '已确认收货，感谢您的确认！',
 );
