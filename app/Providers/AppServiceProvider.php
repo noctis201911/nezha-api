@@ -45,7 +45,7 @@ class AppServiceProvider extends ServiceProvider
         });
 
         // 哪吒(2026-06-18): 发件用 noreply@nezha.am(只发不收), 客户回复统一进运营 Gmail
-        Mail::alwaysReplyTo('noctis201914@gmail.com');
+        Mail::alwaysReplyTo('support@nezha.am');
 
 
         if (!App::runningInConsole()) {
