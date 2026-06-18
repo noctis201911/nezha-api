@@ -1732,6 +1732,7 @@
   'Ex :_Search by food name, name or phone...' => 'Ex : Search by food name  name or phone...',
   'restaurant_temporarily_closed' => 'Restaurant temporarily closed',
   'order_canceled_successfully' => 'Order canceled successfully',
+  'order_canceled_contact_restaurant_for_refund' => 'Order canceled. For the amount you paid directly to the restaurant, please contact the restaurant for an original-route refund.',
   'Unauthorized' => 'Unauthorized',
   'Password_Reset' => 'Password Reset',
   'successfully_added' => 'Successfully added',
