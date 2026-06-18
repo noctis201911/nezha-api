@@ -109,7 +109,11 @@ class LoginController extends Controller
         $custome_recaptcha->setMaxFrontLines(0);
         $custome_recaptcha->setDistortion(true);
         $custome_recaptcha->build(200, 60);
-        Session::put('six_captcha', $custome_recaptcha->getPhrase());
+        $nz_phrase = $custome_recaptcha->getPhrase();
+        Session::put('six_captcha', $nz_phrase);
+        $nz_caps = (array) session('six_captcha_list', []);
+        $nz_caps[] = $nz_phrase;
+        Session::put('six_captcha_list', array_slice($nz_caps, -5));
 
         $email =  null;
         $password = null;
@@ -180,9 +184,18 @@ class LoginController extends Controller
                 Toastr::info(translate('Enter recaptcha value'));
                 return back()->withInput($request->only('email', 'remember'))->with('show_image_captcha', true);
             }
-        } else if (strtolower(session('six_captcha')) != strtolower((string) $request->custome_recaptcha)) {
-            Toastr::error(translate('messages.ReCAPTCHA Failed'));
-            return back()->withInput($request->only('email', 'remember'))->with('show_image_captcha', (bool) $request->set_default_captcha);
+        } else {
+            // 哪吒: 验证码答案保留最近多张, 任一匹配即过, 避免开多标签/刷新/换图后"输对却报错"的会话覆盖race
+            $nz_typed = strtolower((string) $request->custome_recaptcha);
+            $nz_valid = array_map('strtolower', (array) session('six_captcha_list', []));
+            if (session('six_captcha') !== null) { $nz_valid[] = strtolower((string) session('six_captcha')); }
+            if (!in_array($nz_typed, $nz_valid, true)) {
+                Toastr::error(translate('messages.ReCAPTCHA Failed'));
+                return back()->withInput($request->only('email', 'remember'))->with('show_image_captcha', (bool) $request->set_default_captcha);
+            }
+            // 命中后立即作废全部未用答案, 防重放
+            Session::forget('six_captcha_list');
+            Session::forget('six_captcha');
         }
 
         $ip = $request->ip();
@@ -299,7 +312,11 @@ class LoginController extends Controller
         $custome_recaptcha->setMaxFrontLines(0);
         $custome_recaptcha->setDistortion(true);
         $custome_recaptcha->build(200, 60);
-        Session::put('six_captcha', $custome_recaptcha->getPhrase());
+        $nz_phrase = $custome_recaptcha->getPhrase();
+        Session::put('six_captcha', $nz_phrase);
+        $nz_caps = (array) session('six_captcha_list', []);
+        $nz_caps[] = $nz_phrase;
+        Session::put('six_captcha_list', array_slice($nz_caps, -5));
 
         return response()->json([
             'view' => view('auth.custom-captcha', compact('custome_recaptcha'))->render()

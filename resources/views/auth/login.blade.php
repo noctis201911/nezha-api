@@ -407,50 +407,7 @@
     });
 </script>
 
-@if(isset($recaptcha) && $recaptcha['status'] == 1)
-    <script src="https://www.google.com/recaptcha/api.js?render={{$recaptcha['site_key']}}"></script>
-@endif
-@if(isset($recaptcha) && $recaptcha['status'] == 1)
-    <script>
-        // 哪吒: 谷歌验证码在部分网络(如中国大陆)会被屏蔽; 加载失败时自动降级到图形验证码(中文提示), 省去二次点击
-        function nzFallbackToImageCaptcha(notify) {
-            if ($('#set_default_captcha_value').val() == 1) return;
-            $('#reload-captcha').removeClass('d-none');
-            $('#set_default_captcha_value').val('1');
-            if (notify) { toastr.info('当前网络无法连接谷歌验证，请直接输入下方图形验证码后登录'); }
-        }
-        $(document).ready(function() {
-            var nzWaited = 0;
-            var nzTimer = setInterval(function () {
-                if (typeof grecaptcha !== 'undefined' && grecaptcha.execute) { clearInterval(nzTimer); return; }
-                nzWaited += 500;
-                if (nzWaited >= 4000) { clearInterval(nzTimer); nzFallbackToImageCaptcha(true); }
-            }, 500);
-
-            $('#signInBtn').click(function (e) {
-                if ($('#set_default_captcha_value').val() == 1) {
-                    return true;
-                }
-                e.preventDefault();
-                if (typeof grecaptcha === 'undefined' || !grecaptcha.execute) {
-                    nzFallbackToImageCaptcha(true);
-                    return;
-                }
-                grecaptcha.ready(function () {
-                    try {
-                        grecaptcha.execute('{{$recaptcha['site_key']}}', {action: 'submit'}).then(function (token) {
-                            $('#g-recaptcha-response').val(token);
-                            $('#form-id').submit();
-                        }).catch(function () { nzFallbackToImageCaptcha(true); });
-                    } catch (err) {
-                        nzFallbackToImageCaptcha(true);
-                    }
-                });
-            });
-        });
-    </script>
-@endif
-{{-- recaptcha scripts end --}}
+{{-- recaptcha scripts end (Google v3 retired: 图形验证码为唯一路径, 校验见 LoginController@submit) --}}
 
 
 
