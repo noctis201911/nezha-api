@@ -27,7 +27,11 @@ class NezhaDepositController extends Controller
         $transactions = RestaurantDepositTransaction::where('vendor_id', $vendorId)
             ->orderByDesc('id')->paginate(20);
 
-        return view('vendor-views.nezha-deposit.index', compact('restaurant', 'balance', 'transactions'));
+        // 结算汇率(与全站顾客折算同源, 仅用于把余额展示成 ≈¥/≈$; 缺省回退默认值)
+        $rateCny = (float) (\Illuminate\Support\Facades\DB::table('business_settings')->where('key', 'nezha_rate_cny_to_amd')->value('value') ?: 55);
+        $rateUsd = (float) (\Illuminate\Support\Facades\DB::table('business_settings')->where('key', 'nezha_rate_usd_to_amd')->value('value') ?: 400);
+
+        return view('vendor-views.nezha-deposit.index', compact('restaurant', 'balance', 'transactions', 'rateCny', 'rateUsd'));
     }
 
     public function update_alert(Request $request)

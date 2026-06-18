@@ -3,6 +3,14 @@
 @section('title', translate('预存佣金'))
 
 @section('content')
+@php
+    // 德拉姆(֏)金额折算成 ≈¥ / ≈$ 显示(汇率来自 business_settings, 与全站结算同源; 仅展示, 不碰钱)。
+    $nezhaConv = function ($amd) use ($rateCny, $rateUsd) {
+        $cny = $rateCny > 0 ? $amd / $rateCny : 0;
+        $usd = $rateUsd > 0 ? $amd / $rateUsd : 0;
+        return '≈ ¥' . number_format($cny, 2) . '  ·  ≈ $' . number_format($usd, 2);
+    };
+@endphp
 <div class="content container-fluid">
     <div class="page-header">
         <div class="row align-items-center">
@@ -23,10 +31,12 @@
                     @if($balance < 0)
                         <h6 class="text-danger mb-1">{{ translate('当前欠款') }}</h6>
                         <h2 class="text-danger mb-1">{{ \App\CentralLogics\Helpers::format_currency(abs($balance)) }}</h2>
+                        <p class="text-danger small mb-1">{{ $nezhaConv(abs($balance)) }}</p>
                         <p class="text-danger small mb-0">{{ translate('您已欠平台佣金, 请尽快充值, 否则无法接收新订单。') }}</p>
                     @else
                         <h6 class="text-muted mb-1">{{ translate('预存佣金余额') }}</h6>
                         <h2 class="mb-1">{{ \App\CentralLogics\Helpers::format_currency($balance) }}</h2>
+                        <p class="text-muted small mb-1">{{ $nezhaConv($balance) }}</p>
                         <p class="text-muted small mb-0">{{ translate('平台按每单佣金从这里扣除; 余额不足将暂停接单。') }}</p>
                     @endif
                 </div>
