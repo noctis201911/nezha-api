@@ -279,7 +279,7 @@
 
 
                                 @if ($order?->offline_payments)
-                                    @foreach (json_decode($order->offline_payments->payment_info) as $key => $item)
+                                    @foreach ((json_decode($order->offline_payments->payment_info) ?? []) as $key => $item)
                                         @if ($key != 'method_id')
                                             <h6 class="">
                                                 <div class="d-flex justify-content-sm-end text-capitalize">
@@ -488,8 +488,8 @@
                                                             <div>
                                                                 <strong class="line--limit-1">
                                                                     {{ $detail->food == null ? 'Not Found' : $detail->food['name'] }}</strong>
-                                                                @if (isset($detail['variation']) ? json_decode($detail['variation'], true) : [])
-                                                                    @foreach (json_decode($detail['variation'], true) as $variation)
+                                                                @if (isset($detail['variation']) ? (json_decode($detail['variation'], true) ?? []) : [])
+                                                                    @foreach ((json_decode($detail['variation'], true) ?? []) as $variation)
                                                                         @if (isset($variation['name']) && isset($variation['values']))
                                                                             <span class="d-block text-capitalize">
                                                                                 <strong>
@@ -503,11 +503,11 @@
                                                                                 </span>
                                                                             @endforeach
                                                                         @else
-                                                                            @if (isset(json_decode($detail['variation'], true)[0]))
+                                                                            @if (isset((json_decode($detail['variation'], true) ?? [])[0]))
                                                                                 <strong><u>
                                                                                         {{ translate('messages.Variation') }}
                                                                                         : </u></strong>
-                                                                                @foreach (json_decode($detail['variation'], true)[0] as $key1 => $variation)
+                                                                                @foreach ((json_decode($detail['variation'], true) ?? [])[0] as $key1 => $variation)
                                                                                     <div class="font-size-sm text-body">
                                                                                         <span>{{ $key1 }} : </span>
                                                                                         <span
@@ -528,7 +528,7 @@
                                                 </td>
                                                 <td>
                                                     <div>
-                                                        @foreach (json_decode($detail['add_ons'], true) as $key2 => $addon)
+                                                        @foreach ((json_decode($detail['add_ons'], true) ?? []) as $key2 => $addon)
                                                             <div class="font-size-sm text-body">
                                                                 <span>{{ Str::limit($addon['name'], 20, '...') }} : </span>
                                                                 <span class="font-weight-bold">
@@ -585,8 +585,8 @@
                                                             <div>
                                                                 <strong class="line--limit-1">
                                                                     {{ $detail->campaign == null ? 'Not Found' : $detail->campaign['name'] }}</strong>
-                                                                @if (count(json_decode($detail['variation'], true)) > 0)
-                                                                    @foreach (json_decode($detail['variation'], true) as $variation)
+                                                                @if (count((json_decode($detail['variation'], true) ?? [])) > 0)
+                                                                    @foreach ((json_decode($detail['variation'], true) ?? []) as $variation)
                                                                         @if (isset($variation['name']) && isset($variation['values']))
                                                                             <span class="d-block text-capitalize">
                                                                                 <strong>
@@ -600,11 +600,11 @@
                                                                                 </span>
                                                                             @endforeach
                                                                         @else
-                                                                            @if (isset(json_decode($detail['variation'], true)[0]))
+                                                                            @if (isset((json_decode($detail['variation'], true) ?? [])[0]))
                                                                                 <strong><u>
                                                                                         {{ translate('messages.Variation') }}
                                                                                         : </u></strong>
-                                                                                @foreach (json_decode($detail['variation'], true)[0] as $key1 => $variation)
+                                                                                @foreach ((json_decode($detail['variation'], true) ?? [])[0] as $key1 => $variation)
                                                                                     <div class="font-size-sm text-body">
                                                                                         <span>{{ $key1 }} : </span>
                                                                                         <span
@@ -626,7 +626,7 @@
                                                 </td>
                                                 <td>
                                                     <div>
-                                                        @foreach (json_decode($detail['add_ons'], true) as $key2 => $addon)
+                                                        @foreach ((json_decode($detail['add_ons'], true) ?? []) as $key2 => $addon)
                                                             @if ($key2 == 0)
                                                                 <strong><u>{{ translate('messages.addons') }} :
                                                                     </u></strong>
