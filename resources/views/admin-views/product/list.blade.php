@@ -171,6 +171,7 @@
                                     @endif
                                     <th class="w-100px text-center">{{ translate('messages.Stock') }}</th>
                                     <th class="w-100px">{{ translate('messages.status') }}</th>
+                                    <th class="w-100px text-center">推荐</th>
 
                                     <th class="w-120px text-center">
                                         {{ translate('messages.action') }}
@@ -271,6 +272,17 @@
                                                     data-url="{{ route('admin.food.status', [$food['id'], $food->status ? 0 : 1]) }}"
                                                     class="toggle-switch-input redirect-url" id="stocksCheckbox{{ $food->id }}"
                                                     {{ $food->status ? 'checked' : '' }}>
+                                                <span class="toggle-switch-label">
+                                                    <span class="toggle-switch-indicator"></span>
+                                                </span>
+                                            </label>
+                                        </td>
+                                        <td>
+                                            <label class="toggle-switch toggle-switch-sm" data-toggle="tooltip" data-placement="top" title="推荐到首页热销" for="recommendCheckbox{{ $food->id }}">
+                                                <input type="checkbox"
+                                                    data-url="{{ route('admin.food.recommended', [$food['id'], $food->recommended ? 0 : 1]) }}"
+                                                    class="toggle-switch-input redirect-url" id="recommendCheckbox{{ $food->id }}"
+                                                    {{ $food->recommended ? 'checked' : '' }}>
                                                 <span class="toggle-switch-label">
                                                     <span class="toggle-switch-indicator"></span>
                                                 </span>

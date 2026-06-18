@@ -186,6 +186,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('list', [FoodController::class, 'list'])->name('list');
             Route::delete('delete/{id}', [FoodController::class, 'delete'])->name('delete');
             Route::get('status/{id}/{status}', [FoodController::class, 'status'])->name('status');
+            Route::get('recommended/{id}/{status}', [FoodController::class, 'recommended'])->name('recommended');
             Route::get('review-status/{id}/{status}', [FoodController::class, 'reviews_status'])->name('reviews.status');
             Route::post('search-restaurant', [FoodController::class, 'search_vendor'])->name('search-restaurant');
             Route::get('reviews', [FoodController::class, 'review_list'])->name('reviews');

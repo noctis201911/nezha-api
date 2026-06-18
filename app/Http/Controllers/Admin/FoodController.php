@@ -284,6 +284,16 @@ class FoodController extends Controller
         return back();
     }
 
+    // 首页「人气热销」橱窗人工干预: 勾选后该菜品 recommended=1, 前端读 popular 接口后把它排到橱窗最前
+    public function recommended(Request $request)
+    {
+        $product = Food::withoutGlobalScope(RestaurantScope::class)->findOrFail($request->id);
+        $product->recommended = $request->status;
+        $product->save();
+        Toastr::success('已更新「首页热销推荐」状态');
+        return back();
+    }
+
     public function update(Request $request, $id)
     {
         $validator = Validator::make($request->all(), [
