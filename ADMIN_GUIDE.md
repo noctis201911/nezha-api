@@ -17,6 +17,8 @@
 9. [推送通知 (Firebase FCM)](#9-推送通知-firebase-fcm)（2026-06-15 新增）
 10. [佣金充值管理](#10-佣金充值管理商家预存佣金)（2026-06-16 新增）
 11. [可用性监控（站外 uptime + 服务器自检）](#11-可用性监控站外-uptime--服务器自检-nzwatch)（2026-06-17 新增）
+12. [顾客下单需登录（游客结算已关闭）](#12-顾客下单需登录游客结算已关闭2026-06-18)（2026-06-18 新增）
+13. [邮件系统（域名发信 / 客诉收信）](#13-邮件系统域名发信--客诉收信2026-06-18-上线)（2026-06-18 新增）
 
 ---
 
@@ -674,3 +676,54 @@
 - ⚠️ 若真要恢复游客下单，还需配套恢复后端"游客用前端购物车下单"的逻辑（已回退）+ 想清楚游客订单记录怎么给顾客查——否则游客下单又会下不了/查不到。建议保持关闭。
 
 **配套机制（顺带说明，无需操作）**：顾客登录 / 注册时，会自动把登录前加的购物车合并进账号（不会因登录丢车）。
+
+---
+
+## 13. 邮件系统（域名发信 / 客诉收信）〔2026-06-18 上线〕
+
+平台所有邮件现在都用自有域名 **nezha.am**，对外不再暴露任何 Gmail。**日常你只需要登录并查看一个邮箱：`noctis201914@gmail.com`**，其余都是自动的。
+
+### 13.1 一张表看懂
+
+| 场景 | 顾客看到 | 实际在哪 |
+|---|---|---|
+| 哪吒发给顾客（验证码 / 找回密码 / 订单通知）| 哪吒外卖 `<noreply@nezha.am>`（带 logo）| 系统自动发，不用管 |
+| 顾客发客诉 / 回复哪吒的邮件 | 发到 `support@nezha.am` | 自动转进 `noctis201914@gmail.com` |
+| 你回复客诉 | 收到来自 `support@nezha.am` | 你在 Gmail 里点回复，自动以 support@ 身份发出 |
+| 隐私政策 / 用户协议 / 风控页的联系邮箱 | `support@nezha.am` | 同上 |
+
+### 13.2 用到的三个账号（别混）
+- **Resend**（负责"发信"）：https://resend.com ，登录账号 `noctis201911@gmail.com`，域名 nezha.am 已验证。
+- **Cloudflare**（负责"收信转发" + 域名 DNS）：登录账号 `noctis201911@gmail.com`。
+- **收发邮件的工作邮箱**：`noctis201914@gmail.com`（客诉最终落这里、你回信也在这里操作）。
+> 后台登录用 201911、日常收发邮件用 201914，是两个不同用途，记清楚。
+
+### 13.3 发信（Resend）—— 一般不用动
+- 发件人固定显示「哪吒外卖 \<noreply@nezha.am\>」，邮件顶部带哪吒 logo。
+- 技术配置在服务器 `.env`（MAIL_* 走 smtp.resend.com 587 端口），不在后台页面，运营无需操作。
+- noreply@ 是"只发不收"地址，顾客不会往它回信（回信地址已设成 support@）。
+
+### 13.4 收客诉（Cloudflare 邮件路由）—— 已配好
+- 顾客发到 `support@nezha.am` 的信，由 Cloudflare 自动转发到 `noctis201914@gmail.com`。
+- 规则位置：Cloudflare → 选 nezha.am → 左侧 Email → Email Routing → Routing rules，能看到 `support → noctis201914@gmail.com`。
+- 想加别的地址（如 `sales@nezha.am`）：同一页 Create address，转发到你的 Gmail 即可。
+
+### 13.5 你回复客诉时自动用 support@（已在 Gmail 配好）
+- Gmail 已设置「以 support@nezha.am 身份发送（Send mail as）」+「回复时用收件地址回」。
+- 所以你直接在 Gmail 里对客诉点「回复」，发出去的发件人就是 support@nezha.am，顾客看不到你的 Gmail。
+- 设置位置（如需检查）：Gmail → 设置（齿轮）→ 查看所有设置 → 账号和导入 → Send mail as / When replying to a message。
+
+### 13.6 🔴 免费额度（要盯）
+- Resend 免费档：**100 封/天、3000 封/月**。发给顾客的邮件 + 你回客诉都算在内。
+- 现在量小没问题。**上线后订单多了**，去 Resend 后台 **Logs** 看每天发了多少；接近 100/天 就升级 Resend 付费档（或换 Brevo，免费 300/天）。
+
+### 13.7 出问题怎么查
+- **顾客说收不到验证码 / 通知**：登录 Resend → Logs，搜该顾客邮箱，看状态——Delivered=已送达、Bounced=被退回（地址错）、没记录=系统压根没发出。
+- **客诉没转进 Gmail**：检查 Cloudflare → Email Routing 规则还在不在、目标地址 `noctis201914@gmail.com` 是否仍是 Verified（绿色）。
+- **🔴 这些 DNS 记录千万别删**（Cloudflare → nezha.am → DNS）：
+  - `send` 的 MX/TXT、`resend._domainkey` 的 TXT、`_dmarc` —— 发信认证，删了邮件会进垃圾箱或发不出。
+  - 根域名的 MX（route1/2/3.mx.cloudflare.net）、`v=spf1 ... cloudflare` 的 TXT —— 收信用，删了 support@ 收不到信。
+
+### 13.8 密钥安全
+- Resend 的 API 密钥（`re_...`）存在服务器 `.env` 和 Gmail 的 Send-mail-as 设置里，**不要外泄**。
+- 怀疑泄露时：Resend → API Keys 删旧建新（权限选 Sending access、限 nezha.am），再更新服务器 `.env` 的 MAIL_PASSWORD + Gmail Send-mail-as 的密码。这一步可让 AI 帮忙改服务器。
