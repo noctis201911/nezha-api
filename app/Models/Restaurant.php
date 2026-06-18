@@ -519,7 +519,10 @@ class Restaurant extends Model
 
     public function scopeMultiCuisine($query, $cuisine_id)
     {
-        $cuisine_id = json_decode($cuisine_id);
+        // 容忍数组或JSON字符串: 调用方可能直接传数组(空数组时勿对其json_decode, 否则PHP8 TypeError致500)
+        if (is_string($cuisine_id)) {
+            $cuisine_id = json_decode($cuisine_id);
+        }
         if(is_array($cuisine_id) && count($cuisine_id)>0){
             return $query->whereHas('cuisine', function ($query) use ($cuisine_id){
                 $query->whereIn('cuisine_restaurant.cuisine_id', $cuisine_id)->orWhereIn('cuisines.slug', $cuisine_id);
