@@ -20,6 +20,7 @@ use App\Http\Controllers\Admin\ContactMessages;
 use App\Http\Controllers\Admin\MerchantLeadController;
 use App\Http\Controllers\Admin\LocalLifeController as AdminLocalLifeController;
 use App\Http\Controllers\Admin\LocalLifeCategoryController;
+use App\Http\Controllers\Admin\LocalLifeMerchantController;
 use App\Http\Controllers\Admin\ConversationController;
 use App\Http\Controllers\Admin\CouponController;
 use App\Http\Controllers\Admin\CuisineController;
@@ -1129,6 +1130,16 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
                 Route::post('update/{id}', [LocalLifeCategoryController::class, 'update'])->name('update');
                 Route::post('status/{id}', [LocalLifeCategoryController::class, 'statusToggle'])->name('status');
                 Route::delete('delete', [LocalLifeCategoryController::class, 'destroy'])->name('delete');
+            });
+            // 商家管理（移民/签证/美容美发/按摩等服务型商家）
+            Route::group(['prefix' => 'merchants', 'as' => 'merchants.'], function () {
+                Route::get('list', [LocalLifeMerchantController::class, 'list'])->name('list');
+                Route::get('create', [LocalLifeMerchantController::class, 'create'])->name('create');
+                Route::post('store', [LocalLifeMerchantController::class, 'store'])->name('store');
+                Route::get('edit/{id}', [LocalLifeMerchantController::class, 'edit'])->name('edit');
+                Route::post('update/{id}', [LocalLifeMerchantController::class, 'update'])->name('update');
+                Route::post('status/{id}', [LocalLifeMerchantController::class, 'statusToggle'])->name('status');
+                Route::delete('delete', [LocalLifeMerchantController::class, 'destroy'])->name('delete');
             });
         });
         Route::group(['prefix' => 'vehicle', 'as' => 'vehicle.', 'middleware' => ['module:deliveryman']], function () {

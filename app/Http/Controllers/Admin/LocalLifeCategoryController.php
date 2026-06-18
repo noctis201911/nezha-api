@@ -102,6 +102,7 @@ class LocalLifeCategoryController extends Controller
             'emoji'      => 'nullable|string|max:16',
             'color'      => 'nullable|string|max:40',
             'tab'        => ['required', 'string', 'in:' . implode(',', self::TABS)],
+            'kind'       => 'nullable|string|in:ugc,merchant',
             'sort_order' => 'nullable|integer|min:0|max:9999',
         ], [
             'name.required' => '类目名必填',
@@ -114,6 +115,7 @@ class LocalLifeCategoryController extends Controller
             'emoji'        => $request->emoji ?: null,
             'color'        => $request->color ?: null,
             'tab'          => $request->tab,
+            'kind'         => $request->kind ?: 'ugc',
             'sort_order'   => (int) ($request->sort_order ?: 0),
             'is_sensitive' => $request->boolean('is_sensitive'),
             'status'       => $request->boolean('status'),

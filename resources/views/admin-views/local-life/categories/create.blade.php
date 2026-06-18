@@ -63,6 +63,21 @@
                             </div>
 
                             <div class="col-md-12">
+                                <label class="input-label">类目性质 <span class="text-danger">*</span></label>
+                                <div>
+                                    <label class="form-check form-check-inline">
+                                        <input type="radio" class="form-check-input" name="kind" value="ugc" {{ $val('kind','ugc')==='ugc'?'checked':'' }}>
+                                        <span class="form-check-label">个人发帖（租房/二手等，留在信息流）</span>
+                                    </label>
+                                    <label class="form-check form-check-inline">
+                                        <input type="radio" class="form-check-input" name="kind" value="merchant" {{ $val('kind')==='merchant'?'checked':'' }}>
+                                        <span class="form-check-label">商家服务（移民/签证/美容等，点击进入商家列表）</span>
+                                    </label>
+                                </div>
+                                <small class="text-muted">「个人发帖」类目的帖子显示在信息流；「商家服务」类目点击跳转到商家列表页。</small>
+                            </div>
+
+                            <div class="col-md-12">
                                 <div class="form-check mb-2">
                                     <input type="checkbox" name="is_sensitive" value="1" class="form-check-input" id="is_sensitive" {{ $val('is_sensitive') ? 'checked' : '' }}>
                                     <label class="form-check-label" for="is_sensitive">

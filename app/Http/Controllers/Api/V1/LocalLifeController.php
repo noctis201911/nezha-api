@@ -6,6 +6,7 @@ use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\LocalLifePost;
 use App\Models\LocalLifeCategory;
+use App\Models\LocalLifeMerchant;
 use App\Models\LocalLifeReport;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ class LocalLifeController extends Controller
 
     // 图片存储目录（与 Helpers::upload 一致）
     private const IMG_DIR = 'local-life';
+    private const MERCHANT_IMG_DIR = 'local-life-merchant';
 
     // 发帖可选 tab / category 白名单（与前端表单一致）
     private const TABS = ['推荐', '租房', '招聘', '二手', '免费', '服务'];
@@ -83,6 +85,12 @@ class LocalLifeController extends Controller
         $offset = $offset > 0 ? $offset : 1;
 
         $query = LocalLifePost::where('status', LocalLifePost::STATUS_PUBLISHED);
+
+        // 信息流只出「个人发帖(ugc)」类目：商家服务类目(移民/签证/美容美发/按摩…)走商家页，不混进信息流
+        $ugcCats = LocalLifeCategory::where('status', true)->where('kind', 'ugc')->pluck('name')->toArray();
+        if (!empty($ugcCats)) {
+            $query->whereIn('category', $ugcCats);
+        }
 
         $tab = $request->input('tab');
         if ($tab && $tab !== '推荐') {
@@ -161,17 +169,124 @@ class LocalLifeController extends Controller
     {
         $cats = LocalLifeCategory::where('status', true)
             ->orderBy('sort_order')->orderBy('id')
-            ->get(['name', 'emoji', 'color', 'tab', 'is_sensitive'])
+            ->get(['name', 'emoji', 'color', 'tab', 'kind', 'is_sensitive'])
             ->map(function ($c) {
                 return [
                     'name'         => $c->name,
                     'emoji'        => $c->emoji,
                     'color'        => $c->color,
                     'tab'          => $c->tab,
+                    'kind'         => $c->kind ?: 'ugc',
                     'is_sensitive' => (bool) $c->is_sensitive,
                 ];
             });
         return response()->json(['categories' => $cats], 200);
+    }
+
+    /**
+     * 商家列表（公开只读）。纯信息展示，无任何支付/下单入口（L1-1 信息墙）。
+     * GET /api/v1/local-life/merchants?category=&area=&open_now=1&has_offer=1&limit=&offset=
+     */
+    public function merchants(Request $request)
+    {
+        $limit = (int) ($request->input('limit', 30));
+        $limit = $limit > 0 ? min($limit, 60) : 30;
+        $offset = (int) ($request->input('offset', 1));
+        $offset = $offset > 0 ? $offset : 1;
+
+        $query = LocalLifeMerchant::where('status', true);
+        if ($request->filled('category')) {
+            $query->where('category', $request->category);
+        }
+        if ($request->filled('area')) {
+            $query->where('area', $request->area);
+        }
+        if ($request->boolean('has_offer')) {
+            $query->where('has_offer', true);
+        }
+
+        $total = $query->count();
+        $rows = $query->orderBy('sort_order')->orderByDesc('id')
+            ->skip(($offset - 1) * $limit)->take($limit)->get();
+
+        $list = $rows->map(fn ($m) => $this->merchantCard($m));
+        if ($request->boolean('open_now')) {
+            $list = $list->filter(fn ($m) => $m['is_open'] === true)->values();
+        }
+
+        // 当前类目下的区域选项（前端「全部区域」下拉）
+        $areas = LocalLifeMerchant::where('status', true)
+            ->when($request->filled('category'), fn ($q) => $q->where('category', $request->category))
+            ->whereNotNull('area')->distinct()->orderBy('area')->pluck('area')->values();
+
+        return response()->json([
+            'total_size' => $total,
+            'limit'      => $limit,
+            'offset'     => $offset,
+            'areas'      => $areas,
+            'merchants'  => $list,
+        ], 200);
+    }
+
+    /**
+     * 商家详情（公开只读）。纯信息展示，不含任何支付/下单入口。
+     * GET /api/v1/local-life/merchants/{id}
+     */
+    public function merchantDetail(Request $request, $id)
+    {
+        $m = LocalLifeMerchant::where('status', true)->find($id);
+        if (!$m) {
+            return response()->json(['errors' => [['code' => 'merchant', 'message' => '商家不存在或已下线']]], 404);
+        }
+        $data = $this->merchantCard($m);
+        $data['intro']             = $m->intro;
+        $data['services']          = is_array($m->services) ? $m->services : [];
+        $data['images']            = $this->merchantImageUrls($m->images);
+        $data['wechat_qr_url']     = $m->wechat_qr ? Helpers::get_full_url(self::MERCHANT_IMG_DIR, $m->wechat_qr, 'public') : null;
+        $data['address']           = $m->address;
+        $data['latitude']          = $m->latitude;
+        $data['longitude']         = $m->longitude;
+        $data['hours_note']        = $m->hours_note;
+        $data['google_rating_url'] = $m->google_rating_url;
+        return response()->json($data, 200);
+    }
+
+    /** 商家卡片公共字段（列表 + 详情共用） */
+    private function merchantCard(LocalLifeMerchant $m): array
+    {
+        return [
+            'id'            => $m->id,
+            'name'          => $m->name,
+            'category'      => $m->category,
+            'logo_url'      => $m->logo ? Helpers::get_full_url(self::MERCHANT_IMG_DIR, $m->logo, 'public') : null,
+            'rating'        => (float) $m->rating,
+            'google_rating' => $m->google_rating !== null ? (float) $m->google_rating : null,
+            'area'          => $m->area,
+            'is_sensitive'  => (bool) $m->is_sensitive,
+            'has_offer'     => (bool) $m->has_offer,
+            'offer_text'    => $m->offer_text,
+            'is_open'       => $m->isOpenNow(),
+            'today_hours'   => $m->todayHoursLabel(),
+        ];
+    }
+
+    private function merchantImageUrls($images): array
+    {
+        if (empty($images)) {
+            return [];
+        }
+        $listImgs = is_array($images) ? $images : (json_decode($images, true) ?: []);
+        $urls = [];
+        foreach ($listImgs as $name) {
+            if (!is_string($name) || $name === '') {
+                continue;
+            }
+            $url = Helpers::get_full_url(self::MERCHANT_IMG_DIR, basename($name), 'public');
+            if ($url) {
+                $urls[] = $url;
+            }
+        }
+        return $urls;
     }
 
     /** 发帖类目白名单：后台启用中的类目名 ∪ 旧常量（兼容历史帖；表空时回退常量） */

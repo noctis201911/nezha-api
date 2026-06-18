@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 class LocalLifeCategory extends Model
 {
     protected $fillable = [
-        'name', 'emoji', 'color', 'tab', 'sort_order', 'is_sensitive', 'status',
+        'name', 'emoji', 'color', 'tab', 'kind', 'sort_order', 'is_sensitive', 'status',
     ];
 
     protected $casts = [
