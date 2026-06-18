@@ -1005,7 +1005,7 @@
   'refundRequest' => '售后维权申请',
   'order_type' => '履约模式',
   'take_away' => '到店自取',
-  'delivery' => '平台专送',
+  'delivery' => '外卖配送',
   'date_between' => '时间切片',
   '----to----' => ' —— 至 —— ',
   'clear_all_filters' => '重置漏斗',

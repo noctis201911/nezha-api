@@ -235,7 +235,15 @@ class DashboardController extends Controller
         })
         ->Notpos()->count();
 
+        $offline_pending = Order::when($today, function ($query) {
+            return $query->whereDate('created_at', Carbon::today());
+        })->when($this_month, function ($query) {
+            return $query->whereMonth('created_at', Carbon::now());
+        })->where(['order_status' => 'pending', 'payment_method' => 'offline_payment', 'restaurant_id' => $restaurant?->id])
+        ->whereHas('offline_payments', function ($q) { $q->where('status', 'pending'); })->Notpos()->count();
+
         $data = [
+            'offline_pending' => $offline_pending,
             'confirmed' => $confirmed,
             'cooking' => $cooking,
             'ready_for_delivery' => $ready_for_delivery,

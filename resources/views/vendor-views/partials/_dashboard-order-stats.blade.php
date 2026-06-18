@@ -1,4 +1,12 @@
 <div class="col-xl-3 col-sm-6">
+    <a class="resturant-card dashboard--card bg--1" href="{{route('vendor.order.list',['offline_pending'])}}">
+        <h4 class="title">{{$data['offline_pending'] ?? 0}}</h4>
+        <span class="subtitle">待确认收款</span>
+        <img class="resturant-icon max-width-34px" src="{{dynamicAsset('assets/admin/img/resturant-panel/dashboard/confirmed.png')}}" alt="dashboard">
+    </a>
+</div>
+
+<div class="col-xl-3 col-sm-6">
     <a class="resturant-card dashboard--card bg--2" href="{{route('vendor.order.list',['confirmed'])}}">
         <h4 class="title">{{$data['confirmed']}}</h4>
         <span class="subtitle">{{translate('messages.confirmed')}}</span>
