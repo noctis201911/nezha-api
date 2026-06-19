@@ -360,7 +360,7 @@ class ProductController extends Controller
             'food_id' => 'required',
             'order_id' => 'required',
             'comment' => 'nullable',
-            'rating' => 'required|numeric|min:1|max:5',
+            'rating' => 'required|integer|min:1|max:5',
             'attachment.*' => 'nullable|max:2048',
         ]);
 
