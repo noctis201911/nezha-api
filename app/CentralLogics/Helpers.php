@@ -3995,6 +3995,9 @@ class Helpers
             'method_name' => $method_name,
             'customer_note' => $user_data->customer_note,
             'admin_note' => $user_data->note,
+            // 哪吒: 顾客端「凭证审核中」需展示提交时间, denied 需展示审核时间。
+            'created_at' => $user_data->created_at,
+            'updated_at' => $user_data->updated_at,
         ];
 
         $result = [
