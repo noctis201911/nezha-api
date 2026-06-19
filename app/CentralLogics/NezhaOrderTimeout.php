@@ -9,18 +9,24 @@ use Illuminate\Support\Facades\DB;
 /**
  * 哪吒 B方案 — 订单超时规则集中计算（单一真相源）。
  *
- * 杜绝订单"无限停留在待接单/备餐中"。本类被两处共用：
+ * 杜绝订单"无限停留在待接单/备餐中/出餐后未配送/配送中未送达"。本类被两处共用：
  *   ① 订单详情 API track_order -> describe() 下发顾客可见超时状态（展示层，无副作用）
  *   ② 每分钟兜底任务 nezha:order-timeout-sweep -> 据 phase()/阈值 执行自动动作（动作层）
  * 前端不得再写散落计时器，只渲染 describe() 下发的 nezha_timeout 对象。
+ *
+ * 阶段 A/B/C（凭证审核/待接单/备餐）由动作层 + 展示层共同处理；
+ * 阶段 D/E（已出餐待配送/配送中）**仅展示层**——饭已出/在配送、钱已付，
+ * 自动取消风险高，按 L1 绝不自动取消，只对长时间无进展给诚实升级提示，不造 ETA/不伪造骑手。
  *
  * 规则全文见 docs/ORDER_TIMEOUT_RULES.md。触及 L1-1/L1-2，改动需用户批准。
  */
 class NezhaOrderTimeout
 {
-    const PHASE_PROOF  = 'proof_review';   // A 凭证审核: pending + offline_payment
-    const PHASE_ACCEPT = 'await_accept';   // B 付款确认后待接单: confirmed
-    const PHASE_PREP   = 'preparing';      // C 备餐: processing
+    const PHASE_PROOF    = 'proof_review';   // A 凭证审核: pending + offline_payment
+    const PHASE_ACCEPT   = 'await_accept';   // B 付款确认后待接单: confirmed
+    const PHASE_PREP     = 'preparing';      // C 备餐: processing
+    const PHASE_HANDOVER = 'handover';       // D 已出餐待配送(仅 delivery): handover
+    const PHASE_PICKED   = 'picked_up';      // E 配送中: picked_up
 
     /** 阈值（business_settings，可后台调；测试可注入）。单位=分钟。 */
     public static function settings(): array
@@ -33,6 +39,8 @@ class NezhaOrderTimeout
             'nezha_timeout_cancel_min',
             'nezha_timeout_prep_orange_min',
             'nezha_timeout_prep_red_min',
+            'nezha_timeout_handover_min',
+            'nezha_timeout_picked_min',
         ])->pluck('value', 'key');
 
         return [
@@ -43,6 +51,8 @@ class NezhaOrderTimeout
             'cancel'         => (int) ($rows['nezha_timeout_cancel_min'] ?? 20),
             'prep_orange'    => (int) ($rows['nezha_timeout_prep_orange_min'] ?? 5),
             'prep_red'       => (int) ($rows['nezha_timeout_prep_red_min'] ?? 15),
+            'handover'       => (int) ($rows['nezha_timeout_handover_min'] ?? 45),
+            'picked'         => (int) ($rows['nezha_timeout_picked_min'] ?? 90),
         ];
     }
 
@@ -59,17 +69,26 @@ class NezhaOrderTimeout
         if ($s === 'processing') {
             return self::PHASE_PREP;
         }
+        // D/E 仅 delivery 单计配送超时；take_away 的 handover=可取餐、非配送延迟，不计超时。
+        if ($s === 'handover' && $order->order_type === 'delivery') {
+            return self::PHASE_HANDOVER;
+        }
+        if ($s === 'picked_up' && $order->order_type === 'delivery') {
+            return self::PHASE_PICKED;
+        }
         return null;
     }
 
-    /** 阶段 A/B 的时钟起点。 */
+    /** 阶段时钟起点。D/E 只认状态切换真实时间列，无可靠记录返回 null（绝不退而用 created_at/updated_at 臆造）。 */
     public static function clockStart(Order $order, string $phase): ?Carbon
     {
         $raw = match ($phase) {
-            self::PHASE_PROOF  => optional($order->offline_payments)->created_at ?? $order->pending ?? $order->created_at,
-            self::PHASE_ACCEPT => $order->confirmed ?? $order->created_at,
-            self::PHASE_PREP   => $order->processing ?? $order->created_at,
-            default            => null,
+            self::PHASE_PROOF    => optional($order->offline_payments)->created_at ?? $order->pending ?? $order->created_at,
+            self::PHASE_ACCEPT   => $order->confirmed ?? $order->created_at,
+            self::PHASE_PREP     => $order->processing ?? $order->created_at,
+            self::PHASE_HANDOVER => $order->handover,   // 仅真实出餐时间，无则 null
+            self::PHASE_PICKED   => $order->picked_up,  // 仅真实配送时间，无则 null
+            default              => null,
         };
         return $raw ? Carbon::parse($raw) : null;
     }
@@ -118,7 +137,7 @@ class NezhaOrderTimeout
 
     /**
      * 展示层：返回 nezha_timeout 对象供订单详情 API 下发。不在超时范围返回 null。
-     * 字段（需求5）：phase / severity / title / next_step / deadline_at / refund_method / refund_eta。
+     * 字段（需求5）：phase / severity / title / next_step / contact_hint / deadline_at / refund_method / refund_eta。
      */
     public static function describe(Order $order): ?array
     {
@@ -131,6 +150,11 @@ class NezhaOrderTimeout
 
         $refundMethod = '联系商家原路退回（平台不经手此款）';
         $refundEta    = '以商家退款时间为准（平台不经手，无法预估到账）';
+
+        // 阶段 D/E：配送相关（仅展示，不自动取消）
+        if ($phase === self::PHASE_HANDOVER || $phase === self::PHASE_PICKED) {
+            return self::describeDelivery($order, $phase, $cfg, $now, $refundMethod, $refundEta);
+        }
 
         if ($phase === self::PHASE_PREP) {
             $start  = self::clockStart($order, $phase);
@@ -227,6 +251,69 @@ class NezhaOrderTimeout
             'deadline_at'   => $deadline,
             'refund_method' => $refundMethod,
             'refund_eta'    => $refundEta,
+            'elapsed_minutes' => $elapsed,
+        ];
+    }
+
+    /**
+     * 阶段 D/E 展示层：已出餐待配送 / 配送中。
+     * 仅展示，绝不自动取消（饭已出/在配送、钱已付，L1 风险高）。
+     * - 无可靠后台时间记录 -> 返回 no_time_record 诚实对象，绝不据无关时间臆造超时（需求3）。
+     * - 未超阈值 -> 返回 null，前端用正常默认文案（需求6）。
+     * - 超阈值 -> warning 诚实升级提示：不声称第三方配送在重试、不伪造骑手、不给虚假 ETA（需求5）。
+     */
+    private static function describeDelivery(Order $order, string $phase, array $cfg, Carbon $now, string $refundMethod, string $refundEta): ?array
+    {
+        $start       = self::clockStart($order, $phase);
+        $contactHint = '可点「催单」或联系商家确认配送安排；长时间无进展请联系平台客服处理。';
+
+        if (!$start) {
+            // 无后台时间记录：诚实告知，不触发假超时
+            return [
+                'phase'           => $phase,
+                'severity'        => 'info',
+                'no_time_record'  => true,
+                'title'           => $phase === self::PHASE_HANDOVER ? '餐已出好，等待配送' : '配送中',
+                'next_step'       => '系统暂无该状态的后台时间记录，无法判断配送是否超时；配送进度以商家通知为准。',
+                'contact_hint'    => $contactHint,
+                'deadline_at'     => null,
+                'refund_method'   => $refundMethod,
+                'refund_eta'      => $refundEta,
+                'elapsed_minutes' => null,
+            ];
+        }
+
+        $elapsed   = max(0, (int) floor($start->diffInSeconds($now) / 60));
+        $threshold = $phase === self::PHASE_HANDOVER ? $cfg['handover'] : $cfg['picked'];
+
+        // 未超阈值：不下发超时对象，前端走正常默认文案
+        if ($elapsed < $threshold) {
+            return null;
+        }
+
+        if ($phase === self::PHASE_HANDOVER) {
+            return [
+                'phase'           => $phase,
+                'severity'        => 'warning',
+                'title'           => '已出餐较久，仍未开始配送',
+                'next_step'       => '餐已出餐约 ' . self::humanDuration($elapsed) . '，配送尚未开始。平台未接入第三方配送实时进度，无法预估到达时间；如较急可联系商家确认配送安排。',
+                'contact_hint'    => $contactHint,
+                'deadline_at'     => null,
+                'refund_method'   => $refundMethod,
+                'refund_eta'      => $refundEta,
+                'elapsed_minutes' => $elapsed,
+            ];
+        }
+
+        return [
+            'phase'           => $phase,
+            'severity'        => 'warning',
+            'title'           => '配送时间偏长，仍未送达',
+            'next_step'       => '订单显示配送中已 ' . self::humanDuration($elapsed) . '，超过常规送达时间。平台无第三方配送实时位置与预计送达时间；如长时间未收到，请联系商家或客服核实。',
+            'contact_hint'    => $contactHint,
+            'deadline_at'     => null,
+            'refund_method'   => $refundMethod,
+            'refund_eta'      => $refundEta,
             'elapsed_minutes' => $elapsed,
         ];
     }
