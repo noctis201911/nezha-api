@@ -199,7 +199,7 @@
 
                                     <div class="d-flex bg-white align-items-center gap-1 laglng-controller">
                                                     <div id="outOfZone" class="map-alert bg-dark d-flex align-items-center justify-content-center rounded-8 py-2 px-2 fs-12 text-white mb-2">
-                                                        <img class="" src="{{asset('public/assets/admin/img/warning-cus.png')}}" alt="img"  onerror="this.style.display='none';"> {{ translate('Please place the marker inside the available zones.') }}
+                                                        <img class="" src="{{asset('assets/admin/img/warning-cus.png')}}" alt="img"  onerror="this.style.display='none';"> {{ translate('Please place the marker inside the available zones.') }}
                                                     </div>
                                                     <div id="latlng" class="d-flex">
                                                         <input type="" class="border-0 outline-0 no-validation-message" id="latitude" name="latitude" placeholder="{{ translate('messages.Ex:_-94.22213') }} " value="{{ old('latitude') }}"  readonly>
