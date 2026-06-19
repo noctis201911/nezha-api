@@ -1976,20 +1976,33 @@ class Helpers
         // 哪吒使用商家代叫 Yandex，平台没有第三方骑手回调。通用 StackFood 文案会在
         // handover 时要求顾客“尽快前往取餐”，并把 picked_up 说成平台已掌握骑手状态，
         // 与真实流程冲突。仅对该配送模式覆盖为诚实、可行动的顾客文案。
-        $deliveryInstruction = (string) ($order->delivery_instruction ?? '');
-        $merchantCallsYandex = $order->order_type === 'delivery'
-            && !$order->delivery_man
-            && (mb_strpos($deliveryInstruction, '商家') !== false || stripos($deliveryInstruction, 'merchant') !== false);
-        if ($merchantCallsYandex && in_array($order->order_status, ['handover', 'picked_up'], true)) {
+        // 哪吒: 按结构化的配送责任方(resolvedDeliveryArranger)覆盖出餐/配送阶段文案,
+        // 不再靠 delivery_instruction 中文字符串判断, 也绝不伪造平台拿不到的 Yandex 骑手状态(需求7/9)。
+        $arranger = $order->resolvedDeliveryArranger(); // merchant | customer | null
+        if ($order->order_type === 'delivery' && !$order->delivery_man
+            && in_array($order->order_status, ['handover', 'picked_up'], true)) {
             $isZh = $lang && stripos($lang, 'zh') === 0;
-            if ($order->order_status === 'handover') {
-                $value = $isZh
-                    ? "您在「{$order?->restaurant?->name}」的餐品已出好，商家正在为您安排 Yandex。请保持电话畅通，并在订单追踪页查看取餐号。"
-                    : "Your order from {$order?->restaurant?->name} is ready. The restaurant is arranging Yandex delivery. Keep your phone available and check the pickup code on the tracking page.";
+            $rname = $order?->restaurant?->name;
+            if ($arranger === 'customer') {
+                if ($order->order_status === 'handover') {
+                    $value = $isZh
+                        ? "您在「{$rname}」的餐品已出好。请在订单追踪页点「一键叫 Yandex」自行呼叫配送，商家地址已附上。平台暂无实时骑手轨迹。"
+                        : "Your order from {$rname} is ready. Open the tracking page and tap \"Call Yandex\" to arrange pickup yourself; the restaurant address is provided there. Live courier tracking is not available here.";
+                } else {
+                    $value = $isZh
+                        ? '订单已标记为配送中。平台暂无 Yandex 实时骑手轨迹，请以您在 Yandex 的叫车单为准。'
+                        : 'Your order is marked out for delivery. Live Yandex courier tracking is not available here; follow your Yandex ride for status.';
+                }
             } else {
-                $value = $isZh
-                    ? '商家已将订单更新为配送中。平台暂无法显示 Yandex 骑手、轨迹和预计送达时间，请以 Yandex 或商家通知为准。'
-                    : 'The restaurant marked your order as out for delivery. Live Yandex courier, route, and ETA data are not available here; follow Yandex or restaurant updates.';
+                if ($order->order_status === 'handover') {
+                    $value = $isZh
+                        ? "您在「{$rname}」的餐品已出好，商家正在为您呼叫 Yandex 配送。请保持电话畅通，并在订单追踪页查看取餐号。平台暂无实时骑手轨迹。"
+                        : "Your order from {$rname} is ready and the restaurant is calling Yandex for you. Keep your phone available and check the pickup code on the tracking page. Live courier tracking is not available here.";
+                } else {
+                    $value = $isZh
+                        ? '商家已将订单更新为配送中。平台暂无 Yandex 骑手、轨迹和预计送达时间，请保持电话畅通并以商家或 Yandex 通知为准。'
+                        : 'The restaurant marked your order as out for delivery. Live Yandex courier, route, and ETA data are not available here; follow restaurant or Yandex updates.';
+                }
             }
         }
 

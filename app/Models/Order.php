@@ -45,7 +45,39 @@ class Order extends Model
         'is_pos'=>'boolean',
         'delivery_type_charge' => 'float',
     ];
-    protected $appends = ['order_proof_full_url'];
+    protected $appends = ['order_proof_full_url', 'delivery_arranger_resolved'];
+
+    /**
+     * 哪吒: 解析"谁呼叫 Yandex"的最终责任方, 优先用结构化列 delivery_arranger,
+     * 列为空(历史单)时回退解析 delivery_instruction 字符串。与迁移回填、前端
+     * resolveDeliveryArranger() 同一套规则。
+     *   merchant = 商家代叫 ; customer = 顾客自叫 ; null = 非配送单(无 Yandex)
+     */
+    public function resolvedDeliveryArranger(): ?string
+    {
+        if ($this->order_type !== 'delivery') {
+            return null;
+        }
+        if (in_array($this->delivery_arranger, ['merchant', 'customer'], true)) {
+            return $this->delivery_arranger;
+        }
+        $ins = (string) ($this->delivery_instruction ?? '');
+        if (mb_strpos($ins, '商家') !== false || stripos($ins, 'merchant') !== false) {
+            return 'merchant';
+        }
+        if (mb_strpos($ins, '自行') !== false
+            || mb_strpos($ins, '自己') !== false
+            || stripos($ins, 'self') !== false
+            || stripos($ins, 'customer') !== false) {
+            return 'customer';
+        }
+        return 'customer';
+    }
+
+    public function getDeliveryArrangerResolvedAttribute(): ?string
+    {
+        return $this->resolvedDeliveryArranger();
+    }
 
     public function getOrderProofFullUrlAttribute(){
         $images = [];
