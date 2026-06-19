@@ -1503,7 +1503,7 @@
   'Delivery_Address' => '末端交付坐标',
   'Product' => '实体商品',
   'item_price' => '基准原价',
-  'order_placed_successfully' => '交易引擎已成功建立契约',
+  'order_placed_successfully' => '订单已提交',
   'order_push_title' => '订单状态机发生跳变',
   'new_order_push_description' => '新订单入网，全链路开始运转',
   'Review' => '舆情评价管理',
