@@ -35,4 +35,4 @@
 <!-- 格式： - [ ] 窗口X 正在改 <文件/页面>（YYYY-MM-DD HH:MM） -->
 - [x] 窗口(F-4) 已完成(提交 6a94cab) 改过 OrderLogic.php / Admin·Vendor OrderController / vendor order-view·_sidebar / routes·docs —— 直付单退款通知商家+留痕（2026-06-17）
 - [x] Codex 已完成(提交 e2d5134) OrderLogic.php / Helpers.php —— 顾客确认收款通知去重及 Yandex 状态文案（2026-06-19 07:37→07:45）
-- [~] Claude 接手(自 Codex) 客户可见内部术语去除：resources/lang/zh-CN/messages.php 及 zh-cn/messages.php 的「契约/交易引擎/状态机/推演」改普通用户语言(保留 key/占位符/业务含义);精确 pathspec 提交,绝不带入他窗 NezhaDeliveryAppeal WIP（2026-06-19 10:10 接手）
+- [x] Claude 已完成(自 Codex 接手·提交 fac6624) 客户可见内部术语去除: zh-CN 与 zh-cn/messages.php 的「契约/交易引擎/状态机/推演」共 55+55 处改普通用户语言(order_updated_successfully→订单状态已更新、order_push_title→订单状态有更新、order_placed_successfully→订单已提交、Delivered→已送达、completed→已完成、Privacy_Policy→隐私政策、subscription_*契约系→订阅系等), 保留 key/占位符/业务含义; php -l 通过, 4 词残留=0。验证: app 实发 X-localization=zh-CN(确为所改文件); 渲染页 home/profile/tracking/order-history 与实时 API(order/track·details order#12,zh-CN) 均无术语。仅改两 messages.php(pathspec), 未碰他窗 NezhaDeliveryAppeal WIP。**遗留(超出本次4词范围,多为admin/订阅)**: 同文件仍有「妥投/风控介入/物理结单/战绩/C端」等其它生造黑话(如 orders_delivered=订单妥投池), 主客户面未见, 建议后续统一清（2026-06-19 10:10→10:35）
