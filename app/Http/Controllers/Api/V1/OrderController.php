@@ -105,6 +105,8 @@ class OrderController extends Controller
             'channel'       => $nezha_rr->payment_channel,
             'refunded'      => $nezha_rr->status === 'merchant_refunded',
         ] : null;
+        // 哪吒: 订单超时状态(集中规则, 见 docs/ORDER_TIMEOUT_RULES.md)。前端只渲染, 不写散落计时器。
+        $order['nezha_timeout'] = \App\CentralLogics\NezhaOrderTimeout::describe($order);
         return response()->json($order, 200);
     }
 

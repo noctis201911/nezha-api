@@ -1,0 +1,289 @@
+<?php
+
+namespace App\Console\Commands;
+
+use App\CentralLogics\Helpers;
+use App\CentralLogics\NezhaOrderTimeout;
+use App\CentralLogics\OrderLogic;
+use App\Mail\NezhaOrderTimeoutMail;
+use App\Models\Order;
+use Carbon\Carbon;
+use Illuminate\Console\Command;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+
+/**
+ * 哪吒 B方案 — 订单超时兜底任务（每分钟）。
+ *
+ * 杜绝订单"无限停留在待接单/备餐中"。规则全文见 docs/ORDER_TIMEOUT_RULES.md。
+ * 三阶段 + 自动动作，全部经 nezha_order_timeout_events 幂等账本保证每单每动作恰好一次：
+ *   A 凭证审核(pending+offline):  无凭证图 N1 分钟自动取消; 有凭证图 N2 邮件商家、N3 自动取消+待退款留痕+邮件商家退款
+ *   B 付款确认后待接单(confirmed): N2 邮件商家、N3 自动取消+待退款留痕+邮件商家退款
+ *   C 备餐(processing):           超 ETA+N4 或 ETA 未知 -> 升级客服(邮件商家+客服), 不自动取消
+ *
+ * 合规(L1): 平台不碰钱。自动取消绝不触发平台退款, 已付款单走 OrderLogic::record_direct_pay_refund_pending
+ *           生成 pending_merchant_refund 留痕 + 通知商家原路退。顾客文案显示真实责任人=商家。
+ */
+class OrderTimeoutSweep extends Command
+{
+    protected $signature = 'nezha:order-timeout-sweep {--dry-run : 只报告将执行哪些动作, 不实际改动}';
+
+    protected $description = '哪吒: 扫描超时订单并执行幂等自动动作(提醒/自动取消/待退款留痕/升级客服)';
+
+    private bool $dry = false;
+
+    public function handle()
+    {
+        $this->dry = (bool) $this->option('dry-run');
+        $cfg = NezhaOrderTimeout::settings();
+
+        if (!$cfg['status']) {
+            $this->info('订单超时兜底总开关关闭(nezha_timeout_status=0), 跳过。');
+            return self::SUCCESS;
+        }
+
+        $now = Carbon::now();
+        $acted = 0;
+
+        // ---- 阶段 A: 凭证审核(pending + offline_payment) ----
+        $proofOrders = Order::with(['offline_payments', 'details', 'restaurant.vendor', 'customer'])
+            ->where('order_status', 'pending')
+            ->where('payment_method', 'offline_payment')
+            ->get();
+        foreach ($proofOrders as $order) {
+            $start = NezhaOrderTimeout::clockStart($order, NezhaOrderTimeout::PHASE_PROOF);
+            if (!$start) { continue; }
+            $age = (int) floor($start->diffInSeconds($now) / 60);
+            $hasProof = NezhaOrderTimeout::hasProofImage($order);
+
+            if (!$hasProof) {
+                if ($age >= $cfg['unpaid_cancel']) {
+                    $acted += $this->fireOnce($order->id, 'cancel_unpaid', function () use ($order) {
+                        $this->cancelOrder($order, false, '顾客超时未完成付款，系统自动取消');
+                    }, "未付款超时 {$age}min 自动取消") ? 1 : 0;
+                }
+                continue;
+            }
+
+            // 有凭证图：可能已付待商家核对
+            if ($age >= $cfg['email_merchant']) {
+                $acted += $this->fireOnce($order->id, 'email_merchant', function () use ($order, $age) {
+                    $this->remindMerchant($order, $age, true);
+                }, "有凭证超时 {$age}min 邮件商家") ? 1 : 0;
+            }
+            if ($age >= $cfg['cancel']) {
+                $acted += $this->fireOnce($order->id, 'cancel_paid_refund', function () use ($order) {
+                    $this->cancelOrder($order, true, '商家超时未处理，系统自动取消，已付款项需商家原路退回');
+                }, "有凭证超时 {$age}min 自动取消+退款留痕") ? 1 : 0;
+            }
+        }
+
+        // ---- 阶段 B: 付款确认后待接单(confirmed) ----
+        $acceptOrders = Order::with(['offline_payments', 'details', 'restaurant.vendor', 'customer'])
+            ->where('order_status', 'confirmed')
+            ->get();
+        foreach ($acceptOrders as $order) {
+            $start = NezhaOrderTimeout::clockStart($order, NezhaOrderTimeout::PHASE_ACCEPT);
+            if (!$start) { continue; }
+            $age = (int) floor($start->diffInSeconds($now) / 60);
+
+            if ($age >= $cfg['email_merchant']) {
+                $acted += $this->fireOnce($order->id, 'email_merchant', function () use ($order, $age) {
+                    $this->remindMerchant($order, $age, true);
+                }, "待接单超时 {$age}min 邮件商家") ? 1 : 0;
+            }
+            if ($age >= $cfg['cancel']) {
+                $acted += $this->fireOnce($order->id, 'cancel_paid_refund', function () use ($order) {
+                    $this->cancelOrder($order, true, '商家超时未接单，系统自动取消，已付款项需商家原路退回');
+                }, "待接单超时 {$age}min 自动取消+退款留痕") ? 1 : 0;
+            }
+        }
+
+        // ---- 阶段 C: 备餐(processing) ----
+        $prepOrders = Order::with(['restaurant.vendor', 'customer'])
+            ->where('order_status', 'processing')
+            ->get();
+        foreach ($prepOrders as $order) {
+            $start = NezhaOrderTimeout::clockStart($order, NezhaOrderTimeout::PHASE_PREP);
+            if (!$start) { continue; }
+            $age = (int) floor($start->diffInSeconds($now) / 60);
+            $etaMin = is_numeric($order->processing_time) ? (int) $order->processing_time : null;
+            $overBy = $etaMin === null ? PHP_INT_MAX : ($age - $etaMin);
+
+            if ($etaMin === null || $overBy >= $cfg['prep_red']) {
+                $overTxt = $etaMin === null ? $age : $overBy;
+                $acted += $this->fireOnce($order->id, 'prep_escalate', function () use ($order, $overTxt) {
+                    $this->escalatePrep($order, (int) $overTxt);
+                }, "备餐超时 over={$overTxt}min 升级客服") ? 1 : 0;
+            }
+        }
+
+        $msg = ($this->dry ? '[DRY-RUN] ' : '') . "订单超时兜底完成: 本轮触发动作 {$acted} 个。";
+        $this->info($msg);
+        Log::info('NEZHA_TIMEOUT_SWEEP: ' . $msg);
+        return self::SUCCESS;
+    }
+
+    /**
+     * 幂等闸: 先抢占 (order_id, action) 唯一行, 抢到才执行 $cb。
+     * 唯一冲突=已处理过, 跳过。$cb 抛错则回滚(连同抢占行), 下轮重试。
+     */
+    private function fireOnce(int $orderId, string $action, callable $cb, string $detail = ''): bool
+    {
+        if ($this->dry) {
+            // dry-run: 已有记录视为已处理, 否则报告将执行(不写库)
+            $exists = DB::table('nezha_order_timeout_events')->where(['order_id' => $orderId, 'action' => $action])->exists();
+            if ($exists) { return false; }
+            $this->line("  [DRY] order#{$orderId} action={$action} :: {$detail}");
+            return true;
+        }
+        try {
+            DB::beginTransaction();
+            DB::table('nezha_order_timeout_events')->insert([
+                'order_id'   => $orderId,
+                'action'     => $action,
+                'fired_at'   => now(),
+                'detail'     => $detail,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $cb();
+            DB::commit();
+            $this->line("  order#{$orderId} action={$action} :: {$detail}");
+            return true;
+        } catch (QueryException $e) {
+            DB::rollBack();
+            if ((int) ($e->errorInfo[1] ?? 0) === 1062 || stripos($e->getMessage(), 'duplicate') !== false) {
+                return false; // 幂等: 已处理过
+            }
+            Log::error("NEZHA_TIMEOUT_SWEEP {$action} order#{$orderId} QueryException: " . $e->getMessage());
+            return false;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error("NEZHA_TIMEOUT_SWEEP {$action} order#{$orderId} failed: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 自动取消订单。$paid=true 走待退款留痕(已付款); false 仅取消(未付款无退款)。
+     * 取消的 DB 改动在外层事务内; 邮件/推送best-effort, 失败不回滚取消。
+     */
+    private function cancelOrder(Order $order, bool $paid, string $reason): void
+    {
+        // 事务内再确认状态未被商家手动改走(防竞态)
+        $fresh = Order::where('id', $order->id)->lockForUpdate()->first();
+        if (!$fresh || !in_array($fresh->order_status, ['pending', 'confirmed'], true)) {
+            throw new \RuntimeException('order#' . $order->id . ' 状态已变(' . ($fresh->order_status ?? 'gone') . '), 放弃自动取消');
+        }
+
+        $fresh->order_status        = 'canceled';
+        $fresh->canceled            = now();
+        $fresh->cancellation_reason = $reason;
+        $fresh->cancellation_note   = '系统超时自动处理';
+        $fresh->canceled_by         = 'system_timeout';
+        $fresh->save();
+
+        Helpers::decreaseSellCount(order_details: $order->details);
+        Helpers::increment_order_count($order->restaurant);
+
+        if ($paid && $order->payment_method === 'offline_payment') {
+            \App\Models\OfflinePayments::where('order_id', $order->id)
+                ->whereIn('status', ['pending', 'verified', 'denied'])
+                ->update(['status' => 'canceled']);
+            OrderLogic::record_direct_pay_refund_pending($fresh, 'system', $order->user_id, $reason, true);
+        } elseif ($order->payment_method === 'offline_payment') {
+            \App\Models\OfflinePayments::where('order_id', $order->id)
+                ->where('status', 'pending')
+                ->update(['status' => 'canceled']);
+        }
+
+        // best-effort 通知(不影响取消提交)
+        try {
+            $this->notifyCustomerCanceled($fresh, $paid);
+        } catch (\Throwable $e) {
+            Log::warning('NEZHA_TIMEOUT notifyCustomer order#' . $order->id . ': ' . $e->getMessage());
+        }
+        try {
+            Helpers::send_order_notification($fresh);
+        } catch (\Throwable $e) {
+            info('NEZHA_TIMEOUT send_order_notification: ' . $e->getMessage());
+        }
+        if ($paid) {
+            try {
+                $this->mailMerchant($order, 'cancel_refund', $this->waited($order), true);
+            } catch (\Throwable $e) {
+                Log::warning('NEZHA_TIMEOUT mailMerchant cancel order#' . $order->id . ': ' . $e->getMessage());
+            }
+        }
+    }
+
+    private function remindMerchant(Order $order, int $age, bool $paid): void
+    {
+        // 邮件商家(失败抛出 -> 回滚重试)
+        $this->mailMerchant($order, 'remind', $age, $paid);
+        // 升级客服: 通知平台客服邮箱(best-effort)
+        $this->escalateToSupport($order, "订单 #{$order->id} 待接单已超 {$age} 分钟，商家未处理。");
+    }
+
+    private function escalatePrep(Order $order, int $overBy): void
+    {
+        $this->mailMerchant($order, 'prep_overtime', $overBy, true);
+        $this->escalateToSupport($order, "订单 #{$order->id} 备餐超时约 {$overBy} 分钟(或无预计出餐时间)，已升级。");
+    }
+
+    private function mailMerchant(Order $order, string $type, int $minutes, bool $paid): void
+    {
+        $email = $order->restaurant?->email ?? $order->restaurant?->vendor?->email;
+        $name  = $order->restaurant?->name ?? '商家';
+        if (!$email) {
+            Log::warning('NEZHA_TIMEOUT 商家无邮箱, 跳过邮件 order#' . $order->id);
+            return;
+        }
+        Mail::to($email)->send(new NezhaOrderTimeoutMail($type, (int) $order->id, $name, $minutes, $paid));
+    }
+
+    private function escalateToSupport(Order $order, string $body): void
+    {
+        try {
+            Log::warning('NEZHA_TIMEOUT_ESCALATE order#' . $order->id . ': ' . $body);
+            // 升级客服: 给平台客服信箱发简报(best-effort)
+            Mail::raw($body . "\n\n请登录后台跟进订单 #" . $order->id . "。", function ($m) use ($order) {
+                $m->to('support@nezha.am')->subject('哪吒 · 订单超时升级 #' . $order->id);
+            });
+        } catch (\Throwable $e) {
+            Log::warning('NEZHA_TIMEOUT escalateToSupport order#' . $order->id . ': ' . $e->getMessage());
+        }
+    }
+
+    private function notifyCustomerCanceled(Order $order, bool $paid): void
+    {
+        if ($order->is_guest) { return; }
+        $zh = stripos(($order->customer?->current_language_key ?: 'zh'), 'zh') === 0;
+        $title = $zh ? '订单已取消' : 'Order canceled';
+        if ($paid) {
+            $msg = $zh
+                ? '商家接单超时，订单 #' . $order->id . ' 已自动取消。你此前直付商家的款项，平台将通知商家联系你按原路退回（平台不经手此款）。'
+                : 'The restaurant did not respond in time, so order #' . $order->id . ' was canceled. For the amount paid directly to the restaurant, the platform will ask the restaurant to refund you via the original method (the platform does not handle this money).';
+        } else {
+            $msg = $zh
+                ? '订单 #' . $order->id . ' 因超时未完成付款已自动取消。'
+                : 'Order #' . $order->id . ' was canceled because payment was not completed in time.';
+        }
+        $data = Helpers::makeDataForPushNotification(title: $title, message: $msg, orderId: $order->id, type: 'order_status', orderStatus: 'canceled');
+        $token = $order->customer?->cm_firebase_token;
+        if ($token) {
+            Helpers::send_push_notif_to_device($token, $data);
+        }
+        Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id);
+    }
+
+    private function waited(Order $order): int
+    {
+        $phase = NezhaOrderTimeout::phase($order) ?? NezhaOrderTimeout::PHASE_PROOF;
+        $start = NezhaOrderTimeout::clockStart($order, $phase);
+        return $start ? (int) floor($start->diffInSeconds(Carbon::now()) / 60) : 0;
+    }
+}

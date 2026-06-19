@@ -2504,6 +2504,11 @@
                     html: message + '<br/>' +
                         '<label>{{ translate('Enter Processing time in minutes') }}</label>',
                     inputValue: processing,
+                    inputValidator: (value) => {
+                        if (!value || !/^[0-9]+$/.test(value) || parseInt(value) < 1) {
+                            return '请填写预计出餐时间（至少 1 分钟）后再接单';
+                        }
+                    },
                     preConfirm: (processing_time) => {
                         location.href = route + '&processing_time=' + processing_time;
                     },

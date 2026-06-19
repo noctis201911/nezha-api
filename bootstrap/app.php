@@ -110,6 +110,11 @@ return Application::configure(basePath: dirname(__DIR__))
         //   无人「确认收货」的配送/自取单, 自动判为已送达并结算佣金(恰好一次)。开关 nezha_auto_finalize_handover_status(默认1开)。
         //   背景: 平台不配送、无骑手点送达、商家不知Yandex何时送达 → 顾客忘点会永远卡 handover, 佣金永不入账。每小时跑一次。
         $schedule->command('nezha:auto-finalize-handover')->hourly()->withoutOverlapping();
+
+        // 哪吒 B方案 订单超时兜底: 杜绝订单无限停留在待接单/备餐中。规则见 docs/ORDER_TIMEOUT_RULES.md。
+        //   每分钟扫描, 据阈值执行幂等动作(提醒商家/自动取消未付款单/已付款单待退款留痕+通知商家退款/备餐超时升级客服)。
+        //   总开关 business_settings.nezha_timeout_status(默认1开)。
+        $schedule->command('nezha:order-timeout-sweep')->everyMinute()->withoutOverlapping();
     })
 
     ->create();

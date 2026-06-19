@@ -350,8 +350,12 @@ class OrderController extends Controller
             'id' => 'required',
             'order_status' => 'required|in:confirmed,processing,handover,delivered,canceled',
             'reason' => 'required_if:order_status,canceled',
+            'processing_time' => 'required_if:order_status,processing|integer|min:1',
         ], [
-            'id.required' => 'Order id is required!'
+            'id.required' => 'Order id is required!',
+            'processing_time.required_if' => '请填写预计出餐时间（分钟）后再接单',
+            'processing_time.integer' => '预计出餐时间需为整数分钟',
+            'processing_time.min' => '预计出餐时间至少 1 分钟',
         ]);
 
         $order = Order::where(['id' => $request->id, 'restaurant_id' => Helpers::get_restaurant_id()])->with(['subscription_logs', 'details'])->first();
