@@ -872,6 +872,34 @@
 
                             {{-- 哪吒 B方案: 配送单呼叫 Yandex 后填写追踪链接, 顾客端可实时查看 --}}
                             @if ($order->order_type == 'delivery' && in_array($order->order_status, ['handover', 'picked_up']))
+                                @php($yAddr = $order->delivery_address ? json_decode($order->delivery_address, true) : [])
+                                @php($yLat = $yAddr['latitude'] ?? null)
+                                @php($yLng = $yAddr['longitude'] ?? null)
+                                @php($yText = $yAddr['address'] ?? '')
+                                {{-- 哪吒 B方案: 顾客配送定位助手 — 复制地址/坐标粘进 Yandex Go, 或一键在 Yandex 地图确认位置 --}}
+                                <div class="mt-3 p-3" style="background:#F0F7FF;border:1px solid #CFE3FF;border-radius:12px;">
+                                    <div style="font-weight:700;margin-bottom:6px;color:#1A1A1A;">顾客配送位置（叫 Yandex 用）</div>
+                                    <div style="font-size:12px;color:#6B7280;margin-bottom:8px;line-height:1.6;">复制下面的地址或坐标，粘贴到 Yandex Go 搜索框即可定位顾客；或点“在 Yandex 地图打开”先确认位置。配送定位以图钉为准。</div>
+                                    @if ($yText)
+                                        <div class="d-flex align-items-center gap-2 mb-2">
+                                            <input type="text" readonly value="{{ $yText }}" class="form-control form-control-sm" style="border-radius:8px;">
+                                            <button type="button" class="btn btn-sm btn-outline-primary" style="white-space:nowrap;" onclick="this.previousElementSibling.select();document.execCommand('copy');this.innerText='已复制';">复制地址</button>
+                                        </div>
+                                    @endif
+                                    @if ($yLat && $yLng)
+                                        <div class="d-flex align-items-center gap-2 mb-2">
+                                            <input type="text" readonly value="{{ $yLat }}, {{ $yLng }}" class="form-control form-control-sm" style="border-radius:8px;">
+                                            <button type="button" class="btn btn-sm btn-outline-primary" style="white-space:nowrap;" onclick="this.previousElementSibling.select();document.execCommand('copy');this.innerText='已复制';">复制坐标</button>
+                                        </div>
+                                        <a href="https://yandex.com/maps/?ll={{ $yLng }},{{ $yLat }}&z=17&pt={{ $yLng }},{{ $yLat }},pm2rdm&l=map" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn--primary">在 Yandex 看顾客位置</a>
+                                        @if ($order->restaurant && $order->restaurant->latitude && $order->restaurant->longitude)
+                                            {{-- 哪吒: 餐厅->顾客 驾车路线(含距离/ETA, Yandex 可发到手机); rtext 坐标顺序=lat,lon (与点位 ll/pt 的 lon,lat 相反, 已实测) --}}
+                                            <a href="https://yandex.com/maps/?rtext={{ $order->restaurant->latitude }},{{ $order->restaurant->longitude }}~{{ $yLat }},{{ $yLng }}&rtt=auto" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary">餐厅→顾客 路线（含距离）</a>
+                                        @endif
+                                    @else
+                                        <div style="font-size:12px;color:#C4193E;">该订单未带坐标（顾客下单未用地图定位），请按地址或电话与顾客确认位置。</div>
+                                    @endif
+                                </div>
                                 <div class="mt-3 p-3" style="background:#FFF7E6;border:1px solid #F3D9A8;border-radius:12px;">
                                     <div style="font-weight:700;margin-bottom:6px;color:#1A1A1A;">Yandex 配送追踪链接</div>
                                     <div style="font-size:12px;color:#6B7280;margin-bottom:8px;line-height:1.6;">
