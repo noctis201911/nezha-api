@@ -360,13 +360,20 @@ class ProductController extends Controller
             'food_id' => 'required',
             'order_id' => 'required',
             'comment' => 'nullable',
-            'rating' => 'required|numeric|max:5',
+            'rating' => 'required|numeric|min:1|max:5',
             'attachment.*' => 'nullable|max:2048',
         ]);
 
         $product = Food::find($request->food_id);
         if (isset($product) == false) {
             $validator->errors()->add('food_id', translate('messages.food_not_found'));
+        }
+
+        // 哪吒: 对象级鉴权 — 订单须属当前用户且包含此商品(防越权评价/食品与订单不匹配)
+        $nz_order_owned = DB::table('orders')->where('id', $request->order_id)->where('user_id', $request?->user()?->id)->exists();
+        $nz_food_in_order = DB::table('order_details')->where('order_id', $request->order_id)->where('food_id', $request->food_id)->exists();
+        if (!$nz_order_owned || !$nz_food_in_order) {
+            return response()->json(['errors' => [['code'=>'order','message'=> translate('messages.not_found')]]], 403);
         }
 
         $multi_review = Review::where(['food_id' => $request->food_id, 'user_id' => $request?->user()?->id, 'order_id'=>$request->order_id])->first();

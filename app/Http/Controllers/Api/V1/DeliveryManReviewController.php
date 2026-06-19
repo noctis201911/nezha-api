@@ -49,7 +49,7 @@ class DeliveryManReviewController extends Controller
             'delivery_man_id' => 'required',
             'order_id' => 'required',
             'comment' => 'required',
-            'rating' => 'required|numeric|max:5',
+            'rating' => 'required|numeric|min:1|max:5',
             'attachment.*' => 'nullable|max:2048',
         ]);
 
