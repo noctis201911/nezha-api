@@ -1841,7 +1841,7 @@
   'Ex:_+9XXX-XXX-XXXX' => '例：+86 13800138000',
   'Ex:_Jhone@company.com' => '例：admin@ele.me',
   'token_not_found' => '401鉴权：Token 物理丢失',
-  'review_submited_successfully' => '舆情反馈已安全落库',
+  'review_submited_successfully' => '评价提交成功',
   'application_placed_successfully' => '入驻工单已推送至底层审核池',
   'subscription_successful' => 'SaaS特权包已挂载生效',
   'status_updated!' => '状态树重构完毕！',
