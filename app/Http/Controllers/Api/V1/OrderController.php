@@ -70,6 +70,9 @@ class OrderController extends Controller
             ->Notpos()->first();
 
         if($order){
+            // 哪吒B方案: 完成/送达元数据 + 收据(必须在 restaurant 被格式化为数组、offline_payments 被 unset 之前, 关系仍为模型时计算)
+            $order['nezha_completion'] = OrderLogic::completion_meta($order);
+            $order['nezha_receipt'] = OrderLogic::receipt_meta($order);
             $order['restaurant'] = $order['restaurant'] ? Helpers::restaurant_data_formatting($order['restaurant']): $order['restaurant'];
             $order['delivery_address'] = $order['delivery_address']?json_decode($order['delivery_address'],true):$order['delivery_address'];
             $order['delivery_man'] = $order['delivery_man']?Helpers::deliverymen_data_formatting([$order['delivery_man']]):$order['delivery_man'];
@@ -249,6 +252,17 @@ class OrderController extends Controller
         $order->cutlery = $request->cutlery ? 1 : 0;
         $order->unavailable_item_note = $request->unavailable_item_note ?? null ;
         $order->delivery_instruction = $request->delivery_instruction ?? null ;
+        // 哪吒: 固化"谁呼叫 Yandex 配送"为结构化字段 delivery_arranger, 不再靠中文字符串判断业务(需求2)。
+        //   delivery -> 当前产品新单一律商家代叫(merchant); 但接受请求显式值以便将来恢复二选一。
+        //   take_away / dine_in -> null (完全不涉及 Yandex, 需求6)。
+        if ($order->order_type === 'delivery') {
+            $order->delivery_arranger = in_array($request->delivery_arranger, ['merchant', 'customer'], true)
+                ? $request->delivery_arranger
+                : 'merchant';
+        } else {
+            $order->delivery_arranger = null;
+        }
+
         // $order->tax_percentage = $restaurant->tax ;
 
 
@@ -775,7 +789,7 @@ class OrderController extends Controller
         }
         $user_id = $request->user ? $request->user->id : $request['guest_id'];
 
-        $paginator = Order::with(['restaurant', 'delivery_man.rating'])->withCount('details')->where(['user_id' => $user_id])
+        $paginator = Order::with(['restaurant', 'delivery_man.rating', 'offline_payments:order_id,status,note,created_at,updated_at'])->withCount('details')->where(['user_id' => $user_id])
             ->whereNull('subscription_id')
             ->whereNotIn('order_status', ['delivered','canceled','refund_requested','refund_request_canceled','refunded','failed'])
             ->when(!isset($request->user) , function($query){
@@ -996,6 +1010,101 @@ class OrderController extends Controller
         }
 
         return response()->json(['message' => translate('messages.order_received_successfully')], 200);
+    }
+
+    /**
+     * 哪吒 B方案 — 「没有收到餐 / 配送异常」专用申诉(req 4)，区别于通用退款申请。
+     * 平台不碰钱：本端点只创建留痕 + 记审计日志，**不触发任何自动退款**(L1-1/L1-2)。
+     * 真实退款仍走「联系商家原路退回」。返回申诉时限/处理预期供前端展示(req 5)。
+     */
+    public function submit_delivery_appeal(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'order_id'    => 'required',
+            'guest_id'    => $request->user ? 'nullable' : 'required',
+            'reason_code' => 'nullable|string|max:64',
+            'detail'      => 'nullable|string|max:1000',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
+        }
+
+        $user_id = $request->user ? $request->user->id : $request['guest_id'];
+        $order = Order::with('restaurant')->where(['id' => $request['order_id'], 'user_id' => $user_id])
+            ->when(!isset($request->user), function ($q) { $q->where('is_guest', 1); })
+            ->when(isset($request->user), function ($q) { $q->where('is_guest', 0); })
+            ->Notpos()->first();
+
+        if (!$order) {
+            return response()->json(['errors' => [['code' => 'order', 'message' => translate('messages.not_found')]]], 404);
+        }
+        if ($order->order_type !== 'delivery') {
+            return response()->json(['errors' => [['code' => 'order', 'message' => '仅配送订单可提交「没有收到餐」申诉。']]], 403);
+        }
+        if (!in_array($order->order_status, ['handover', 'picked_up', 'delivered'], true)) {
+            return response()->json(['errors' => [['code' => 'order', 'message' => '该订单当前状态无法提交配送申诉。']]], 403);
+        }
+
+        // 申诉时限(req 5): 送达后 N 小时内可申诉
+        $window_hours = (int) (DB::table('business_settings')->where('key', 'nezha_appeal_window_hours')->value('value') ?? 48);
+        if ($order->delivered) {
+            $deadline = \Carbon\Carbon::parse($order->delivered)->addHours($window_hours);
+            if ($deadline->isPast()) {
+                return response()->json(['errors' => [['code' => 'order', 'message' => "申诉窗口已过（送达后 {$window_hours} 小时内可申诉），请直接联系商家或客服。"]]], 403);
+            }
+        }
+
+        // 去重: 已有未结申诉则直接返回, 不重复建单
+        $existing = \App\Models\NezhaDeliveryAppeal::where('order_id', $order->id)
+            ->whereIn('status', ['open', 'merchant_contacted'])->orderByDesc('id')->first();
+        if ($existing) {
+            return response()->json([
+                'message' => '你已提交过申诉，我们正在处理中。',
+                'appeal'  => ['id' => $existing->id, 'status' => $existing->status, 'sla_due_at' => (string) $existing->sla_due_at],
+            ], 200);
+        }
+
+        $resolve_hours = (int) (DB::table('business_settings')->where('key', 'nezha_appeal_resolve_hours')->value('value') ?? 72);
+        $appeal = \App\Models\NezhaDeliveryAppeal::create([
+            'order_id'    => $order->id,
+            'user_id'     => $request->user ? $request->user->id : null,
+            'reason_code' => $request->reason_code ?: 'not_received',
+            'detail'      => $request->detail,
+            'evidence'    => [
+                'has_payment_proof' => $order->offline_payments()->exists(),
+                'payment_method'    => $order->payment_method,
+                'submitted_via'     => 'customer_app',
+            ],
+            'status'      => 'open',
+            'sla_due_at'  => now()->addHours($resolve_hours),
+        ]);
+
+        // 留痕(审计: 谁/何时对哪个单发起配送申诉)
+        try {
+            \App\Models\Log::create([
+                'logable_id'     => $order->id,
+                'logable_type'   => \App\Models\Order::class,
+                'action_type'    => 'delivery_appeal_opened',
+                'model'          => 'Order',
+                'model_id'       => $order->id,
+                'action_details' => json_encode([
+                    'appeal_id'   => $appeal->id,
+                    'reason_code' => $appeal->reason_code,
+                    'by_id'       => $appeal->user_id,
+                    'at'          => now()->toDateTimeString(),
+                ]),
+                'before_state'   => $order->order_status,
+                'after_state'    => $order->order_status,
+                'restaurant_id'  => $order->restaurant_id,
+            ]);
+        } catch (\Throwable $e) {
+            info('delivery_appeal log failed: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'message' => '申诉已提交，平台已留痕。请同时联系商家核实是否已配送；如需平台介入，我们会按预计时间跟进。',
+            'appeal'  => ['id' => $appeal->id, 'status' => $appeal->status, 'sla_due_at' => (string) $appeal->sla_due_at],
+        ], 200);
     }
 
     public function refund_reasons(){

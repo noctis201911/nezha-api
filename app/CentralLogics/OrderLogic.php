@@ -429,6 +429,175 @@ class OrderLogic
         return true;
     }
 
+    /**
+     * 哪吒B方案: 订单「完成/送达」展示元数据（顾客端）。
+     * 平台无自营骑手、未接入第三方(Yandex)配送轨迹 → 不能独立核实“送达事件”，
+     * 故必须如实标注「状态来源」(谁把单收尾)；配送订单缺事件时不伪造节点(req 1/2/8)。
+     */
+    public static function completion_meta($order)
+    {
+        $is_delivery = $order->order_type === 'delivery';
+        $is_done = $order->order_status === 'delivered';
+
+        // 是否存在真实配送事件: 有取餐(picked_up)时间 或 指派过配送员
+        $has_delivery_event = !empty($order->picked_up) || !empty($order->delivery_man_id);
+
+        // 状态来源: 读 delivery_settled 留痕(谁把单收尾为已送达)
+        $source = null;
+        try {
+            $log = \App\Models\Log::where('logable_id', $order->id)
+                ->where('logable_type', \App\Models\Order::class)
+                ->where('action_type', 'delivery_settled')
+                ->orderByDesc('id')->first();
+            if ($log) {
+                $d = json_decode($log->action_details, true) ?: [];
+                $source = $d['finalized_by'] ?? null;       // customer / auto / vendor
+            }
+        } catch (\Throwable $e) {
+            // 留痕不可用不影响主流程
+        }
+        if (!$source && $is_done) {
+            // 无 settle 留痕(商家端直接标记送达 / 历史单)
+            $source = $has_delivery_event ? 'deliveryman' : 'merchant_marked';
+        }
+
+        $source_labels = [
+            'customer'        => '你已确认收货',
+            'auto'            => '超时未确认，系统自动完成',
+            'vendor'          => '商家确认送达',
+            'deliveryman'     => '配送员标记送达',
+            'merchant_marked' => '商家标记完成',
+        ];
+
+        // 历史订单无配送轨迹: 配送单、已完成，但既无配送事件，又无任何主动收尾来源(req 8)
+        $legacy_no_track = $is_delivery && $is_done && !$has_delivery_event
+            && !in_array($source, ['customer', 'auto', 'vendor'], true);
+
+        // 配送责任方: B 方案由商家自行安排第三方(如 Yandex)，平台不是配送方
+        $responsible_party = $is_delivery ? '商家自行安排第三方配送（如 Yandex）' : '商家自营';
+
+        // 申诉窗口/处理时间(L2 可后台调)
+        $window_hours = (int) (DB::table('business_settings')->where('key', 'nezha_appeal_window_hours')->value('value') ?? 48);
+        $processing_text = DB::table('business_settings')->where('key', 'nezha_appeal_processing_text')->value('value')
+            ?: '商家通常 24 小时内回应；如需平台介入，预计 1–3 个工作日。';
+
+        $delivered_at = $order->delivered ? (string) $order->delivered : null;
+        $appeal_deadline = null;
+        $appeal_open = false;
+        if ($delivered_at) {
+            try {
+                $deadline = \Carbon\Carbon::parse($order->delivered)->addHours($window_hours);
+                $appeal_deadline = $deadline->toDateTimeString();
+                $appeal_open = $deadline->isFuture();
+            } catch (\Throwable $e) {
+            }
+        }
+
+        // 现有申诉(留痕)状态
+        $appeal = null;
+        try {
+            $row = \App\Models\NezhaDeliveryAppeal::where('order_id', $order->id)->orderByDesc('id')->first();
+            if ($row) {
+                $appeal = [
+                    'id'         => $row->id,
+                    'status'     => $row->status,
+                    'created_at' => (string) $row->created_at,
+                    'sla_due_at' => $row->sla_due_at ? (string) $row->sla_due_at : null,
+                ];
+            }
+        } catch (\Throwable $e) {
+        }
+
+        return [
+            'is_delivered'        => $is_done,
+            'order_type'          => $order->order_type,
+            'delivered_at'        => $delivered_at,
+            'picked_up_at'        => $order->picked_up ? (string) $order->picked_up : null,
+            'has_delivery_event'  => $has_delivery_event,
+            'source'              => $source,
+            'source_label'        => $source ? ($source_labels[$source] ?? $source) : null,
+            'responsible_party'   => $responsible_party,
+            'delivery_trackable'  => false, // 平台未接入第三方配送轨迹
+            'legacy_no_track'     => $legacy_no_track,
+            // 可获得的配送凭证(如实): 平台无骑手轨迹/签收照片
+            'available_proofs'    => self::available_delivery_proofs($order),
+            // 申诉(req 4/5)
+            'appeal_window_hours' => $window_hours,
+            'appeal_deadline'     => $appeal_deadline,
+            'appeal_open'         => $appeal_open,
+            'appeal_processing'   => $processing_text,
+            'appeal'              => $appeal,
+        ];
+    }
+
+    private static function available_delivery_proofs($order)
+    {
+        $proofs = [];
+        if ($order->delivered) {
+            $proofs[] = ['type' => 'completion_record', 'label' => '完成记录（送达时间 + 状态来源）', 'available' => true];
+        }
+        $proofs[] = ['type' => 'chat', 'label' => '与商家的聊天记录', 'available' => (bool) ($order->restaurant && $order->restaurant->vendor_id)];
+        // 平台未接入第三方骑手 → 签收照片/骑手轨迹不可得，如实标记，不伪造
+        $proofs[] = ['type' => 'rider_track', 'label' => '骑手轨迹 / 签收照片', 'available' => false, 'note' => '平台未接入第三方配送轨迹'];
+        return $proofs;
+    }
+
+    /**
+     * 哪吒B方案: 支付凭证/收据（顾客端查看），隐藏敏感信息(req 7)。
+     * 平台不碰钱；收据仅展示订单层面金额/方式/收款方，敏感账号串掩码。
+     */
+    public static function receipt_meta($order)
+    {
+        $symbol = BusinessSetting::where('key', 'currency_symbol')->first()?->value ?? '֏';
+        $method = $order->payment_method;
+        $method_name = trim(str_replace('_', ' ', (string) $method));
+
+        $masked_fields = [];
+        if ($method === 'offline_payment' && isset($order->offline_payments) && $order->offline_payments) {
+            $info = json_decode($order->offline_payments->payment_info, true) ?: [];
+            $method_name = $info['method_name'] ?? $method_name;
+            foreach ($info as $k => $v) {
+                if (in_array($k, ['method_name', 'method_id'], true)) {
+                    continue;
+                }
+                if (!is_scalar($v)) {
+                    continue;
+                }
+                // 截图/文件类字段不进收据摘要(凭证图另有入口, 见 req 7)
+                if (Helpers::offline_payment_proof_url($v) !== null
+                    || preg_match('#\.(png|jpe?g|gif|webp|pdf)$#i', (string) $v)
+                    || str_contains((string) $v, '/')) {
+                    continue;
+                }
+                $masked_fields[] = ['label' => $k, 'value' => self::mask_sensitive((string) $v)];
+            }
+        }
+
+        return [
+            'order_id'        => $order->id,
+            'created_at'      => $order->created_at ? (string) $order->created_at : null,
+            'paid_at'         => $order->payment_status === 'paid'
+                ? ($order->delivered ? (string) $order->delivered : (string) $order->updated_at) : null,
+            'payment_method'  => $method,
+            'method_name'     => $method_name,
+            'payment_status'  => $order->payment_status,
+            'order_amount'    => (float) $order->order_amount,
+            'currency_symbol' => $symbol,
+            'payee'           => $order->restaurant?->name,   // 收款方=商家(B方案直付商家)
+            'platform_note'   => '平台不经手款项，本收据仅供核对；款项直接支付给商家本人账户。',
+            'masked_fields'   => $masked_fields,
+        ];
+    }
+
+    /** 账号/卡号/手机号等长数字串掩码: 保留前2后2，中间用 * 替换(req 7 隐藏敏感信息)。 */
+    private static function mask_sensitive($value)
+    {
+        return preg_replace_callback('/\d{6,}/', function ($m) {
+            $s = $m[0];
+            return mb_substr($s, 0, 2) . str_repeat('*', max(2, strlen($s) - 4)) . mb_substr($s, -2);
+        }, $value);
+    }
+
     public static function refund_before_delivered($order){
         // 哪吒 B方案 L1-1 (F-4a): 直付单(offline_payment)平台从未收款, 取消退款由商家直接退原付款人,
         // 平台不动 digital_received、不走平台钱包(与 refund_order 的 !$isDirectPay 护栏对齐, 防平台垫钱碰钱)。
