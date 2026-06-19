@@ -877,7 +877,14 @@ class OrderLogic
         $cust_lang = $order->customer ? ($order?->customer?->current_language_key ?: 'en') : 'en';
         $isZh = $cust_lang && stripos($cust_lang, 'zh') === 0;
         if ($status == 'approved') {
-            Helpers::send_order_notification($order);
+            // 顾客只收下面的“收款已确认”一条；通用整套通知还会再发一条
+            // “订单已确认”，造成同一动作双推送。商家/配送侧交接仍照常通知。
+            try {
+                Helpers::sentDeliveryManNotification($order);
+                Helpers::sentRestaurantNotification($order);
+            } catch (\Throwable $e) {
+                info('notify offline payment handoff failed: '.$e->getMessage());
+            }
 
             $notification_text  = 'offline_verified';
             $notification_title = $isZh ? '收款已确认' : translate('messages.Your_Offline_payment_was_approved');
@@ -901,10 +908,15 @@ class OrderLogic
         try {
             $fcm_token = ($order->is_guest == 0 ? $order?->customer?->cm_firebase_token : $order?->guest?->fcm_token) ?? null;
             $message = Helpers::getOrderPushNotificationMessage($order, $notification_text, 'user', $order->customer ? $order?->customer?->current_language_key : 'en');
-            if ($message && isset($fcm_token)) {
+            if ($message) {
                 $data = Helpers::makeDataForPushNotification(title: $notification_title, message: $message, orderId: $order->id, type: 'order_status', orderStatus: $order->order_status);
-                Helpers::send_push_notif_to_device($fcm_token, $data);
-                Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id);
+                if ($fcm_token) {
+                    Helpers::send_push_notif_to_device($fcm_token, $data);
+                }
+                // 站内信是所有登录顾客的兜底，不应依赖设备是否已授权 FCM。
+                if (!$order->is_guest && $order->user_id) {
+                    Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id);
+                }
             }
             if ($order?->customer?->email && config('mail.status') && $mail_sattus == '1' && $notification_status?->mail_status == 'active') {
                 Mail::to($order?->customer?->getRawOriginal('email'))->send(new \App\Mail\UserOfflinePaymentMail($order?->customer?->f_name . ' ' . $order?->customer?->l_name, $mail_sattus_type));

@@ -1973,6 +1973,26 @@ class Helpers
         $lang = $order->customer ? ($order?->customer?->current_language_key ?: 'en') : 'en';
         $value = self::getOrderPushNotificationMessage($order, $status, 'user', $lang);
 
+        // 哪吒使用商家代叫 Yandex，平台没有第三方骑手回调。通用 StackFood 文案会在
+        // handover 时要求顾客“尽快前往取餐”，并把 picked_up 说成平台已掌握骑手状态，
+        // 与真实流程冲突。仅对该配送模式覆盖为诚实、可行动的顾客文案。
+        $deliveryInstruction = (string) ($order->delivery_instruction ?? '');
+        $merchantCallsYandex = $order->order_type === 'delivery'
+            && !$order->delivery_man
+            && (mb_strpos($deliveryInstruction, '商家') !== false || stripos($deliveryInstruction, 'merchant') !== false);
+        if ($merchantCallsYandex && in_array($order->order_status, ['handover', 'picked_up'], true)) {
+            $isZh = $lang && stripos($lang, 'zh') === 0;
+            if ($order->order_status === 'handover') {
+                $value = $isZh
+                    ? "您在「{$order?->restaurant?->name}」的餐品已出好，商家正在为您安排 Yandex。请保持电话畅通，并在订单追踪页查看取餐号。"
+                    : "Your order from {$order?->restaurant?->name} is ready. The restaurant is arranging Yandex delivery. Keep your phone available and check the pickup code on the tracking page.";
+            } else {
+                $value = $isZh
+                    ? '商家已将订单更新为配送中。平台暂无法显示 Yandex 骑手、轨迹和预计送达时间，请以 Yandex 或商家通知为准。'
+                    : 'The restaurant marked your order as out for delivery. Live Yandex courier, route, and ETA data are not available here; follow Yandex or restaurant updates.';
+            }
+        }
+
         if ($value) {
             // 标题本地化: translate('Order_Notification') 无 zh 译文会回退成英文 "Order Notification" 并烘焙进推送+站内信,
             // 故按顾客 current_language_key 直接给中文标题, 与前端消息中心(按 type 显示)保持一致
