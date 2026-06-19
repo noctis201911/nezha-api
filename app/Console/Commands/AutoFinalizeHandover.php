@@ -42,7 +42,7 @@ class AutoFinalizeHandover extends Command
         $dry = (bool) $this->option('dry-run');
 
         $orders = Order::whereNull('delivered')
-            ->where('order_status', 'handover')
+            ->whereIn('order_status', ['handover', 'picked_up'])
             ->whereNull('subscription_id')
             ->where('handover', '<', $cutoff)
             ->get();

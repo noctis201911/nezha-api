@@ -344,6 +344,59 @@ class OrderController extends Controller
         return back();
     }
 
+    public function set_yandex_delivery(Request $request, $id)
+    {
+        $request->validate([
+            'yandex_tracking_url' => 'required|url|max:1024',
+        ], [
+            'yandex_tracking_url.required' => '请粘贴 Yandex 配送追踪链接',
+            'yandex_tracking_url.url' => '链接格式不正确，请粘贴完整的 Yandex 链接',
+            'yandex_tracking_url.max' => '链接过长，请检查是否粘贴了正确的内容',
+        ]);
+
+        $url = trim($request->yandex_tracking_url);
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+        // 安全: 只放行 https 的 Yandex 官方域, 防商家粘贴野链接/伪协议推给顾客。
+        $is_yandex = $scheme === 'https' && ($host === 'yandex.ru' || $host === 'yandex.com'
+            || str_ends_with($host, '.yandex.ru') || str_ends_with($host, '.yandex.com'));
+        if (!$is_yandex) {
+            Toastr::warning('只接受 Yandex 官方链接（yandex.ru / yandex.com），请从 Yandex Go 的“分享”复制完整链接');
+            return back();
+        }
+
+        $order = Order::where(['id' => $id, 'restaurant_id' => Helpers::get_restaurant_id()])->first();
+        if (!$order) {
+            Toastr::warning('订单不存在或无权操作');
+            return back();
+        }
+        if ($order->order_type !== 'delivery') {
+            Toastr::warning('仅配送订单需要填写 Yandex 配送链接');
+            return back();
+        }
+        if (!in_array($order->order_status, ['handover', 'picked_up'], true)) {
+            Toastr::warning('请先将订单标记为“待配送/已出餐”，呼叫 Yandex 后再填写配送链接');
+            return back();
+        }
+
+        $order->yandex_tracking_url = $url;
+        // 哪吒 B方案: 商家填入配送链接 = 配送真实出发, 状态推进到「配送中」(picked_up),
+        // 顾客端立即显示配送中并可点击跳转 Yandex 实时追踪。仅 handover->picked_up 推进一次；
+        // 已是 picked_up 时只更新链接不改状态。delivered/canceled 已被上面守卫拦截。
+        if ($order->order_status === 'handover') {
+            $order->order_status = 'picked_up';
+            $order->picked_up = now();
+        }
+        $order->save();
+
+        if (!Helpers::send_order_notification($order)) {
+            Toastr::warning(translate('messages.push_notification_faild'));
+        }
+
+        Toastr::success('已保存 Yandex 配送链接，订单已更新为“配送中”，顾客现在可实时查看配送进度。');
+        return back();
+    }
+
     public function status(Request $request)
     {
         $request->validate([

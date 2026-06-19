@@ -249,6 +249,8 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
         Route::group(['prefix' => 'order', 'as' => 'order.' , 'middleware' => ['module:regular_order']], function () {
             Route::get('list/{status}', [OrderController::class, 'list'])->name('list');
             Route::put('status-update/{id}', [OrderController::class, 'status'])->name('status-update');
+            // 哪吒 B方案: 商家填写 Yandex 配送追踪链接 -> 订单进入「配送中」, 顾客端可实时查看
+            Route::put('set-yandex-delivery/{id}', [OrderController::class, 'set_yandex_delivery'])->name('set-yandex-delivery');
             // 哪吒 B方案: 商家自营「确认收款 / 拒收」离线支付
             Route::put('confirm-offline-payment/{id}', [OrderController::class, 'confirm_offline_payment'])->name('confirm-offline-payment');
             Route::put('deny-offline-payment/{id}', [OrderController::class, 'deny_offline_payment'])->name('deny-offline-payment');

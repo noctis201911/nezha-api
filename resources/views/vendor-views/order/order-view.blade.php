@@ -870,6 +870,33 @@
                                 @endif
                             </div>
 
+                            {{-- 哪吒 B方案: 配送单呼叫 Yandex 后填写追踪链接, 顾客端可实时查看 --}}
+                            @if ($order->order_type == 'delivery' && in_array($order->order_status, ['handover', 'picked_up']))
+                                <div class="mt-3 p-3" style="background:#FFF7E6;border:1px solid #F3D9A8;border-radius:12px;">
+                                    <div style="font-weight:700;margin-bottom:6px;color:#1A1A1A;">Yandex 配送追踪链接</div>
+                                    <div style="font-size:12px;color:#6B7280;margin-bottom:8px;line-height:1.6;">
+                                        叫车后，在 Yandex Go App 点“分享 / Поделиться”复制追踪链接，粘贴到下方保存。保存后订单将更新为“配送中”，顾客可点击实时查看骑手位置。
+                                    </div>
+                                    <form action="{{ route('vendor.order.set-yandex-delivery', ['id' => $order['id']]) }}" method="post">
+                                        @csrf
+                                        @method('put')
+                                        <input type="url" name="yandex_tracking_url" required
+                                            value="{{ $order->yandex_tracking_url }}"
+                                            placeholder="https://dostavka.yandex.ru/route/#..."
+                                            class="form-control form-control-sm mb-2" style="border-radius:8px;">
+                                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                                            <button type="submit" class="btn btn-sm btn--primary">
+                                                {{ $order->yandex_tracking_url ? '更新配送链接' : '保存并标记为配送中' }}
+                                            </button>
+                                            @if ($order->yandex_tracking_url)
+                                                <a href="{{ $order->yandex_tracking_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary">预览顾客看到的追踪页</a>
+                                            @endif
+                                        </div>
+                                        <div style="font-size:12px;color:#9CA3AF;margin-top:6px;">仅接受 Yandex 官方链接（yandex.ru / yandex.com）。配送完成后该链接可能失效，属正常现象。</div>
+                                    </form>
+                                </div>
+                            @endif
+
                             @if ($order->order_status == 'canceled')
                                 <ul class="delivery--information-single mt-3">
                                     <li>
