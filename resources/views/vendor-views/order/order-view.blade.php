@@ -879,7 +879,7 @@
                                 {{-- 哪吒 B方案: 顾客配送定位助手 — 复制地址/坐标粘进 Yandex Go, 或一键在 Yandex 地图确认位置 --}}
                                 <div class="mt-3 p-3" style="background:#F0F7FF;border:1px solid #CFE3FF;border-radius:12px;">
                                     <div style="font-weight:700;margin-bottom:6px;color:#1A1A1A;">顾客配送位置（叫 Yandex 用）</div>
-                                    <div style="font-size:12px;color:#6B7280;margin-bottom:8px;line-height:1.6;">复制下面的地址或坐标，粘贴到 Yandex Go 搜索框即可定位顾客；或点“在 Yandex 地图打开”先确认位置。配送定位以图钉为准。</div>
+                                    <div style="font-size:12px;color:#6B7280;margin-bottom:8px;line-height:1.6;">复制下面的“坐标”粘到 Yandex Go 目的地框，认准带 Yerevan / 亚美尼亚 的那条（一般在最顶）——⚠️ 列表里可能混入坐标顺序写反、落到俄罗斯/土耳其的诱饵，别选错。也可点下方“在 Yandex 看顾客位置 / 路线”先核对。配送定位以图钉为准。</div>
                                     @if ($yText)
                                         <div class="d-flex align-items-center gap-2 mb-2">
                                             <input type="text" readonly value="{{ $yText }}" class="form-control form-control-sm" style="border-radius:8px;">
