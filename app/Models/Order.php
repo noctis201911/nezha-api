@@ -58,20 +58,8 @@ class Order extends Model
         if ($this->order_type !== 'delivery') {
             return null;
         }
-        if (in_array($this->delivery_arranger, ['merchant', 'customer'], true)) {
-            return $this->delivery_arranger;
-        }
-        $ins = (string) ($this->delivery_instruction ?? '');
-        if (mb_strpos($ins, '商家') !== false || stripos($ins, 'merchant') !== false) {
-            return 'merchant';
-        }
-        if (mb_strpos($ins, '自行') !== false
-            || mb_strpos($ins, '自己') !== false
-            || stripos($ins, 'self') !== false
-            || stripos($ins, 'customer') !== false) {
-            return 'customer';
-        }
-        return 'customer';
+        // 哪吒[v6]: 平台已放弃"顾客自叫"模式, 配送单一律商家代叫 Yandex(减少顾客理解摩擦)。
+        return 'merchant';
     }
 
     public function getDeliveryArrangerResolvedAttribute(): ?string

@@ -30,9 +30,8 @@
 
         @php
             $hasAlipay = !empty($restaurant?->rmb_qr_image);
-            $hasWechat = !empty($restaurant?->wechat_qr_image);
             $hasUsdt   = !empty($restaurant?->usdt_address);
-            $configuredCount = ($hasAlipay ? 1 : 0) + ($hasWechat ? 1 : 0) + ($hasUsdt ? 1 : 0);
+            $configuredCount = ($hasAlipay ? 1 : 0) + ($hasUsdt ? 1 : 0);
         @endphp
 
         {{-- 说明: 平台不碰钱 + 只读核对 (INVARIANTS L1-1) --}}
@@ -62,7 +61,7 @@
                     <span class="badge badge-soft-success fs-13 py-2 px-3">
                         <i class="tio-checkmark-circle"></i>
                         {{ translate('顾客可用') }}:
-                        {{ trim(($hasAlipay ? translate('支付宝') . ' ' : '') . ($hasWechat ? translate('微信') . ' ' : '') . ($hasUsdt ? 'USDT' : '')) }}
+                        {{ trim(($hasAlipay ? translate('支付宝') . ' ' : '') . ($hasUsdt ? 'USDT' : '')) }}
                     </span>
                 @endif
             </div>
@@ -105,38 +104,7 @@
             </div>
         </div>
 
-        {{-- 微信收款 (人民币) --}}
-        <div class="card mb-2 nz-pay-card">
-            <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
-                <h5 class="card-title mb-0">
-                    <span class="card-header-icon"><i class="tio-comment"></i></span> &nbsp;
-                    <span>{{ translate('微信收款 (人民币)') }}</span>
-                </h5>
-                @if ($hasWechat)
-                    <span class="badge badge-soft-success badge-pill">{{ translate('已配置') }}</span>
-                @else
-                    <span class="badge badge-soft-secondary badge-pill">{{ translate('未配置') }}</span>
-                @endif
-            </div>
-            <div class="card-body">
-                <div class="row g-3 align-items-start">
-                    <div class="col-md-7">
-                        <small class="text-muted">{{ translate('顾客在结算页选「微信」时，会扫描右侧收款码付款。微信码与支付宝码分开登记，缺一种顾客就少一种付款方式。') }}</small>
-                    </div>
-                    <div class="col-md-5">
-                        <label class="input-label d-block mb-1">{{ translate('当前微信收款码') }}</label>
-                        @if ($hasWechat)
-                            <span class="nz-qr-box">
-                                <img src="{{ $restaurant->wechat_qr_image_full_url }}" alt="WeChat QR"
-                                     onerror="this.parentNode.outerHTML='<div class=\'nz-pay-empty\'>{{ translate('收款码加载失败，请联系平台') }}</div>';">
-                            </span>
-                        @else
-                            <div class="nz-pay-empty">{{ translate('平台尚未登记微信收款码') }}</div>
-                        @endif
-                    </div>
-                </div>
-            </div>
-        </div>
+        {{-- 微信收款已下线: 平台放弃微信支付方式(2026-06-19), 顾客只用支付宝/USDT --}}
 
         {{-- USDT 收款 --}}
         <div class="card mb-2 nz-pay-card">

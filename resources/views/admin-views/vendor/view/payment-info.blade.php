@@ -79,45 +79,7 @@
                 </div>
             </div>
 
-            <div class="card mb-2">
-                <div class="card-header">
-                    <h5 class="card-title">
-                        <span class="card-header-icon"><i class="tio-comment"></i></span> &nbsp;
-                        <span>{{ translate('微信收款 (人民币)') }}</span>
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="alert alert-light border py-2 mb-3 small">
-                        <i class="tio-info-outined"></i>
-                        {{ translate('微信收款码与支付宝码分开上传。顾客在结算页选「微信」时显示此码; 留空则顾客无法用微信付款, 请提醒商家提供本人微信收款二维码。') }}
-                    </div>
-                    <div class="row g-3 align-items-start">
-                        <div class="col-md-7">
-                            <div class="form-group mb-0">
-                                <label class="input-label">{{ translate('微信收款码图片') }}</label>
-                                <div class="custom-file">
-                                    <input type="file" name="wechat_qr_image" id="wechat_qr_image" class="custom-file-input"
-                                           accept=".jpg,.jpeg,.png,.webp">
-                                    <label class="custom-file-label" for="wechat_qr_image">{{ translate('未选择文件') }}</label>
-                                </div>
-                                <small class="text-muted">{{ translate('支持 jpg/png/webp, 最大 2MB') }}</small>
-                            </div>
-                        </div>
-                        <div class="col-md-5">
-                            <div id="wechat_qr_box" style="{{ $restaurant->wechat_qr_image_full_url ? '' : 'display:none;' }}">
-                                <label class="input-label d-block mb-1" id="wechat_qr_label">{{ translate('当前微信收款码') }}</label>
-                                <div style="display:inline-block;background:#fff;padding:6px;border:1px solid #eee;border-radius:8px;line-height:0;">
-                                    <img id="wechat_qr_current" src="{{ $restaurant->wechat_qr_image_full_url ?? '' }}" alt="WeChat QR"
-                                         style="display:block;max-width:120px;max-height:120px;" onerror="var b=document.getElementById('wechat_qr_box'),e=document.getElementById('wechat_qr_empty');if(b)b.style.display='none';if(e)e.style.display='';">
-                                </div>
-                            </div>
-                            <div id="wechat_qr_empty" style="{{ $restaurant->wechat_qr_image_full_url ? 'display:none;' : '' }}">
-                                <div class="qr-empty-box">{{ translate('尚未上传微信收款码') }}</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            {{-- 微信收款已下线: 平台放弃微信支付方式(2026-06-19), 商家无需再上传微信收款码 --}}
 
             <div class="card mb-2">
                 <div class="card-header">
@@ -192,7 +154,6 @@
                 });
             }
             wire("rmb_qr_image", "rmb_qr_box", "rmb_qr_current", "rmb_qr_label", "rmb_qr_empty");
-            wire("wechat_qr_image", "wechat_qr_box", "wechat_qr_current", "wechat_qr_label", "wechat_qr_empty");
             // USDT: 改地址时提示二维码需保存后更新(二维码服务端按已存地址生成)
             var usdt = document.querySelector('input[name="usdt_address"]');
             var usdtHint = document.getElementById("usdt_qr_hint");

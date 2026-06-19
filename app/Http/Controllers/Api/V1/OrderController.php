@@ -258,9 +258,8 @@ class OrderController extends Controller
         //   delivery -> 当前产品新单一律商家代叫(merchant); 但接受请求显式值以便将来恢复二选一。
         //   take_away / dine_in -> null (完全不涉及 Yandex, 需求6)。
         if ($order->order_type === 'delivery') {
-            $order->delivery_arranger = in_array($request->delivery_arranger, ['merchant', 'customer'], true)
-                ? $request->delivery_arranger
-                : 'merchant';
+            // 哪吒[v6]: 平台已放弃顾客自叫, 配送单一律商家代叫 Yandex。
+            $order->delivery_arranger = 'merchant';
         } else {
             $order->delivery_arranger = null;
         }
