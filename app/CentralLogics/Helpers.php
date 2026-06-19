@@ -241,6 +241,48 @@ class Helpers
                 if ($__nz_addonIds) { $__nz_addonMap = AddOn::whereIn('id', array_unique($__nz_addonIds))->active()->get()->keyBy('id'); }
                 if ($__nz_taxIds) { $__nz_taxMap = \Modules\TaxModule\Entities\Tax::whereIn('id', array_unique($__nz_taxIds))->get(['id', 'name', 'tax_rate'])->keyBy('id'); }
             }
+            // --- 哪吒[社会证明层] 批量预聚合(真实数据·零N+1): 月售/店内热销名次/近期下单数 ---
+            // 全部从 order_details 真实下单明细按时间窗聚合; 无数据的商品该字段为 0/null, 前端整行不渲染(红线:不造假)
+            $__nz_monthMap = []; $__nz_rankMap = []; $__nz_recentMap = [];
+            if ($__nz_items && $__nz_items->isNotEmpty() && $__nz_items->first() instanceof \Illuminate\Database\Eloquent\Model) {
+                $__nz_foodIds = $__nz_items->pluck('id')->filter()->unique()->values()->all();
+                $__nz_restIds = $__nz_items->pluck('restaurant_id')->filter()->unique()->values()->all();
+                if (!empty($__nz_foodIds) && !empty($__nz_restIds)) {
+                    $__nz_foodTable = (new Food)->getTable();
+                    // ①月售(近30天·按销量·排除取消单) + ②店内热销名次: 按餐厅维度全店统计(不止当前页), 仅前3名打名次
+                    $__nz_monthRows = DB::table('order_details as od')
+                        ->join('orders as o', 'od.order_id', '=', 'o.id')
+                        ->join($__nz_foodTable . ' as f', 'od.food_id', '=', 'f.id')
+                        ->whereIn('f.restaurant_id', $__nz_restIds)
+                        ->where('o.order_status', '!=', 'canceled')
+                        ->where('o.created_at', '>=', now()->subDays(30))
+                        ->groupBy('f.restaurant_id', 'od.food_id')
+                        ->select('f.restaurant_id', 'od.food_id', DB::raw('SUM(od.quantity) as qty'))
+                        ->orderByDesc('qty')
+                        ->get();
+                    $__nz_rankCounter = [];
+                    foreach ($__nz_monthRows as $__nz_mr) {
+                        $__nz_monthMap[$__nz_mr->food_id] = (int) $__nz_mr->qty;
+                        $__nz_rid = $__nz_mr->restaurant_id;
+                        $__nz_rankCounter[$__nz_rid] = ($__nz_rankCounter[$__nz_rid] ?? 0) + 1;
+                        if ($__nz_rankCounter[$__nz_rid] <= 3 && $__nz_mr->qty > 0) {
+                            $__nz_rankMap[$__nz_mr->food_id] = $__nz_rankCounter[$__nz_rid];
+                        }
+                    }
+                    // ③近期下单数(近7天·去重订单·排除取消单)
+                    $__nz_recentRows = DB::table('order_details as od')
+                        ->join('orders as o', 'od.order_id', '=', 'o.id')
+                        ->whereIn('od.food_id', $__nz_foodIds)
+                        ->where('o.order_status', '!=', 'canceled')
+                        ->where('o.created_at', '>=', now()->subDays(7))
+                        ->groupBy('od.food_id')
+                        ->select('od.food_id', DB::raw('COUNT(DISTINCT od.order_id) as cnt'))
+                        ->get();
+                    foreach ($__nz_recentRows as $__nz_rr) {
+                        $__nz_recentMap[$__nz_rr->food_id] = (int) $__nz_rr->cnt;
+                    }
+                }
+            }
             foreach ($data as $item) {
                 $variations = [];
                 if ($item->title) {
@@ -265,6 +307,10 @@ class Helpers
                     unset($item['end_date']);
                 }
                 $item['recommended'] = (int) $item->recommended;
+                // 哪吒[社会证明层] 真实字段: 月售(30天销量)/店内热销名次(前3名,否则null)/近期下单数(7天)
+                $item['month_sold'] = $__nz_monthMap[$item->id] ?? 0;
+                $item['store_rank'] = $__nz_rankMap[$item->id] ?? null;
+                $item['recent_order_count'] = $__nz_recentMap[$item->id] ?? 0;
                 $categories = [];
                 foreach (json_decode($item?->category_ids) as $value) {
                     $categories[] = ['id' => (string) $value->id, 'position' => $value->position ?? 1, 'category_name' => ($__nz_catMap->get($value->id) ?? Category::find($value->id))?->name];
