@@ -251,6 +251,8 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
             Route::put('status-update/{id}', [OrderController::class, 'status'])->name('status-update');
             // 哪吒 B方案: 商家填写 Yandex 配送追踪链接 -> 订单进入「配送中」, 顾客端可实时查看
             Route::put('set-yandex-delivery/{id}', [OrderController::class, 'set_yandex_delivery'])->name('set-yandex-delivery');
+            // 哪吒 B方案: 商家一拍标记配送中(不需链接, 与贴链接解耦)
+            Route::put('mark-dispatched/{id}', [OrderController::class, 'mark_dispatched'])->name('mark-dispatched');
             // 哪吒 B方案: 商家自营「确认收款 / 拒收」离线支付
             Route::put('confirm-offline-payment/{id}', [OrderController::class, 'confirm_offline_payment'])->name('confirm-offline-payment');
             Route::put('deny-offline-payment/{id}', [OrderController::class, 'deny_offline_payment'])->name('deny-offline-payment');

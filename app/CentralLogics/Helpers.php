@@ -1890,6 +1890,33 @@ class Helpers
         return true;
     }
 
+    public static function sendTelegramToRestaurant($restaurant, $text)
+    {
+        try {
+            $token = self::get_business_settings('telegram_bot_token', false);
+            $chatId = $restaurant?->telegram_chat_id;
+            if (!$token || !is_string($token) || !$chatId || !$text) {
+                return;
+            }
+            $ch = curl_init('https://api.telegram.org/bot' . $token . '/sendMessage');
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_CONNECTTIMEOUT => 3,
+                CURLOPT_TIMEOUT => 4,
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => http_build_query([
+                    'chat_id' => $chatId,
+                    'text' => $text,
+                    'disable_web_page_preview' => true,
+                ]),
+            ]);
+            curl_exec($ch);
+            curl_close($ch);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('telegram restaurant msg failed: ' . $e->getMessage());
+        }
+    }
+
     public static function sendTelegramOrderAlert($order)
     {
         try {

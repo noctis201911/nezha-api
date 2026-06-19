@@ -970,6 +970,42 @@ class OrderController extends Controller
      * 触发与商家「已送达」等价的收尾(OrderLogic::settle_delivered: delivered + 佣金结算恰好一次)。
      * 轴A 对象级鉴权: 仅能确认归属请求者本人的单(登录按 user->id; 游客按 guest_id + is_guest=1)。
      */
+    public function remind_delivery_link(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'order_id' => 'required',
+            'guest_id' => $request->user ? 'nullable' : 'required',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
+        }
+        $user_id = $request->user ? $request->user->id : $request['guest_id'];
+        $order = Order::where(['id' => $request['order_id'], 'user_id' => $user_id])
+            ->when(!isset($request->user), function ($query) { $query->where('is_guest', 1); })
+            ->when(isset($request->user), function ($query) { $query->where('is_guest', 0); })
+            ->Notpos()->first();
+        if (!$order) {
+            return response()->json(['errors' => [['code' => 'order', 'message' => translate('messages.not_found')]]], 404);
+        }
+        if ($order->order_type !== 'delivery' || $order->order_status !== 'picked_up') {
+            return response()->json(['errors' => [['code' => 'order', 'message' => '当前订单状态无需提醒商家']]], 403);
+        }
+        if (!empty($order->yandex_tracking_url)) {
+            return response()->json(['message' => '商家已分享配送进度，请刷新查看'], 200);
+        }
+        // 防刷: 10 分钟内只记一次提醒
+        if ($order->delivery_link_reminded_at && \Carbon\Carbon::parse($order->delivery_link_reminded_at)->gt(now()->subMinutes(10))) {
+            return response()->json(['message' => '已提醒商家，请耐心等待商家分享配送进度'], 200);
+        }
+        $order->delivery_link_reminded_at = now();
+        $order->save();
+        try {
+            Helpers::sendTelegramToRestaurant($order->restaurant,
+                "🔔 顾客在催配送进度\n订单 #{$order->id}\n请在 Yandex Go 点「分享 / Поделиться」复制配送追踪链接，回到商家后台「待配送」订单贴上，顾客即可实时查看。");
+        } catch (\Throwable $e) {}
+        return response()->json(['message' => '已提醒商家分享配送进度，请稍候'], 200);
+    }
+
     public function confirm_delivery(Request $request)
     {
         $validator = Validator::make($request->all(), [

@@ -876,6 +876,17 @@
                                 @php($yLat = $yAddr['latitude'] ?? null)
                                 @php($yLng = $yAddr['longitude'] ?? null)
                                 @php($yText = $yAddr['address'] ?? '')
+                                @if ($order->order_status == 'handover')
+                                    <form action="{{ route('vendor.order.mark-dispatched', ['id' => $order['id']]) }}" method="post" class="mt-3 mb-1">
+                                        @csrf
+                                        @method('put')
+                                        <button type="submit" class="btn btn--primary w-100" style="font-weight:700;border-radius:10px;">✅ 已叫车，标记为「配送中」</button>
+                                        <div style="font-size:12px;color:#6B7280;margin-top:4px;line-height:1.6;">点一下，顾客立刻看到“配送中”。下面贴 Yandex 链接是可选项——贴了顾客能实时看骑手位置。</div>
+                                    </form>
+                                @endif
+                                @if ($order->delivery_link_reminded_at && !$order->yandex_tracking_url)
+                                    <div class="mt-2 p-2" style="background:#FFF3F5;border:1px solid #F3C9D2;border-radius:8px;font-size:13px;color:#7c1228;line-height:1.6;">🔔 顾客已请求查看配送进度（{{ \Carbon\Carbon::parse($order->delivery_link_reminded_at)->timezone('Asia/Yerevan')->format('H:i') }}）——请在 Yandex Go 点「分享」复制追踪链接，贴到下方。</div>
+                                @endif
                                 {{-- 哪吒 B方案: 顾客配送定位助手 — 复制地址/坐标粘进 Yandex Go, 或一键在 Yandex 地图确认位置 --}}
                                 <div class="mt-3 p-3" style="background:#F0F7FF;border:1px solid #CFE3FF;border-radius:12px;">
                                     <div style="font-weight:700;margin-bottom:6px;color:#1A1A1A;">顾客配送位置（叫 Yandex 用）</div>

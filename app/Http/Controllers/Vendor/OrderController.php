@@ -344,6 +344,35 @@ class OrderController extends Controller
         return back();
     }
 
+    public function mark_dispatched(Request $request, $id)
+    {
+        $order = Order::where(['id' => $id, 'restaurant_id' => Helpers::get_restaurant_id()])->first();
+        if (!$order) {
+            Toastr::warning('订单不存在或无权操作');
+            return back();
+        }
+        if ($order->order_type !== 'delivery') {
+            Toastr::warning('仅配送订单需要标记配送中');
+            return back();
+        }
+        if ($order->order_status !== 'handover') {
+            Toastr::warning('请先把订单标记为“已出餐/待配送”，呼叫 Yandex 后再标记为配送中');
+            return back();
+        }
+        // 哪吒 B方案: 商家叫车后一拍标记「配送中」(picked_up), 无需 Yandex 链接;
+        // 顾客立即看到配送中。贴 Yandex 链接是可选加分项(贴了顾客可实时追踪)。
+        $order->order_status = 'picked_up';
+        $order->picked_up = now();
+        $order->save();
+
+        if (!Helpers::send_order_notification($order)) {
+            Toastr::warning(translate('messages.push_notification_faild'));
+        }
+
+        Toastr::success('已标记为「配送中」，顾客已看到。如需顾客实时追踪，可在下方贴上 Yandex 分享链接。');
+        return back();
+    }
+
     public function set_yandex_delivery(Request $request, $id)
     {
         $request->validate([
@@ -380,6 +409,7 @@ class OrderController extends Controller
         }
 
         $order->yandex_tracking_url = $url;
+        $order->delivery_link_reminded_at = null;
         // 哪吒 B方案: 商家填入配送链接 = 配送真实出发, 状态推进到「配送中」(picked_up),
         // 顾客端立即显示配送中并可点击跳转 Yandex 实时追踪。仅 handover->picked_up 推进一次；
         // 已是 picked_up 时只更新链接不改状态。delivered/canceled 已被上面守卫拦截。
