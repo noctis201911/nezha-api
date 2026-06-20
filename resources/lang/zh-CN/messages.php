@@ -2457,4 +2457,23 @@
   'failed_updated_subscription' => '订阅更新失败',
   'failed_updated_subscription_schedule' => '订阅排期更新失败',
   'You_Can_Not_Delivered_This_Subscription_order_Before_Schedule' => '订阅订单未到配送时间，无法配送',
+
+  // —— 剩余商家/骑手/校验类文案补齐(nezha) ——
+  'deliveryman_added_successfully' => '配送员添加成功',
+  'shift_is_required' => '请选择班次',
+  'Delivery_man_wallet_adjustment_successfull' => '配送员钱包调整成功',
+  'Already_Adjusted' => '已调整',
+  'dm_maximum_order_exceed_warning' => '已达最大接单数量',
+  'can_not_accept' => '无法接受该订单',
+  'order_confirmation_warning' => '该订单需由商家确认',
+  'Price_must_be_greater_then_0_on_id' => '价格必须大于 0，ID',
+  'Discount_must_be_greater_then_0_on_id' => '折扣必须大于 0，ID',
+  'Image_name_must_be_in_30_char_on_id' => '图片名称不能超过 30 个字符，ID',
+  'AvailableTimeEnds_must_be_greater_then_AvailableTimeStarts_on_id' => '结束时间必须晚于开始时间，ID',
+  'Invalid_AvailableTimeEnds_or_AvailableTimeStarts_on_id' => '开始或结束时间无效，ID',
+  'restaurant_id_required' => '缺少商家 ID',
+  'current_language_key_required' => '缺少语言参数',
+  'Use_test_OTP' => '使用测试验证码',
+  'user_account_wallet_delete_warning' => '钱包中仍有余额，无法删除账号',
+  'subscription_pause_log_overlap_warning' => '暂停时间段与已有记录重叠',
 );
