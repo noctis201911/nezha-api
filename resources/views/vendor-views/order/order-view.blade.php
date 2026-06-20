@@ -279,6 +279,16 @@
 
 
                                 @if ($order?->offline_payments)
+                                    @php($nzAc = $order->offline_payments->nezha_auto_check ?? null)
+                                    <div style="background:#FFF7E6;border:1px solid #FFE2A8;border-radius:10px;padding:10px 12px;margin-bottom:12px;">
+                                        <div style="font-size:12px;color:#8a6d3b;">本单应收</div>
+                                        <div style="font-size:22px;font-weight:800;color:#17191D;line-height:1.2;">{{ Helpers::format_currency($order->order_amount) }}</div>
+                                        @if($nzAc && (!empty($nzAc['expected_usdt']) || !empty($nzAc['expected_rmb'])))
+                                            @php($nzApprox = collect([!empty($nzAc['expected_usdt']) ? ('≈ '.$nzAc['expected_usdt'].' USDT') : null, !empty($nzAc['expected_rmb']) ? ('≈ ¥'.$nzAc['expected_rmb']) : null])->filter()->implode(' · '))
+                                            <div style="font-size:12px;color:#8a6d3b;margin-top:2px;">{{ $nzApprox }}</div>
+                                        @endif
+                                        <div style="font-size:11px;color:#a98b54;margin-top:6px;">请先在自己账户核对到账金额与上方一致，再点「确认收款」。</div>
+                                    </div>
                                     @foreach ((json_decode($order->offline_payments->payment_info) ?? []) as $key => $item)
                                         @if ($key != 'method_id')
                                             <h6 class="">
@@ -288,7 +298,12 @@
                                                     @if($nzProof)
                                                         <a href="{{ $nzProof }}" target="_blank" rel="noopener"><img src="{{ $nzProof }}" alt="{{ translate('payment proof') }}" style="max-width:140px;max-height:140px;border-radius:8px;border:1px solid #e6e6e6;object-fit:cover;"></a>
                                                     @else
+                                                    @if(preg_match('/^(0x)?[0-9a-fA-F]{64}$/', trim($item)))
+                                                        @php($nzTxUrl = $nzAc['chain']['explorer_url'] ?? ('https://tronscan.org/#/transaction/'.preg_replace('/^0x/i','',trim($item))))
+                                                        <a href="{{ $nzTxUrl }}" target="_blank" rel="noopener" style="word-break:break-all;color:#1769aa;text-decoration:underline;"><strong>{{ $item }}</strong> &#8599;</a>
+                                                    @else
                                                         <strong>{{ $item }}</strong>
+                                                    @endif
                                                     @endif
                                                 </div>
                                             </h6>
@@ -310,6 +325,26 @@
                                             </span>
                                         @endif
                                     </h6>
+
+                                    @if($nzAc)
+                                        @php($nzChain = $nzAc['chain'] ?? null)
+                                        @if($nzChain)
+                                            @php($cs = $nzChain['status'] ?? '')
+                                            <div style="margin-top:8px;padding:10px 12px;border-radius:10px;@if($cs==='verified')background:#E8F6EC;border:1px solid #BCE5C7;@elseif($cs==='unconfirmed')background:#FFF7E6;border:1px solid #FFE2A8;@else background:#FDECEC;border:1px solid #F5C2C2;@endif">
+                                                <div style="font-size:13px;font-weight:700;color:#17191D;">@if($cs==='verified')✅ 链上已核验到账@elseif($cs==='unconfirmed')⏳ 链上已查到 · 待区块确认@elseif($cs==='mismatch')⚠️ 链上核验不符@elseif($cs==='not_found')⚠️ 链上查无此交易@elseif($cs==='invalid_hash')⚠️ 交易哈希无效@else ℹ️ 未自动核验@endif</div>
+                                                <div style="font-size:12px;color:#555;margin-top:3px;">{{ $nzChain['reason'] ?? '' }}</div>
+                                                @if(!empty($nzChain['explorer_url']))<a href="{{ $nzChain['explorer_url'] }}" target="_blank" rel="noopener" style="font-size:12px;color:#1769aa;text-decoration:underline;">在区块浏览器查看 &#8599;</a>@endif
+                                                <div style="font-size:11px;color:#999;margin-top:4px;">自动核验仅供参考，确认收款前请仍以你钱包实际到账为准。</div>
+                                            </div>
+                                        @endif
+                                        @if(isset($nzAc['amount_match']) && $nzAc['amount_match'] !== null)
+                                            <div style="margin-top:6px;font-size:12.5px;color:{{ $nzAc['amount_match'] ? '#1b8a3f' : '#c0392b' }};">顾客填写实付：<strong>{{ $nzAc['paid_amount'] ?? '' }}</strong> {{ $nzAc['amount_match'] ? '（与应付相符 ✓）' : '（与应付不符，请核对 ⚠️）' }}</div>
+                                        @endif
+                                        @if(!empty($nzAc['image_flags']))
+                                            @php($nzImg = collect(['low_res'=>'分辨率偏低','blurry'=>'疑似模糊','blank'=>'接近空白'])->filter(fn($v,$k)=>!empty($nzAc['image_flags'][$k]))->values()->implode('、'))
+                                            <div style="margin-top:6px;font-size:12.5px;color:#b8860b;">⚠️ 凭证图片存疑：{{ $nzImg }} — 请仔细核对，必要时让顾客重传。</div>
+                                        @endif
+                                    @endif
 
                                     {{-- 哪吒 B方案: 商家自营「确认收款」操作。仅离线支付 + 待核验时显示。 --}}
                                     @if ($order->payment_method == 'offline_payment' && $order?->offline_payments->status == 'pending')

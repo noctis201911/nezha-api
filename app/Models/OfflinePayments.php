@@ -10,6 +10,7 @@ class OfflinePayments extends Model
     use HasFactory;
     protected $casts = [
         'order_id'=>'integer',
+        'nezha_auto_check'=>'array',
     ];
     protected $guarded = ['id'];
 }

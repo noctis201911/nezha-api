@@ -278,9 +278,9 @@ class OrderController extends Controller
                 return $query->where('id',$request->cart_id);
             })
             ->get()->map(function ($data) {
-                $data->add_on_ids = json_decode($data->add_on_ids,true);
-                $data->add_on_qtys = json_decode($data->add_on_qtys,true);
-                $data->variations = json_decode($data->variations,true);
+                $data->add_on_ids = (is_string($data->add_on_ids) ? json_decode($data->add_on_ids,true) : $data->add_on_ids) ?? [];
+                $data->add_on_qtys = (is_string($data->add_on_qtys) ? json_decode($data->add_on_qtys,true) : $data->add_on_qtys) ?? [];
+                $data->variations = is_string($data->variations) ? json_decode($data->variations,true) : $data->variations;
                 return $data;
             });
 
@@ -337,7 +337,7 @@ class OrderController extends Controller
                     ], 406);
                 }
 
-                $addon_data = Helpers::calculate_addon_price(addons: \App\Models\AddOn::whereIn('id',$c['add_on_ids'])->get(), add_on_qtys: $c['add_on_qtys']);
+                $addon_data = Helpers::calculate_addon_price(addons: \App\Models\AddOn::whereIn('id', (gettype($c['add_on_ids']) == 'array' ? $c['add_on_ids'] : json_decode($c['add_on_ids'], true)) ?? [])->get(), add_on_qtys: (gettype($c['add_on_qtys']) == 'array' ? $c['add_on_qtys'] : json_decode($c['add_on_qtys'], true)) ?? []);
 
                 if($code == 'food'){
                     $variation_options =  is_string(data_get($c,'variation_options')) ? json_decode(data_get($c,'variation_options') ,true) : [];
@@ -1553,6 +1553,70 @@ class OrderController extends Controller
             $OfflinePayments->payment_info =json_encode($offline_payment_info);
             $OfflinePayments->customer_note = $request->customer_note;
             $OfflinePayments->method_fields = json_encode($method?->method_fields);
+
+            // 哪吒[自动核验]: 法币实付金额比对 + USDT 上链核验 + 图片软门标记。
+            // 仅辅助商家判断真到账, 不改资金机制(平台不碰钱), 不阻断下单 —— 任何异常都吞掉。
+            try {
+                $autoCheck = ['method_name' => $method->method_name, 'checked_at' => now()->toIso8601String()];
+                $expectedAmd = (float) ($order->order_amount ?? 0);
+                $rateCny = (float) (DB::table('business_settings')->where('key', 'nezha_rate_cny_to_amd')->value('value') ?: 55);
+                $rateUsd = (float) (DB::table('business_settings')->where('key', 'nezha_rate_usd_to_amd')->value('value') ?: 400);
+                $expectedUsdt = $rateUsd > 0 ? round($expectedAmd / $rateUsd, 2) : 0;
+                $expectedRmb  = $rateCny > 0 ? round($expectedAmd / $rateCny) : 0;
+                $isUsdtMethod = (bool) preg_match('/usdt/i', $method->method_name);
+                $autoCheck['expected_amd'] = $expectedAmd;
+                $autoCheck['expected_usdt'] = $expectedUsdt;
+                $autoCheck['expected_rmb'] = $expectedRmb;
+
+                // 顾客自报实付金额, 与应付比对(容差 3%)
+                $paid = $request->input('nezha_paid_amount');
+                if ($paid !== null && $paid !== '' && is_numeric($paid)) {
+                    $paid = (float) $paid;
+                    $autoCheck['paid_amount'] = $paid;
+                    $expect = $isUsdtMethod ? $expectedUsdt : $expectedRmb;
+                    $tol = max(1, $expect * 0.03);
+                    $autoCheck['amount_match'] = ($expect > 0) ? (abs($paid - $expect) <= $tol) : null;
+                }
+
+                // 图片软门标记(前端 canvas 体检: 过小/疑似模糊/接近空白) —— 仅提示不拦
+                $flags = json_decode((string) $request->input('nezha_image_flags'), true);
+                if (is_array($flags) && !empty($flags)) {
+                    $autoCheck['image_flags'] = $flags;
+                }
+
+                // USDT 上链核验
+                if ($isUsdtMethod) {
+                    $hash = null;
+                    foreach ($offline_payment_info as $k => $v) {
+                        if (in_array($k, ['method_id', 'method_name'], true)) continue;
+                        if (is_string($v) && \App\CentralLogics\NezhaChainVerifier::isValidHashFormat($v)) { $hash = $v; break; }
+                    }
+                    $autoCheck['tx_hash'] = $hash;
+                    if ($hash) {
+                        $reused = OfflinePayments::where('order_id', '!=', $order->id)
+                            ->where('payment_info', 'like', '%'.$hash.'%')->exists();
+                        $rest = DB::table('restaurants')->where('id', $order->restaurant_id)->first();
+                        $verify = \App\CentralLogics\NezhaChainVerifier::verifyUsdt(
+                            $hash,
+                            $rest->usdt_address ?? '',
+                            $expectedUsdt,
+                            $rest->usdt_network ?? 'TRC20'
+                        );
+                        if ($reused) {
+                            $verify['status'] = 'mismatch';
+                            $verify['reason'] = '这笔交易哈希此前已被其它订单使用过，疑似重复冒认，请核对';
+                            $verify['reused'] = true;
+                        }
+                        $autoCheck['chain'] = $verify;
+                    } else {
+                        $autoCheck['chain'] = ['status' => 'invalid_hash', 'reason' => '未填写有效交易哈希'];
+                    }
+                }
+                $OfflinePayments->nezha_auto_check = $autoCheck;
+            } catch (\Throwable $acEx) {
+                info('nezha auto_check failed: '.$acEx->getMessage());
+            }
+
             DB::beginTransaction();
             $OfflinePayments->save();
             $order->save();
