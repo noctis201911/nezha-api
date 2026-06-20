@@ -29,16 +29,6 @@
                     <div class="card-body p-0" id="admin-conversation-list">
                         @include('vendor-views.messages.admin_data')
                     </div>
-                    <div class="px-4">
-                        <ul class="nav nav-tabs active-style mb-3 border-0">
-                            <li class="nav-item">
-                                <a href="{{route('vendor.message.list', ['tab'=> 'customer'])}}" class="nav-link {{$tab=='customer'?'active':''}}">{{ translate('Customer') }}</a>
-                            </li>
-                            <li class="nav-item">
-                                <a href="{{route('vendor.message.list', ['tab'=> 'delivery_man'])}}" class="nav-link {{$tab=='delivery_man'?'active':''}}">{{ translate('delivery_man') }}</a>
-                            </li>
-                        </ul>
-                    </div>
 
                     <!-- Body -->
                     <div class="card-body p-0 initial-19" id="conversation-list">

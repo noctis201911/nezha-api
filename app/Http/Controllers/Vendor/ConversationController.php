@@ -18,11 +18,9 @@ class ConversationController extends Controller
 {
     public function list(Request $request)
     {
-        if($request->query('tab')){
-            $tab = $request->query('tab');
-        }else{
-            $tab = 'customer';
-        }
+        // 哪吒: 配送走 Yandex, 无 App 内骑手 —— 聊天只保留顾客, 强制 tab=customer
+        // (同时修掉 ?tab=undefined 时顾客视图错显「未找到骑手」空态的问题)
+        $tab = 'customer';
         $vendor = Helpers::get_vendor_data();
         $sender = UserInfo::where('vendor_id',$vendor->id)->first();
 

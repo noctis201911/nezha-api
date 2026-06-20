@@ -658,7 +658,7 @@
   'Shift' => '排班制度',
   'active_time' => '有效在线工时',
   'H:M' => '小时:分钟',
-  'conversation_list' => '骑客沟通记录',
+  'conversation_list' => '顾客沟通记录',
   'search' => '搜索',
   'view_conversation' => '回放聊天记录',
   'deliveryman_type_updated' => '骑手类型已更新',
