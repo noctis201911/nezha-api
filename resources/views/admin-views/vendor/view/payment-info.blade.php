@@ -91,19 +91,24 @@
                 <div class="card-body">
                     <div class="row g-3 align-items-start">
                         <div class="col-md-7">
-                            <div class="form-group mb-3">
-                                <label class="input-label">{{ translate('USDT 网络') }}</label>
-                                <select name="usdt_network" class="form-control">
-                                    <option value="">{{ translate('-- 选择网络 --') }}</option>
-                                    <option value="TRC20" {{ $restaurant->usdt_network == 'TRC20' ? 'selected' : '' }}>TRC20 (Tron)</option>
-                                    <option value="BSC" {{ $restaurant->usdt_network == 'BSC' ? 'selected' : '' }}>BSC (BEP20)</option>
-                                </select>
+                            <div class="alert alert-info" style="font-size:13px;line-height:1.7;">
+                                <b>两条链可各填一个地址，顾客下单时自己选便宜的那条：</b><br>
+                                • <b>波场 TRC20</b>（地址 T 开头）：手续费略高（约 1 USDT）。<br>
+                                • <b>BEP20 / 币安智能链</b>（地址 0x 开头）：手续费更低（约 0.3–0.8 USDT），适合从币安转出的顾客。<br>
+                                • <b>两条链平台都会自动上链核验是否真到账</b>（顾客填交易哈希后系统去公链查收款地址/金额/确认）；偶尔链上节点繁忙时会提示商家手动核对。<br>
+                                • ⚠️ 地址=钱的去向，务必填商家<b>自己掌控的钱包</b>地址，别填交易所内部充值地址（易被识别成"内部转账"而查不到链上记录）。
                             </div>
-                            <div class="form-group mb-0">
-                                <label class="input-label">{{ translate('USDT 收款地址') }}</label>
+                            <div class="form-group mb-3">
+                                <label class="input-label">{{ translate('USDT · 波场TRC20 收款地址') }} <small class="text-muted">(T 开头, 选填)</small></label>
                                 <input type="text" name="usdt_address" class="form-control"
                                        value="{{ $restaurant->usdt_address }}"
-                                       placeholder="{{ translate('如: TXxxxxx... 或 0xXxxx...') }}">
+                                       placeholder="如: TXxxxxxxxx...">
+                            </div>
+                            <div class="form-group mb-0">
+                                <label class="input-label">{{ translate('USDT · BEP20 收款地址') }} <small class="text-muted">(0x 开头, 选填)</small></label>
+                                <input type="text" name="usdt_bep20_address" class="form-control"
+                                       value="{{ $restaurant->usdt_bep20_address }}"
+                                       placeholder="如: 0xXxxxxxxx...">
                             </div>
                         </div>
                         <div class="col-md-5">

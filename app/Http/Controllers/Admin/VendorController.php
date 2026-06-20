@@ -590,6 +590,7 @@ class VendorController extends Controller
             'payee_name'   => 'nullable|string|max:100',
             'usdt_address' => 'nullable|string|max:191',
             'usdt_network' => 'nullable|string|max:50',
+            'usdt_bep20_address' => 'nullable|string|max:191',
         ]);
 
         if ($validator->fails()) {
@@ -607,7 +608,8 @@ class VendorController extends Controller
         }
         $restaurant->payee_name   = $request->payee_name;
         $restaurant->usdt_address = $request->usdt_address;
-        $restaurant->usdt_network = $request->usdt_network;
+        $restaurant->usdt_bep20_address = $request->usdt_bep20_address;
+        if ($request->has('usdt_network')) { $restaurant->usdt_network = $request->usdt_network; }
         $restaurant->save();
 
         Toastr::success(translate('messages.收款信息已保存'));

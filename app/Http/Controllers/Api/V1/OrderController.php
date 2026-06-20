@@ -1676,11 +1676,16 @@ class OrderController extends Controller
                         $reused = OfflinePayments::where('order_id', '!=', $order->id)
                             ->where('payment_info', 'like', '%'.$hash.'%')->exists();
                         $rest = DB::table('restaurants')->where('id', $order->restaurant_id)->first();
+                        // 按所选 USDT 方式确定链与应收地址: BEP20 方式→usdt_bep20_address; 否则波场TRC20→usdt_address。
+                        $isBep20 = (bool) preg_match('/bep ?20|bsc|bnb/i', $method->method_name);
+                        $expectNet = $isBep20 ? 'BEP20' : 'TRC20';
+                        $expectAddr = $isBep20 ? ($rest->usdt_bep20_address ?? '') : ($rest->usdt_address ?? '');
+                        $autoCheck['usdt_network'] = $expectNet;
                         $verify = \App\CentralLogics\NezhaChainVerifier::verifyUsdt(
                             $hash,
-                            $rest->usdt_address ?? '',
+                            $expectAddr,
                             $expectedUsdt,
-                            $rest->usdt_network ?? 'TRC20'
+                            $expectNet
                         );
                         if ($reused) {
                             $verify['status'] = 'mismatch';
