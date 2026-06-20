@@ -179,4 +179,33 @@ class NezhaRefundController extends Controller
         Toastr::success(translate('已标记该退款为已完成, 并视情况解除接单暂停。'));
         return back();
     }
+
+    /** 运营: 保存逾期未退款阈值/总开关(L2, 后台可视化设置)。🔴 总开关=真实影响, 开=系统每天自动催办/记风控/告警。 */
+    public function overdueSettings(Request $request)
+    {
+        $request->validate([
+            'nezha_refund_overdue_status'       => 'required|in:0,1',
+            'nezha_refund_overdue_remind_days'  => 'required|integer|min:1|max:60',
+            'nezha_refund_overdue_suspend_days' => 'required|integer|min:1|max:90',
+        ]);
+        $remind  = (int) $request->nezha_refund_overdue_remind_days;
+        $suspend = (int) $request->nezha_refund_overdue_suspend_days;
+        if ($suspend < $remind) {
+            Toastr::warning(translate('停接单建议天数不能小于催办天数, 已自动取催办天数。'));
+            $suspend = $remind;
+        }
+        foreach ([
+            'nezha_refund_overdue_status'       => (string) ((int) $request->nezha_refund_overdue_status),
+            'nezha_refund_overdue_remind_days'  => (string) $remind,
+            'nezha_refund_overdue_suspend_days' => (string) $suspend,
+        ] as $key => $val) {
+            \App\Models\BusinessSetting::updateOrCreate(['key' => $key], ['value' => $val]);
+        }
+        if ((int) $request->nezha_refund_overdue_status === 1) {
+            Toastr::success(translate('已保存。⚠️ 兜底已开启: 系统将每天自动催办逾期商家+计入风控+告警; 停接单仍需您手动。'));
+        } else {
+            Toastr::success(translate('已保存。兜底总开关保持关闭, 系统不会自动催办/记风控/告警(本页仍可手动处置)。'));
+        }
+        return back();
+    }
 }

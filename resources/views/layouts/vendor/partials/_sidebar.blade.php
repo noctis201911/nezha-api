@@ -146,7 +146,7 @@
                                         <span class="text-truncate sidebar--badge-container">
                                             待退款
                                             <span class="badge badge-soft-warning badge-pill ml-1">
-                                                {{\App\Models\NezhaRefundRecord::where('restaurant_id',\App\CentralLogics\Helpers::get_restaurant_id())->where('status','pending_merchant_refund')->count()}}
+                                                {{\App\Models\Order::where('restaurant_id',\App\CentralLogics\Helpers::get_restaurant_id())->whereIn('id', \App\Models\NezhaRefundRecord::where('status','pending_merchant_refund')->pluck('order_id'))->count()}}
                                             </span>
                                         </span>
                                     </a>

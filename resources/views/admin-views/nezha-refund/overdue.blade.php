@@ -16,6 +16,38 @@
             @endif
         </div>
 
+        {{-- 阈值/总开关 可视化设置 --}}
+        <div class="card mb-3">
+            <div class="card-header"><h5 class="card-header-title">{{ translate('逾期未退款 · 阈值与总开关设置') }}</h5></div>
+            <div class="card-body">
+                <form method="POST" action="{{ route('admin.nezha-refund.overdue.settings') }}">
+                    @csrf
+                    <div class="row align-items-end">
+                        <div class="col-sm-4 form-group mb-2">
+                            <label class="input-label">{{ translate('兜底总开关') }}</label>
+                            <select name="nezha_refund_overdue_status" class="form-control">
+                                <option value="0" {{ $status != 1 ? 'selected' : '' }}>{{ translate('关闭(只看与手动处置, 不自动催办)') }}</option>
+                                <option value="1" {{ $status == 1 ? 'selected' : '' }}>{{ translate('开启(每天自动催办+记风控+告警)') }}</option>
+                            </select>
+                            <small class="text-danger">{{ translate('⚠️ 开启=真实影响: 会自动催办逾期商家并计入风控。停接单仍需您手动。') }}</small>
+                        </div>
+                        <div class="col-sm-3 form-group mb-2">
+                            <label class="input-label">{{ translate('逾期几天起 催办+记风控') }}</label>
+                            <input type="number" name="nezha_refund_overdue_remind_days" class="form-control" min="1" max="60" value="{{ $remindDays }}" required>
+                        </div>
+                        <div class="col-sm-3 form-group mb-2">
+                            <label class="input-label">{{ translate('逾期几天起 升级告警建议停接单') }}</label>
+                            <input type="number" name="nezha_refund_overdue_suspend_days" class="form-control" min="1" max="90" value="{{ $suspendDays }}" required>
+                        </div>
+                        <div class="col-sm-2 form-group mb-2">
+                            <button type="submit" class="btn btn-primary btn-block">{{ translate('保存') }}</button>
+                        </div>
+                    </div>
+                    <small class="text-muted">{{ translate('停接单天数应≥催办天数; 系统每天09:30自动扫描一次。') }}</small>
+                </form>
+            </div>
+        </div>
+
         {{-- 当前被「退款逾期」停接单的商家 --}}
         <div class="card mb-3">
             <div class="card-header"><h5 class="card-header-title">{{ translate('当前因退款逾期被暂停接单的商家') }} ({{ count($suspended) }})</h5></div>

@@ -509,6 +509,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::post('overdue/suspend/{id}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'overdueSuspend'])->name('overdue.suspend');
             Route::post('overdue/unsuspend/{restaurant}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'overdueUnsuspend'])->name('overdue.unsuspend');
             Route::post('overdue/resolve/{id}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'overdueResolve'])->name('overdue.resolve');
+            Route::post('overdue/settings', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'overdueSettings'])->name('overdue.settings');
         });
 
 
