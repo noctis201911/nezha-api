@@ -105,3 +105,9 @@
 ## 已知残留(滚动维护，修一条删一条)
 - 暂无(2026-06-16 首轮 H1/H2/H3/M1/M2/M3 + dm_messages 已修)。
 - 复查重点:任何**新增的"按 id 操作"接口**默认按轴 A 重审。
+
+### 2026-06-20 第二轮(commit ecd35d7) — 已修
+- **订阅 IDOR 簇(潜伏)**:`OrderSubscriptionController` 的 show/edit/update/update_schedule 4 个 by-id 方法原**零归属校验**(auth:api 下任意登录顾客可读他人订阅+订单收货地址PII / 取消/改他人订阅)。当时 `subscriptions=0`、功能未启用故潜伏(启用即🔴)。**前端有订阅 UI 在用**(subscription-details 组件树+react-query/subscription hooks),故**加 `where('user_id', auth id)` 作用域而非拔路由**(对齐同控制器 index() 既有正确模式)。
+- **骑手评价越权写**:`DeliveryManReviewController::submit_review` 原不校验 order 归属本人/该骑手是否真送此单 → 可伪造骑手评分。补订单归属校验(对齐 `ProductController::submit_product_review` 的 nz_order_owned)。注:该端点在 `actch:deliveryman_app` 激活闸后(实测 503),可达性本就低,此为纵深加固。
+- **🟢 加固**:`update_payment_method`/`order_notification` 补 is_guest 过滤(原靠 H2 随机 guest_id 不碰撞兜底,不可利用但不一致);`get_order_details` 未找到改 200→404;删 `CustomerController` 未挂路由的死代码 `get_order_list`/`get_order_details`(按 order_id 取 OrderDetail 无归属,虽不可达仍清除防误接线)。
+- **覆盖局限(诚实)**:订阅作用域为**静态(where user_id)+动态不破坏(show/edit/update→404、index/order.list→200、无 500/无泄露)**验证;因订阅 0 行,**未能动态区分"owner 得 200 vs 非 owner 404"**。双账号正向跨账户 PoC 未做(仅 1 个真实测试账号 user6,只做了负向对照)。place_order 全量(轴 E/K)、vendor/dm 端本轮未重审。
