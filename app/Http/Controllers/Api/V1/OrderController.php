@@ -105,6 +105,16 @@ class OrderController extends Controller
             'channel'       => $nezha_rr->payment_channel,
             'refunded'      => $nezha_rr->status === 'merchant_refunded',
         ] : null;
+        // 哪吒: 顾客「接单后申请取消」状态(申请→商家裁决)。前端据此显示申请入口/申请中/被拒卡。
+        $nz_cancel_stage_ok = in_array($order->order_status, ['confirmed', 'processing'], true);
+        $order['nezha_cancel'] = [
+            'status'        => $order->nezha_cancel_request,            // null|requested|approved|rejected
+            'can_request'   => $nz_cancel_stage_ok && $order->nezha_cancel_request !== 'requested',
+            'reason'        => $order->nezha_cancel_request_reason,
+            'response_note' => $order->nezha_cancel_response_note,
+            'requested_at'  => $order->nezha_cancel_requested_at,
+            'responded_at'  => $order->nezha_cancel_responded_at,
+        ];
         // 哪吒: 订单超时状态(集中规则, 见 docs/ORDER_TIMEOUT_RULES.md)。前端只渲染, 不写散落计时器。
         $order['nezha_timeout'] = \App\CentralLogics\NezhaOrderTimeout::describe($order);
         return response()->json($order, 200);
@@ -1004,6 +1014,76 @@ class OrderController extends Controller
                 ['code' => 'order', 'message' => translate('messages.you_can_not_cancel_after_confirm')]
             ]
         ], 403);
+    }
+
+    /**
+     * 哪吒 B方案 — 顾客「接单后申请取消」(申请 → 商家裁决, 非自助即时取消)。
+     * 适用阶段: confirmed / processing(已接单/备餐中)。pending 仍走 cancel_order 自助即时取消;
+     * handover/picked_up(已出餐/配送中)一律拒绝(饭已出, 见 docs/ORDER_TIMEOUT_RULES.md D/E)。
+     * 本端点只「登记申请 + 通知商家」, 绝不改 order_status, 订单继续履约直到商家同意/拒绝。
+     * 防刷: 已有 requested 申请→拦; 被拒后 10 分钟内不可再申请。
+     * 顾客可见消息按 current_language_key 直出中英文(不经 messages.php, 避热点文件并发覆盖)。
+     */
+    public function cancel_request(Request $request)
+    {
+        $lang = $request->user?->current_language_key ?: 'zh';
+        $zh = stripos($lang, 'zh') === 0;
+        $validator = Validator::make($request->all(), [
+            'guest_id' => $request->user ? 'nullable' : 'required',
+            'reason'   => 'required|string|max:500',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
+        }
+        $user_id = $request->user ? $request->user->id : $request['guest_id'];
+        $order = Order::where(['user_id' => $user_id, 'id' => $request['order_id']])
+            ->when(!isset($request->user), function ($query) { $query->where('is_guest', 1); })
+            ->when(isset($request->user), function ($query) { $query->where('is_guest', 0); })
+            ->Notpos()->first();
+        if (!$order) {
+            return response()->json(['errors' => [['code' => 'order', 'message' => translate('messages.not_found')]]], 404);
+        }
+        // 仅 confirmed/processing 可申请(已出餐/配送中/已送达不可)
+        if (!in_array($order->order_status, ['confirmed', 'processing'], true)) {
+            $m = $zh
+                ? '当前订单状态无法申请取消。商家未接单时可直接取消；已出餐或配送中请直接联系商家。'
+                : 'You cannot request cancellation at this stage. Please contact the restaurant directly.';
+            return response()->json(['errors' => [['code' => 'order', 'message' => $m]]], 403);
+        }
+        // 已有待处理申请 → 不重复(防刷)
+        if ($order->nezha_cancel_request === 'requested') {
+            $m = $zh ? '你的取消申请正在等待商家处理，请勿重复提交。' : 'Your cancellation request is pending. Please do not submit again.';
+            return response()->json(['errors' => [['code' => 'order', 'message' => $m]]], 403);
+        }
+        // 被拒后 10 分钟节流
+        if ($order->nezha_cancel_request === 'rejected' && $order->nezha_cancel_responded_at
+            && \Carbon\Carbon::parse($order->nezha_cancel_responded_at)->gt(now()->subMinutes(10))) {
+            $m = $zh ? '商家刚拒绝了你的取消申请，请稍后再试或直接联系商家。' : 'The restaurant just declined your request. Please try again later or contact the restaurant.';
+            return response()->json(['errors' => [['code' => 'order', 'message' => $m]]], 403);
+        }
+
+        $order->nezha_cancel_request = 'requested';
+        $order->nezha_cancel_request_reason = mb_substr($request->reason, 0, 500);
+        $order->nezha_cancel_requested_at = now();
+        $order->nezha_cancel_response_note = null;
+        $order->nezha_cancel_responded_at = null;
+        $order->save();
+
+        // 通知商家有待处理的取消申请(推送)。失败不阻断。
+        try {
+            $vendorToken = $order->restaurant?->vendor?->firebase_token;
+            if ($vendorToken) {
+                $title = '顾客申请取消订单';
+                $msg = '订单 #' . $order->id . ' 顾客申请取消，理由：' . mb_substr($request->reason, 0, 120) . '。请在订单详情「同意取消」或「拒绝继续履约」。';
+                $data = Helpers::makeDataForPushNotification(title: $title, message: $msg, orderId: $order->id, type: 'order_status', orderStatus: $order->order_status);
+                Helpers::send_push_notif_to_device($vendorToken, $data);
+            }
+        } catch (\Throwable $e) { info('cancel_request notify vendor failed: ' . $e->getMessage()); }
+
+        $ok = $zh
+            ? '取消申请已提交，等待商家处理。商家同意后订单将取消；若你此前已付款，需联系商家原路退回。'
+            : 'Cancellation request submitted. Waiting for the restaurant. If approved and you have paid, contact the restaurant for an original-route refund.';
+        return response()->json(['message' => $ok], 200);
     }
 
     /**
