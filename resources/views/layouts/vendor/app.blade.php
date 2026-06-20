@@ -930,6 +930,72 @@
         })();
         @endif
 
+        // 哪吒: 商家面板聊天「新消息轮询」——FCM web push 不稳，这里用后端轮询兜底：
+        // 每 12s 查最新「非本人发」消息 id，增长即响铃 + toast + 刷新会话列表/当前会话(保留草稿)。
+        @if(\App\CentralLogics\Helpers::employee_module_permission_check('chat'))
+        (function(){
+            var LS_KEY = 'nz_seen_chat_msg_id_v1';
+            var stored = null;
+            try { stored = localStorage.getItem(LS_KEY); } catch(e){}
+            var lastSeen = stored === null ? null : (parseInt(stored, 10) || 0);
+            var baseUrl = '{{url('/')}}';
+
+            function refreshOpenThread(){
+                if (typeof getUrlParameter !== 'function') { return; }
+                var conversation_id = getUrlParameter('conversation');
+                var user_id = getUrlParameter('user');
+                if (!conversation_id) { return; }
+                var ta = document.getElementById('msgInputValue');
+                var draft = ta ? ta.value : '';
+                $.get(baseUrl + '/restaurant-panel/message/view/' + conversation_id + '/' + user_id, function(data){
+                    $('#view-conversation').html(data.view);
+                    var ta2 = document.getElementById('msgInputValue');
+                    if (ta2 && draft) { ta2.value = draft; }
+                });
+            }
+
+            function pollChat(){
+                $.get({
+                    url: '{{ route('vendor.message.live-status') }}',
+                    dataType: 'json',
+                    success: function(res){
+                        var latest = parseInt((res && res.latest_incoming_id) || 0, 10) || 0;
+                        if (lastSeen === null) {
+                            // 本浏览器首次：仅校准基线，不为历史消息响铃
+                            lastSeen = latest;
+                            try { localStorage.setItem(LS_KEY, String(latest)); } catch(e){}
+                            return;
+                        }
+                        if (latest > lastSeen) {
+                            lastSeen = latest;
+                            try { localStorage.setItem(LS_KEY, String(latest)); } catch(e){}
+                            try { playAudio(); } catch(e){}
+                            if (typeof toastr !== 'undefined') {
+                                toastr.success('{{ translate('messages.New message arrived') }}', {
+                                    CloseButton: true,
+                                    ProgressBar: true,
+                                    onclick: function(){ location.href = baseUrl + '/restaurant-panel/message/list'; }
+                                });
+                            }
+                            if (document.getElementById('conversation-list')) {
+                                var ctab = (typeof getUrlParameter === 'function' && getUrlParameter('tab') && getUrlParameter('tab') !== 'undefined') ? getUrlParameter('tab') : 'customer';
+                                $.get(baseUrl + '/restaurant-panel/message/list?tab=' + ctab, function(d){
+                                    $('#conversation-list').empty().append(d.html);
+                                    $('#admin-conversation-list').empty().append(d.admin_html);
+                                    var uid = (typeof getUrlParameter === 'function') ? getUrlParameter('user') : null;
+                                    if (uid) { $('.customer-list').removeClass('conv-active'); $('#customer-' + uid).addClass('conv-active'); }
+                                });
+                                refreshOpenThread();
+                            }
+                        }
+                    }
+                });
+            }
+            pollChat();
+            setInterval(pollChat, 12000);
+        })();
+        @endif
+
         $(document).on('click', '.check-order', function () {
             location.href = '{{url('/')}}/restaurant-panel/order/list/all';
         });

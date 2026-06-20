@@ -1654,7 +1654,7 @@
   'You have new order, Check Please.' => '您有新订单，请及时查看！',
   'Ok, let me check' => '好的，立即查看',
   'Are you sure ?' => '这可是不可逆的操作，确定？',
-  'New message arrived' => '捕获未知频率新会话',
+  'New message arrived' => '收到新消息',
   'Restaurant Setup' => '商家基础盘初始化',
   'Close_Restaurant_Temporarily' => '暂时停业',
   'If_enabled,_this_restaurant_will_be_closed_temporarily_and_hidden_from_customer_app_and_web_app._Restaurant_owners_can_re-open_this_restaurant_anytime_by_turning_off_this_button.' => '启用后，本店将暂时停业并从顾客 App 和网站隐藏；关闭此按钮即可随时重新营业。',

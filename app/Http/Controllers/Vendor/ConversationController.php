@@ -136,6 +136,31 @@ class ConversationController extends Controller
         ]);
     }
 
+    // 哪吒: 商家面板聊天「新消息轮询」轻量状态——返回未读总数 + 最新一条「非本人发」消息 id（作为响铃触发信号）。
+    // 严格按当前商家 UserInfo 派生，无越权；只读、极轻量（两条聚合查询）。
+    public function live_status(Request $request)
+    {
+        $vendor = Helpers::get_vendor_data();
+        $me = UserInfo::where('vendor_id', $vendor->id)->first();
+        if (!$me) {
+            return response()->json(['total_unread' => 0, 'latest_incoming_id' => 0]);
+        }
+        $convIds = Conversation::whereUser($me->id)->pluck('id');
+        if ($convIds->isEmpty()) {
+            return response()->json(['total_unread' => 0, 'latest_incoming_id' => 0]);
+        }
+        $latestIncomingId = (int) (Message::whereIn('conversation_id', $convIds)
+            ->where('sender_id', '!=', $me->id)->max('id') ?? 0);
+        $totalUnread = (int) Conversation::whereUser($me->id)
+            ->whereHas('last_message', function ($q) use ($me) {
+                $q->where('sender_id', '!=', $me->id);
+            })->sum('unread_message_count');
+        return response()->json([
+            'total_unread' => $totalUnread,
+            'latest_incoming_id' => $latestIncomingId,
+        ]);
+    }
+
     public function store(Request $request, $user_id, $user_type)
     {
         if ($request->has('images')) {

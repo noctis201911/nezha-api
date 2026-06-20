@@ -341,6 +341,7 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
 
         Route::group(['prefix' => 'message', 'as' => 'message.', 'middleware' => ['module:chat','subscription:chat'] ], function () {
             Route::get('list', [ConversationController::class, 'list'])->name('list');
+            Route::get('live-status', [ConversationController::class, 'live_status'])->name('live-status');
             Route::post('store/{user_id}/{user_type}', [ConversationController::class, 'store'])->name('store');
             Route::get('view/{conversation_id}/{user_id}', [ConversationController::class, 'view'])->name('view');
         });
