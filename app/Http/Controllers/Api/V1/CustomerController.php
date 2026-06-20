@@ -146,30 +146,6 @@ class CustomerController extends Controller
         return response()->json(['message' => translate('messages.not_found')], 404);
     }
 
-    public function get_order_list(Request $request)
-    {
-        $orders = Order::with('restaurant')->where('is_guest', 0)->where(['user_id' => $request?->user()?->id])->get();
-        return response()->json($orders, 200);
-    }
-
-    public function get_order_details(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'order_id' => 'required'
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
-        }
-
-        $details = OrderDetail::where(['order_id' => $request['order_id']])->get();
-        foreach ($details as $det) {
-            $det['product_details'] = json_decode($det['product_details'], true);
-        }
-
-        return response()->json($details, 200);
-    }
-
     public function info(Request $request)
     {
 

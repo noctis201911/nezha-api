@@ -866,7 +866,7 @@ class OrderController extends Controller
                 'errors' => [
                     ['code' => 'order', 'message' => translate('messages.not_found')]
                 ]
-            ], 200);
+            ], 404);
         }
     }
 
@@ -1265,9 +1265,9 @@ class OrderController extends Controller
             ], 403);
         }
         $user_id = $request->user ? $request->user->id : $request['guest_id'];
-        $order = Order::where(['user_id' => $user_id, 'id' => $request['order_id']])->Notpos()->first();
+        $order = Order::where(['user_id' => $user_id, 'id' => $request['order_id']])->where('is_guest', $request->user ? 0 : 1)->Notpos()->first();
         if ($order) {
-            Order::where(['user_id' =>$user_id, 'id' => $request['order_id']])->update([
+            Order::where(['user_id' =>$user_id, 'id' => $request['order_id']])->where('is_guest', $request->user ? 0 : 1)->update([
                 'payment_method' => 'cash_on_delivery', 'order_status'=>'pending', 'pending'=> now()
             ]);
             $order_mail_status = Helpers::get_mail_status('place_order_mail_status_user');
@@ -1343,7 +1343,7 @@ class OrderController extends Controller
 
     public function order_notification(Request $request,$order_id){
         $user_id = $request->user ? $request->user->id : $request['guest_id'];
-        $order = Order::where('user_id', $user_id)->where('id',$order_id)->with(['restaurant','customer'])->first();
+        $order = Order::where('user_id', $user_id)->where('id',$order_id)->where('is_guest', $request->user ? 0 : 1)->with(['restaurant','customer'])->first();
         if(!$order){
             return response()->json([
                 'errors' => [

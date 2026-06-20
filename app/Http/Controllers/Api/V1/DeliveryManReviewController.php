@@ -62,6 +62,15 @@ class DeliveryManReviewController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
+        // 哪吒 轴A: 对象级鉴权 — 订单须属当前用户且该骑手确实配送了此单(防伪造骑手评分), 对齐 ProductController::submit_product_review
+        $nz_order_owned = \App\Models\Order::where('id', $request->order_id)
+            ->where('user_id', $request?->user()?->id)
+            ->where('delivery_man_id', $request->delivery_man_id)
+            ->exists();
+        if (!$nz_order_owned) {
+            return response()->json(['errors' => [['code' => 'order', 'message' => translate('messages.not_found')]]], 403);
+        }
+
         $multi_review = DMReview::where(['delivery_man_id' => $request->delivery_man_id, 'user_id' => $request?->user()?->id, 'order_id'=>$request->order_id])->first();
         if (isset($multi_review)) {
             return response()->json([

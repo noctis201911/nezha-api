@@ -40,7 +40,8 @@ class OrderSubscriptionController extends Controller
     {
         $limit = $request->query('limit', 10);
         $offset = $request->query('off$offset', 1);
-        $subscription = Subscription::with(['restaurant','order','schedules','pause'])->findOrFail($id);
+        // 哪吒 轴A: 仅能查看本人的订阅(按 Subscription.user_id 归属, 防越权读他人订阅+订单收货地址PII)
+        $subscription = Subscription::with(['restaurant','order','schedules','pause'])->where('user_id', $request->user()->id)->findOrFail($id);
         $schedules= $subscription->schedules ?? [];
         $pauselogs= $subscription->pause ?? [];
         $scheduleType= $subscription->type;
@@ -119,8 +120,13 @@ class OrderSubscriptionController extends Controller
         return $result;
     }
 
-    public function edit(Subscription $subscription)
+    public function edit(Request $request, $id)
     {
+        // 哪吒 轴A: 仅能查看本人订阅(原签名按 {id} 路由模型绑定不匹配且无归属校验)
+        $subscription = Subscription::where('user_id', $request->user()->id)->find($id);
+        if (!$subscription) {
+            return response()->json(['errors' => [['code' => 'subscription', 'message' => translate('messages.not_found')]]], 404);
+        }
         return response()->json($subscription);
     }
     public function update(Request $request, $id)
@@ -134,7 +140,11 @@ class OrderSubscriptionController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
-        $subscription = Subscription::find($id);
+        // 哪吒 轴A: 仅能暂停/取消/激活本人订阅(防越权改他人订阅状态)
+        $subscription = Subscription::where('user_id', $request->user()->id)->find($id);
+        if (!$subscription) {
+            return response()->json(['errors' => [['code' => 'subscription', 'message' => translate('messages.not_found')]]], 404);
+        }
         DB::beginTransaction();
         try{
             if($request->status == 'paused'){
@@ -195,6 +205,10 @@ class OrderSubscriptionController extends Controller
     }
     public function update_schedule(Request $request, Subscription $subscription)
     {
+        // 哪吒 轴A: 仅能修改本人订阅的配送排期(路由模型绑定按 id 取, 无归属校验)
+        if ($subscription->user_id !== $request->user()->id) {
+            return response()->json(['errors' => [['code' => 'subscription', 'message' => translate('messages.not_found')]]], 404);
+        }
         $validator = Validator::make($request->all(), [
             'day' => 'nullable|integer',
             'time' => 'required'
