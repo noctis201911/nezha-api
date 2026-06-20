@@ -171,16 +171,48 @@ class RestaurantController extends Controller
         }
         $id = $request['restaurant_id'];
 
+        // 筛选类型: all/latest(默认按最新) | good(4-5星好评) | bad(1-2星差评) | has_image(有图)
+        $type = $request->input('type', 'all');
 
-        $reviews = Review::with(['customer', 'food'])
+        $query = Review::with(['customer', 'food.translations'])
         ->whereHas('food', function($query)use($id){
             return $query->where('restaurant_id', $id);
         })
-        ->active()->latest()->get();
+        ->active();
+
+        if ($type === 'good') {
+            $query->where('rating', '>=', 4);
+        } elseif ($type === 'bad') {
+            $query->where('rating', '<=', 2);
+        } elseif ($type === 'has_image') {
+            $query->whereNotNull('attachment')
+                  ->where('attachment', '!=', '')
+                  ->where('attachment', '!=', '[]');
+        }
+
+        $query->latest();
+
+        // 分页: 传了 limit 才分页, 不传保持全量(向后兼容旧前端)
+        if ($request->filled('limit')) {
+            $limit = max(1, (int) $request->input('limit'));
+            $offset = max(0, (int) $request->input('offset', 0));
+            $query->skip($offset)->take($limit);
+        }
+
+        $reviews = $query->get();
 
         $storage = [];
         foreach ($reviews as $item) {
-            $item->attachment = json_decode($item->attachment);
+            $attachments = json_decode($item->attachment, true) ?? [];
+            $item->attachment = $attachments;
+            // 评价图完整 URL(与 food_image_full_url 同机制, 存于 public 盘 review 目录)
+            $attachment_full_url = [];
+            foreach ($attachments as $att) {
+                if (!empty($att)) {
+                    $attachment_full_url[] = Helpers::get_full_url('review', basename($att), 'public');
+                }
+            }
+            $item->attachment_full_url = $attachment_full_url;
             $item->food_name = null;
             $item->food_image = null;
             $item->customer_name = null;
