@@ -56,6 +56,24 @@ FPM=$(ps -eo comm 2>/dev/null | grep -c '[p]hp-fpm')
 MAXC=$(grep -rh 'pm.max_children' /www/server/php/*/etc/php-fpm.d/*.conf 2>/dev/null | grep -v ';' | grep -oE '[0-9]+' | head -1)
 [ -n "$MAXC" ] && [ "$FPM" -ge "$((MAXC-2))" ] && add "php-fpm 进程 $FPM 逼近上限 $MAXC — 高峰排队致变慢/超时" "fpm"
 
+# 6. 备份新鲜度: 最新加密数据库备份 >26h 未更新 → 备份可能静默失败(出事才发现没备份)
+BK=$(ls -1t /www/backup/database/nezha-enc/*.sql.gz.enc 2>/dev/null | head -1)
+if [ -z "$BK" ]; then
+  add "未找到任何数据库备份文件 — 每日备份可能未在产出" "backup"
+else
+  BAGE=$(( ( $(date +%s) - $(stat -c %Y "$BK") ) / 3600 ))
+  [ "$BAGE" -gt 26 ] && add "最新数据库备份已 ${BAGE}h 未更新 (>26h) — 每日备份可能静默失败" "backup"
+fi
+
+# 7. SSL 源站证书剩余天数 <14天 → 自动续期可能失败,提前预警(绕CF直查本机源站证书)
+for SD in nezha.am api.nezha.am; do
+  CEND=$(echo | timeout 10 openssl s_client -servername "$SD" -connect 127.0.0.1:443 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
+  [ -z "$CEND" ] && continue
+  CEE=$(date -d "$CEND" +%s 2>/dev/null) || continue
+  CLEFT=$(( (CEE - $(date +%s)) / 86400 ))
+  [ "$CLEFT" -lt 14 ] && add "$SD 源站SSL证书仅剩 ${CLEFT} 天 — 自动续期可能失败,需手动续" "ssl"
+done
+
 # 无异常 → 静默退出
 [ -z "$ALERTS" ] && exit 0
 
