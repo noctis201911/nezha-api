@@ -3,7 +3,8 @@
 **版本**: 1.0（中文版上线）　**更新**: 2026-06-16　**批准人**: 用户（noctis201914@gmail.com）
 
 > 本文件是哪吒外卖（nezha.am）主站面向用户的《用户协议》**法律文案正本（source of truth）**，纳入 git 版本管理供审计/法务对接。
-> 线上实际渲染来自 `business_settings` 表（`terms_and_conditions`），运营可在后台微调；**任何改动请同步回本文件**，保持正本与线上一致。
+> 线上实际渲染来自 `data_settings` 表（`key=terms_and_conditions`, `type=admin_landing_page`，经 `/config` 的 `ConfigController::get_settings_data()` 读取），运营可在后台微调；**任何改动请同步回本文件**，保持正本与线上一致。
+> 2026-06-20：线上页面顶部新增可见展示行「最后更新：2026年6月16日 · 版本 1.0」（淡灰小字，写入 data_settings 值首部），仅展示、不改动协议正文。
 > 体例、合规口径与 `docs/legal/local-life-terms.md`、`docs/compliance/data-protection.md` 保持一致，复用同一套文本与立场，不另起一份。
 
 ## 合规口径与待办

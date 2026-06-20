@@ -6,6 +6,8 @@
 > 线上渲染来自 `data_settings` 表（`key=about_us`, `type=admin_landing_page`，经 `/config` 的 `get_settings_data` 读取），**不是 business_settings**。运营可在后台「业务设置→页面设置→关于我们」录入；保存会自动清 `data_settings_about_us_<lang>` 缓存。
 > 体例、口径与 `docs/legal/terms-and-conditions.md`、`docs/legal/privacy-policy.md` 保持一致。**2026-06-20 已发布上线**（写入 data_settings key=about_us，与本正本一致；运营如在后台改动请同步回本文件）。
 
+> 2026-06-20：线上页面顶部新增可见展示行「最后更新：2026年6月20日 · 版本 1.0」（淡灰小字，写入 data_settings 值首部），仅展示、不改动正文。
+
 ## 合规口径与待办
 - **L1-1 平台不碰钱**：正文如实表述"信息撮合＋配送协调，顾客直付商家，平台不归集/不代收代付资金"，不出现"平台代收/平台结算"等表述。
 - **不夸大**：不宣称平台自有骑手团队（配送由商家统一代叫第三方 Yandex）；不承诺"绝对/最快/保证"。
