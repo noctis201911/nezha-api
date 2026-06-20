@@ -65,8 +65,12 @@
                 </div>
                 <!-- End Header -->
 
-
-
+                <div class="px-3 py-2 border-bottom d-flex gap-2 align-items-center">
+                    @php $sf = $statusFilter ?? 'all'; @endphp
+                    <a href="{{ route('admin.food.reviews', ['status_filter'=>'all']) }}" class="btn btn-sm {{ $sf==='all'?'btn--primary':'btn-outline-secondary' }}">{{ translate('messages.all') }}</a>
+                    <a href="{{ route('admin.food.reviews', ['status_filter'=>'pending']) }}" class="btn btn-sm {{ $sf==='pending'?'btn--primary':'btn-outline-secondary' }}">{{ translate('messages.pending_review') }} <span class="badge badge-soft-danger">{{ $pendingCount ?? 0 }}</span></a>
+                    <a href="{{ route('admin.food.reviews', ['status_filter'=>'rejected']) }}" class="btn btn-sm {{ $sf==='rejected'?'btn--primary':'btn-outline-secondary' }}">{{ translate('messages.review_rejected') }}</a>
+                </div>
 
                     <div class="card-body p-0">
                         <!-- Table -->
@@ -136,6 +140,18 @@
                                             </label>
                                             <p class="text-wrap min-w-170px" data-toggle="tooltip" data-placement="left"
                                                data-original-title="{{ $review?->comment }}">{!! $review->comment?Str::limit($review->comment, 30, '...'):'' !!}</p>
+                                            @php $atts = is_array($review->attachment)?$review->attachment:(json_decode($review->attachment,true)?:[]); @endphp
+                                            @if(count($atts))
+                                                <div class="d-flex gap-1 mt-1 flex-wrap">
+                                                    @foreach($atts as $att)
+                                                        <a href="{{ \App\CentralLogics\Helpers::get_full_url('review', basename($att), 'public') }}" target="_blank">
+                                                            <img class="onerror-image" src="{{ \App\CentralLogics\Helpers::get_full_url('review', basename($att), 'public') }}" data-onerror-image="{{dynamicAsset('assets/admin/img/100x100/food-default-image.png')}}" alt="review image" style="width:48px;height:48px;object-fit:cover;border-radius:6px;">
+                                                        </a>
+                                                    @endforeach
+                                                </div>
+                                            @endif
+                                            @if($review->status==3)<span class="badge badge-soft-warning mt-1">{{ translate('messages.pending_review') }}</span>@endif
+                                            @if($review->status==4)<span class="badge badge-soft-danger mt-1">{{ translate('messages.review_rejected') }}@if($review->reject_reason): {{ $review->reject_reason }}@endif</span>@endif
                                         </td>
                                         <td class="text-uppercase">
                                             <div>
@@ -151,17 +167,26 @@
                                                data-original-title="{{ $review?->reply }}">{!! $review->reply?Str::limit($review->reply, 50, '...'): translate('messages.Not_replied_Yet') !!}</p>
                                         </td>
                                         <td>
-                                            <label class="toggle-switch toggle-switch-sm" for="reviewCheckbox{{$review->id}}">
-                                                <input type="checkbox"
-                                                       data-id="status-{{ $review['id'] }}" data-message="{{ $review->status ? translate('messages.you_want_to_hide_this_review_for_customer') : translate('messages.you_want_to_show_this_review_for_customer') }}"
-                                                       class="toggle-switch-input status_form_alert" id="reviewCheckbox{{ $review->id }}"
-                                                        {{ $review->status ? 'checked' : '' }}>
-                                                <span class="toggle-switch-label">
-                                                    <span class="toggle-switch-indicator"></span>
-                                                </span>
-                                            </label>
-                                            <form action="{{route('admin.food.reviews.status',[$review['id'],$review->status?0:1])}}" method="get" id="status-{{$review['id']}}">
-                                            </form>
+                                            @if($review->status==3)
+                                                <a href="{{ route('admin.food.reviews.approve',[$review['id']]) }}" class="btn btn-sm btn--primary mb-1 d-block">{{ translate('messages.approve') }}</a>
+                                                <button type="button" class="btn btn-sm btn-outline-danger mb-1 d-block reject-btn" data-id="{{ $review['id'] }}">{{ translate('messages.reject') }}</button>
+                                                <form action="{{ route('admin.food.reviews.reject',[$review['id']]) }}" method="post" id="reject-{{$review['id']}}">
+                                                    @csrf
+                                                    <input type="hidden" name="reject_reason" id="reject-reason-{{$review['id']}}">
+                                                </form>
+                                            @else
+                                                <label class="toggle-switch toggle-switch-sm" for="reviewCheckbox{{$review->id}}">
+                                                    <input type="checkbox"
+                                                           data-id="status-{{ $review['id'] }}" data-message="{{ $review->status ? translate('messages.you_want_to_hide_this_review_for_customer') : translate('messages.you_want_to_show_this_review_for_customer') }}"
+                                                           class="toggle-switch-input status_form_alert" id="reviewCheckbox{{ $review->id }}"
+                                                            {{ ($review->status==1) ? 'checked' : '' }}>
+                                                    <span class="toggle-switch-label">
+                                                        <span class="toggle-switch-indicator"></span>
+                                                    </span>
+                                                </label>
+                                                <form action="{{route('admin.food.reviews.status',[$review['id'],($review->status==1)?0:1])}}" method="get" id="status-{{$review['id']}}">
+                                                </form>
+                                            @endif
                                         </td>
                                     </tr>
                                 @endforeach
@@ -220,6 +245,27 @@
             }).then((result) => {
                 if (result.value) {
                     $('#'+id).submit()
+                }
+            })
+        })
+
+        $(".reject-btn").on("click", function (e) {
+            const id = $(this).data('id');
+            e.preventDefault();
+            Swal.fire({
+                title: '{{translate('messages.reject_reason')}}',
+                input: 'text',
+                inputPlaceholder: '{{translate('messages.reject_reason')}}',
+                showCancelButton: true,
+                cancelButtonColor: 'default',
+                confirmButtonColor: '#FC6A57',
+                cancelButtonText: '{{ translate('no') }}',
+                confirmButtonText: '{{ translate('yes') }}',
+                reverseButtons: true
+            }).then((result) => {
+                if (result.value !== undefined) {
+                    $('#reject-reason-'+id).val(result.value || '');
+                    $('#reject-'+id).submit();
                 }
             })
         })

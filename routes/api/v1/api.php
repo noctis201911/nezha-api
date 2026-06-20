@@ -380,6 +380,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         Route::get('dine-in', [RestaurantController::class, 'get_dine_in_restaurants']);
         Route::get('details/{id}', [RestaurantController::class, 'get_details']);  // visitor logs
         Route::get('reviews', [RestaurantController::class, 'reviews']);
+        Route::post('reviews/{id}/report', [RestaurantController::class, 'report_review'])->middleware('auth:api');
         Route::get('search', [RestaurantController::class, 'get_searched_restaurants']);
         Route::get('recently-viewed-restaurants', [RestaurantController::class, 'recently_viewed_restaurants']);
         Route::get('get-coupon', [RestaurantController::class, 'get_coupons']);

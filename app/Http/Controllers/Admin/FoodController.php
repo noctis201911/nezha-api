@@ -18,7 +18,9 @@ use App\Exports\FoodListExport;
 use App\Scopes\RestaurantScope;
 use App\Exports\FoodReviewExport;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use App\CentralLogics\ProductLogic;
+use App\CentralLogics\RestaurantLogic;
 use App\Http\Controllers\Controller;
 use Brian2694\Toastr\Facades\Toastr;
 use Maatwebsite\Excel\Facades\Excel;
@@ -760,6 +762,8 @@ class FoodController extends Controller
     public function review_list(Request $request)
     {
         $key = explode(' ', $request['search']);
+        $statusFilter = $request->input('status_filter', 'all');
+        $pendingCount = Review::where('status', 3)->count();
         $reviews = Review::with(['customer', 'food' => function ($q) {
             $q->withoutGlobalScope(RestaurantScope::class);
         }])
@@ -770,8 +774,11 @@ class FoodController extends Controller
                     }
                 });
             })
+            ->when($statusFilter === 'pending', function ($q) { $q->where('status', 3); })
+            ->when($statusFilter === 'rejected', function ($q) { $q->where('status', 4); })
+            ->when($statusFilter === 'published', function ($q) { $q->where('status', 1); })
             ->latest()->paginate(config('default_pagination'));
-        return view('admin-views.product.reviews-list', compact('reviews'));
+        return view('admin-views.product.reviews-list', compact('reviews', 'statusFilter', 'pendingCount'));
     }
 
     public function reviews_status(Request $request)
@@ -780,6 +787,51 @@ class FoodController extends Controller
         $review->status = $request->status;
         $review->save();
         Toastr::success(translate('messages.review_visibility_updated'));
+        return back();
+    }
+
+    // 评价审核通过: 待审核(3)/驳回(4) -> 公开(1), 并把延迟的评分计入聚合(带图评价提交时未计)
+    public function review_approve(Request $request, $id)
+    {
+        $review = Review::find($id);
+        if (!$review) { Toastr::error(translate('messages.not_found')); return back(); }
+        $wasPublished = ((int) $review->status === 1);
+        $review->status = 1;
+        $review->reject_reason = null;
+        $review->reviewed_at = now();
+        $review->save();
+        if (!$wasPublished) {
+            $product = Food::withoutGlobalScope(RestaurantScope::class)->with('restaurant')->find($review->food_id);
+            if ($product) {
+                if ($product->restaurant) {
+                    $product->restaurant->rating = RestaurantLogic::update_restaurant_rating(ratings: $product->restaurant->rating, product_rating: $review->rating);
+                    $product->restaurant->save();
+                }
+                $product->rating = ProductLogic::update_rating(ratings: $product->rating, product_rating: $review->rating);
+                $product->avg_rating = ProductLogic::get_avg_rating(rating: json_decode($product->rating, true));
+                $product->save();
+                $product->increment('rating_count');
+            }
+        }
+        Toastr::success(translate('messages.review_approved'));
+        return back();
+    }
+
+    // 评价驳回: -> 已驳回(4), 删除未过审的评价图(可能含违规/PII), 评价行保留供审计
+    public function review_reject(Request $request, $id)
+    {
+        $review = Review::find($id);
+        if (!$review) { Toastr::error(translate('messages.not_found')); return back(); }
+        $review->status = 4;
+        $review->reject_reason = $request->input('reject_reason') ?: translate('messages.rejected_by_admin');
+        $review->reviewed_at = now();
+        $atts = json_decode($review->attachment, true) ?? [];
+        foreach ($atts as $a) {
+            if ($a && Storage::disk('public')->exists($a)) { Storage::disk('public')->delete($a); }
+        }
+        $review->attachment = json_encode([]);
+        $review->save();
+        Toastr::success(translate('messages.review_rejected'));
         return back();
     }
 

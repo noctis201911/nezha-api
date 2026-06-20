@@ -361,12 +361,22 @@ class ProductController extends Controller
             'order_id' => 'required',
             'comment' => 'nullable',
             'rating' => 'required|integer|min:1|max:5',
-            'attachment.*' => 'nullable|max:2048',
+            // 评价图: 仅接受图片扩展名(源头杜绝非图上传)+单张≤2MB
+            'attachment.*' => 'nullable|image|mimes:png,jpg,jpeg,webp,gif|max:2048',
         ]);
 
         $product = Food::find($request->food_id);
         if (isset($product) == false) {
             $validator->errors()->add('food_id', translate('messages.food_not_found'));
+        }
+
+        // 违禁词过滤(与本地生活 UGC 同词库 locallife_banned_words), 命中即拒不回显命中词
+        if ($this->reviewHitsBannedWord((string) $request->comment)) {
+            return response()->json([
+                'errors' => [
+                    ['code' => 'comment', 'message' => translate('messages.review_contains_banned_content')]
+                ]
+            ], 422);
         }
 
         // 哪吒: 对象级鉴权 — 订单须属当前用户且包含此商品(防越权评价/食品与订单不匹配)
@@ -392,16 +402,29 @@ class ProductController extends Controller
         }
 
         $image_array = [];
+        $provided_files = 0;
         if (!empty($request->file('attachment'))) {
             foreach ($request->file('attachment') as $image) {
                 if ($image != null) {
+                    $provided_files++;
                     if (!Storage::disk('public')->exists('review')) {
                         Storage::disk('public')->makeDirectory('review');
                     }
-                    array_push($image_array, Storage::disk('public')->put('review', $image));
+                    $stored = Storage::disk('public')->put('review', $image);
+                    if ($stored) {
+                        $image_array[] = $stored;
+                    }
                 }
             }
         }
+        // 用户附了图但一张都没存成功 → 报错, 不创建「无图僵尸待审核评价」(防永久卡审核)
+        if ($provided_files > 0 && count($image_array) === 0) {
+            return response()->json(['errors' => [['code' => 'attachment', 'message' => translate('messages.image_upload_failed')]]], 500);
+        }
+
+        // 带图评价进「待审核」(status=3, active 作用域不公开), 过审才计入评分聚合;
+        // 纯文字评价即时公开(status=1)并立即计分 —— 只把 UGC 图风险面挡在审核后
+        $hasImage = count($image_array) > 0;
 
         $review->user_id = $request?->user()?->id;
         $review->food_id = $request->food_id;
@@ -409,21 +432,53 @@ class ProductController extends Controller
         $review->comment = $request->comment;
         $review->rating = $request->rating;
         $review->attachment = json_encode($image_array);
+        $review->status = $hasImage ? 3 : 1;
         $review->save();
 
-        if($product->restaurant)
-        {
-            $restaurant_rating = RestaurantLogic::update_restaurant_rating(ratings:$product?->restaurant?->rating, product_rating:$request->rating);
-            $product->restaurant->rating = $restaurant_rating;
-            $product?->restaurant?->save();
+        if (!$hasImage) {
+            // 仅即时公开的评价立即更新聚合; 带图评价的聚合在审核通过时再更新(approve)
+            if($product->restaurant)
+            {
+                $restaurant_rating = RestaurantLogic::update_restaurant_rating(ratings:$product?->restaurant?->rating, product_rating:$request->rating);
+                $product->restaurant->rating = $restaurant_rating;
+                $product?->restaurant?->save();
+            }
+
+            $product->rating = ProductLogic::update_rating(ratings:$product->rating, product_rating:$request->rating);
+            $product->avg_rating = ProductLogic::get_avg_rating(rating:json_decode($product->rating, true));
+            $product?->save();
+            $product->increment('rating_count');
         }
 
-        $product->rating = ProductLogic::update_rating(ratings:$product->rating, product_rating:$request->rating);
-        $product->avg_rating = ProductLogic::get_avg_rating(rating:json_decode($product->rating, true));
-        $product?->save();
-        $product->increment('rating_count');
+        return response()->json([
+            'message' => $hasImage
+                ? translate('messages.review_with_image_pending')
+                : translate('messages.review_submited_successfully')
+        ], 200);
+    }
 
-        return response()->json(['message' => translate('messages.review_submited_successfully')], 200);
+    // ── 评价违禁词(与本地生活 UGC 同词库, 后台 business_settings.locallife_banned_words 可配) ──
+    private function reviewHitsBannedWord(string $text): bool
+    {
+        if (trim($text) === '') {
+            return false;
+        }
+        $raw = DB::table('business_settings')->where('key', 'locallife_banned_words')->value('value');
+        $words = [];
+        if ($raw !== null && trim($raw) !== '') {
+            foreach (preg_split('/[\r\n,，]+/u', $raw) as $p) {
+                $p = trim($p);
+                if ($p !== '') {
+                    $words[] = $p;
+                }
+            }
+        }
+        foreach ($words as $w) {
+            if ($w !== '' && mb_stripos($text, $w) !== false) {
+                return true;
+            }
+        }
+        return false;
     }
 
 

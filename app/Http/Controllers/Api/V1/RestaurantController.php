@@ -241,6 +241,46 @@ class RestaurantController extends Controller
         return response()->json($storage, 200);
     }
 
+    // 顾客举报评价(对齐本地生活 UGC 举报, auth:api 禁匿名)
+    public function report_review(Request $request, $id)
+    {
+        $allowed_reasons = ['spam', 'offensive', 'fake', 'privacy', 'other'];
+        $validator = Validator::make($request->all(), [
+            'reason' => 'required|in:' . implode(',', $allowed_reasons),
+            'detail' => 'nullable|string|max:500',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
+        }
+
+        $review = \App\Models\Review::find($id);
+        if (!$review) {
+            return response()->json(['errors' => [['code' => 'review', 'message' => translate('messages.not_found')]]], 404);
+        }
+
+        $user_id = $request?->user()?->id;
+        // 「其他」必须填说明
+        if ($request->reason === 'other' && trim((string) $request->detail) === '') {
+            return response()->json(['errors' => [['code' => 'detail', 'message' => translate('messages.please_provide_detail')]]], 422);
+        }
+        // 去重: 同用户对同评价同理由不重复记
+        $exists = DB::table('nezha_review_reports')
+            ->where('review_id', $id)->where('user_id', $user_id)->where('reason', $request->reason)
+            ->exists();
+        if (!$exists) {
+            DB::table('nezha_review_reports')->insert([
+                'review_id' => $id,
+                'user_id' => $user_id,
+                'reason' => $request->reason,
+                'detail' => $request->detail,
+                'status' => 0,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+        return response()->json(['message' => translate('messages.report_submitted_successfully')], 200);
+    }
+
     public function get_coupons(Request $request){
 
         $validator = Validator::make($request->all(), [

@@ -189,6 +189,8 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('status/{id}/{status}', [FoodController::class, 'status'])->name('status');
             Route::get('recommended/{id}/{status}', [FoodController::class, 'recommended'])->name('recommended');
             Route::get('review-status/{id}/{status}', [FoodController::class, 'reviews_status'])->name('reviews.status');
+            Route::get('review-approve/{id}', [FoodController::class, 'review_approve'])->name('reviews.approve');
+            Route::post('review-reject/{id}', [FoodController::class, 'review_reject'])->name('reviews.reject');
             Route::post('search-restaurant', [FoodController::class, 'search_vendor'])->name('search-restaurant');
             Route::get('reviews', [FoodController::class, 'review_list'])->name('reviews');
             Route::post('update-stock', [FoodController::class, 'updateStock'])->name('updateStock');
