@@ -294,6 +294,18 @@ class OrderController extends Controller
 
         foreach ($carts as $c) {
 
+            // 哪吒[轴K 数量篡改]: buy_now(活动商品)走 $request['cart'] 绕过 Cart 表的 quantity min:1 校验。
+            //   此处对所有下单路径补数量下界: 必须为 >=1 的整数, 防负数/0/小数 篡改 product_price 少付。
+            $nz_qty = data_get($c, 'quantity');
+            if (!is_numeric($nz_qty) || floor((float) $nz_qty) != (float) $nz_qty || (int) $nz_qty < 1) {
+                DB::rollBack();
+                return response()->json([
+                    'errors' => [
+                        ['code' => 'quantity', 'message' => '所选商品数量不正确，请重新选择']
+                    ]
+                ], 406);
+            }
+
             if ($c['item_type'] === 'App\Models\ItemCampaign' || $c['item_type'] === 'AppModelsItemCampaign')  {
                 $product = ItemCampaign::active()->find($c['item_id']);
                 $campaign_id = $c['item_id'];
@@ -410,7 +422,19 @@ class OrderController extends Controller
         $restaurant_discount_amount= $discount;
 
 
-        $coupon_discount_amount = $coupon ? CouponLogic::get_discount(coupon:$coupon, order_amount: $product_price + $total_addon_price - $restaurant_discount_amount) : 0;
+        // 哪吒[券 min_purchase 强制]: coupon_check 调 CouponLogic::is_valide 时只传3参(order_amount=null), 致最低消费门槛(409)被跳过。
+        //   这里按券的购物车口径金额(商品+加料-商家折扣, 与下方 get_discount 同源)补强制门槛; 低于 min_purchase 则拒绝用券(不静默放行)。
+        //   注: free_delivery 型券在 coupon_check 已置 $coupon=null, 此处覆盖不到(其 min_purchase 为独立残留, 待单独修)。
+        $nezha_coupon_basis = $product_price + $total_addon_price - $restaurant_discount_amount;
+        if ($coupon && $coupon->min_purchase > 0 && $nezha_coupon_basis < $coupon->min_purchase) {
+            DB::rollBack();
+            return response()->json([
+                'errors' => [
+                    ['code' => 'coupon', 'message' => translate('messages.you_need_to_order_at_least').' '.$coupon->min_purchase.' '.Helpers::currency_code()]
+                ]
+            ], 403);
+        }
+        $coupon_discount_amount = $coupon ? CouponLogic::get_discount(coupon:$coupon, order_amount: $nezha_coupon_basis) : 0;
 
         $total_price = $product_price + $total_addon_price - $restaurant_discount_amount - $coupon_discount_amount ;
 
