@@ -255,6 +255,11 @@ class AdvertisementController extends Controller
      */
     public function update(AdvertisementUpdateRequest $request, Advertisement $advertisement)
     {
+        // [哪吒广告计费 T3] 已扣费广告锁死: 不可编辑(防改 end_date 免费延期 / 改内容绕过审核)。未扣费仍可正常编辑; 已扣费如需变更请新建广告。
+        if ((int) $advertisement->is_paid === 1) {
+            return response()->json(['errors' => [['message' => translate('广告已开始投放并扣费, 不可修改; 如需变更请新建广告')]]], 200);
+        }
+
         $dateRange = $request->dates;
         list($startDate, $endDate) = explode(' - ', $dateRange);
         $startDate = \Carbon\Carbon::createFromFormat('m/d/Y', trim($startDate));

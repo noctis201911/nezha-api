@@ -357,6 +357,27 @@ active
                                     <input type="hidden"  name="status" value="paused">
                                     <input type="hidden"  name="id" value="{{ $advertisement->id }}">
                                 </form>
+                                @if($advertisement->is_paid == 1)
+                                <a class="btn btn-soft-danger justify-content-center d-flex gap-2 align-items-center new-dynamic-submit-model mt-2"
+                                    id="data-add-refund-{{ $advertisement->id }}"
+                                    data-id="data-add-refund-{{ $advertisement->id }}"
+                                    data-title="{{translate('确认下架并退还未投放天数的广告费?')}}"
+                                    data-text="<p>{{translate('该广告将下架, 并按未投放天数比例把广告费退回商家保证金(不可撤销)。如只想临时暂停、保留已付费用, 请用上方「暂停」。')}}</p>"
+                                    data-image="{{dynamicAsset('assets/admin/img/modal/pause.png')}}"
+                                    data-type="pause"
+                                    href="#">
+                                    <i class="tio-dollar"></i>
+                                    {{ translate('下架并退费') }}
+                                </a>
+                                <form id="data-add-refund-{{ $advertisement->id }}_form" action="{{ route('admin.advertisement.status',['status' => 'paused' ,'id' => $advertisement->id, 'refund' => 1]) }}" method="get">
+                                    @csrf
+                                    @method('get')
+                                    <input type="hidden" name="pause_note" id="data-add-refund-{{ $advertisement->id }}_note" value="{{ translate('平台下架并退还未投放天数广告费') }}">
+                                    <input type="hidden" name="status" value="paused">
+                                    <input type="hidden" name="refund" value="1">
+                                    <input type="hidden" name="id" value="{{ $advertisement->id }}">
+                                </form>
+                                @endif
                             @endif
 
 

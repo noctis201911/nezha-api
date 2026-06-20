@@ -259,10 +259,11 @@ class AdvertisementController extends Controller
         $advertisement->is_updated =0;
         $advertisement?->save();
 
-        // [哪吒广告计费 T3] 平台/超管强制下架(暂停/拒绝)已扣费广告 -> 按未投放天数比例退回保证金。
-        //   商家自停(Vendor 控制器)永不退; 仅此平台主动路径退。开关 nezha_ad_refund_on_platform_takedown(默认1)。
-        //   幂等: 退费后置 is_paid=0, 重复下架(先暂停后拒绝)不二次退; paid_at 保留作"曾扣费"永久标记(扣费命令要求 paid_at IS NULL, 永不会被重扣)。
-        if (in_array($request->status, ['paused', 'denied'], true) && (int) $advertisement->is_paid === 1 && (float) $advertisement->price > 0) {
+        // [哪吒广告计费 T3] 平台/超管「下架并退费」已扣费广告 -> 按未投放天数比例退回保证金。
+        //   🔴 仅当显式 refund=1(后台「下架并退费」按钮)时退; 普通「暂停」(refund 缺省)不退费、保持 is_paid=1 可恢复。
+        //   商家自停(Vendor 控制器)永不退; 仅此平台主动退费路径退。开关 nezha_ad_refund_on_platform_takedown(默认1)。
+        //   幂等: 退费后置 is_paid=0, 重复下架不二次退; paid_at 保留作"曾扣费"永久标记(扣费命令要求 paid_at IS NULL, 永不会被重扣)。
+        if ($request->boolean('refund') && in_array($request->status, ['paused', 'denied'], true) && (int) $advertisement->is_paid === 1 && (float) $advertisement->price > 0) {
             $nezhaAdRefundOn = (int) (\App\Models\BusinessSetting::where('key', 'nezha_ad_refund_on_platform_takedown')->first()?->value ?? 0);
             if ($nezhaAdRefundOn === 1) {
                 $nezhaToday = \Carbon\Carbon::now('Asia/Yerevan')->startOfDay();
