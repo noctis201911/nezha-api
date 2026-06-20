@@ -74,7 +74,13 @@ class AdvertisementController extends Controller
         $review=  round($review,1);
         $rating=  round($rating,1);
 
-        return view("vendor-views.advertisement.create",compact('defaultLang','language','review','rating' ));
+        // [哪吒广告计费] 提交页所需: 计费开关/单价/当前保证金余额/币种符号
+        $adBilling = (int) (\App\Models\BusinessSetting::where('key','nezha_ad_billing_status')->first()?->value ?? 0);
+        $adPricePerDay = (float) (\App\Models\BusinessSetting::where('key','nezha_ad_price_per_day')->first()?->value ?? 0);
+        $adDepositBalance = (float) (\App\Models\RestaurantWallet::where('vendor_id', $restaurant->vendor_id)->value('deposit_balance') ?? 0);
+        $adCurrencySymbol = Helpers::currency_symbol();
+
+        return view("vendor-views.advertisement.create",compact('defaultLang','language','review','rating','adBilling','adPricePerDay','adDepositBalance','adCurrencySymbol'));
     }
 
 
@@ -104,6 +110,16 @@ class AdvertisementController extends Controller
         }
 
 
+        // [哪吒广告计费] 计费开启时: 校验不可退确认 + 按单价×天数锁定本单广告费(实扣在投放起始日由 nezha:charge-ad-on-start 执行)
+        $nezhaAdBilling = (int) (\App\Models\BusinessSetting::where('key','nezha_ad_billing_status')->first()?->value ?? 0);
+        $nezhaAdPrice = null;
+        if ($nezhaAdBilling == 1) {
+            $request->validate(['ad_billing_confirm' => 'accepted'], ['ad_billing_confirm.accepted' => '请先确认广告计费与不可退款条款']);
+            $nezhaAdPricePerDay = (float) (\App\Models\BusinessSetting::where('key','nezha_ad_price_per_day')->first()?->value ?? 0);
+            $nezhaAdDays = $startDate->copy()->startOfDay()->diffInDays($endDate->copy()->startOfDay()) + 1;
+            $nezhaAdPrice = $nezhaAdPricePerDay * $nezhaAdDays;
+        }
+
         $advertisement = New Advertisement();
         $advertisement->restaurant_id = Helpers::get_restaurant_id();
         $advertisement->add_type = $request->advertisement_type;
@@ -115,6 +131,7 @@ class AdvertisementController extends Controller
         $advertisement->is_rating_active = $request->advertisement_type == 'restaurant_promotion' ?  $request?->rating ?? 0 : 0;
         $advertisement->is_review_active = $request->advertisement_type == 'restaurant_promotion' ?  $request?->review ?? 0 : 0;
         $advertisement->is_paid =  0 ;
+        $advertisement->price = $nezhaAdPrice;
         $advertisement->created_by_id = $logable_id;
         $advertisement->created_by_type = $loable_type;
         $advertisement->status = 'pending';

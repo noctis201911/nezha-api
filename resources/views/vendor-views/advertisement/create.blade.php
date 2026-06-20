@@ -328,6 +328,20 @@ active
                                 </div>
                                 </div>
                                 </div>
+                                    @if(($adBilling ?? 0) == 1)
+                                    <div class="border rounded p-3 mb-3" style="background:#FFF7E6;">
+                                        <h6 class="mb-2">广告费用</h6>
+                                        <div class="d-flex justify-content-between mb-1"><span>单价</span><span>{{ \App\CentralLogics\Helpers::format_currency($adPricePerDay ?? 0) }} / 天</span></div>
+                                        <div class="d-flex justify-content-between mb-1"><span>投放天数</span><span id="ad_days_display">—</span></div>
+                                        <div class="d-flex justify-content-between mb-1 font-weight-bold"><span>预估总费用</span><span id="ad_total_display">—</span></div>
+                                        <div class="d-flex justify-content-between mb-2"><span>当前保证金余额</span><span id="ad_balance_display">{{ \App\CentralLogics\Helpers::format_currency($adDepositBalance ?? 0) }}</span></div>
+                                        <div id="ad_balance_warning" class="alert alert-danger py-2 d-none">保证金余额不足以支付本次广告费，请先充值保证金，否则到投放起始日将无法扣费、广告不会投放。</div>
+                                        <div class="form-check mt-2">
+                                            <input type="checkbox" class="form-check-input" id="ad_billing_confirm" name="ad_billing_confirm" value="1" required>
+                                            <label class="form-check-label" for="ad_billing_confirm">我已知悉：广告将在<strong>有效期起始日正式投放时</strong>从保证金扣取上述费用，<strong>扣费后不可取消、不可退款</strong>（平台主动下架除外）。</label>
+                                        </div>
+                                    </div>
+                                    @endif
                                     <div class="btn--container justify-content-end">
                                         <button type="reset" id="reset_btn" class="btn btn--reset">{{ translate('Reset') }}</button>
                                         <button type="submit" class="btn btn--primary">{{ translate('Submit') }}</button>
@@ -369,6 +383,31 @@ active
             $('.js-select').each(function () {
                 let select2 = $.HSCore.components.HSSelect2.init($(this));
             });
+
+            @if(($adBilling ?? 0) == 1)
+            (function(){
+                var pricePerDay = {{ $adPricePerDay ?? 0 }};
+                var balance = {{ $adDepositBalance ?? 0 }};
+                var symbol = '{!! $adCurrencySymbol ?? '' !!}';
+                function fmt(n){ return symbol + ' ' + Number(n).toLocaleString('en-US'); }
+                function recompute(){
+                    var v = $('input[name="dates"]').val();
+                    if(!v || v.indexOf(' - ') === -1){ return; }
+                    var parts = v.split(' - ');
+                    var s = moment(parts[0], 'MM/DD/YYYY');
+                    var e = moment(parts[1], 'MM/DD/YYYY');
+                    if(!s.isValid() || !e.isValid()){ return; }
+                    var days = e.startOf('day').diff(s.startOf('day'), 'days') + 1;
+                    if(days < 1){ days = 1; }
+                    var total = days * pricePerDay;
+                    $('#ad_days_display').text(days + ' 天');
+                    $('#ad_total_display').text(fmt(total));
+                    if(total > balance){ $('#ad_balance_warning').removeClass('d-none'); } else { $('#ad_balance_warning').addClass('d-none'); }
+                }
+                $('input[name="dates"]').on('apply.daterangepicker', function(){ setTimeout(recompute, 10); });
+                recompute();
+            })();
+            @endif
         });
     </script>
 
