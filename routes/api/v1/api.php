@@ -441,6 +441,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
             Route::get('list', [ConversationController::class, 'conversations']);
             Route::get('search-list', [ConversationController::class, 'get_searched_conversations']);
             Route::get('details', [ConversationController::class, 'messages']);
+            Route::get('orders', [ConversationController::class, 'chat_orders']);
             Route::post('send', [ConversationController::class, 'messages_store']);
             Route::post('chat-image', [ConversationController::class, 'chat_image']);
             Route::post('mark-all-read', [ConversationController::class, 'mark_all_read']);

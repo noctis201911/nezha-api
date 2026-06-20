@@ -15,10 +15,12 @@ class Message extends Model
     protected $casts = [
         'conversation_id' => 'integer',
         'sender_id' => 'integer',
+        'order_id' => 'integer',
         'is_seen' => 'integer'
     ];
 
-    protected $appends = ['file_full_url'];
+    // order_summary: 顾客「一键发送订单卡片」用——消息引用的订单摘要（无引用则为 null）。
+    protected $appends = ['file_full_url', 'order_summary'];
 
     public function sender()
     {
@@ -28,6 +30,32 @@ class Message extends Model
     public function conversation()
     {
         return $this->belongsTo(Conversation::class);
+    }
+
+    // 消息引用的订单（顾客发卡片消息时携带）。带 OrderReference 取「取餐号」。
+    public function order()
+    {
+        return $this->belongsTo(Order::class, 'order_id')->with('OrderReference');
+    }
+
+    // 订单卡片摘要：仅在 order_id 有值时构建；优先用已 eager-load 的关系避免 N+1。
+    public function getOrderSummaryAttribute()
+    {
+        if (empty($this->order_id)) {
+            return null;
+        }
+        $order = $this->relationLoaded('order') ? $this->getRelation('order') : Order::with('OrderReference')->find($this->order_id);
+        if (!$order) {
+            return null;
+        }
+        return [
+            'id' => $order->id,
+            'order_status' => $order->order_status,
+            'order_type' => $order->order_type,
+            'order_amount' => $order->order_amount,
+            'token_number' => $order->OrderReference?->token_number,
+            'created_at' => $order->created_at ? (string) $order->created_at : null,
+        ];
     }
 
     public function getFileFullUrlAttribute(){

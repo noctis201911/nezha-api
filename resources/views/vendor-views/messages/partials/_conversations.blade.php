@@ -55,6 +55,45 @@
                     <div class="message" data-toggle="tooltip" data-placement="top" title="{{ \App\CentralLogics\Helpers::time_date_format($con->created_at) }}">{{ $con->message }}</div>
                 </div>
             @endif
+            {{-- 哪吒: 顾客「一键发送」的订单卡片——商家一眼知道在聊哪一单 --}}
+            @if($con->order_id && $con->order)
+                @php
+                    $ord = $con->order;
+                    $nzStatusMap = [
+                        'pending' => translate('messages.pending'),
+                        'accepted' => translate('messages.accepted'),
+                        'confirmed' => translate('messages.confirmed'),
+                        'processing' => translate('messages.processing'),
+                        'handover' => translate('messages.handover'),
+                        'picked_up' => translate('messages.picked_up'),
+                        'delivered' => translate('messages.delivered'),
+                        'canceled' => translate('messages.canceled'),
+                        'failed' => translate('messages.failed'),
+                        'refunded' => translate('messages.refunded'),
+                        'refund_requested' => translate('messages.refund_requested'),
+                        'refund_request_canceled' => translate('messages.refund_request_canceled'),
+                    ];
+                    $nzStatusLabel = $nzStatusMap[$ord->order_status] ?? $ord->order_status;
+                    $nzToken = $ord->OrderReference?->token_number;
+                @endphp
+                <div class="{{ $convClass }} bg-transparent py-1">
+                    <a href="{{ route('vendor.order.details', ['id' => $ord->id]) }}"
+                       class="d-inline-block text-decoration-none"
+                       style="max-width:240px; border:1px solid #F2D8A8; background:#FFF7E6; border-radius:12px; padding:10px 12px;">
+                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                            <i class="tio-receipt" style="color:#C4193E;"></i>
+                            <span style="font-weight:700; color:#323842; font-size:13px;">{{ translate('messages.Order') }} #{{ $ord->id }}</span>
+                        </div>
+                        <div style="font-size:12px; color:#8A6420; line-height:1.6;">
+                            <span style="display:inline-block; background:rgba(196,25,62,0.08); color:#C4193E; border-radius:6px; padding:1px 6px; font-weight:700;">{{ $nzStatusLabel }}</span>
+                            @if($nzToken)
+                                <span style="margin-inline-start:6px;">取餐号: <b>{{ $nzToken }}</b></span>
+                            @endif
+                        </div>
+                        <div style="font-size:12px; color:#5F6673; margin-top:3px;">֏{{ number_format($ord->order_amount) }} · {{ \App\CentralLogics\Helpers::time_date_format($ord->created_at) }}</div>
+                    </a>
+                </div>
+            @endif
             @php
                 $count=0;
             @endphp

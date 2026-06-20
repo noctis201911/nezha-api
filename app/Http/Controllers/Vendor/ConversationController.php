@@ -107,7 +107,7 @@ class ConversationController extends Controller
             $conversation->save();
         }
         Message::where(['conversation_id' => $conversation->id])->where('sender_id',$user_id)->update(['is_seen' => 1]);
-        $convs = Message::where(['conversation_id' => $conversation_id])->get();
+        $convs = Message::with('order')->where(['conversation_id' => $conversation_id])->get();
         $conversation= Conversation::find($conversation_id);
         $receiver = $conversation->receiver;
         $sender = $conversation->sender;
@@ -291,7 +291,7 @@ class ConversationController extends Controller
 
 
         $vendor = UserInfo::where('vendor_id',$vendor->id)->first();
-        $convs = Message::where(['conversation_id' => $conversation->id])->get();
+        $convs = Message::with('order')->where(['conversation_id' => $conversation->id])->get();
         return response()->json([
             'view' => view('vendor-views.messages.partials._conversations', compact('convs', 'user', 'receiver','user_type','vendor'))->render(),
             'error_message' => $error_message ?? null,

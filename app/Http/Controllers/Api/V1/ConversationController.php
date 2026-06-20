@@ -9,6 +9,7 @@ use App\Models\DeliveryMan;
 use App\Models\UserInfo;
 use App\Models\Message;
 use App\Models\Order;
+use App\Models\Restaurant;
 use App\Models\Vendor;
 use App\Models\User;
 use Carbon\Carbon;
@@ -149,6 +150,27 @@ class ConversationController extends Controller
         if($image_name && count($image_name)>0){
             $message->file = json_encode($image_name, JSON_UNESCAPED_SLASHES);
         }
+
+        // 哪吒: 顾客「一键发送订单卡片」——校验引用订单必须本人下单 + 属于本会话商家(IDOR 防越权)。
+        // 非商家会话(客服/骑手)或订单不匹配则拒绝；纯卡片消息允许 message 为空。
+        $message->order_id = null;
+        if (!empty($request->order_id)) {
+            $convCounterpartId = ($conversation->sender_id == $sender->id)
+                ? $conversation->receiver_id
+                : $conversation->sender_id;
+            $convVendorId = $convCounterpartId ? UserInfo::find($convCounterpartId)?->vendor_id : null;
+            if ($convVendorId) {
+                $refOrder = Order::where('id', $request->order_id)
+                    ->where('user_id', $request?->user()?->id)
+                    ->first();
+                $orderVendorId = $refOrder ? Restaurant::where('id', $refOrder->restaurant_id)->value('vendor_id') : null;
+                if ($refOrder && (int) $orderVendorId === (int) $convVendorId) {
+                    $message->order_id = $refOrder->id;
+                } else {
+                    return response()->json(['errors' => [['code' => 'order', 'message' => translate('messages.not_found')]]], 403);
+                }
+            }
+        }
         try {
             if($message->save())
             $conversation->unread_message_count = $conversation->unread_message_count? $conversation->unread_message_count+1:1;
@@ -188,9 +210,9 @@ class ConversationController extends Controller
             info($e->getMessage());
         }
 
-        $messages = Message::where(['conversation_id' => $conversation->id])->latest()->paginate($limit, ['*'], 'page', $offset);
+        $messages = Message::with('order')->where(['conversation_id' => $conversation->id])->latest()->paginate($limit, ['*'], 'page', $offset);
 
-        $conv = Conversation::with('sender','receiver','last_message')->find($conversation->id);
+        $conv = Conversation::with('sender','receiver','last_message.order')->find($conversation->id);
 
         if($conv->sender_type == 'vendor' && $conversation->sender){
             $vd = Vendor::find($conv->sender->vendor_id);
@@ -220,6 +242,42 @@ class ConversationController extends Controller
             'conversation' => $conv,
         ];
         return response()->json($data, 200);
+    }
+
+    // 哪吒: 顾客聊天「订单选择抽屉」数据源——列出本人与该商家近 3 天的订单(供一键发卡片)。
+    // 作用域严格按登录用户 user_id 派生，无 IDOR；只读，不碰资金。
+    public function chat_orders(Request $request)
+    {
+        $userId = $request?->user()?->id;
+        if (!$userId || !$request->vendor_id) {
+            return response()->json(['orders' => []], 200);
+        }
+
+        $restaurantIds = Restaurant::where('vendor_id', $request->vendor_id)->pluck('id');
+        if ($restaurantIds->isEmpty()) {
+            return response()->json(['orders' => []], 200);
+        }
+
+        $orders = Order::with('OrderReference')
+            ->where('user_id', $userId)
+            ->whereIn('restaurant_id', $restaurantIds)
+            ->where('created_at', '>=', Carbon::now()->subDays(3))
+            ->whereNotIn('order_type', ['pos'])
+            ->latest()
+            ->limit(20)
+            ->get()
+            ->map(function ($order) {
+                return [
+                    'id' => $order->id,
+                    'order_status' => $order->order_status,
+                    'order_type' => $order->order_type,
+                    'order_amount' => $order->order_amount,
+                    'token_number' => $order->OrderReference?->token_number,
+                    'created_at' => $order->created_at ? (string) $order->created_at : null,
+                ];
+            });
+
+        return response()->json(['orders' => $orders], 200);
     }
 
     public function chat_image(Request $request)
@@ -262,7 +320,7 @@ class ConversationController extends Controller
             $sender->save();
         }
 
-        $conversations = Conversation::with('sender','receiver','last_message')
+        $conversations = Conversation::with('sender','receiver','last_message.order')
         ->where(function($q) use($sender){
                     $q->where(['sender_id' => $sender->id])->orWhere(['receiver_id' => $sender->id]);
                 })
@@ -313,7 +371,7 @@ class ConversationController extends Controller
             $sender->save();
         }
 
-        $conversations = Conversation::with('sender','receiver','last_message')->WhereUser($sender->id)->where(function($qu)use($key){
+        $conversations = Conversation::with('sender','receiver','last_message.order')->WhereUser($sender->id)->where(function($qu)use($key){
                     $qu->whereHas('sender',function($query)use($key){
                     foreach ($key as $value) {
                         $query->where('f_name', 'like', "%{$value}%")->orWhere('l_name', 'like', "%{$value}%");
@@ -425,7 +483,7 @@ class ConversationController extends Controller
                 $conversation->save();
             }
             Message::where(['conversation_id' => $conversation->id])->where('sender_id','!=',$user->id)->update(['is_seen' => 1]);
-            $messages = Message::where(['conversation_id' => $conversation->id])->latest()->paginate($limit, ['*'], 'page', $offset);
+            $messages = Message::with('order')->where(['conversation_id' => $conversation->id])->latest()->paginate($limit, ['*'], 'page', $offset);
         }else{
             $messages =[];
             $order=0;
@@ -641,9 +699,9 @@ class ConversationController extends Controller
             info($e);
         }
 
-        $messages = Message::where(['conversation_id' => $conversation->id])->latest()->paginate($limit, ['*'], 'page', $offset);
+        $messages = Message::with('order')->where(['conversation_id' => $conversation->id])->latest()->paginate($limit, ['*'], 'page', $offset);
 
-        $conv = Conversation::with('sender','receiver','last_message')->find($conversation->id);
+        $conv = Conversation::with('sender','receiver','last_message.order')->find($conversation->id);
 
         if($conv->sender_type == 'vendor' && $conversation->sender){
             $vd = Vendor::find($conv->sender->vendor_id);
@@ -695,7 +753,7 @@ class ConversationController extends Controller
         }
 
 
-        $conversations = Conversation::with('sender','receiver','last_message')
+        $conversations = Conversation::with('sender','receiver','last_message.order')
             ->where(function ($query) use ($sender, $request) {
                 $query->where('sender_id', $sender->id)
                     ->orWhere('receiver_id', $sender->id);
@@ -755,7 +813,7 @@ class ConversationController extends Controller
             $sender->save();
         }
 
-        $conversations = Conversation::with('sender','receiver','last_message')->WhereUser($sender->id)
+        $conversations = Conversation::with('sender','receiver','last_message.order')->WhereUser($sender->id)
             ->when(isset($request->type), function ($query) use ($request) {
                 $query->where(function ($q) use ($request) {
                     $q->where(function ($q) use ($request) {
@@ -874,7 +932,7 @@ class ConversationController extends Controller
             }
 
             Message::where(['conversation_id' => $conversation->id])->where('sender_id','!=',$delivery_man->id)->update(['is_seen' => 1]);
-            $messages = Message::where(['conversation_id' => $conversation->id])->latest()->paginate($limit, ['*'], 'page', $offset);
+            $messages = Message::with('order')->where(['conversation_id' => $conversation->id])->latest()->paginate($limit, ['*'], 'page', $offset);
         }else{
             $messages =[];
             $order=0;
