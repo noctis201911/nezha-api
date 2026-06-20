@@ -304,6 +304,7 @@
                         </div>
                     </div>
 
+@if(false) {{-- takeaway retired 2026-06-20: delivery-only platform; toggle hidden to prevent re-enable. Restore: delete this @if(false) line and its matching @endif below. --}}
                     <div class="col-xl-4 col-md-4 col-sm-6">
                         <div class="form-group mb-0">
                             <label
@@ -338,6 +339,7 @@
                             </form>
                         </div>
                     </div>
+@endif {{-- /takeaway retired 2026-06-20 --}}
 
                     @if (isset($order_subscription) && $order_subscription->value == 1)
                         <div class="col-xl-4 col-md-4 col-sm-6">

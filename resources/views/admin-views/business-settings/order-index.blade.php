@@ -62,6 +62,7 @@
                             </label>
                         </div>
                     </div>
+@if(false) {{-- takeaway retired 2026-06-20: delivery-only platform; toggle hidden to prevent re-enable. Restore: delete this @if(false) line and its matching @endif below. --}}
                     <div class="col-lg-4">
                         <div class="custom-checkbox custom-control d-flex gap-2 h-100">
                             <input type="checkbox" class="custom-control-input" value="1" name="take_away"
@@ -79,6 +80,7 @@
                             </label>
                         </div>
                     </div>
+@endif {{-- /takeaway retired 2026-06-20 --}}
                     <div class="col-lg-4">
                         <div class="custom-checkbox custom-control d-flex gap-2 h-100">
                             <input type="checkbox" class="custom-control-input" value="1" name="dine_in_order_option"
