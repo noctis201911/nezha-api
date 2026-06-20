@@ -471,7 +471,11 @@ class OrderController extends Controller
         $order->tax_type = $taxType;
 
 
-        if($restaurant->minimum_order > $product_price + $total_addon_price )
+        // 哪吒[起送价口径·券后]: 起送门槛按"商品券后金额"判定(商品+加料 - 商家活动折扣 - 优惠券),
+        //   与前端餐厅页购物车条 cartPayableAmount 同源, 避免折前/折后分叉(临界区白丢单/最后一步被拒).
+        //   不含配送费/税/小费/打包费; 首单返现(ref_bonus)不计入起送判定.
+        $nezha_min_order_comparable = $product_price + $total_addon_price - $restaurant_discount_amount - $coupon_discount_amount;
+        if($restaurant->minimum_order > $nezha_min_order_comparable )
         {
             return response()->json([
                 'errors' => [
