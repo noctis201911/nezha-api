@@ -1,4 +1,6 @@
 <?php return array (
+  'review_btn_pass' => '通过',
+  'review_btn_reject' => '驳回',
   'image_upload_failed' => '图片上传失败，请重试',
   'review_approved' => '评价已通过',
   'review_rejected' => '评价已驳回',

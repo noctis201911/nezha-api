@@ -115,7 +115,9 @@
                                                             <h5 class="text-hover-primary mb-0">{{Str::limit($review->food['name'],20,'...')}}</h5>
                                                         </div>
                                                     </a>
+                                                    @if($review->order_id)
                                                     <a class="mr-5 text-body" href="{{route('admin.order.details',['id'=>$review->order_id])}}"> {{ translate('Order_ID') }}: {{$review->order_id}}</a>
+                                                    @endif
                                                 </div>
                                                 @else
                                                     {{translate('messages.Food_deleted!')}}
@@ -168,8 +170,8 @@
                                         </td>
                                         <td>
                                             @if($review->status==3)
-                                                <a href="{{ route('admin.food.reviews.approve',[$review['id']]) }}" class="btn btn-sm btn--primary mb-1 d-block">{{ translate('messages.approve') }}</a>
-                                                <button type="button" class="btn btn-sm btn-outline-danger mb-1 d-block reject-btn" data-id="{{ $review['id'] }}">{{ translate('messages.reject') }}</button>
+                                                <a href="{{ route('admin.food.reviews.approve',[$review['id']]) }}" class="btn btn-sm btn--primary mb-1 d-block">{{ translate('messages.review_btn_pass') }}</a>
+                                                <button type="button" class="btn btn-sm btn-outline-danger mb-1 d-block reject-btn" data-id="{{ $review['id'] }}">{{ translate('messages.review_btn_reject') }}</button>
                                                 <form action="{{ route('admin.food.reviews.reject',[$review['id']]) }}" method="post" id="reject-{{$review['id']}}">
                                                     @csrf
                                                     <input type="hidden" name="reject_reason" id="reject-reason-{{$review['id']}}">

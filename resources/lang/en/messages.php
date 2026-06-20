@@ -1,4 +1,6 @@
 <?php return array (
+  'review_btn_pass' => 'Pass',
+  'review_btn_reject' => 'Reject',
   'image_upload_failed' => 'Image upload failed, please retry',
   'review_contains_banned_content' => 'Your review contains prohibited content',
   'review_with_image_pending' => 'Review submitted. Photo reviews appear after approval.',
