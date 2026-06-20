@@ -109,11 +109,15 @@ class OrderTimeoutSweep extends Command
             $start = NezhaOrderTimeout::clockStart($order, NezhaOrderTimeout::PHASE_PREP);
             if (!$start) { continue; }
             $age = (int) floor($start->diffInSeconds($now) / 60);
-            $etaMin = is_numeric($order->processing_time) ? (int) $order->processing_time : null;
-            $overBy = $etaMin === null ? PHP_INT_MAX : ($age - $etaMin);
+            $etaMin = is_numeric($order->processing_time) && (int) $order->processing_time > 0
+                ? (int) $order->processing_time : null;
+            // 关键修复(2026-06-21): 无 ETA 不再在第 0 分钟立刻升级客服(避免每张未填出餐时间的单都骚扰客服,
+            // 也与 describe() 客户态对齐——无 ETA 早期是正常 info「商家备餐中」)。
+            // 改用绝对已等待 age 作基准：仅 age(或超出 ETA 的分钟数) >= prep_red 才真的通知商家+客服。
+            $overBy = $etaMin === null ? $age : ($age - $etaMin);
 
-            if ($etaMin === null || $overBy >= $cfg['prep_red']) {
-                $overTxt = $etaMin === null ? $age : $overBy;
+            if ($overBy >= $cfg['prep_red']) {
+                $overTxt = $overBy;
                 $acted += $this->fireOnce($order->id, 'prep_escalate', function () use ($order, $overTxt) {
                     $this->escalatePrep($order, (int) $overTxt);
                 }, "备餐超时 over={$overTxt}min 升级客服") ? 1 : 0;

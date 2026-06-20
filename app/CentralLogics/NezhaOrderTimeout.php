@@ -85,7 +85,7 @@ class NezhaOrderTimeout
         $raw = match ($phase) {
             self::PHASE_PROOF    => optional($order->offline_payments)->created_at ?? $order->pending ?? $order->created_at,
             self::PHASE_ACCEPT   => $order->confirmed ?? $order->created_at,
-            self::PHASE_PREP     => $order->processing ?? $order->created_at,
+            self::PHASE_PREP     => $order->processing ?? $order->confirmed ?? $order->updated_at ?? $order->created_at,
             self::PHASE_HANDOVER => $order->handover,   // 仅真实出餐时间，无则 null
             self::PHASE_PICKED   => $order->picked_up,  // 仅真实配送时间，无则 null
             default              => null,
@@ -159,52 +159,57 @@ class NezhaOrderTimeout
         if ($phase === self::PHASE_PREP) {
             $start  = self::clockStart($order, $phase);
             $etaMin = is_numeric($order->processing_time) ? (int) $order->processing_time : null;
+            if ($etaMin !== null && $etaMin <= 0) {
+                $etaMin = null; // 0/负数视同"未填"，不当 ETA
+            }
             $elapsed = $start ? max(0, (int) floor($start->diffInSeconds($now) / 60)) : 0;
 
-            if ($etaMin === null || $etaMin <= 0) {
-                return [
-                    'phase'         => $phase,
-                    'severity'      => 'error',
-                    'title'         => '备餐异常，已升级客服处理',
-                    'next_step'     => '商家未填写预计出餐时间，系统已通知商家与客服跟进。如长时间无进展，请联系客服。',
-                    'deadline_at'   => null,
-                    'refund_method' => $refundMethod,
-                    'refund_eta'    => $refundEta,
-                    'elapsed_minutes' => $elapsed,
-                ];
-            }
+            // 升级基准：有 ETA 用「超出 ETA 的分钟数」；无 ETA 用「绝对已等待分钟数」。
+            // 关键修复(2026-06-21): 无 ETA 不再立刻 error —— 早期是正常的 info「商家备餐中」，
+            // 只有久未出餐(超 prep_orange/prep_red)才升级。与 OrderTimeoutSweep 客服升级阈值对齐：
+            // 仅 $overBy >= prep_red(含无 ETA 时绝对 elapsed>=prep_red) 才真的通知商家+客服，
+            // 故只有 error 级才写「已升级客服」(满足"不假称已升级"铁律)。
+            $overBy   = $etaMin === null ? $elapsed : ($elapsed - $etaMin);
+            $deadline = ($etaMin !== null && $start) ? $start->copy()->addMinutes($etaMin)->toDateTimeString() : null;
 
-            $overBy   = $elapsed - $etaMin;
-            $deadline = $start ? $start->copy()->addMinutes($etaMin)->toDateTimeString() : null;
+            // 正常备餐（含无 ETA 早期）：info，绝不报警
             if ($overBy < $cfg['prep_orange']) {
                 return [
                     'phase'         => $phase,
                     'severity'      => 'info',
-                    'title'         => "备餐中，预计 {$etaMin} 分钟出餐",
-                    'next_step'     => '商家正在备餐，出餐后将更新取餐号。',
+                    'title'         => $etaMin !== null ? "备餐中，预计 {$etaMin} 分钟出餐" : '商家备餐中',
+                    'next_step'     => $etaMin !== null
+                        ? '商家正在备餐，出餐后将更新配送安排。'
+                        : '商家正在制作，出餐后会更新配送安排。',
                     'deadline_at'   => $deadline,
                     'refund_method' => $refundMethod,
                     'refund_eta'    => $refundEta,
                     'elapsed_minutes' => $elapsed,
                 ];
             }
+            // 轻微延迟：warning，措辞克制，不写「已升级客服」（此时 sweep 尚未升级）
             if ($overBy < $cfg['prep_red']) {
                 return [
                     'phase'         => $phase,
                     'severity'      => 'warning',
-                    'title'         => '出餐稍有延迟',
-                    'next_step'     => "已超出预计出餐时间约 {$overBy} 分钟，商家仍在备餐。如较急可联系商家。",
+                    'title'         => '备餐时间较长',
+                    'next_step'     => $etaMin !== null
+                        ? "已超出预计出餐时间约 {$overBy} 分钟，商家仍在备餐。如较急可联系商家或客服。"
+                        : "备餐已等待约 {$elapsed} 分钟，商家仍在制作。如较急可联系商家或客服。",
                     'deadline_at'   => $deadline,
                     'refund_method' => $refundMethod,
                     'refund_eta'    => $refundEta,
                     'elapsed_minutes' => $elapsed,
                 ];
             }
+            // 严重超时：error。此档 OrderTimeoutSweep 已 escalatePrep 通知商家+客服，故「已升级」属实。
             return [
                 'phase'         => $phase,
                 'severity'      => 'error',
-                'title'         => '备餐异常，已升级客服处理',
-                'next_step'     => "已超出预计出餐时间约 {$overBy} 分钟，系统已通知商家与客服跟进。如需取消/退款，请联系客服，平台将通知商家原路退款。",
+                'title'         => '备餐超时，已升级处理',
+                'next_step'     => $etaMin !== null
+                    ? "已超出预计出餐时间约 {$overBy} 分钟，系统已通知商家与客服跟进。如需取消/退款，请联系客服，平台将通知商家原路退款。"
+                    : "备餐已等待约 {$elapsed} 分钟仍未出餐，系统已通知商家与客服跟进。如需取消/退款，请联系客服，平台将通知商家原路退款。",
                 'deadline_at'   => $deadline,
                 'refund_method' => $refundMethod,
                 'refund_eta'    => $refundEta,
@@ -230,12 +235,40 @@ class NezhaOrderTimeout
             $autoNote = "系统将在第 {$cfg['email_merchant']} 分钟提醒商家、第 {$cfg['cancel']} 分钟自动取消并通知商家联系你原路退款。";
         }
 
+        // 阶段 B（confirmed）：钱已确认、商家已接单，等待开始备餐。
+        // 关键修复(2026-06-21): 不再沿用 A 阶段的「等待确认收款与接单」——收款与接单都已发生。
+        if ($phase === self::PHASE_ACCEPT) {
+            if ($elapsed < $cfg['remind']) {
+                return [
+                    'phase'         => $phase,
+                    'severity'      => 'info',
+                    'title'         => '商家已接单，正在安排备餐',
+                    'next_step'     => '商家已确认收款并接单，正在安排备餐，出餐后会更新配送安排。' . $autoNote,
+                    'deadline_at'   => $deadline,
+                    'refund_method' => $refundMethod,
+                    'refund_eta'    => $refundEta,
+                    'elapsed_minutes' => $elapsed,
+                ];
+            }
+            return [
+                'phase'         => $phase,
+                'severity'      => 'warning',
+                'title'         => '商家已接单，但迟迟未开始备餐',
+                'next_step'     => '商家已接单约 ' . self::humanDuration($elapsed) . '，但还未开始备餐。' . $autoNote . ' 你也可现在联系商家或客服确认。',
+                'deadline_at'   => $deadline,
+                'refund_method' => $refundMethod,
+                'refund_eta'    => $refundEta,
+                'elapsed_minutes' => $elapsed,
+            ];
+        }
+
+        // 阶段 A（pending offline）：等待商家确认收款（前端对 pending 另有绿色清爽态处理）
         if ($elapsed < $cfg['remind']) {
             return [
                 'phase'         => $phase,
                 'severity'      => 'info',
-                'title'         => '已下单，等待商家确认收款与接单',
-                'next_step'     => '通常 3–5 分钟内商家会确认。' . $autoNote,
+                'title'         => '等待商家确认收款',
+                'next_step'     => '通常 3–5 分钟内商家会确认收款并接单。' . $autoNote,
                 'deadline_at'   => $deadline,
                 'refund_method' => $refundMethod,
                 'refund_eta'    => $refundEta,
@@ -246,7 +279,7 @@ class NezhaOrderTimeout
         return [
             'phase'         => $phase,
             'severity'      => 'warning',
-            'title'         => '商家暂未确认，已等待 ' . self::humanDuration($elapsed),
+            'title'         => '商家暂未确认收款，已等待 ' . self::humanDuration($elapsed),
             'next_step'     => '已超过通常的 3–5 分钟确认时间。' . $autoNote . ' 你也可现在联系商家或客服确认。',
             'deadline_at'   => $deadline,
             'refund_method' => $refundMethod,
