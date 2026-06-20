@@ -120,6 +120,11 @@ return Application::configure(basePath: dirname(__DIR__))
         //   L2 资金, 流水类型 advertisement_fee; 总开关 nezha_ad_billing_status(默认0关, 关时命令直接返回零扣费)。
         //   幂等(paid_at IS NULL 防重闸+事务内 lockForUpdate), 每小时跑一次, 起始日到达后尽快扣费; 余额不足跳过并提醒充值。
         $schedule->command('nezha:charge-ad-on-start')->hourly()->withoutOverlapping();
+
+        // 哪吒 B方案 商家逾期未退款兜底: 对 pending_merchant_refund 超过阈值天数仍未退的留痕施加非资金约束
+        //   (记风控 refund_overdue / 催办商家 / 告警运营; 停接单由运营后台手动)。
+        //   总开关 nezha_refund_overdue_status(默认0关), 关时命令直接返回。每天 09:30 跑一次。
+        $schedule->command('nezha:refund-overdue-sweep')->dailyAt('09:30')->withoutOverlapping();
     })
 
     ->create();

@@ -504,6 +504,11 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::post('upload-proof/{id}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'uploadProof'])->name('upload-proof');
             Route::post('approve/{id}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'approve'])->name('approve');
             Route::post('reject/{id}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'reject'])->name('reject');
+            // 哪吒: 逾期未退款列表 + 运营手动停/解除接单 + 人工核实已退款
+            Route::get('overdue', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'overdue'])->name('overdue');
+            Route::post('overdue/suspend/{id}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'overdueSuspend'])->name('overdue.suspend');
+            Route::post('overdue/unsuspend/{restaurant}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'overdueUnsuspend'])->name('overdue.unsuspend');
+            Route::post('overdue/resolve/{id}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'overdueResolve'])->name('overdue.resolve');
         });
 
 

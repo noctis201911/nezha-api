@@ -258,6 +258,9 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
             Route::put('deny-offline-payment/{id}', [OrderController::class, 'deny_offline_payment'])->name('deny-offline-payment');
             // 哪吒 F-4: 商家「标记已退款」直付单
             Route::put('mark-refunded/{id}', [OrderController::class, 'mark_refunded'])->name('mark-refunded');
+            // 哪吒 B方案: 商家主动拒单(仅 pending/confirmed) + 处理顾客取消申请(同意/拒绝)
+            Route::put('reject/{id}', [OrderController::class, 'reject_order'])->name('reject');
+            Route::put('cancel-request-decision/{id}', [OrderController::class, 'cancel_request_decision'])->name('cancel-request-decision');
             Route::post('search', [OrderController::class, 'search'])->name('search');
             Route::post('add-to-cart', [OrderController::class, 'add_to_cart'])->name('add-to-cart');
             Route::post('remove-from-cart', [OrderController::class, 'remove_from_cart'])->name('remove-from-cart');

@@ -1215,4 +1215,66 @@ class OrderLogic
             info('record_direct_pay_refund_pending failed: order=' . ($order->id ?? '?') . ' ' . $e->getMessage());
         }
     }
+
+    /**
+     * 哪吒 — 统一「取消订单收尾」(B方案 L1-1 平台不碰钱)。
+     * 三条路共用: ①顾客接单后申请取消→商家同意 ②商家主动拒单 ③(防御)后台/超时取消。
+     * 行为: 置 canceled + 来源/理由/备注 → 回退销量 → 增订单计数 →
+     *   已付直付单则 mark offline_payments=canceled + 生成 pending_merchant_refund 留痕 +
+     *   通知顾客「联系商家原路退回」(平台绝不自动退款) → send_order_notification。
+     * 返回 bool: 是否生成了待退款留痕(已付款单)。
+     * 注: 调用方需已 ->with('details') 加载明细(decreaseSellCount 用)。
+     */
+    public static function finalize_cancellation($order, $canceled_by = 'customer', $reason = null, $note = null, $actor_id = null)
+    {
+        $order->order_status = 'canceled';
+        $order->canceled = now();
+        $order->cancellation_reason = $reason;
+        $order->cancellation_note = $note;
+        $order->canceled_by = $canceled_by;
+        if ($order->nezha_cancel_request === 'requested') {
+            $order->nezha_cancel_request = 'approved';
+            $order->nezha_cancel_responded_at = now();
+        }
+        $order->save();
+
+        Helpers::decreaseSellCount(order_details: $order->details);
+        Helpers::increment_order_count($order->restaurant);
+
+        $refund_pending = false;
+        $nezha_offline_proof = $order->payment_method == 'offline_payment'
+            ? \App\Models\OfflinePayments::where('order_id', $order->id)->whereIn('status', ['pending', 'verified', 'denied'])->first()
+            : null;
+        if ($nezha_offline_proof) {
+            \App\Models\OfflinePayments::where('order_id', $order->id)->update(['status' => 'canceled']);
+            $reasonNote = ($note ?: $reason) ? ('订单已取消：' . ($note ?: $reason)) : '订单已取消，已支付款项需商家原路退回';
+            self::record_direct_pay_refund_pending($order, $canceled_by, $actor_id, $reasonNote, true);
+            $refund_pending = true;
+            self::notify_customer_cancel_refund($order);
+        }
+
+        Helpers::send_order_notification($order);
+        return $refund_pending;
+    }
+
+    /**
+     * 哪吒 — 给顾客发「订单已取消，请联系商家原路退款」站内信 + 推送(已付直付单专用)。
+     * 平台不经手此款(L1-1),文案永远指向商家原路退,绝不出现"平台已退款"。失败不阻断主流程。
+     */
+    public static function notify_customer_cancel_refund($order)
+    {
+        try {
+            $nezha_zh = stripos(($order->customer?->current_language_key ?: 'zh'), 'zh') === 0;
+            $title = $nezha_zh ? '订单已取消' : 'Order canceled';
+            $msg = $nezha_zh
+                ? '你的订单 #' . $order->id . ' 已取消。你此前直接支付给商家的款项，请联系商家按原路退回（平台不经手此款）。'
+                : 'Your order #' . $order->id . ' is canceled. For the amount paid directly to the restaurant, please contact the restaurant for an original-route refund.';
+            $fcm = $order->is_guest == 0 ? $order?->customer?->cm_firebase_token : null;
+            $data = Helpers::makeDataForPushNotification(title: $title, message: $msg, orderId: $order->id, type: 'order_status', orderStatus: 'canceled');
+            if ($fcm) { Helpers::send_push_notif_to_device($fcm, $data); }
+            if ($order->is_guest == 0) { Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id); }
+        } catch (\Throwable $e) {
+            info('notify_customer_cancel_refund failed: ' . $e->getMessage());
+        }
+    }
 }

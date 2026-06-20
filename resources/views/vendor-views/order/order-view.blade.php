@@ -870,6 +870,45 @@
                         <div class="card-body">
                             <!-- Unfold -->
                             @php($order_delivery_verification = (bool) Helpers::get_business_data('order_delivery_verification'))
+                            {{-- 哪吒 B方案: 顾客「取消申请」待裁决 — 商家同意取消 / 拒绝继续履约 --}}
+                            @if ($order->nezha_cancel_request === 'requested' && in_array($order->order_status, ['confirmed', 'processing']))
+                                <div class="mb-3 p-3" style="background:#FFF3F5;border:1px solid #F3C9D2;border-radius:12px;">
+                                    <div style="font-weight:800;color:#7c1228;margin-bottom:4px;">⚠️ 顾客申请取消本单</div>
+                                    <div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:4px;">顾客理由：{{ $order->nezha_cancel_request_reason ?: '（未填写）' }}</div>
+                                    @if ($order->payment_method == 'offline_payment')
+                                        <div style="font-size:12px;color:#a98b54;line-height:1.6;margin-bottom:8px;">提示：若顾客已付款，同意取消后请到「订单 → 待退款」按原路退还顾客（平台不经手此款）。</div>
+                                    @endif
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <form action="{{ route('vendor.order.cancel-request-decision', ['id' => $order['id']]) }}" method="post" onsubmit="return confirm('确认同意取消本单？若顾客已付款，需你按原路退还。');">
+                                            @csrf
+                                            @method('put')
+                                            <input type="hidden" name="action" value="approve">
+                                            <button type="submit" class="btn btn-sm btn-success" style="border-radius:8px;">同意取消</button>
+                                        </form>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" style="border-radius:8px;" data-toggle="modal" data-target="#nzRejectCancelReq-{{ $order['id'] }}">拒绝（继续履约）</button>
+                                    </div>
+                                </div>
+                                {{-- 拒绝取消申请弹窗(必填原因) --}}
+                                <div class="modal fade" id="nzRejectCancelReq-{{ $order['id'] }}" tabindex="-1" role="dialog" aria-hidden="true">
+                                    <div class="modal-dialog modal-dialog-centered" role="document">
+                                        <div class="modal-content">
+                                            <form action="{{ route('vendor.order.cancel-request-decision', ['id' => $order['id']]) }}" method="post">
+                                                @csrf
+                                                @method('put')
+                                                <input type="hidden" name="action" value="reject">
+                                                <div class="modal-header"><h5 class="modal-title">拒绝取消申请</h5><button type="button" class="close" data-dismiss="modal">&times;</button></div>
+                                                <div class="modal-body">
+                                                    <label style="font-size:13px;color:#555;">请填写拒绝原因（会通知顾客）</label>
+                                                    <textarea name="reason" required maxlength="500" rows="3" class="form-control" placeholder="例：已开始备餐，无法取消；如有问题请电话联系。"></textarea>
+                                                </div>
+                                                <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">关闭</button><button type="submit" class="btn btn--danger btn-sm">确认拒绝</button></div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            @elseif ($order->nezha_cancel_request === 'rejected')
+                                <div class="mb-2 p-2" style="background:#F6F7F9;border:1px solid #E3E6EA;border-radius:8px;font-size:12px;color:#6B7280;line-height:1.6;">本单曾有顾客取消申请，你已拒绝（{{ $order->nezha_cancel_response_note }}），订单继续履约。</div>
+                            @endif
                             <div class="order-btn-wraper d-flex justify-content-center flex-wrap gap-2 align-items-center">
                                 @if ($order['order_status'] == 'pending')
 
@@ -904,6 +943,30 @@
                                         href="javascript:">{{ $order?->order_type == 'dine_in' ? translate('messages.Make_Completed') : translate('messages.make_delivered') }}</a>
                                 @endif
                             </div>
+
+                            {{-- 哪吒 B方案: 商家「无法接单 / 拒单」(仅 pending/confirmed, 必填原因) --}}
+                            @if (in_array($order->order_status, ['pending', 'confirmed']))
+                                <div class="mt-2 text-center">
+                                    <button type="button" class="btn btn-sm btn-outline-danger" style="border-radius:8px;" data-toggle="modal" data-target="#nzRejectOrder-{{ $order['id'] }}">无法接单 / 拒单</button>
+                                    <div style="font-size:11px;color:#999;margin-top:4px;line-height:1.6;">缺货 / 打烊 / 接不了单时使用。拒单会取消订单并通知顾客；已付款的请到「待退款」原路退还。</div>
+                                </div>
+                                <div class="modal fade" id="nzRejectOrder-{{ $order['id'] }}" tabindex="-1" role="dialog" aria-hidden="true">
+                                    <div class="modal-dialog modal-dialog-centered" role="document">
+                                        <div class="modal-content">
+                                            <form action="{{ route('vendor.order.reject', ['id' => $order['id']]) }}" method="post" onsubmit="return confirm('确认拒单？订单将取消并通知顾客。若顾客已付款，需你按原路退还。');">
+                                                @csrf
+                                                @method('put')
+                                                <div class="modal-header"><h5 class="modal-title">无法接单 / 拒单</h5><button type="button" class="close" data-dismiss="modal">&times;</button></div>
+                                                <div class="modal-body">
+                                                    <label style="font-size:13px;color:#555;">请填写拒单原因（会通知顾客）</label>
+                                                    <textarea name="reason" required maxlength="500" rows="3" class="form-control" placeholder="例：该商品已售罄；今日已打烊；订单超出配送范围。"></textarea>
+                                                </div>
+                                                <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">关闭</button><button type="submit" class="btn btn--danger btn-sm">确认拒单</button></div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            @endif
 
                             {{-- 哪吒 B方案: 配送单呼叫 Yandex 后填写追踪链接, 顾客端可实时查看 --}}
                             @if ($order->order_type == 'delivery' && in_array($order->order_status, ['processing', 'handover', 'picked_up']))

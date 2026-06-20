@@ -110,4 +110,73 @@ class NezhaRefundController extends Controller
 
         return back();
     }
+
+    /** 逾期未退款列表(pending_merchant_refund 且尚未标记退款) + 运营手动停/解除接单 */
+    public function overdue(Request $request)
+    {
+        $remindDays  = (int) (\App\Models\BusinessSetting::where('key', 'nezha_refund_overdue_remind_days')->value('value') ?? 3);
+        $suspendDays = (int) (\App\Models\BusinessSetting::where('key', 'nezha_refund_overdue_suspend_days')->value('value') ?? 7);
+        $status      = (int) (\App\Models\BusinessSetting::where('key', 'nezha_refund_overdue_status')->value('value') ?? 0);
+
+        $records = NezhaRefundRecord::with(['order', 'restaurant'])
+            ->where('status', 'pending_merchant_refund')
+            ->whereNull('merchant_refunded_at')
+            ->orderBy('created_at', 'asc')
+            ->paginate(30)
+            ->appends($request->all());
+
+        $suspended = \App\Models\Restaurant::where('nezha_order_suspended', 1)
+            ->orderByDesc('nezha_suspended_at')
+            ->get(['id', 'name', 'nezha_order_suspended', 'nezha_suspend_reason', 'nezha_suspended_at']);
+
+        return view('admin-views.nezha-refund.overdue', compact('records', 'suspended', 'remindDays', 'suspendDays', 'status'));
+    }
+
+    /** 运营手动: 据某退款留痕暂停该商家接单(非资金, 留人工复核口子)。 */
+    public function overdueSuspend(Request $request, $id)
+    {
+        $rec = NezhaRefundRecord::findOrFail($id);
+        if (!$rec->restaurant_id) {
+            Toastr::warning(translate('该留痕未关联商家, 无法停接单'));
+            return back();
+        }
+        $reason = '退款逾期未处理(留痕#' . $rec->id . ' 订单#' . $rec->order_id . ')';
+        if (\App\CentralLogics\NezhaRefundOverdue::suspend((int) $rec->restaurant_id, $reason)) {
+            Toastr::success(translate('已暂停该商家接单(退款逾期)。商家标记退款或您手动解除后恢复。'));
+        } else {
+            Toastr::warning(translate('找不到该商家'));
+        }
+        return back();
+    }
+
+    /** 运营手动: 解除某商家接单暂停。 */
+    public function overdueUnsuspend(Request $request, $restaurant)
+    {
+        if (\App\CentralLogics\NezhaRefundOverdue::unsuspend((int) $restaurant)) {
+            Toastr::success(translate('已解除该商家接单暂停。'));
+        } else {
+            Toastr::warning(translate('找不到该商家'));
+        }
+        return back();
+    }
+
+    /**
+     * 运营手动: 人工核实该退款留痕已实际退款(商家退了但忘标记), 转 merchant_refunded 并自动解除挂起。
+     * 🔴 仅改留痕状态(留痕/审计), 零资金操作。
+     */
+    public function overdueResolve(Request $request, $id)
+    {
+        $rec = NezhaRefundRecord::where('id', $id)->where('status', 'pending_merchant_refund')->first();
+        if (!$rec) {
+            Toastr::warning(translate('该记录不存在或已处理'));
+            return back();
+        }
+        $rec->status               = 'merchant_refunded';
+        $rec->merchant_refunded_at = now();
+        $rec->merchant_refund_note = '运营人工核实已退款: ' . ($request->input('note') ? mb_substr($request->input('note'), 0, 200) : '已确认商家原路退款');
+        $rec->save();
+        \App\CentralLogics\NezhaRefundOverdue::lift_suspend_if_clear((int) $rec->restaurant_id);
+        Toastr::success(translate('已标记该退款为已完成, 并视情况解除接单暂停。'));
+        return back();
+    }
 }

@@ -1826,6 +1826,7 @@ class OrderController extends Controller
         // [哪吒 B方案/组4 预存佣金扣佣] 开关(nezha_deposit_mode_status)开启时, 预存佣金低于阈值的餐馆停止接收新单。
         // 开关关闭(一阶段免佣免押)时 $nezha_deposit_low 恒为 false, 不影响接单。
         $nezha_deposit_low = self::nezha_deposit_below_threshold($restaurant);
+        $nezha_order_suspended = \App\CentralLogics\NezhaRefundOverdue::is_suspended($restaurant); // 哪吒: 退款逾期被运营暂停接单(非资金)
 
         $response = match (true) {
             !$restaurant => [
@@ -1841,6 +1842,11 @@ class OrderController extends Controller
             $nezha_deposit_low => [
                 'code' => 'restaurant',
                 'message' => 'restaurant_temporarily_unavailable_low_deposit',
+                'status' => 403
+            ],
+            $nezha_order_suspended => [
+                'code' => 'restaurant',
+                'message' => translate('该商家暂时停止接单，请稍后再试或更换其他商家'),
                 'status' => 403
             ],
             $request->schedule_at && $request->order_type != 'dine_in'  && !$restaurant->schedule_order => [
@@ -2032,6 +2038,7 @@ class OrderController extends Controller
 
         // [哪吒 B方案/组4 预存佣金扣佣] 结算预检同样拦预存佣金不足的餐馆(开关关闭时恒 false)。
         $nezha_deposit_low = self::nezha_deposit_below_threshold($restaurant);
+        $nezha_order_suspended = \App\CentralLogics\NezhaRefundOverdue::is_suspended($restaurant); // 哪吒: 退款逾期被运营暂停接单(非资金)
 
         $response = match (true) {
             !$restaurant => [
@@ -2048,6 +2055,11 @@ class OrderController extends Controller
             $nezha_deposit_low => [
                 'code' => 'restaurant',
                 'message' => 'restaurant_temporarily_unavailable_low_deposit',
+                'status' => 403
+            ],
+            $nezha_order_suspended => [
+                'code' => 'restaurant',
+                'message' => translate('该商家暂时停止接单，请稍后再试或更换其他商家'),
                 'status' => 403
             ],
 

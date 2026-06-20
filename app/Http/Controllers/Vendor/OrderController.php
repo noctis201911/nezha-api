@@ -340,6 +340,9 @@ class OrderController extends Controller
         }
         $record->save();
 
+        // 哪吒: 商家标记已退款后, 若该店已无逾期未退款留痕, 自动解除退款逾期接单暂停(非资金)。
+        \App\CentralLogics\NezhaRefundOverdue::lift_suspend_if_clear($record->restaurant_id);
+
         Toastr::success(translate('已标记为已退款，感谢您的原路退还。'));
         return back();
     }
@@ -567,12 +570,124 @@ class OrderController extends Controller
         $order[$request['order_status']] = now();
         $order->save();
 
+        // 哪吒 F-4 补缺(2026-06-21): 商家经 status 通道取消已付直付单时, 补「待退款」留痕。
+        // 旧版只写 canceled_by/reason 而漏调 record_direct_pay_refund_pending → 资金留痕缺口。
+        // 本分支默认死(canceled_by_restaurant 默认关), 此处为防御性补全(平台不碰钱 L1-1)。
+        if ($request->order_status == 'canceled' && $order->payment_method == 'offline_payment') {
+            $nz_op = \App\Models\OfflinePayments::where('order_id', $order->id)->whereIn('status', ['pending', 'verified', 'denied'])->first();
+            if ($nz_op) {
+                \App\Models\OfflinePayments::where('order_id', $order->id)->update(['status' => 'canceled']);
+                OrderLogic::record_direct_pay_refund_pending($order, 'restaurant', auth('vendor')->id() ?? auth('vendor_employee')->id(), '商家取消订单，已支付款项需原路退回', true);
+                OrderLogic::notify_customer_cancel_refund($order);
+            }
+        }
 
         if (!Helpers::send_order_notification($order)) {
             Toastr::warning(translate('messages.push_notification_faild'));
         }
         OrderLogic::update_subscription_log($order);
         Toastr::success(translate('messages.order_status_updated'));
+        return back();
+    }
+
+    /**
+     * 哪吒 B方案 — 商家「无法接单 / 拒单」(商家主动)。
+     * 仅【未进入备餐前】(pending / confirmed)可拒; handover / picked_up(已出餐/配送中)绝不可拒。
+     * 必填拒单原因。走统一收尾 OrderLogic::finalize_cancellation: canceled_by='restaurant' +
+     * 已付直付单生成「待退款」留痕 + 通知顾客原路退(平台不碰钱 L1-1)。
+     * 不依赖全局 canceled_by_restaurant 开关(避免开关一开商家可取消任意阶段单的风险)。
+     * 对象级鉴权: 只能拒本店单。
+     */
+    public function reject_order(Request $request, $id)
+    {
+        $request->validate([
+            'reason' => 'required|string|max:500',
+        ], [
+            'reason.required' => '请填写拒单原因',
+        ]);
+        $order = Order::where(['id' => $id, 'restaurant_id' => Helpers::get_restaurant_id()])->with('details')->first();
+        if (!$order) {
+            Toastr::error(translate('messages.order_not_found'));
+            return back();
+        }
+        if (!in_array($order->order_status, ['pending', 'confirmed'], true)) {
+            Toastr::warning('该订单已进入备餐 / 出餐 / 配送阶段，无法拒单。如确需取消请联系平台客服。');
+            return back();
+        }
+        $refund_pending = false;
+        \Illuminate\Support\Facades\DB::transaction(function () use ($order, $request, &$refund_pending) {
+            $refund_pending = OrderLogic::finalize_cancellation(
+                $order,
+                'restaurant',
+                mb_substr($request->reason, 0, 500),
+                $request->note ? mb_substr($request->note, 0, 500) : null,
+                auth('vendor')->id() ?? auth('vendor_employee')->id()
+            );
+        });
+        Toastr::success('已拒单并通知顾客。' . ($refund_pending ? '顾客已付款，请到「订单 → 待退款」按原路退还。' : ''));
+        return back();
+    }
+
+    /**
+     * 哪吒 B方案 — 商家处理顾客「取消申请」: action=approve 同意 / reject 拒绝。
+     * approve → finalize_cancellation(canceled_by='customer', 申请理由) 收尾 + (已付)待退款留痕。
+     * reject  → nezha_cancel_request='rejected' + 存商家理由, 订单回原状态继续履约 + 通知顾客被拒+原因。
+     * 仅本店、且当前确有 requested 申请、且仍在 confirmed/processing 阶段可裁决(对象级鉴权)。
+     */
+    public function cancel_request_decision(Request $request, $id)
+    {
+        $request->validate([
+            'action' => 'required|in:approve,reject',
+            'reason' => 'required_if:action,reject|string|max:500',
+        ], [
+            'reason.required_if' => '拒绝取消申请时请填写原因',
+        ]);
+        $order = Order::where(['id' => $id, 'restaurant_id' => Helpers::get_restaurant_id()])->with('details')->first();
+        if (!$order) {
+            Toastr::error(translate('messages.order_not_found'));
+            return back();
+        }
+        if ($order->nezha_cancel_request !== 'requested') {
+            Toastr::warning('该订单当前没有待处理的取消申请。');
+            return back();
+        }
+        if (!in_array($order->order_status, ['confirmed', 'processing'], true)) {
+            Toastr::warning('订单已进入出餐 / 配送阶段，取消申请已失效。');
+            return back();
+        }
+
+        if ($request->action === 'approve') {
+            $refund_pending = false;
+            \Illuminate\Support\Facades\DB::transaction(function () use ($order, &$refund_pending) {
+                $refund_pending = OrderLogic::finalize_cancellation(
+                    $order,
+                    'customer',
+                    $order->nezha_cancel_request_reason ?: '顾客申请取消，商家已同意',
+                    null,
+                    auth('vendor')->id() ?? auth('vendor_employee')->id()
+                );
+            });
+            Toastr::success('已同意取消并通知顾客。' . ($refund_pending ? '顾客已付款，请到「订单 → 待退款」按原路退还。' : ''));
+            return back();
+        }
+
+        // reject: 订单状态不变, 继续履约
+        $order->nezha_cancel_request = 'rejected';
+        $order->nezha_cancel_response_note = mb_substr($request->reason, 0, 500);
+        $order->nezha_cancel_responded_at = now();
+        $order->save();
+        try {
+            $zh = stripos(($order->customer?->current_language_key ?: 'zh'), 'zh') === 0;
+            $title = $zh ? '取消申请未通过' : 'Cancellation declined';
+            $msg = $zh
+                ? '商家未同意取消订单 #' . $order->id . '，原因：' . mb_substr($request->reason, 0, 150) . '。订单将继续履约，如有疑问请联系商家。'
+                : 'The restaurant declined to cancel order #' . $order->id . '. Reason: ' . mb_substr($request->reason, 0, 150) . '. The order will continue.';
+            $fcm = $order->is_guest == 0 ? $order?->customer?->cm_firebase_token : null;
+            $data = Helpers::makeDataForPushNotification(title: $title, message: $msg, orderId: $order->id, type: 'order_status', orderStatus: $order->order_status);
+            if ($fcm) { Helpers::send_push_notif_to_device($fcm, $data); }
+            if ($order->is_guest == 0) { Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id); }
+        } catch (\Throwable $e) { info('cancel_request_decision reject notify failed: ' . $e->getMessage()); }
+        Toastr::success('已拒绝取消申请，订单继续履约，已通知顾客。');
         return back();
     }
 

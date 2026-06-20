@@ -451,10 +451,16 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                                         <span class="text-truncate">{{ translate('风控设置') }}</span>
                                     </a>
                                 </li>
-                                <li class="nav-item {{ Request::is('admin/nezha-refund*') ? 'active' : '' }}">
+                                <li class="nav-item {{ Request::is('admin/nezha-refund/records') ? 'active' : '' }}">
                                     <a class="nav-link" href="{{ route('admin.nezha-refund.records') }}" title="{{ translate('退款留痕/审核') }}">
                                         <span class="tio-circle nav-indicator-icon"></span>
                                         <span class="text-truncate">{{ translate('退款留痕/审核') }}</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item {{ Request::is('admin/nezha-refund/overdue') ? 'active' : '' }}">
+                                    <a class="nav-link" href="{{ route('admin.nezha-refund.overdue') }}" title="{{ translate('逾期未退款') }}">
+                                        <span class="tio-circle nav-indicator-icon"></span>
+                                        <span class="text-truncate">{{ translate('逾期未退款') }}</span>
                                     </a>
                                 </li>
                             </ul>

@@ -476,6 +476,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
             Route::post('get-Tax', [OrderController::class, 'getTaxFromCart']);
             Route::post('check-restaurant-validation', [OrderController::class, 'check_restaurant_validation']);
             Route::put('cancel', [OrderController::class, 'cancel_order']);
+            Route::put('cancel-request', [OrderController::class, 'cancel_request']); // 哪吒B方案: 接单后(confirmed/processing)申请取消→商家裁决
             Route::put('confirm-delivery', [OrderController::class, 'confirm_delivery']); // 哪吒B方案: 顾客确认收货收尾(A)
             Route::post('remind-delivery-link', [OrderController::class, 'remind_delivery_link']); // 哪吒B方案: 配送中无链接时顾客一键提醒商家分享Yandex追踪
             Route::post('delivery-appeal', [OrderController::class, 'submit_delivery_appeal']); // 哪吒B方案: 「没有收到餐/配送异常」专用申诉留痕(req 4), 不自动退款
