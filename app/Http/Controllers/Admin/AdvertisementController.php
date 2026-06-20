@@ -602,6 +602,40 @@ class AdvertisementController extends Controller
     /**
      * Remove the specified resource from storage.
      */
+    /**
+     * [哪吒广告计费] 广告计费设置页 (L2 业务参数). 见 docs/PLAN_advertisement_billing.md.
+     */
+    public function billingSettings()
+    {
+        $keys = ['nezha_ad_billing_status', 'nezha_ad_price_per_day', 'nezha_ad_boost_weight', 'nezha_ad_refund_on_platform_takedown'];
+        $settings = \App\Models\BusinessSetting::whereIn('key', $keys)->pluck('value', 'key')->toArray();
+        return view('admin-views.advertisement.billing-settings', compact('settings'));
+    }
+
+    /**
+     * [哪吒广告计费] 保存广告计费设置. 全部 L2 业务参数, 不动 L1 资金红线.
+     */
+    public function updateBillingSettings(Request $request)
+    {
+        $request->validate([
+            'nezha_ad_billing_status' => 'required|in:0,1',
+            'nezha_ad_price_per_day' => 'required|numeric|min:0',
+            'nezha_ad_boost_weight' => 'required|numeric|min:0|max:2',
+            'nezha_ad_refund_on_platform_takedown' => 'required|in:0,1',
+        ]);
+        $map = [
+            'nezha_ad_billing_status' => $request->nezha_ad_billing_status,
+            'nezha_ad_price_per_day' => $request->nezha_ad_price_per_day,
+            'nezha_ad_boost_weight' => $request->nezha_ad_boost_weight,
+            'nezha_ad_refund_on_platform_takedown' => $request->nezha_ad_refund_on_platform_takedown,
+        ];
+        foreach ($map as $key => $value) {
+            \App\Models\BusinessSetting::updateOrCreate(['key' => $key], ['value' => $value]);
+        }
+        Toastr::success('广告计费设置已更新');
+        return back();
+    }
+
     public function destroy(string $id)
     {
         $advertisement =Advertisement::where('id',$id)->first();

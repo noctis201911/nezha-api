@@ -55,6 +55,7 @@ active
             <span class="badge badge-soft-dark ml-2">{{ $adds->total() }}</span>
         </h1>
         <a href="{{ route('admin.advertisement.create') }}" class="btn btn-primary">  <i class="tio-add"></i> {{ translate('New Advertisement') }}</a>
+        <a href="{{ route('admin.advertisement.billing-settings') }}" class="btn btn--secondary ml-2"> <i class="tio-settings"></i> 广告计费设置</a>
     </div>
     <!-- Title -->
 

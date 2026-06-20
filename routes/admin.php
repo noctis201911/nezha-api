@@ -262,6 +262,10 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('/updateDate/{advertisement}', [AdvertisementController::class, 'updateDate'])->name('updateDate');
             Route::post('/copy-add-post/{advertisement}', [AdvertisementController::class, 'copyAddPost'])->name('copyAddPost');
 
+            // [哪吒广告计费] 广告计费设置 (L2): 计费开关/单价/加权系数/下架退费
+            Route::get('/billing-settings', [AdvertisementController::class, 'billingSettings'])->name('billing-settings');
+            Route::post('/billing-settings', [AdvertisementController::class, 'updateBillingSettings'])->name('billing-settings.update');
+
         });
 
         Route::group(['prefix' => 'coupon', 'as' => 'coupon.', 'middleware' => ['module:coupon']], function () {
