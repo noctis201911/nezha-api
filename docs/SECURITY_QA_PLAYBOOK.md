@@ -118,7 +118,8 @@
 - **buy_now(活动商品)数量无下界(已修)**:`is_buy_now==1` 走 `$request['cart']` 绕 Cart 表 min:1;foreach 补 `>=1 正整数`校验。**动态实测**:qty=-2→**406 quantity**。两守卫 reject 前 DB::rollBack 不建脏单(实测订单数不变)。
 - **优惠券每人限领并发race(轴K TOCTOU,已修 0613faa)**:`Order::where(user_id,coupon_code)->count()<limit`(及 first_order 的 `Order::where(user_id)->count()`)在order commit前→并发双提交可超限。修法(最省,非Cache::lock):place_order 事务内、coupon_check **之前**对券行 `\App\Models\Coupon::where('code',$code)->lockForUpdate()->first()`,串行化"同一张券"的并发下单→使 is_valide 的 count() 在锁内权威;锁随 commit/rollBack 释放,只锁同券不影响别券。**验证**:①代码评审确认锁在事务内、coupon_check 在锁后;②真事务对 NEZHA-NEW(limit=1,first_order)跑 lockForUpdate 返回券行无错+干净rollback;⬜并发双提交 E2E 未确定性复现(需同用户并发fire,InnoDB FOR UPDATE 串行化属已知行为,未压测)。
 
-**开放残留(本轮未修,待评估/批准)**:
-- ⚠️ **free_delivery 型券 min_purchase 同样未强制**(FREESHIP min=2500):coupon_check 对 free_delivery 券**先置 $coupon=null 再设 delivery_charge=0**,且发生在购物车金额已知前→ #1 的内联检查(基于$coupon)覆盖不到。修法需让 coupon_check 回传 min_purchase 或在 place_order 按基额回退免运费。**注(2026-06-20):此项已在工作树由并发窗口实现(coupon_check 回传 free_delivery_min_purchase + place_order `if($free_delivery_by && basis<min) rollback+403`),待其窗提交后移入已修;本窗只提交了 race 修复未捆绑此 WIP。**
+- **free_delivery 型券 min_purchase 下单未强制(已修 345fab4)**:coupon_check 对 free_delivery 券**先置 $coupon=null 再设 delivery_charge=0**(发生在购物车金额已知前)→ #1 的内联检查(基于$coupon)覆盖不到→可低于门槛白嫖免运费(FREESHIP min=2500)。修法:coupon_check 回传 `free_delivery_min_purchase`;place_order 按购物车口径(与折扣券同源 basis)补 `if($free_delivery_by && min>0 && basis<min) rollback+403`(不回退运费;该处 $free_delivery_by 只可能来自券,admin/vendor 免运费规则 L520+ 才评估)。**动态实测(user6/店6/FREESHIP·经真实 HTTP 下单)**:food32×1(basis 300<2500)→**403 coupon**「未达最低起送金额 2500 AMD」;food32×9(basis 2700≥2500)→**200 下单成功**(门不误伤,免运费券照常生效)。测试单已删+券 total_uses 复位 0。
 
-**覆盖局限(诚实)**:place_order 资金链路+券逻辑+数量为静态+关键路径动态(min_purchase/数量 reject 实测);**未跑正向>=门槛 E2E**(会建测试单);钱包/partial/digital 路径只扫入口未深查(B方案应关);退款金额上限/原路(L1-2/3 NezhaRefundControl)未重审;并发race仅静态推断未压测。
+**开放残留(本轮未修,待评估/批准)**:本簇(place_order 券/数量/资金完整性)暂无未决项。
+
+**覆盖局限(诚实)**:place_order 资金链路+券逻辑+数量为静态+关键路径动态(min_purchase/数量 reject 实测);正向≥门槛 E2E 已补(free_delivery 券 food32×9 basis2700→200·测试单已清);钱包/partial/digital 路径只扫入口未深查(B方案应关);退款金额上限/原路(L1-2/3 NezhaRefundControl)未重审;并发race仅静态推断未压测。
