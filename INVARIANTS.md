@@ -39,6 +39,8 @@
 | **制裁筛查总开关 nezha_sanction_screen_status** | 1(开) | 后台「风控设置→制裁名单筛查」;关则不筛查 USDT 来源地址 = **L1-6 不生效**,关闭须告知用户;名单源 URL nezha_sanction_source_url 同处可调 |
 | 佣金率/服务费率 | 佣金10%/服务费5%(未启用) | 后台业务设置 |
 | 预存佣金（履约保证金）阈值/扣佣开关 | 0/关 | 后台 |
+| **广告计费总开关 nezha_ad_billing_status** | 0(关) | 后台「广告管理→广告计费设置」;开=商家投广按天从保证金扣 advertisement_fee(平台收自有广告服务费、不碰顾客钱,非二清),属"真实影响开关",开前确认单价/商家知情/有保证金充值通道 |
+| 广告单价/曝光加权/平台下架退费 | nezha_ad_price_per_day 1000֏·天 / nezha_ad_boost_weight 0.5 / nezha_ad_refund_on_platform_takedown 1(开) | 后台「广告计费设置」,不改代码 |
 
 ## 改动 L1 的标准流程
 1. 在工作窗口中**停下**,向用户说明:要改哪条 L1、为什么、影响什么。
