@@ -5025,14 +5025,17 @@ class Helpers
             }
             $coupon->increment('total_uses');
             $coupon_created_by = $coupon->created_by;
+            $free_delivery_min_purchase = 0;
             if ($coupon->coupon_type == 'free_delivery') {
+                // 哪吒[免运费券门槛]: 保留 min_purchase 供下单时按购物车额强制(coupon 即将被置 null)
+                $free_delivery_min_purchase = $coupon->min_purchase ?? 0;
                 $delivery_charge = 0;
                 $free_delivery_by = $coupon_created_by;
                 $coupon_created_by = null;
                 $coupon = null;
             }
 
-            return ['coupon' => $coupon, 'coupon_created_by' => $coupon_created_by, 'delivery_charge' => $delivery_charge ?? null, 'free_delivery_by' => $free_delivery_by ?? null];
+            return ['coupon' => $coupon, 'coupon_created_by' => $coupon_created_by, 'delivery_charge' => $delivery_charge ?? null, 'free_delivery_by' => $free_delivery_by ?? null, 'free_delivery_min_purchase' => $free_delivery_min_purchase];
         } else {
             return ['code' => 'coupon', 'message' => translate('messages.not_found'), 'status_code' => 404];
         }

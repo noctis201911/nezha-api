@@ -160,6 +160,7 @@ class OrderController extends Controller
         $coupon_created_by = null;
         $delivery_charge = null;
         $free_delivery_by = null;
+        $free_delivery_min_purchase = 0;
 
         $schedule_at = $request->schedule_at?Carbon::parse($request->schedule_at):now();
 
@@ -180,6 +181,7 @@ class OrderController extends Controller
                 $coupon_created_by = data_get($coupon_check,'coupon_created_by');
                 $delivery_charge = data_get($coupon_check,'delivery_charge');
                 $free_delivery_by = data_get($coupon_check,'free_delivery_by');
+                $free_delivery_min_purchase = data_get($coupon_check,'free_delivery_min_purchase', 0);
             }
         }
 
@@ -433,6 +435,16 @@ class OrderController extends Controller
             return response()->json([
                 'errors' => [
                     ['code' => 'coupon', 'message' => translate('messages.you_need_to_order_at_least').' '.$coupon->min_purchase.' '.Helpers::currency_code()]
+                ]
+            ], 403);
+        }
+        // 哪吒[免运费券 min_purchase 强制]: free_delivery 券在 coupon_check 已 nulled 且置 delivery_charge=0; 此处按购物车口径(与折扣券同源 basis)补门槛。
+        //   此处 $free_delivery_by 只可能来自券(admin/vendor 免运费规则在后面 L520+ 才评估), 故可据此判定为"券免运费"。不达标直接拒绝(与折扣券一致, 不回退运费)。
+        if ($free_delivery_by && $free_delivery_min_purchase > 0 && $nezha_coupon_basis < $free_delivery_min_purchase) {
+            DB::rollBack();
+            return response()->json([
+                'errors' => [
+                    ['code' => 'coupon', 'message' => translate('messages.you_need_to_order_at_least').' '.$free_delivery_min_purchase.' '.Helpers::currency_code()]
                 ]
             ], 403);
         }
