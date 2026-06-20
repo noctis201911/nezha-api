@@ -536,6 +536,32 @@
 <audio id="myAudio">
     <source src="{{dynamicAsset('assets/admin/sound/new-order-voice.mp3')}}" type="audio/mpeg">
 </audio>
+<audio id="nzMsgAudio" preload="auto">
+    <source src="{{dynamicAsset('assets/admin/sound/new-message-voice.mp3')}}" type="audio/mpeg">
+</audio>
+<script>
+    // 哪吒: 首次用户交互时解锁提示音(绕开浏览器自动播放限制)——之后轮询新消息能稳定响铃
+    (function(){
+        function nzUnlockAudio(){
+            ['myAudio','nzMsgAudio'].forEach(function(id){
+                var a = document.getElementById(id);
+                if(!a) return;
+                try {
+                    a.muted = true;
+                    var p = a.play();
+                    if (p && p.then) { p.then(function(){ a.pause(); a.currentTime = 0; a.muted = false; }).catch(function(){ a.muted = false; }); }
+                    else { a.pause(); a.currentTime = 0; a.muted = false; }
+                } catch(e){ a.muted = false; }
+            });
+            document.removeEventListener('click', nzUnlockAudio);
+            document.removeEventListener('keydown', nzUnlockAudio);
+            document.removeEventListener('touchstart', nzUnlockAudio);
+        }
+        document.addEventListener('click', nzUnlockAudio);
+        document.addEventListener('keydown', nzUnlockAudio);
+        document.addEventListener('touchstart', nzUnlockAudio);
+    })();
+</script>
 
 <script>
         "use strict";
@@ -969,7 +995,7 @@
                         if (latest > lastSeen) {
                             lastSeen = latest;
                             try { localStorage.setItem(LS_KEY, String(latest)); } catch(e){}
-                            try { playAudio(); } catch(e){}
+                            try { var __ma = document.getElementById('nzMsgAudio'); if (__ma) { __ma.currentTime = 0; var __p = __ma.play(); if (__p && __p.catch) { __p.catch(function(){}); } } } catch(e){}
                             if (typeof toastr !== 'undefined') {
                                 toastr.success('{{ translate('messages.New message arrived') }}', {
                                     CloseButton: true,
