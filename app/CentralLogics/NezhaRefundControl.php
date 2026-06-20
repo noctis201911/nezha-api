@@ -250,11 +250,45 @@ class NezhaRefundControl
         return ['status' => 'failed', 'detail' => ['reason' => '未找到USDT转账事件']];
     }
 
+    // 哪吒[BSC 多节点 failover]: 公共 bsc-dataseed 会限流/偶尔节点滞后 —— 单节点不可靠。
+    // 依次尝试一组公共 BSC RPC, 返回首个非 null 结果; 全部不可达/都 null 才返回 null。
+    // 让 BEP20 链上核验(退款/制裁/离线收款)稳定可用。后台可用 nezha_refund_chain_rpc_bsc_list(逗号分隔)整表覆盖。
+    protected static function bscRpcEndpoints(): array
+    {
+        $primary = trim((string) self::cfg('nezha_refund_chain_rpc_bsc', 'https://bsc-dataseed.binance.org'));
+        $custom = trim((string) self::cfg('nezha_refund_chain_rpc_bsc_list', ''));
+        if ($custom !== '') {
+            $list = array_map('trim', explode(',', $custom));
+        } else {
+            $list = [
+                $primary,
+                'https://bsc-dataseed.bnbchain.org',
+                'https://bsc-rpc.publicnode.com',
+                'https://bsc-dataseed1.defibit.io',
+                'https://bsc.drpc.org',
+                'https://1rpc.io/bnb',
+            ];
+        }
+        return array_values(array_unique(array_filter($list)));
+    }
+
     protected static function bsc_rpc(string $method, array $params)
     {
-        $rpc = (string) self::cfg('nezha_refund_chain_rpc_bsc', 'https://bsc-dataseed.binance.org');
-        $resp = Http::timeout(12)->post($rpc, ['jsonrpc' => '2.0', 'id' => 1, 'method' => $method, 'params' => $params]);
-        return $resp->ok() ? ($resp->json()['result'] ?? null) : null;
+        foreach (self::bscRpcEndpoints() as $rpc) {
+            try {
+                $resp = Http::timeout(10)->post($rpc, ['jsonrpc' => '2.0', 'id' => 1, 'method' => $method, 'params' => $params]);
+                if (!$resp->ok()) continue;
+                $j = $resp->json();
+                if (!is_array($j) || isset($j['error'])) continue; // 限流(-32005)/节点错 → 换下一个
+                if (array_key_exists('result', $j)) {
+                    if ($j['result'] !== null) return $j['result'];
+                    // result=null: 可能该节点滞后未同步到该交易, 继续探下一个节点。
+                }
+            } catch (\Throwable $e) {
+                continue;
+            }
+        }
+        return null; // 所有节点都不可达或都 null(真查无 / 未生成回执)
     }
 
     protected static function tron_headers(): array

@@ -70,7 +70,10 @@ class NezhaChainVerifier
         }
 
         try {
-            $cleanHash = preg_replace('/^0x/i', '', trim($hash));
+            // BSC/EVM 回执查询要 0x 前缀; Tron 哈希不带 0x —— 按链规范化, 否则 BSC 查不到。
+            $cleanHash = trim($hash);
+            if ($chain === 'bsc') { if (!preg_match('/^0x/i', $cleanHash)) $cleanHash = '0x' . $cleanHash; }
+            else { $cleanHash = preg_replace('/^0x/i', '', $cleanHash); }
             // 🔁 复用退款/制裁同一套链上设施（TronGrid/BSC RPC + 已配 key），不重复造轮子。
             $r = NezhaRefundControl::verify_refund_tx($cleanHash, $chain, $expectedTo, (float) $expectedUsdt);
             $st = $r['status'] ?? 'manual';
