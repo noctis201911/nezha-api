@@ -854,7 +854,7 @@
                                         data-message="{{ translate('Change status to cooking ?') }}"
                                         data-verification="false" data-processing-time="{{ $max_processing_time }}"
                                         href="javascript:">{{ translate('messages.Proceed_for_cooking') }}</a>
-                                @elseif ($order['order_status'] == 'processing')
+                                @elseif ($order['order_status'] == 'processing' && in_array($order['order_type'], ['take_away', 'dine_in']))
                                     <a class="btn btn-sm btn--primary order-status-change-alert"
                                         data-url="{{ route('vendor.order.status', ['id' => $order['id'], 'order_status' => 'handover']) }}"
                                         data-message="{{ translate('Change status to ready for handover ?') }}"
@@ -871,12 +871,12 @@
                             </div>
 
                             {{-- 哪吒 B方案: 配送单呼叫 Yandex 后填写追踪链接, 顾客端可实时查看 --}}
-                            @if ($order->order_type == 'delivery' && in_array($order->order_status, ['handover', 'picked_up']))
+                            @if ($order->order_type == 'delivery' && in_array($order->order_status, ['processing', 'handover', 'picked_up']))
                                 @php($yAddr = $order->delivery_address ? json_decode($order->delivery_address, true) : [])
                                 @php($yLat = $yAddr['latitude'] ?? null)
                                 @php($yLng = $yAddr['longitude'] ?? null)
                                 @php($yText = $yAddr['address'] ?? '')
-                                @if ($order->order_status == 'handover')
+                                @if (in_array($order->order_status, ['processing', 'handover']))
                                     <form action="{{ route('vendor.order.mark-dispatched', ['id' => $order['id']]) }}" method="post" class="mt-3 mb-1">
                                         @csrf
                                         @method('put')

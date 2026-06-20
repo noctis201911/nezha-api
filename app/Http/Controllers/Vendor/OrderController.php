@@ -355,12 +355,15 @@ class OrderController extends Controller
             Toastr::warning('仅配送订单需要标记配送中');
             return back();
         }
-        if ($order->order_status !== 'handover') {
-            Toastr::warning('请先把订单标记为“已出餐/待配送”，呼叫 Yandex 后再标记为配送中');
+        if (!in_array($order->order_status, ['processing', 'handover'], true)) {
+            Toastr::warning('请在「备餐中 / 已出餐」状态、呼叫 Yandex 后再标记为配送中');
             return back();
         }
-        // 哪吒 B方案: 商家叫车后一拍标记「配送中」(picked_up), 无需 Yandex 链接;
-        // 顾客立即看到配送中。贴 Yandex 链接是可选加分项(贴了顾客可实时追踪)。
+        // 哪吒 B方案: 商家叫车后一拍标记「配送中」(picked_up), 无需 Yandex 链接, 顾客立即看到配送中。
+        // 配送单不单独显示"已出餐"拍, 但 handover 时间戳是超时+24h自动结算的承重墙, 这里照样补记。
+        if (empty($order->handover)) {
+            $order->handover = now();
+        }
         $order->order_status = 'picked_up';
         $order->picked_up = now();
         $order->save();
@@ -403,17 +406,19 @@ class OrderController extends Controller
             Toastr::warning('仅配送订单需要填写 Yandex 配送链接');
             return back();
         }
-        if (!in_array($order->order_status, ['handover', 'picked_up'], true)) {
-            Toastr::warning('请先将订单标记为“待配送/已出餐”，呼叫 Yandex 后再填写配送链接');
+        if (!in_array($order->order_status, ['processing', 'handover', 'picked_up'], true)) {
+            Toastr::warning('请在「备餐中 / 已出餐 / 配送中」状态下填写 Yandex 配送链接');
             return back();
         }
 
         $order->yandex_tracking_url = $url;
         $order->delivery_link_reminded_at = null;
-        // 哪吒 B方案: 商家填入配送链接 = 配送真实出发, 状态推进到「配送中」(picked_up),
-        // 顾客端立即显示配送中并可点击跳转 Yandex 实时追踪。仅 handover->picked_up 推进一次；
-        // 已是 picked_up 时只更新链接不改状态。delivered/canceled 已被上面守卫拦截。
-        if ($order->order_status === 'handover') {
+        // 哪吒 B方案: 商家填入配送链接 = 配送真实出发, 状态推进到「配送中」(picked_up)。
+        // processing/handover 都推进到 picked_up(并补记 handover 承重墙时间戳); 已是 picked_up 只更新链接。
+        if (in_array($order->order_status, ['processing', 'handover'], true)) {
+            if (empty($order->handover)) {
+                $order->handover = now();
+            }
             $order->order_status = 'picked_up';
             $order->picked_up = now();
         }

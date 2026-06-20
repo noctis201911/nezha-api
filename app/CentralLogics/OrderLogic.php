@@ -994,6 +994,16 @@ class OrderLogic
         $order->payment_status = 'paid';
         $order->confirmed = now();
         $order->order_status = 'confirmed';
+        // 哪吒 B方案: 确认收款 = 接单; 即时单自动进入「备餐中」, 省去商家再点一下"开始备餐"(高峰减负)。
+        // 预约单(scheduled=1 且未来时段)不自动进备餐, 商家临近时段手动开始(预约单当前已平台级关闭, 此为防御性兜底)。
+        $nz_is_scheduled = $order->scheduled == 1 && $order->schedule_at && \Carbon\Carbon::parse($order->schedule_at)->gt(now());
+        if (!$nz_is_scheduled) {
+            $order->processing = now();
+            $order->order_status = 'processing';
+            if (empty($order->processing_time)) {
+                $order->processing_time = (int) (\App\CentralLogics\Helpers::get_business_settings('nezha_default_prep_min') ?: 30);
+            }
+        }
         $order->save();
         $order->offline_payments()->update([
             'status' => 'verified',
