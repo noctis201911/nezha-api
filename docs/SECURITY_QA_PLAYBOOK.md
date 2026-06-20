@@ -111,3 +111,14 @@
 - **骑手评价越权写**:`DeliveryManReviewController::submit_review` 原不校验 order 归属本人/该骑手是否真送此单 → 可伪造骑手评分。补订单归属校验(对齐 `ProductController::submit_product_review` 的 nz_order_owned)。注:该端点在 `actch:deliveryman_app` 激活闸后(实测 503),可达性本就低,此为纵深加固。
 - **🟢 加固**:`update_payment_method`/`order_notification` 补 is_guest 过滤(原靠 H2 随机 guest_id 不碰撞兜底,不可利用但不一致);`get_order_details` 未找到改 200→404;删 `CustomerController` 未挂路由的死代码 `get_order_list`/`get_order_details`(按 order_id 取 OrderDetail 无归属,虽不可达仍清除防误接线)。
 - **覆盖局限(诚实)**:订阅作用域为**静态(where user_id)+动态不破坏(show/edit/update→404、index/order.list→200、无 500/无泄露)**验证;因订阅 0 行,**未能动态区分"owner 得 200 vs 非 owner 404"**。双账号正向跨账户 PoC 未做(仅 1 个真实测试账号 user6,只做了负向对照)。place_order 全量(轴 E/K)、vendor/dm 端本轮未重审。
+
+### 2026-06-20 第三轮 轴E(资金完整性)+轴K(业务逻辑) place_order 审计(commit ecd... 见 e48ffe5)
+**确认安全**:order_amount 客户端值(L228占位)被服务端 L537 重算覆盖(DB商品价×qty+加料-商家折扣-券-tax+配送+小费),商品单价取自 Food DB,商家折扣/税服务端算,起送价(券后)服务端强制,add/update_cart quantity min:1。**已修(commit e48ffe5,L2业务规则不碰L1)**:
+- **折扣券 min_purchase 下单未强制(现行可绕,已修)**:`Helpers::coupon_check` 调 `CouponLogic::is_valide` 只传3参(order_amount=null)→最低消费(409)死分支;6个active券全设门槛2000-5000。place_order 算出购物车口径后补 `if($coupon->min_purchase>0 && basis<min) rollback+403`。**动态实测**:SICHUAN500(min3000)打300元单→**403 coupon**(修前会放行)。
+- **buy_now(活动商品)数量无下界(已修)**:`is_buy_now==1` 走 `$request['cart']` 绕 Cart 表 min:1;foreach 补 `>=1 正整数`校验。**动态实测**:qty=-2→**406 quantity**。两守卫 reject 前 DB::rollBack 不建脏单(实测订单数不变)。
+
+**开放残留(本轮未修,待评估/批准)**:
+- ⚠️ **free_delivery 型券 min_purchase 同样未强制**(FREESHIP min=2500):coupon_check 对 free_delivery 券**先置 $coupon=null 再设 delivery_charge=0**,且发生在购物车金额已知前→ #1 的内联检查(基于$coupon)覆盖不到。修法需让 coupon_check 回传 min_purchase 或在 place_order 按基额回退免运费,**涉及配送费重算,风险高于折扣券,故单列**。
+- ⚠️ **优惠券每人限领并发race(轴K TOCTOU)**:`Order::where(user_id,coupon_code)->count()<limit` 检查在order commit前→并发双提交可超限。**评估=低优先级**:现有券per-user limit多为500/1000(race无意义),唯一limit=1是NEZHA-NEW(first_order型,影响小)+place已挂rateLimiter收窄窗口+B方案商家确认订单兜底。修法选项:(a)Cache::lock(user+coupon)包住校验+建单(CACHE_DRIVER=database支持原子锁,~10行无migration);(b)usage pivot表+unique(仅limit=1适用);(c)接受并记录。**倾向(c)接受+文档化**,(a)作可选纵深。
+
+**覆盖局限(诚实)**:place_order 资金链路+券逻辑+数量为静态+关键路径动态(min_purchase/数量 reject 实测);**未跑正向>=门槛 E2E**(会建测试单);钱包/partial/digital 路径只扫入口未深查(B方案应关);退款金额上限/原路(L1-2/3 NezhaRefundControl)未重审;并发race仅静态推断未压测。
