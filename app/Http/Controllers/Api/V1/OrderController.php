@@ -166,6 +166,8 @@ class OrderController extends Controller
         DB::beginTransaction();
 
         if ($request['coupon_code']) {
+            // 哪吒[券限领 race]: 事务内先对券行加排他锁, 串行化"同一券"的并发下单, 使 is_valide 的每人限领 count() 在锁内权威(防 TOCTOU 超限)。锁随 commit/rollBack 释放。
+            \App\Models\Coupon::where('code', $request['coupon_code'])->lockForUpdate()->first();
             $coupon_check = Helpers::coupon_check(coupon_code:$request['coupon_code'],restaurant_id:$restaurant->id,user_id:$request?->user?->id, is_guest:$request->user ? false : true);
             if(data_get($coupon_check,'code') === 'coupon' ){
                 return response()->json([
