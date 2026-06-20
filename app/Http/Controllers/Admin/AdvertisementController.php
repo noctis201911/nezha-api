@@ -259,6 +259,54 @@ class AdvertisementController extends Controller
         $advertisement->is_updated =0;
         $advertisement?->save();
 
+        // [哪吒广告计费 T3] 平台/超管强制下架(暂停/拒绝)已扣费广告 -> 按未投放天数比例退回保证金。
+        //   商家自停(Vendor 控制器)永不退; 仅此平台主动路径退。开关 nezha_ad_refund_on_platform_takedown(默认1)。
+        //   幂等: 退费后置 is_paid=0, 重复下架(先暂停后拒绝)不二次退; paid_at 保留作"曾扣费"永久标记(扣费命令要求 paid_at IS NULL, 永不会被重扣)。
+        if (in_array($request->status, ['paused', 'denied'], true) && (int) $advertisement->is_paid === 1 && (float) $advertisement->price > 0) {
+            $nezhaAdRefundOn = (int) (\App\Models\BusinessSetting::where('key', 'nezha_ad_refund_on_platform_takedown')->first()?->value ?? 0);
+            if ($nezhaAdRefundOn === 1) {
+                $nezhaToday = \Carbon\Carbon::now('Asia/Yerevan')->startOfDay();
+                $nezhaStart = \Carbon\Carbon::parse($advertisement->start_date)->startOfDay();
+                $nezhaEnd   = \Carbon\Carbon::parse($advertisement->end_date)->startOfDay();
+                $nezhaTotalDays = (int) $nezhaStart->diffInDays($nezhaEnd) + 1;
+                $nezhaRemainDays = $nezhaToday->lt($nezhaEnd) ? (int) $nezhaToday->diffInDays($nezhaEnd) : 0;
+                $nezhaRemainDays = (int) min(max($nezhaRemainDays, 0), $nezhaTotalDays);
+                $nezhaRefund = $nezhaTotalDays > 0 ? round(((float) $advertisement->price) * $nezhaRemainDays / $nezhaTotalDays, 2) : 0;
+                if ($nezhaRefund > 0) {
+                    try {
+                        \Illuminate\Support\Facades\DB::transaction(function () use ($advertisement, $nezhaRefund) {
+                            $vendorId = $advertisement->restaurant?->vendor_id;
+                            if (!$vendorId) { return; }
+                            // 顺序: 钱包->广告, 与扣费命令一致防死锁。
+                            $wallet = \App\Models\RestaurantWallet::where('vendor_id', $vendorId)->lockForUpdate()->first();
+                            if (!$wallet) { return; }
+                            $newBalance = round((float) $wallet->deposit_balance + $nezhaRefund, 2);
+                            $wallet->deposit_balance = $newBalance;
+                            $wallet->save();
+                            \App\Models\RestaurantDepositTransaction::insertGetId([
+                                'vendor_id'     => $vendorId,
+                                'restaurant_id' => $advertisement->restaurant_id,
+                                'order_id'      => null,
+                                'type'          => 'advertisement_fee',
+                                'amount'        => $nezhaRefund,
+                                'commission'    => 0,
+                                'balance_after' => $newBalance,
+                                'note'          => '广告#'.$advertisement->id.' 平台下架退费(未投放比例退)',
+                                'created_at'    => now(),
+                                'updated_at'    => now(),
+                            ]);
+                            // 幂等: 置 is_paid=0 防重复退; paid_at / deposit_transaction_id(原扣款流水)保留供审计。
+                            $advertisement->is_paid = 0;
+                            $advertisement->save();
+                        });
+                        Toastr::info(translate('已按未投放天数比例退回保证金: ').$nezhaRefund);
+                    } catch (\Throwable $e) {
+                        info('[ad-takedown-refund] failed ad#'.$advertisement->id.': '.$e->getMessage());
+                    }
+                }
+            }
+        }
+
 
 
         if( $request->status == 'paused'){

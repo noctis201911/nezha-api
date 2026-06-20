@@ -333,6 +333,13 @@ class AdvertisementController extends Controller
     {
         $advertisement =Advertisement::where('restaurant_id',Helpers::get_restaurant_id())->where('id',$id)->first();
 
+        // [哪吒广告计费 T3] 已扣费(is_paid=1)广告锁死: 投放开始已从保证金扣全额, 不可取消/删除/退款。
+        //   未扣费(is_paid=0, 即 pending 或 approved 但未到起始日)仍可免费取消。商家自停永不退; 仅平台主动下架按比例退。
+        if ($advertisement && (int) $advertisement->is_paid === 1) {
+            Toastr::error(translate('广告已开始投放并扣费, 不可取消或删除'));
+            return back();
+        }
+
         if($advertisement?->cover_image)
         {
             Helpers::check_and_delete('advertisement/' , $advertisement->cover_image);
