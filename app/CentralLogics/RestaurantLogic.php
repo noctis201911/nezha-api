@@ -142,8 +142,20 @@ class RestaurantLogic
                                 ->where('reviews.status', 1)
                                 ->whereColumn('food.restaurant_id', 'restaurants.id')
                                 ->groupBy('food.restaurant_id');
-                        }, 'nz_comp_rating')
-                        ->orderByRaw('(0.45 * GREATEST(0, 1 - distance / 8000) + 0.30 * COALESCE(nz_comp_rating, 0) / 5 + 0.25 * LEAST(1, orders_count / 50)) DESC');
+                        }, 'nz_comp_rating');
+
+                    // [哪吒广告计费 T1] 综合分 + 付费曝光权重: 餐馆存在「已扣费(is_paid=1)+审核通过+在投放期内」广告时, 综合分 +nezha_ad_boost_weight。
+                    //   只影响排序、不伪造数据/不改卡片。boost 钳到 [0,1.0] 防排序失真(综合分本身上限≈1.0); 设 0 即关闭加权。
+                    //   计费总开关关时无广告会 is_paid=1(扣费命令不跑) → EXISTS 恒 0 → 排序零行为变化。
+                    $nz_ad_boost = (float) (\App\Models\BusinessSetting::where('key', 'nezha_ad_boost_weight')->first()?->value ?? 0);
+                    $nz_ad_boost = max(0, min($nz_ad_boost, 1.0));
+                    $nz_comp_base = '0.45 * GREATEST(0, 1 - distance / 8000) + 0.30 * COALESCE(nz_comp_rating, 0) / 5 + 0.25 * LEAST(1, orders_count / 50)';
+                    if ($nz_ad_boost > 0) {
+                        $nz_today = date('Y-m-d');
+                        $query = $query->orderByRaw("(" . $nz_comp_base . " + ? * EXISTS(SELECT 1 FROM advertisements nz_ad WHERE nz_ad.restaurant_id = restaurants.id AND nz_ad.is_paid = 1 AND nz_ad.status = 'approved' AND DATE(nz_ad.start_date) <= ? AND DATE(nz_ad.end_date) >= ?)) DESC", [$nz_ad_boost, $nz_today, $nz_today]);
+                    } else {
+                        $query = $query->orderByRaw("(" . $nz_comp_base . ") DESC");
+                    }
                 } else {
                     // 其它筛选(销量popular/好评率top_rated/距离near_by/delivery等)各有自己的主排序; 默认块这里只补订单量做稳定并列项, 不套综合分(否则销量等会被综合分打破并列,看起来与综合排序雷同)。
                     $query = self::addOrdersCountIfMissing($query)->orderBy('orders_count', 'desc');
