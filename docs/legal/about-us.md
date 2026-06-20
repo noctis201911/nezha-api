@@ -1,10 +1,10 @@
 # 哪吒外卖 —《关于我们》（法务/CMS 正本草稿）
 
-**版本**: 0.1（草稿·待用户/律师审阅，未发布）　**拟更新**: 2026-06-20　**批准人**: ⬜ 待用户批准
+**版本**: 1.0（已上线）　**更新**: 2026-06-20　**批准人**: 用户（noctis201914@gmail.com，2026-06-20 批准发布）
 
 > 本文件是哪吒外卖（nezha.am）主站《关于我们》页面文案的**正本草稿**，纳入 git 供审计/法务对接。
 > 线上渲染来自 `data_settings` 表（`key=about_us`, `type=admin_landing_page`，经 `/config` 的 `get_settings_data` 读取），**不是 business_settings**。运营可在后台「业务设置→页面设置→关于我们」录入；保存会自动清 `data_settings_about_us_<lang>` 缓存。
-> 体例、口径与 `docs/legal/terms-and-conditions.md`、`docs/legal/privacy-policy.md` 保持一致。**当前线上 about_us 为空（data_settings 无此行），本页未发布。**
+> 体例、口径与 `docs/legal/terms-and-conditions.md`、`docs/legal/privacy-policy.md` 保持一致。**2026-06-20 已发布上线**（写入 data_settings key=about_us，与本正本一致；运营如在后台改动请同步回本文件）。
 
 ## 合规口径与待办
 - **L1-1 平台不碰钱**：正文如实表述"信息撮合＋配送协调，顾客直付商家，平台不归集/不代收代付资金"，不出现"平台代收/平台结算"等表述。
