@@ -1510,7 +1510,8 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                         </li>
                     @endif
                     <!-- withdraw -->
-                    @if (Helpers::module_permission_check('withdraw_list'))
+                    {{-- 哪吒 B方案隐藏「提现列表」: 平台不向商家打款(INVARIANTS L1-1/L1-5,提现/打款腿已拔除),withdraw_requests 恒空且审批不触发真实打款,此为StackFood残留菜单,避免误导运营。恢复直付台账时把 false 改回即可;路由 admin.restaurant.withdraw_list 未动 --}}
+                    @if (false && Helpers::module_permission_check('withdraw_list'))
                         <li
                             class="navbar-vertical-aside-has-menu {{ Request::is('admin/restaurant/withdraw*') ||Request::is('admin/restaurant/withdraw-view*') ? 'active' : '' }}">
                             <a class="js-navbar-vertical-aside-menu-link nav-link"
@@ -1537,7 +1538,8 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                     @endif
                     <!-- End provide_dm_earning -->
 
-                    @if (Helpers::module_permission_check('withdraw_list'))
+                    {{-- 哪吒 B方案隐藏「提现方式」: 同上,平台不打款,提现方式无实义。路由 admin.business-settings.withdraw-method.list 未动 --}}
+                    @if (false && Helpers::module_permission_check('withdraw_list'))
                         <li
                             class="navbar-vertical-aside-has-menu {{ Request::is('admin/withdraw-method*') ? 'active' : '' }}">
                             <a class="js-navbar-vertical-aside-menu-link nav-link"

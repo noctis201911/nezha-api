@@ -1475,6 +1475,11 @@ class VendorController extends Controller
         }
 
         if ($request->approved == 1) {
+            // [哪吒 B方案 L1-1/L1-5 硬闸] 平台不向商家打款,审批"通过"在直付模式下无实义且误导。默认禁用;迁移持牌分账时设 nezha_withdraw_enabled=1 恢复。
+            if ((AppModelsBusinessSetting::where('key','nezha_withdraw_enabled')->first()?->value ?? 0) != 1) {
+                Toastr::error('B方案: 平台不向商家打款,提现审批已停用。');
+                return redirect()->route('admin.restaurant.withdraw_list');
+            }
             $wallet->increment('total_withdrawn', $withdraw->amount);
             $wallet->decrement('pending_withdraw', $withdraw->amount);
             $withdraw->save();
