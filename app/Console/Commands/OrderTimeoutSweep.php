@@ -246,6 +246,13 @@ class OrderTimeoutSweep extends Command
             Log::warning('NEZHA_TIMEOUT 商家无邮箱, 跳过邮件 order#' . $order->id);
             return;
         }
+        // 哪吒: 超时提醒渠道开关——商家可在后台「餐厅设置」选「仅系统(面板)」关掉软提醒邮件;
+        // 但敏感邮件(自动取消+需原路退款 cancel_refund)恒发, 无视开关(L1 退款义务必须落到商家)。
+        $sensitive = in_array($type, ['cancel_refund'], true);
+        if (! $sensitive && (int) ($order->restaurant?->timeout_notify_email ?? 1) === 0) {
+            Log::info('NEZHA_TIMEOUT 商家选「仅系统」, 跳过软提醒邮件 type=' . $type . ' order#' . $order->id);
+            return;
+        }
         Mail::to($email)->send(new NezhaOrderTimeoutMail($type, (int) $order->id, $name, $minutes, $paid));
     }
 
@@ -278,7 +285,8 @@ class OrderTimeoutSweep extends Command
         }
         $data = Helpers::makeDataForPushNotification(title: $title, message: $msg, orderId: $order->id, type: 'order_status', orderStatus: 'canceled');
         $token = $order->customer?->cm_firebase_token;
-        if ($token) {
+        // 哪吒: 顾客「订单进度」推送偏好闸(接单超时自动取消)
+        if ($token && Helpers::customerWantsPush($order->customer, 'order_progress')) {
             Helpers::send_push_notif_to_device($token, $data);
         }
         Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id);

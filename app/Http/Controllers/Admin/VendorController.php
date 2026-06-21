@@ -1254,6 +1254,20 @@ class VendorController extends Controller
         return back();
     }
 
+    // 哪吒: 商家可选订单超时提醒渠道。0=仅系统(面板) / 1=系统+邮箱。
+    // 敏感邮件(自动取消+需原路退款)恒发, 不受此设置影响(见 OrderTimeoutSweep::mailMerchant)。
+    public function updateTimeoutNotify(Restaurant $restaurant, Request $request)
+    {
+        $request->validate([
+            'timeout_notify_email' => 'required|in:0,1',
+        ]);
+        $restaurant->timeout_notify_email = (int) $request->input('timeout_notify_email');
+        $restaurant->save();
+        Toastr::success('订单超时提醒方式已更新');
+
+        return back();
+    }
+
     // 哪吒外卖: 读取最近给机器人发过消息的会话(只读,供后台找 chat_id) — getUpdates
     public function telegramRecentChats(Request $request)
     {

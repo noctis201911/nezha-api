@@ -113,6 +113,18 @@
         </div>
         <button type="button" id="nz-new-order-go" style="margin-top:10px;width:100%;background:#C4193E;color:#fff;border:none;border-radius:8px;padding:9px 0;font-size:14px;font-weight:600;cursor:pointer;">立即接单</button>
     </div>
+    <!-- 哪吒: 订单超时紧急提示条 (系统/面板渠道, 红色高优先, 独立于新订单提示) -->
+    <div id="nz-timeout-toast" style="display:none;position:fixed;right:20px;bottom:96px;z-index:100001;background:#fff;border:1px solid #f3c2c2;border-left:4px solid #d32029;border-radius:12px;box-shadow:0 6px 24px rgba(211,32,41,.2);padding:14px 16px;min-width:248px;max-width:320px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+            <div style="font-size:22px;line-height:1;">&#9888;&#65039;</div>
+            <div style="flex:1;">
+                <div style="font-weight:600;color:#d32029;font-size:15px;margin-bottom:2px;"><span id="nz-timeout-count">0</span> 个订单超时未处理</div>
+                <div style="color:#8a8a8a;font-size:12px;">已超过处理时限，请尽快接单/确认收款/出餐，避免被系统自动取消</div>
+            </div>
+            <button type="button" id="nz-timeout-close" aria-label="关闭" style="border:none;background:none;color:#bbb;font-size:20px;line-height:1;cursor:pointer;padding:0;">&times;</button>
+        </div>
+        <button type="button" id="nz-timeout-go" style="margin-top:10px;width:100%;background:#d32029;color:#fff;border:none;border-radius:8px;padding:9px 0;font-size:14px;font-weight:600;cursor:pointer;">立即处理</button>
+    </div>
     <div class="modal fade" id="popup-modal-msg">
         <div class="modal-dialog modal-dialog-centered" role="document">
             <div class="modal-content">
@@ -903,6 +915,38 @@
             var currentTarget = 'pending';
             var dismissed = false;
             var memSeen = new Set();
+            // 哪吒: 订单超时紧急提示(系统渠道)——独立 seen-set, 与新订单提示互不干扰
+            var TIMEOUT_SEEN_KEY = 'nz_seen_timeout_ids_v1';
+            var toToast    = document.getElementById('nz-timeout-toast');
+            var toCountEl  = document.getElementById('nz-timeout-count');
+            var toGoBtn    = document.getElementById('nz-timeout-go');
+            var toCloseBtn = document.getElementById('nz-timeout-close');
+            var toTarget   = 'pending';
+            var toDismissed = false;
+            var toMemSeen  = new Set();
+            function toLoadSeen(){ try { return new Set(JSON.parse(localStorage.getItem(TIMEOUT_SEEN_KEY) || '[]')); } catch(e){ return toMemSeen; } }
+            function toSaveSeen(set){ toMemSeen = set; try { var arr = Array.from(set); if (arr.length > 200) { arr = arr.slice(arr.length - 200); } localStorage.setItem(TIMEOUT_SEEN_KEY, JSON.stringify(arr)); } catch(e){} }
+            function toShow(count){ if (toCountEl) { toCountEl.textContent = count; } if (toToast) { toToast.style.display = 'block'; } }
+            function toHide(){ if (toToast) { toToast.style.display = 'none'; } }
+            if (toGoBtn) { toGoBtn.addEventListener('click', function(){ location.href = listBase + toTarget; }); }
+            if (toCloseBtn) { toCloseBtn.addEventListener('click', function(){ toDismissed = true; toHide(); }); }
+            function updateTimeoutToast(data){
+                var ids = (data.timeout_order_ids || []).map(String);
+                var total = data.timeout_total || 0;
+                toTarget = data.timeout_target || 'pending';
+                if (total === 0) { toHide(); toDismissed = false; return; }
+                var seen = toLoadSeen();
+                var freshIds = ids.filter(function(id){ return !seen.has(id); });
+                if (freshIds.length > 0) {
+                    playAudio();
+                    toDismissed = false;
+                    freshIds.forEach(function(id){ seen.add(id); });
+                    toSaveSeen(seen);
+                    toShow(total);
+                } else if (!toDismissed) {
+                    toShow(total);
+                }
+            }
 
             function loadSeen(){
                 try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); }
@@ -933,6 +977,7 @@
                     dataType: 'json',
                     success: function (response) {
                         var data = response.data || {};
+                        updateTimeoutToast(data);
                         var ids = (data.new_order_ids || []).map(String);
                         var total = data.new_total || 0;
                         currentTarget = data.target || 'pending';

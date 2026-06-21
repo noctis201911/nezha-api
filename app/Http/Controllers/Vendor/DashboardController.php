@@ -126,6 +126,39 @@ class DashboardController extends Controller
         elseif ($new_pending_order > 0)   { $target = 'pending';         $target_label = '待处理'; $target_ids = $pending_ids; }
         elseif ($new_confirmed_order > 0) { $target = 'confirmed';       $target_label = '待处理'; $target_ids = $confirmed_ids; }
 
+        // 哪吒: 超时提醒(系统/面板渠道)——独立于「新订单」横幅, 专门兜住现有横幅照不到的「备餐超时」等;
+        // 复用 NezhaOrderTimeout::describe 的 severity(warning/error)判定是否需商家立即处理,
+        // 排除「未上传凭证的待确认收款单」(那是等顾客付款, 商家无可为)。
+        $timeout_alerts = [];
+        try {
+            $open = AppModelsOrder::with(['offline_payments'])
+                ->where('restaurant_id', $rid)
+                ->whereIn('order_status', ['pending', 'confirmed', 'processing'])
+                ->Notpos()->get();
+            foreach ($open as $o) {
+                $phase = AppCentralLogicsNezhaOrderTimeout::phase($o);
+                if (! $phase) { continue; }
+                if ($phase === AppCentralLogicsNezhaOrderTimeout::PHASE_PROOF
+                    && ! AppCentralLogicsNezhaOrderTimeout::hasProofImage($o)) { continue; }
+                $d = AppCentralLogicsNezhaOrderTimeout::describe($o);
+                if (! $d || ($d['severity'] ?? 'info') === 'info') { continue; }
+                $bucket = 'pending';
+                if ($phase === AppCentralLogicsNezhaOrderTimeout::PHASE_ACCEPT)    { $bucket = 'confirmed'; }
+                elseif ($phase === AppCentralLogicsNezhaOrderTimeout::PHASE_PREP)  { $bucket = 'processing'; }
+                elseif ($phase === AppCentralLogicsNezhaOrderTimeout::PHASE_PROOF) { $bucket = 'offline_pending'; }
+                $timeout_alerts[] = [
+                    'order_id' => $o->id,
+                    'minutes'  => (int) ($d['elapsed_minutes'] ?? 0),
+                    'bucket'   => $bucket,
+                ];
+            }
+        } catch (Throwable $e) {
+            IlluminateSupportFacadesLog::warning('NEZHA_TIMEOUT panel alert: ' . $e->getMessage());
+        }
+        $timeout_total  = count($timeout_alerts);
+        $timeout_ids    = array_map(function ($a) { return $a['order_id']; }, $timeout_alerts);
+        $timeout_target = $timeout_total > 0 ? $timeout_alerts[0]['bucket'] : 'pending';
+
         return response()->json([
             'success' => 1,
             'data' => [
@@ -136,6 +169,9 @@ class DashboardController extends Controller
                 'new_order_ids'       => $target_ids->values(),
                 'target'              => $target,
                 'target_label'        => $target_label,
+                'timeout_total'       => $timeout_total,
+                'timeout_order_ids'   => $timeout_ids,
+                'timeout_target'      => $timeout_target,
             ]
         ]);
     }

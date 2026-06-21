@@ -87,6 +87,29 @@
                 </script>
             </div>
         </div>
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <span class="card-header-icon"><i class="tio-notifications-on"></i></span> &nbsp;
+                    <span>订单超时提醒方式</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">订单超时时（待接单 / 待确认收款 / 备餐超时），平台会提醒商家尽快处理。可选择是否同时发邮件。<b>无论哪种，商家登录后台面板都会弹出系统提醒。</b><br>注意：「<b>订单被系统自动取消、需原路退款</b>」这类敏感通知<b>始终</b>会发邮件给商家，不受此设置影响。</p>
+                <form action="{{ route('admin.restaurant.update-timeout-notify', [$restaurant->id]) }}" method="post">
+                    @csrf
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="timeout_notify_email" id="tn_system" value="0" {{ (int)($restaurant->timeout_notify_email ?? 1) === 0 ? 'checked' : '' }}>
+                        <label class="form-check-label" for="tn_system">仅系统提醒（商家面板弹窗，不发邮件）</label>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="radio" name="timeout_notify_email" id="tn_email" value="1" {{ (int)($restaurant->timeout_notify_email ?? 1) === 1 ? 'checked' : '' }}>
+                        <label class="form-check-label" for="tn_email">系统 + 邮箱提醒（面板弹窗，并发邮件到商家邮箱，推荐）</label>
+                    </div>
+                    <button type="submit" class="btn btn-primary">{{ translate('messages.save') }}</button>
+                </form>
+            </div>
+        </div>
 <div class="card mb-3">
             <div class="card-header">
                 <h5 class="card-title">
