@@ -70,3 +70,19 @@
 - 🔴 storage 与 .env 已抽到 `api-deploy/shared/`(L1凭证持久层),别动;工作树 storage/.env 是软链。备份脚本已指 shared。
 - 回滚: `ln -sfn $(readlink /www/wwwroot/api-deploy/previous) /www/wwwroot/api-deploy/current && kill -USR2 $(cat /www/server/php/82/var/run/php-fpm.pid)`。
 - 前端(nezha.am)暂未改,仍走 nzbuild.sh。
+
+---
+## 🔴 跨窗提交两道防线(2026-06-22 路线B + 防覆盖墙) — 所有窗口必读
+单一共享工作树 + 共享 `.git/index` 的两个跨窗"提交卫生"事故已各砌一道墙。（注: catastrophic 的"带半成品上线/出货旧版"已被【前后端都已上线的 release 发布边界】另行杀死，deploy 只 archive origin/main、永不读工作树。）
+
+1. **index 串味**(别窗 `git add`/`git commit -a` 卷走我已暂存的文件、归属混乱) → 用私有 index 提交助手：
+   `bash /www/wwwroot/nzcommit.sh <仓库路径> -F <消息文件> <文件...>`   (中文消息可用 `-b <base64消息>`，或 `-m "消息"`)
+   它把暂存放进私有临时 index，别窗看不见、卷不走；提交后只把我这几个文件回同步共享 index。
+   ⚠️ 它仍从【共享工作树】读文件内容，提交前务必先 `git diff HEAD -- <文件>` 确认没扫进别窗 WIP。
+
+2. **物理覆盖 / 旧备份回退**(别窗把旧 `.bak` 盖到盘上文件再提交，悄悄退掉我已 push 的新代码；2026-06-21 customerKb 被退案) → 两仓 `.git/hooks/commit-msg` 装了【防覆盖墙】：
+   本次提交相对 origin/main **净删 > 15 行**即拦下，点名文件与行数。
+   确是【有意】大删除 → 在 commit message 末尾加 `[force-revert]` 重提；应急 `git commit --no-verify`(自负风险)。
+   注: 墙比的是本地 origin/main ref(未 fetch 会偏旧)，是提交期 best-effort；catastrophic 路径 push/deploy 自己会 fetch。
+
+这两道只堵"提交卫生"。两窗同时物理改同一文件盖盘仍靠【认领区】。完整 worktree 隔离(路线A)暂缓，待并发变密集再升级。
