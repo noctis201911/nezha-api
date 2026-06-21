@@ -575,7 +575,7 @@ class NezhaCsAssistant
             throw new \RuntimeException('nezha cs ai key missing');
         }
 
-        $faq = Helpers::get_business_settings('nezha_cs_faq') ?: self::defaultFaq();
+        $faq = self::customerKb();
         $system = self::systemPrompt($faq, $orderCtx);
 
         $messages = [
@@ -903,6 +903,29 @@ KB;
 - action="to_merchant"：顾客就某笔订单遇到实际问题（退款、钱、漏发/送错、久等很久还没送到、投诉某单、想取消等）需要商家处理时。reply 可留空，系统会接管引导联系商家。
 - action="cannot"：你答不准、超出范围、或与外卖无关的闲聊（如推荐吃什么、天气）。用 reply 礼貌说明你帮不上这个忙，但【不要】让顾客去找商家。
 SYS;
+    }
+
+    // 顾客客服知识库：以 CUSTOMER_FAQ.md 为准（文档一更新小哪即同步）+ 后台 nezha_cs_faq 补充 + 读不到回退 defaultFaq()。
+    // 🔴 顾客端高频、每条消息都独立把整份资料喂模型，文档务必精简（≤4KB），绝不喂商家手册/内部内容。
+    protected static function customerKb(): string
+    {
+        $parts = [];
+        try {
+            $doc = @file_get_contents(base_path('CUSTOMER_FAQ.md'));
+        } catch (\Throwable $e) {
+            $doc = false;
+        }
+        if ($doc && strlen(trim($doc)) > 50) {
+            $parts[] = trim($doc);
+        }
+        $override = Helpers::get_business_settings('nezha_cs_faq');
+        if ($override && trim((string) $override) !== '') {
+            $parts[] = "【运营补充说明】\n" . trim((string) $override);
+        }
+        if (!$parts) {
+            $parts[] = self::defaultFaq();
+        }
+        return implode("\n\n", $parts);
     }
 
     public static function defaultFaq(): string
