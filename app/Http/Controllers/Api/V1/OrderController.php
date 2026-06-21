@@ -586,6 +586,21 @@ class OrderController extends Controller
         }else{
             $order->order_amount += $order->delivery_type_charge;
         }
+        // 哪吒[资金完整性·风控入参]: 用服务端重算的权威订单金额复评风控, 堵住"前端低报 order_amount
+        //   绕过单笔/大额风控阈值"的缺口(L157 build_context 早评用的是客户端 $request->order_amount)。
+        //   早评对诚实顾客已是权威; 低报者会在此处被真金额拦下。仍在事务内, 命中即记录+rollBack 不建单。
+        $nezha_risk_ctx_authoritative = $nezha_risk_ctx;
+        $nezha_risk_ctx_authoritative['order_amount'] = (float) $order->order_amount;
+        $nezha_risk_authoritative = \App\CentralLogics\NezhaRiskControl::evaluate($nezha_risk_ctx_authoritative);
+        if ($nezha_risk_authoritative['action'] !== 'pass') {
+            DB::rollBack();
+            \App\CentralLogics\NezhaRiskControl::record($nezha_risk_ctx_authoritative, $nezha_risk_authoritative);
+            return response()->json([
+                'errors' => [
+                    ['code' => $nezha_risk_authoritative['action'] === 'reject' ? 'risk_reject' : 'risk_review', 'message' => $nezha_risk_authoritative['message']]
+                ]
+            ], 403);
+        }
         if($request->payment_method == 'wallet' && $request->user->wallet_balance < $order_amount)
         {
             DB::rollBack();
