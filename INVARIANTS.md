@@ -53,6 +53,8 @@
 
 相关: `docs/compliance/AML-policy.md` · `docs/compliance/business-flow.md` · `docs/compliance/data-protection.md`
 
+> 🟢 **L1 现有自动化断言(2026-06-21·子项C)**: `tests/Feature/NezhaL1RedlineTest.php` 把 L1-1(平台不碰钱)/L1-2,3(退款只原路)/L1-5(二清腿已拔)/L1-6(制裁命中即拒)写成可重复运行的断言; `composer test:redlines` 同时跑红线 + IDOR 结构守卫(`NezhaIdorGuardTest`), git `pre-push` 门红则拒推(应急 `--no-verify` 自负风险)。**改 L1 机制时这些断言会随之红——按上面流程取得批准后, 必须同步更新断言**使其反映新的红线态, 而不是删断言绕过。
+
 ---
 
 ## 附：本地生活/入驻「硬禁业务」机制定级〔2026-06-21〕

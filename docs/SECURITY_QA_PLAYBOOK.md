@@ -123,3 +123,10 @@
 **开放残留(本轮未修,待评估/批准)**:本簇(place_order 券/数量/资金完整性)暂无未决项。
 
 **覆盖局限(诚实)**:place_order 资金链路+券逻辑+数量为静态+关键路径动态(min_purchase/数量 reject 实测);正向≥门槛 E2E 已补(free_delivery 券 food32×9 basis2700→200·测试单已清);钱包/partial/digital 路径只扫入口未深查(B方案应关);退款金额上限/原路(L1-2/3 NezhaRefundControl)未重审;并发race仅静态推断未压测。
+
+### 2026-06-21 安全架构化(轴A 结构守卫 + 轴E 前端值不读) — 已实施
+- **轴A 从"每次人工审"升级为"CI 防回归门"**:新增 `App\Traits\OwnedByCustomer::forCustomer($id[,$isGuest])`(owner 为 null 即抛异常,绝不退化成全表)+ `tests/Feature/NezhaIdorGuardTest.php`(扫顾客 API 命名空间,凡对归属模型 Order/CustomerAddress/Cart/Conversation/Subscription… 做裸 by-id 查询而**同方法内无任何归属过滤 token**(user_id/guest_id/forCustomer/sender_id/receiver_id/auth_token/whereHas/`// idor-ok`)即 fail)。**新写顾客 by-id 接口默认就被守卫盯**;合法跨查在该行加 `// idor-ok: <理由>`。
+  - **方法级粒度局限(诚实)**:方法体里别处恰好有归属 token 时,本方法内的裸查询不会被拦(false negative)。它拦的是"整段方法毫无归属概念"的新代码;语义级精确鉴权仍需人工审本轴。
+  - 已加固:`CustomerController::set_default_address` 末句裸 `CustomerAddress::where('id')->update` → `forCustomer($userId)->where('id')`。Order/Cart/CustomerAddress 已 use OwnedByCustomer,其余顾客归属模型可增量采用。
+- **轴E place_order 前端 order_amount 已彻底不读**:删早赋值(原本被服务端重算覆盖),校验改 nullable;真实下单谎报 order_amount=1 → 存库 4500 验证客户端值被丢弃。
+- **新开放残留(待用户批准)**:`NezhaRiskController::build_context` 仍读 `$request->order_amount` 做 L2 风控阈值 → 顾客低报可绕单笔/大额风控(订单记录金额本身安全,此为风控入参的客户端信任缺口)。修法(金额重算后复评 / 早算服务端金额喂风控)待用户拍板,改 L2 风控行为前留痕告知。
