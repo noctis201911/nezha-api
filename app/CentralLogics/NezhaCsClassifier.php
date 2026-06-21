@@ -73,8 +73,8 @@ class NezhaCsClassifier
         if (!$text) {
             return false;
         }
-        // 含亚美尼亚字母 → 几乎必是中文顾客粘贴骑手的亚美尼亚语消息求翻译。
-        if (preg_match('/[\x{0530}-\x{058F}]/u', $text)) {
+        // 含亚美尼亚字母 / 西里尔(俄语)字母 → 几乎必是中文顾客粘贴骑手的外语消息求翻译。
+        if (preg_match('/[\x{0530}-\x{058F}\x{0400}-\x{04FF}]/u', $text)) {
             return true;
         }
         $t = mb_strtolower($text);

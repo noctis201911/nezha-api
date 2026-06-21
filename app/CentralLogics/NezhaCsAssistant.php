@@ -104,8 +104,11 @@ class NezhaCsAssistant
         }
 
         // 0.3) 顾客对客服服务的评价(好评/差评)→ 记录 + 致谢/致歉。运营定期看负反馈整理问题。
+        // 同句若同时含退款/钱/纠纷/联系不上商家等诉求 → 让那些优先处理，绝不被"满意/差"吞掉(防 money-adjacent 诉求丢失)。
         $fb = NezhaCsClassifier::feedbackSentiment($text);
-        if ($fb !== null) {
+        if ($fb !== null
+            && !NezhaCsClassifier::isSensitive($text)
+            && !NezhaCsClassifier::isCantReachMerchant($text)) {
             self::recordFeedback($conversation, $customerUser, $fb, $text);
             return;
         }
@@ -544,25 +547,6 @@ class NezhaCsAssistant
         }
     }
 
-    // 近 8 条消息作为对话上下文；顾客=user，客服=assistant。最新一条(顾客刚发的)已在末尾。
-    protected static function recentHistory(Conversation $conversation, $customerUser): array
-    {
-        $custInfoId = UserInfo::where('user_id', $customerUser->id)->value('id');
-        $msgs = Message::where('conversation_id', $conversation->id)
-            ->latest()->limit(8)->get()->reverse();
-
-        $out = [];
-        foreach ($msgs as $m) {
-            $body = trim((string) $m->message);
-            if ($body === '') {
-                continue;
-            }
-            $role = ((int) $m->sender_id === (int) $custInfoId) ? 'user' : 'assistant';
-            $out[] = ['role' => $role, 'content' => $body];
-        }
-        return $out;
-    }
-
     protected static function callModel(string $latestText, string $orderCtx): array
     {
         $key = Helpers::get_business_settings('nezha_cs_ai_api_key');
@@ -719,11 +703,11 @@ SYS;
         $ctx = "【近7天客服数据】\n{$legend}\n分类计数: " . json_encode($cats, JSON_UNESCAPED_UNICODE)
             . "\n待跟进工单(联系不上商家等): {$openTickets}\n近7天 好评: {$fbPos} / 差评: {$fbNeg}\n";
         if ($negComments) {
-            $ctx .= "差评原文(最多20条):\n- " . implode("\n- ", array_map(fn ($x) => mb_substr((string) $x, 0, 120), $negComments)) . "\n";
+            $ctx .= "差评原文(最多20条):\n- " . implode("\n- ", array_map(fn ($x) => self::redactPii(mb_substr((string) $x, 0, 120)), $negComments)) . "\n";
         }
         if ($questions) {
             $ctx .= "近期顾客发给客服的消息(最多80条, 供你归纳高频问题/未解决问题):\n- "
-                . implode("\n- ", array_map(fn ($x) => mb_substr((string) $x, 0, 120), array_slice($questions, 0, 80))) . "\n";
+                . implode("\n- ", array_map(fn ($x) => self::redactPii(mb_substr((string) $x, 0, 120)), array_slice($questions, 0, 80))) . "\n";
         }
 
         $system = "你是「哪吒外卖」平台的运营数据助手，面向平台超级管理员（不是顾客）。基于下面的真实客服数据，简洁、专业地回答管理员的问题（如：高频问题、哪些问题没解决、差评集中在哪、改进建议）。可以讨论内部统计。用中文。数据不足以回答时如实说明。\n\n" . $ctx;
@@ -833,6 +817,14 @@ FAQ;
             return $base;
         }
         return '这个我帮您记下啦～方便告诉我是哪一笔订单、哪家店吗？您也可以在【我的订单】里找到对应订单点『联系商家』，直接跟店家沟通是最快的哦。';
+    }
+
+    // 运营助手把顾客原话喂给第三方模型(DeepSeek,数据出境)前，抹掉可能的 PII(电话/邮箱)，降低 L1-7 风险。
+    protected static function redactPii(string $s): string
+    {
+        $s = preg_replace('/[\w.+-]+@[\w-]+\.[\w.-]+/u', '[邮箱]', $s);
+        $s = preg_replace('/\+?\d[\d().\-]{6,}\d/u', '[电话]', $s);
+        return $s;
     }
 
     protected static function dodgeIdentityText(string $incomingText = ''): string
