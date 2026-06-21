@@ -60,6 +60,13 @@ class NezhaCsAssistant
             return;
         }
 
+        // 0.3) 顾客对客服服务的评价(好评/差评)→ 记录 + 致谢/致歉。运营定期看负反馈整理问题。
+        $fb = NezhaCsClassifier::feedbackSentiment($text);
+        if ($fb !== null) {
+            self::recordFeedback($conversation, $customerUser, $fb, $text);
+            return;
+        }
+
         // 0.5) 顾客联系不上商家 → 升级处理：给商家电话 + 自动催商家邮件 + 留工单 + 通知运营。
         if (NezhaCsClassifier::isCantReachMerchant($text)) {
             self::cantReachMerchant($conversation, $customerUser, $text);
@@ -124,6 +131,35 @@ class NezhaCsAssistant
         $msg = self::handoffText($order, $relayed, NezhaCsClassifier::isChinese($incomingText));
         $category = $relayed ? 'relay' : $reason;
         self::reply($conversation, $customerUser, $msg, $category, $usage);
+    }
+
+    // 记录顾客对客服服务的评价 + 致谢/致歉。负反馈通知运营。
+    protected static function recordFeedback(Conversation $conversation, $customerUser, string $sentiment, string $incomingText): void
+    {
+        try {
+            DB::table('nezha_cs_feedback')->insert([
+                'sentiment' => $sentiment,
+                'user_id' => $customerUser->id ?? null,
+                'conversation_id' => $conversation->id,
+                'comment' => mb_substr($incomingText, 0, 255),
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('nezha cs feedback insert failed: ' . $e->getMessage());
+        }
+
+        $zh = NezhaCsClassifier::isChinese($incomingText);
+        if ($sentiment === 'positive') {
+            $msg = $zh ? '谢谢您的认可～有需要随时来找我！' : "Thank you so much! I'm here whenever you need help.";
+            $cat = 'feedback_pos';
+        } else {
+            $msg = $zh
+                ? '抱歉这次没帮好您，我已经记下您的意见、我们会认真改进。如果问题还没解决，我可以帮您联系商家或转人工跟进～'
+                : "Sorry we didn't do well this time. I've logged your feedback and we'll improve. If it's still unresolved, I can help you contact the merchant or a human agent.";
+            $cat = 'feedback_neg';
+        }
+        self::reply($conversation, $customerUser, $msg, $cat, null);
     }
 
     /**
@@ -265,7 +301,7 @@ class NezhaCsAssistant
         }
 
         // 真订单问题转商家/联系不上/出错 → 通知运营（复用 admin_message topic；有人在看就能补位）。闲聊/答不准(soft)不打扰。
-        if (in_array($category, ['sensitive', 'to_merchant', 'relay', 'cant_reach', 'error'], true)) {
+        if (in_array($category, ['sensitive', 'to_merchant', 'relay', 'cant_reach', 'feedback_neg', 'error'], true)) {
             try {
                 Helpers::send_push_notif_to_topic([
                     'title' => translate('messages.message'),
@@ -587,12 +623,14 @@ class NezhaCsAssistant
 
 规则：
 1. 如果对方发来的是外语（亚美尼亚语 / 俄语 / 英语等），把它准确翻译成中文，并用一句话点明骑手大概想表达什么（比如"骑手在问您具体在哪栋楼"）。
-2. 如果对方用中文说了想对骑手说的话，把它翻译成骑手能看懂的语言：默认给【亚美尼亚语】，再另起一行附【俄语】，让对方挑一条直接复制发给骑手。译文要自然、口语、礼貌。
+2. 如果对方用中文说了想对骑手说的话，把它翻译成骑手能看懂的语言：默认给【亚美尼亚语】，再另起一行附【俄语】，最后再附一行【中文回译】（把你的译文再翻回中文），让对方确认意思没翻错、放心复制发给骑手。译文要自然、口语、礼貌。
 3. 只做翻译和帮忙沟通这件事，简洁亲切，别扯别的。如果对方只是问"能不能翻译"，就热情地说可以、请把要翻译的内容发过来。
+4. 如果你拿不准对方到底是想让你翻译、还是在问别的问题（内容不像要发给骑手的话），先用一句话确认："您是想让我帮您翻译这句话、发给骑手吗？" 确认后再翻译，别擅自瞎翻。
 
-把顾客要发给骑手的话翻译出来时，用这个格式（每条单独一行，方便复制）：
+把对方要发给骑手的话翻译出来时，用这个格式（每条单独一行，方便复制）：
 亚美尼亚语：<译文>
 俄语：<译文>
+中文回译：<把上面译文再翻回中文，供对方核对语义>
 SYS;
     }
 
@@ -613,6 +651,7 @@ SYS;
 3. 绝不谈钱：不承诺退款、不说退多少、不处理付款/扣款/到账/余额纠纷、不碰投诉赔偿。遇到这类用 action="to_merchant"。
 4. 不要编造具体数字：配送费、最低起送、预计送达时间都因商家而异——就说"这个每家店不一样，您在餐厅页或结算页能看到哦"，绝不瞎报数字。
 5. 只针对顾客【最新一条】消息回答；绝不照抄你上一条回复；不同的问题必须给不同的答案。
+6. 当顾客道谢、或说"好了/没问题了/没事了"这类收尾的话时，热情回应，并顺带轻轻邀请一次评价："方便的话帮我评价下这次服务呗～满意回复 👍、不满意回复 👎，谢谢！"（一次就好，别反复邀请）。这种情况用 action="answer"。
 
 【你能回答的范围（用 answer）】
 {$faq}

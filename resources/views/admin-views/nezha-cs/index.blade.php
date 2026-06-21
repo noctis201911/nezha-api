@@ -101,5 +101,43 @@
         @if ($tickets->hasPages())
             <div class="mt-3 d-flex justify-content-end">{{ $tickets->links() }}</div>
         @endif
+
+        {{-- 顾客对客服的评价：重点看差评 --}}
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="card-header-title">
+                    {{ translate('顾客服务评价') }}
+                    <span class="badge badge-soft-success ml-2">👍 {{ $fbPos }}</span>
+                    <span class="badge badge-soft-danger ml-1">👎 {{ $fbNeg }}</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <small class="text-muted">{{ translate('下面是最近的差评，定期看看顾客负反馈集中在什么问题、好做改进。') }}</small>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-borderless table-thead-bordered table-align-middle card-table mb-0">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>{{ translate('时间') }}</th>
+                            <th>{{ translate('顾客') }}</th>
+                            <th>{{ translate('反馈内容') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($negFeedback as $f)
+                            <tr>
+                                <td class="text-nowrap">{{ $f->created_at }}</td>
+                                <td>{{ $f->user_id ? '#' . $f->user_id : '—' }}</td>
+                                <td class="text-danger">{{ $f->comment }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="3" class="text-center text-muted py-4">{{ translate('暂无差评') }}</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 @endsection

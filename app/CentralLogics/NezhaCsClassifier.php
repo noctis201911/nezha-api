@@ -49,6 +49,35 @@ class NezhaCsClassifier
         return false;
     }
 
+    // 顾客对「客服服务」的评价。先判负面(防 不满意 被 满意 误命中)。限服务语境，避免抓订单投诉。
+    public static function feedbackSentiment(?string $text): ?string
+    {
+        if (!$text) {
+            return null;
+        }
+        $t = mb_strtolower($text);
+        $neg = [
+            '👎', '不满意', '没帮到', '没帮上', '没解决', '答非所问', '客服没用', '客服太差', '客服差',
+            '客服态度', '你们客服', '小哪没用', '小哪太差', '服务太差', '服务差', '很失望', '太失望',
+            '一点用都没有', '一点用没有', '没什么用', '太差劲', '垃圾客服',
+        ];
+        foreach ($neg as $w) {
+            if (mb_stripos($t, $w) !== false) {
+                return 'negative';
+            }
+        }
+        $pos = [
+            '👍', '好评', '满意', '谢谢小哪', '小哪谢谢', '客服很好', '客服不错', '很有用', '太有用',
+            '帮大忙', '解决了', '点赞', '服务好', '服务不错', '你真好', '客服真好', '太棒了', '很棒',
+        ];
+        foreach ($pos as $w) {
+            if (mb_stripos($t, $w) !== false) {
+                return 'positive';
+            }
+        }
+        return null;
+    }
+
     // 顾客表示「联系不上商家」→ 走升级处理（给电话+催商家邮件+工单），先于普通敏感判断。
     protected static array $cantReach = [
         '联系不上', '联系不到', '联系不了', '找不到商家', '商家不回', '商家没回', '商家不理',

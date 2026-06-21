@@ -34,7 +34,15 @@ class NezhaCsController extends Controller
             ->orderByDesc('id')
             ->paginate(30);
 
-        return view('admin-views.nezha-cs.index', compact('status', 'relay', 'faq', 'model', 'hasKey', 'tickets'));
+        $negFeedback = DB::table('nezha_cs_feedback')
+            ->where('sentiment', 'negative')
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get();
+        $fbPos = (int) DB::table('nezha_cs_feedback')->where('sentiment', 'positive')->count();
+        $fbNeg = (int) DB::table('nezha_cs_feedback')->where('sentiment', 'negative')->count();
+
+        return view('admin-views.nezha-cs.index', compact('status', 'relay', 'faq', 'model', 'hasKey', 'tickets', 'negFeedback', 'fbPos', 'fbNeg'));
     }
 
     public function saveSettings(Request $request)
