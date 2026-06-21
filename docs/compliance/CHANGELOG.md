@@ -5,6 +5,7 @@
 
 | 日期 | 变更 | 等级 | 批准人 | 说明 |
 |---|---|---|---|---|
+| 2026-06-21 | **每日加密备份增异地副本(Cloudflare R2 off-site)** | 🟢 L3(强化L1-4留存可靠性,收紧不放松) | 用户批准(选R2方案) | 此前每日加密备份(DB+storage/app+.env)仅在本机同盘,丢机/丢盘/勒索即丢含≥5年留存的 nezha_refund_records。新增:备份成功后 rclone 推一份加密件到 Cloudflare R2(异地对象存储),copy 只增不删防级联删,远端独立保留30天;出站强制 --bind IPv4 178.105.216.158 匹配 R2 token IP白名单(双栈默认IPv6会403)。失败双告警:备份脚本即时邮件+nzwatch 每5min 查 offsite_last_ok>26h 告警。实测:真跑一次→R2收到→从R2下载解密解压得完整有效 MySQL dump(端到端可恢复)。R2上是加密副本,backup.key 仍须离线另存否则副本=废。 |
 | 2026-06-21 | **隐私政策§3加(6):在线客服/翻译经第三方AI(DeepSeek)处理+数据跨境披露** | 🔴 L1-7相关(数据出境披露) | 用户批准("这个处理掉") | 配合 ea2d179 AI客服:翻译/运营助手会把顾客消息发DeepSeek(服务器在中国)→个人信息跨境传输。正本docs/legal/privacy-policy.md+线上data_settings(id=154,旧值备份key _privacy_policy_live_backup_202606211819)同步加第3条(6)项:披露第三方AI处理+跨境+运营统计已去标识化+提示勿发非必要敏感信息。清data_settings缓存,nginx 60s自动过期。 |
 | 2026-06-21 | **AI客服运营助手喂模型前抹PII(电话/邮箱)** | 🟢 L3(强化L1-7,收紧不放松) | Claude实施(用户"全部都修") | adminAssistant 把顾客原话/差评原文发DeepSeek(数据出境中国)做运营归纳,顾客消息可能含电话/邮箱PII。新增 redactPii() 在喂模型前正则抹电话(含亚美尼亚号)/邮箱。注:①翻译功能因需译原文无法脱敏;②地址类PII正则难尽抹;③「客服/翻译消息可能经第三方AI处理、数据出境」的隐私政策披露仍待用户+律师确认。 |
 | 2026-06-21 | **风控通道收口服务端(子项B补2): 复评不信任客户端 payment_channel** | 🟡 L2(风控行为:仅改通道如何判定,阈值/开关未变) | 用户批准 | 缺口: build_context 读客户端自由串 payment_channel 选通道阈值可伪报换松阈值(线下具体通道下单后才提交凭证,下单时服务端无法权威得知)。修法: evaluate_server_authoritative 由 order->payment_method 权威判定——非线下用 other(法币阈值); 线下通道未定则对 rmb/usdt 两套阈值取最严(reject>review>pass),伪报换不到更松阈值; 阈值相同(现 rmb=usdt)则零行为变化,分化自动 fail-closed。新增 NezhaRiskChannelTest(3测)接入 composer test:redlines+pre-push门防回归(现9测19断言)。
