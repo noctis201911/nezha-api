@@ -975,6 +975,9 @@
                                 @php($yLng = $yAddr['longitude'] ?? null)
                                 @php($yText = $yAddr['address'] ?? '')
                                 @if (in_array($order->order_status, ['processing', 'handover']))
+                                    <div class="mt-3 mb-1 p-2" style="background:#EEF6FF;border:1px solid #CFE3FF;border-radius:10px;font-size:12px;color:#1A1A1A;line-height:1.7;">
+                                        <span style="font-weight:700;">🛵 什么时候叫 Yandex？</span> 餐快做好时，用下方「顾客配送位置」把坐标粘到 Yandex Go 叫车；叫到车后点下面「已叫车，标记为配送中」（贴上追踪链接，顾客还能看骑手实时位置）。
+                                    </div>
                                     <form action="{{ route('vendor.order.mark-dispatched', ['id' => $order['id']]) }}" method="post" class="mt-3 mb-1">
                                         @csrf
                                         @method('put')
