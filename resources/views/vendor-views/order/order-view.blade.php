@@ -916,12 +916,15 @@
                                         <a
                                             class="btn btn-sm btn-outline-danger btn--danger cancelled-status">{{ translate('Cancel Order') }}</a>
                                     @endif
+                                    {{-- 哪吒效率: 离线支付待确认单只走右侧「确认收款」完整表单(核验+自动进备餐+通知顾客); 通用「改为已确认」按钮会绕过核验留半状态, 故离线待付时隐藏防误点 --}}
+                                    @if (!($order->payment_method == 'offline_payment' && optional($order->offline_payments)->status == 'pending'))
                                     <a class="btn btn-sm btn--primary order-status-change-alert"
                                         data-url="{{ route('vendor.order.status', ['id' => $order['id'], 'order_status' => 'confirmed']) }}"
                                         data-message="{{ translate('Change status to confirmed ?') }}"
                                         href="javascript:">
                                         确认收款·接单
                                     </a>
+                                    @endif
                                 @elseif ($order['order_status'] == 'confirmed' || $order['order_status'] == 'accepted')
                                     <a class="btn btn-sm btn--primary order-status-change-alert"
                                         data-url="{{ route('vendor.order.status', ['id' => $order['id'], 'order_status' => 'processing']) }}"
