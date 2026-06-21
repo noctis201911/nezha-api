@@ -123,7 +123,7 @@ class OrderController extends Controller
     public function place_order(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'order_amount' => 'required',
+            'order_amount' => 'nullable', // 哪吒[资金完整性·子项B]: 前端金额永不被信任, 服务端按DB商品价重算覆盖(见下方order_amount收口); 保留键兼容旧前端但不再required
             'payment_method'=>'required|in:cash_on_delivery,digital_payment,wallet,offline_payment',
             'order_type' => 'required|in:take_away,delivery,dine_in',
             'restaurant_id' => 'required',
@@ -238,7 +238,8 @@ class OrderController extends Controller
 
         $order->distance = $request->distance ?? 0;
         $order->user_id = $request->user ? $request->user->id : $request['guest_id'];
-        $order->order_amount = $request['order_amount'];
+        // 哪吒[资金完整性·子项B]: 不读前端 order_amount。先置0占位, 真值由服务端在下方按 DB 商品价/折扣/券/税/配送/小费重算后唯一赋值($order->order_amount = $order_amount + dm_tips), 入口结构上不依赖客户端值, 杜绝篡改。
+        $order->order_amount = 0;
         $order->payment_status = ($request->partial_payment ? 'partially_paid' : ($request['payment_method'] == 'wallet' ? 'paid' : 'unpaid'));
         $order->order_status = $order_status;
         $order->coupon_code = $request['coupon_code'];
