@@ -116,6 +116,9 @@
         ],
         "post-create-project-cmd": [
             "@php artisan key:generate --ansi"
+        ],
+        "test:redlines": [
+            "@php vendor/bin/phpunit tests/Feature/NezhaL1RedlineTest.php tests/Feature/NezhaIdorGuardTest.php"
         ]
     },
     "extra": {
