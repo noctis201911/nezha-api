@@ -65,6 +65,15 @@ else
   [ "$BAGE" -gt 26 ] && add "最新数据库备份已 ${BAGE}h 未更新 (>26h) — 每日备份可能静默失败" "backup"
 fi
 
+# 6b. 异地备份(R2)新鲜度: off-site 推送 >26h 未成功 → 异地副本停更(本地在但丢机即丢留存)
+OSOK="/root/nezha-backup/offsite_last_ok"
+if [ ! -f "$OSOK" ]; then
+  add "异地备份(Cloudflare R2)从未成功推送 — 当前仅有本地备份, 丢机即丢" "offsite"
+else
+  OAGE=$(( ( $(date +%s) - $(cat "$OSOK" 2>/dev/null || echo 0) ) / 3600 ))
+  [ "$OAGE" -gt 26 ] && add "异地备份(R2)已 ${OAGE}h 未成功推送 (>26h) — 异地副本停更, 仅剩本地" "offsite"
+fi
+
 # 7. SSL 源站证书剩余天数 <14天 → 自动续期可能失败,提前预警(绕CF直查本机源站证书)
 for SD in nezha.am api.nezha.am; do
   CEND=$(echo | timeout 10 openssl s_client -servername "$SD" -connect 127.0.0.1:443 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
