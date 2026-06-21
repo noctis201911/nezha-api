@@ -59,7 +59,6 @@ class User extends Authenticatable
         'loyalty_point' => 'integer',
         'ref_by' => 'integer',
         'social_id' => 'integer',
-        'notification_preferences' => 'array',
     ];
 
     protected $appends = ['image_full_url'];

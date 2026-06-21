@@ -553,7 +553,7 @@
 </audio>
 {{-- 哪吒: 客服(平台/admin)新消息专用提示音——前置叮咚铃 + 低音色人声，与顾客「新消息」音明显区别 --}}
 <audio id="nzAdminMsgAudio" preload="auto">
-    <source src="{{dynamicAsset('assets/admin/sound/new-admin-message-voice.wav')}}?v=2" type="audio/wav">
+    <source src="{{dynamicAsset('assets/admin/sound/new-admin-message-voice.wav')}}?v=3" type="audio/wav">
 </audio>
 <script>
     // 哪吒: 首次用户交互时解锁提示音(绕开浏览器自动播放限制)——之后轮询新消息能稳定响铃

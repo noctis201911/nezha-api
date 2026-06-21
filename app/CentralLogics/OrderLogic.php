@@ -1098,8 +1098,7 @@ class OrderLogic
             $message = Helpers::getOrderPushNotificationMessage($order, $notification_text, 'user', $order->customer ? $order?->customer?->current_language_key : 'en');
             if ($message) {
                 $data = Helpers::makeDataForPushNotification(title: $notification_title, message: $message, orderId: $order->id, type: 'order_status', orderStatus: $order->order_status);
-                // 哪吒: 顾客「订单进度」推送偏好闸(离线支付审核结果)
-                if ($fcm_token && Helpers::customerWantsPush($order->customer, 'order_progress')) {
+                if ($fcm_token) {
                     Helpers::send_push_notif_to_device($fcm_token, $data);
                 }
                 // 站内信是所有登录顾客的兜底，不应依赖设备是否已授权 FCM。
@@ -1281,8 +1280,7 @@ class OrderLogic
                 : 'Your order #' . $order->id . ' is canceled. For the amount paid directly to the restaurant, please contact the restaurant for an original-route refund.';
             $fcm = $order->is_guest == 0 ? $order?->customer?->cm_firebase_token : null;
             $data = Helpers::makeDataForPushNotification(title: $title, message: $msg, orderId: $order->id, type: 'order_status', orderStatus: 'canceled');
-            // 哪吒: 顾客「订单进度」推送偏好闸(B方案取消退款提醒)
-            if ($fcm && Helpers::customerWantsPush($order->customer, 'order_progress')) { Helpers::send_push_notif_to_device($fcm, $data); }
+            if ($fcm) { Helpers::send_push_notif_to_device($fcm, $data); }
             if ($order->is_guest == 0) { Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id); }
         } catch (\Throwable $e) {
             info('notify_customer_cancel_refund failed: ' . $e->getMessage());

@@ -305,51 +305,6 @@ class CustomerController extends Controller
         return response()->json(['message' => translate('messages.updated_successfully')], 200);
     }
 
-    /**
-     * 哪吒: 读取顾客推送偏好。默认全开(notification_preferences 为 null/缺键 => true)。
-     * 只控制 FCM 推送, 不影响站内信(站内信永远保留历史)。
-     */
-    public function get_notification_preferences(Request $request)
-    {
-        $prefs = $request->user()?->notification_preferences;
-        $prefs = is_array($prefs) ? $prefs : [];
-
-        return response()->json([
-            'master'         => array_key_exists('master', $prefs) ? (bool) $prefs['master'] : true,
-            'order_progress' => array_key_exists('order_progress', $prefs) ? (bool) $prefs['order_progress'] : true,
-            'chat'           => array_key_exists('chat', $prefs) ? (bool) $prefs['chat'] : true,
-        ], 200);
-    }
-
-    /**
-     * 哪吒: 更新顾客推送偏好(master / order_progress / chat)。
-     * master 关 => 全部推送停; order_progress/chat 单独关 => 对应类停。站内信不受影响。
-     */
-    public function update_notification_preferences(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'master'         => 'required|boolean',
-            'order_progress' => 'required|boolean',
-            'chat'           => 'required|boolean',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
-        }
-
-        $prefs = [
-            'master'         => $request->boolean('master'),
-            'order_progress' => $request->boolean('order_progress'),
-            'chat'           => $request->boolean('chat'),
-        ];
-
-        DB::table('users')->where('id', $request?->user()?->id)->update([
-            'notification_preferences' => json_encode($prefs),
-        ]);
-
-        return response()->json(['message' => translate('messages.updated_successfully'), 'data' => $prefs], 200);
-    }
-
     public function get_suggested_food(Request $request)
     {
         Helpers::getZoneIds($request);
