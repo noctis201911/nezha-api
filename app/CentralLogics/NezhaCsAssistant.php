@@ -44,7 +44,41 @@ class NezhaCsAssistant
             return;
         }
 
-        // 0) 翻译模式（中文顾客 ↔ 本地骑手沟通）——最高优先，招牌功能，不被其它逻辑抢走。
+        // 0) 翻译相关——最高优先，招牌功能，不被其它逻辑抢走。
+        $zhIn = NezhaCsClassifier::isChinese($text);
+        $xlateKey = 'nezha_cs_xlate:' . $conversation->id;
+        $inXlate = (bool) \Illuminate\Support\Facades\Cache::get($xlateKey);
+
+        // 退出翻译模式
+        if ($inXlate && NezhaCsClassifier::isExitTranslateMode($text)) {
+            \Illuminate\Support\Facades\Cache::forget($xlateKey);
+            self::reply($conversation, $customerUser, $zhIn ? '好的，已退出翻译～有需要随时再叫我哈。' : 'OK, translation mode is off. Ping me anytime!', 'answer', null);
+            return;
+        }
+        // 进入翻译模式
+        if (!$inXlate && NezhaCsClassifier::isEnterTranslateMode($text)) {
+            \Illuminate\Support\Facades\Cache::put($xlateKey, 1, 1800);
+            self::reply($conversation, $customerUser, $zhIn
+                ? '好嘞，进入翻译协助啦～您把骑手发来的话、或想对骑手说的话直接发给我就行，我帮您互译（亚美尼亚语/俄语/英语+中文回译）。结束了跟我说一声"退出翻译"。'
+                : 'Translation mode on~ Just send me what the rider says, or what you want to tell them — I\'ll translate both ways. Say "exit translation" when done.', 'answer', null);
+            return;
+        }
+        // 翻译模式中：每条都互译（模式内直接翻、不再问是否需要翻译）
+        if ($inXlate) {
+            try {
+                $t = self::translate($text, true);
+            } catch (\Throwable $e) {
+                $t = null;
+            }
+            if ($t !== null && trim($t) !== '') {
+                self::reply($conversation, $customerUser, $t, 'translate', null);
+            } else {
+                self::softReply($conversation, $customerUser, null, $text, 'soft', null);
+            }
+            return;
+        }
+
+        // 一次性翻译（未进入模式，但单条明显是翻译诉求）
         if (NezhaCsClassifier::isTranslationRequest($text)) {
             try {
                 $t = self::translate($text);
@@ -577,7 +611,7 @@ class NezhaCsAssistant
     }
 
     // 翻译模式：中文顾客 ↔ 本地骑手。返回给顾客直接看的译文（纯文本，非 JSON）。失败返回 null。
-    protected static function translate(string $text): ?string
+    protected static function translate(string $text, bool $mode = false): ?string
     {
         $key = Helpers::get_business_settings('nezha_cs_ai_api_key');
         $base = rtrim((string) (Helpers::get_business_settings('nezha_cs_ai_base_url') ?: 'https://api.deepseek.com'), '/');
@@ -589,7 +623,7 @@ class NezhaCsAssistant
         $payload = [
             'model' => $model,
             'messages' => [
-                ['role' => 'system', 'content' => self::translatePrompt()],
+                ['role' => 'system', 'content' => self::translatePrompt($mode)],
                 ['role' => 'user', 'content' => $text],
             ],
             'temperature' => 0.3,
@@ -616,22 +650,100 @@ class NezhaCsAssistant
         return trim((string) $content) !== '' ? trim((string) $content) : null;
     }
 
-    protected static function translatePrompt(): string
+    protected static function translatePrompt(bool $mode = false): string
     {
+        $rule4 = $mode
+            ? '4. 对方正处于翻译协助模式中，默认他发来的每一句都需要翻译：外语就翻成中文、中文就翻成发给骑手的话，直接翻译，不要再问"是否需要翻译"。'
+            : '4. 如果你拿不准对方到底是想让你翻译、还是在问别的问题（内容不像要发给骑手的话），先用一句话确认："您是想让我帮您翻译这句话、发给骑手吗？" 确认后再翻译，别擅自瞎翻。';
         return <<<SYS
 你是「哪吒外卖」的客服小哪，正在帮说中文的顾客和亚美尼亚本地的骑手/配送员沟通、做翻译。你是真人客服，绝不自称 AI。称呼对方一律用"您"，不要说"顾客"。
 
 规则：
 1. 如果对方发来的是外语（亚美尼亚语 / 俄语 / 英语等），把它准确翻译成中文，并用一句话点明骑手大概想表达什么（比如"骑手在问您具体在哪栋楼"）。
-2. 如果对方用中文说了想对骑手说的话，把它翻译成骑手能看懂的语言：默认给【亚美尼亚语】，再另起一行附【俄语】，最后再附一行【中文回译】（把你的译文再翻回中文），让对方确认意思没翻错、放心复制发给骑手。译文要自然、口语、礼貌。
+2. 如果对方用中文说了想对骑手说的话，把它翻译成骑手能看懂的语言：依次给【亚美尼亚语】【俄语】【英语】三种，最后再附一行【中文回译】（把你的译文再翻回中文），让对方确认意思没翻错、放心挑一条复制发给骑手。译文要自然、口语、礼貌。
 3. 只做翻译和帮忙沟通这件事，简洁亲切，别扯别的。如果对方只是问"能不能翻译"，就热情地说可以、请把要翻译的内容发过来。
-4. 如果你拿不准对方到底是想让你翻译、还是在问别的问题（内容不像要发给骑手的话），先用一句话确认："您是想让我帮您翻译这句话、发给骑手吗？" 确认后再翻译，别擅自瞎翻。
+{$rule4}
 
 把对方要发给骑手的话翻译出来时，用这个格式（每条单独一行，方便复制）：
 亚美尼亚语：<译文>
 俄语：<译文>
+英语：<译文>
 中文回译：<把上面译文再翻回中文，供对方核对语义>
 SYS;
+    }
+
+    /**
+     * 运营数据助手：面向平台超级管理员（非顾客）。读近 7 天客服数据回答运营问题。
+     * 与顾客端是两个独立入口，顾客无法走到这里。返回回答文本。
+     */
+    public static function adminAssistant(string $question): string
+    {
+        $key = Helpers::get_business_settings('nezha_cs_ai_api_key');
+        $base = rtrim((string) (Helpers::get_business_settings('nezha_cs_ai_base_url') ?: 'https://api.deepseek.com'), '/');
+        $model = Helpers::get_business_settings('nezha_cs_ai_model') ?: 'deepseek-chat';
+        if (!$key) {
+            return '尚未配置 AI 接口密钥，无法回答。请先在本页设置。';
+        }
+
+        $since = Carbon::now()->subDays(7);
+        $cats = DB::table('nezha_cs_logs')->where('created_at', '>=', $since)
+            ->selectRaw('category, count(*) as c')->groupBy('category')->pluck('c', 'category')->toArray();
+        $openTickets = (int) DB::table('nezha_cs_tickets')->where('status', 'open')->count();
+        $fbPos = (int) DB::table('nezha_cs_feedback')->where('sentiment', 'positive')->where('created_at', '>=', $since)->count();
+        $fbNeg = (int) DB::table('nezha_cs_feedback')->where('sentiment', 'negative')->where('created_at', '>=', $since)->count();
+        $negComments = DB::table('nezha_cs_feedback')->where('sentiment', 'negative')->orderByDesc('id')->limit(20)->pluck('comment')->toArray();
+
+        $adminInfoId = optional(self::adminSenderInfo())->id;
+        $adminConvIds = Conversation::where('receiver_type', 'admin')->pluck('id')->toArray();
+        $questions = [];
+        if ($adminConvIds) {
+            $questions = Message::whereIn('conversation_id', $adminConvIds)
+                ->where('created_at', '>=', $since)
+                ->when($adminInfoId, fn ($q) => $q->where('sender_id', '!=', $adminInfoId))
+                ->latest()->limit(80)->pluck('message')->toArray();
+            $questions = array_values(array_filter(array_map('trim', $questions)));
+        }
+
+        $legend = '分类含义: answer=已自动回答, translate=翻译, to_merchant/sensitive/relay=转商家(退款/投诉等), cant_reach=联系不上商家工单, feedback_pos/neg=好评/差评, soft=答不上婉拒, handoff/error=转人工/出错';
+        $ctx = "【近7天客服数据】\n{$legend}\n分类计数: " . json_encode($cats, JSON_UNESCAPED_UNICODE)
+            . "\n待跟进工单(联系不上商家等): {$openTickets}\n近7天 好评: {$fbPos} / 差评: {$fbNeg}\n";
+        if ($negComments) {
+            $ctx .= "差评原文(最多20条):\n- " . implode("\n- ", array_map(fn ($x) => mb_substr((string) $x, 0, 120), $negComments)) . "\n";
+        }
+        if ($questions) {
+            $ctx .= "近期顾客发给客服的消息(最多80条, 供你归纳高频问题/未解决问题):\n- "
+                . implode("\n- ", array_map(fn ($x) => mb_substr((string) $x, 0, 120), array_slice($questions, 0, 80))) . "\n";
+        }
+
+        $system = "你是「哪吒外卖」平台的运营数据助手，面向平台超级管理员（不是顾客）。基于下面的真实客服数据，简洁、专业地回答管理员的问题（如：高频问题、哪些问题没解决、差评集中在哪、改进建议）。可以讨论内部统计。用中文。数据不足以回答时如实说明。\n\n" . $ctx;
+
+        $payload = [
+            'model' => $model,
+            'messages' => [
+                ['role' => 'system', 'content' => $system],
+                ['role' => 'user', 'content' => $question],
+            ],
+            'temperature' => 0.4,
+            'max_tokens' => 900,
+            'stream' => false,
+        ];
+        $ch = curl_init($base . '/chat/completions');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $key],
+            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+        ]);
+        $raw = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($raw === false || $code >= 400) {
+            return 'AI 暂时无法回答（接口错误 ' . $code . '），请稍后再试。';
+        }
+        $json = json_decode($raw, true);
+        $content = trim((string) ($json['choices'][0]['message']['content'] ?? ''));
+        return $content !== '' ? $content : '没有得到有效回答，请换个问法试试。';
     }
 
     protected static function systemPrompt(string $faq, string $orderCtx): string
@@ -679,6 +791,7 @@ SYS;
 - 退款：平台不经手货款，退款需要联系下单的商家协商、按原路退回（在订单页『联系商家』）。
 - 订单号 / 取餐号：下单后在订单页可以查看。
 - 翻译帮助：可以帮您和不懂中文的骑手/配送员沟通——把骑手发来的外语发给我，我翻成中文；您把想说的话用中文发给我，我翻成当地语言让您复制发给骑手。直接把内容发给我就行。
+- 平台规则（本地生活/发帖时）：哪吒只做正规外卖和本地生活信息撮合，平台全程不碰资金。以下内容禁止发布、一经发现即删：博彩赌博、色情、诈骗、换汇/跑分/代收代付（涉洗钱外汇违规）、签证"包过/假材料"、招聘陷阱（博彩园区等）、毒品枪支等违法内容。原因：这些是法律红线，也为保护用户安全，平台必须守规合规经营。正规商家/信息正常发布即可。
 FAQ;
     }
 

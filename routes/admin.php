@@ -518,6 +518,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('/', [\App\Http\Controllers\Admin\NezhaCsController::class, 'index'])->name('index');
             Route::post('settings', [\App\Http\Controllers\Admin\NezhaCsController::class, 'saveSettings'])->name('settings');
             Route::post('ticket/close/{id}', [\App\Http\Controllers\Admin\NezhaCsController::class, 'closeTicket'])->name('ticket.close');
+            Route::post('ask', [\App\Http\Controllers\Admin\NezhaCsController::class, 'ask'])->name('ask');
         });
 
 

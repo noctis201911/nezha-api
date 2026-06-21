@@ -34,15 +34,23 @@ class NezhaCsController extends Controller
             ->orderByDesc('id')
             ->paginate(30);
 
-        $negFeedback = DB::table('nezha_cs_feedback')
-            ->where('sentiment', 'negative')
+        $feedback = DB::table('nezha_cs_feedback')
             ->orderByDesc('id')
-            ->limit(50)
+            ->limit(60)
             ->get();
         $fbPos = (int) DB::table('nezha_cs_feedback')->where('sentiment', 'positive')->count();
         $fbNeg = (int) DB::table('nezha_cs_feedback')->where('sentiment', 'negative')->count();
 
-        return view('admin-views.nezha-cs.index', compact('status', 'relay', 'faq', 'model', 'hasKey', 'tickets', 'negFeedback', 'fbPos', 'fbNeg'));
+        return view('admin-views.nezha-cs.index', compact('status', 'relay', 'faq', 'model', 'hasKey', 'tickets', 'feedback', 'fbPos', 'fbNeg'));
+    }
+
+    /** 运营数据助手：超管在后台问小哪客服运营情况。 */
+    public function ask(Request $request)
+    {
+        $request->validate(['question' => 'required|string|max:500']);
+        $q = trim($request->question);
+        $answer = \App\CentralLogics\NezhaCsAssistant::adminAssistant($q);
+        return back()->with('cs_admin_q', $q)->with('cs_admin_a', $answer);
     }
 
     public function saveSettings(Request $request)

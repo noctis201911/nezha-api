@@ -55,6 +55,24 @@
             </div>
         </div>
 
+        {{-- 运营数据助手：超管问小哪 --}}
+        <div class="card mb-3">
+            <div class="card-header"><h5 class="card-header-title"><i class="tio-chat-outlined"></i> {{ translate('问小哪（运营助手）') }}</h5></div>
+            <div class="card-body">
+                <small class="text-muted d-block mb-2">{{ translate('问问客服运营情况，例如：最近顾客问得最多的是什么？哪些问题没解决？差评集中在哪？— 基于近 7 天真实客服数据回答。') }}</small>
+                <form method="POST" action="{{ route('admin.nezha-cs.ask') }}">
+                    @csrf
+                    <div class="input-group">
+                        <input type="text" name="question" class="form-control" maxlength="500" placeholder="{{ translate('例如：最近顾客最常问什么？哪些没解决？') }}" value="{{ session('cs_admin_q') }}">
+                        <button type="submit" class="btn btn-primary">{{ translate('问一下') }}</button>
+                    </div>
+                </form>
+                @if (session('cs_admin_a'))
+                    <div class="alert alert-soft-secondary mt-3 mb-0" style="white-space: pre-wrap;">{{ session('cs_admin_a') }}</div>
+                @endif
+            </div>
+        </div>
+
         {{-- 待处理工单 --}}
         <div class="card mb-3">
             <div class="card-header">
@@ -112,27 +130,35 @@
                 </h5>
             </div>
             <div class="card-body">
-                <small class="text-muted">{{ translate('下面是最近的差评，定期看看顾客负反馈集中在什么问题、好做改进。') }}</small>
+                <small class="text-muted">{{ translate('顾客在对话里对客服的评价（好评/差评全文）。定期看看负反馈集中在什么问题、好做改进。') }}</small>
             </div>
             <div class="table-responsive">
                 <table class="table table-borderless table-thead-bordered table-align-middle card-table mb-0">
                     <thead class="thead-light">
                         <tr>
                             <th>{{ translate('时间') }}</th>
+                            <th>{{ translate('评价') }}</th>
                             <th>{{ translate('顾客') }}</th>
                             <th>{{ translate('反馈内容') }}</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse ($negFeedback as $f)
+                        @forelse ($feedback as $f)
                             <tr>
                                 <td class="text-nowrap">{{ $f->created_at }}</td>
+                                <td>
+                                    @if ($f->sentiment == 'negative')
+                                        <span class="badge badge-soft-danger">👎 {{ translate('差评') }}</span>
+                                    @else
+                                        <span class="badge badge-soft-success">👍 {{ translate('好评') }}</span>
+                                    @endif
+                                </td>
                                 <td>{{ $f->user_id ? '#' . $f->user_id : '—' }}</td>
-                                <td class="text-danger">{{ $f->comment }}</td>
+                                <td class="{{ $f->sentiment == 'negative' ? 'text-danger' : '' }}">{{ $f->comment }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="3" class="text-center text-muted py-4">{{ translate('暂无差评') }}</td>
+                                <td colspan="4" class="text-center text-muted py-4">{{ translate('暂无评价') }}</td>
                             </tr>
                         @endforelse
                     </tbody>

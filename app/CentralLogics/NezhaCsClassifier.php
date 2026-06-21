@@ -31,6 +31,43 @@ class NezhaCsClassifier
         '用亚美尼亚语', '用俄语', '用英语', '亚美尼亚语怎么', '俄语怎么', '英语怎么', '当地语言怎么', 'translate',
     ];
 
+    // 进入翻译模式（之后每条都互译，直到退出）。
+    protected static array $enterXlate = [
+        '需要翻译', '要翻译', '进入翻译', '翻译模式', '开启翻译', '和骑手对话', '跟骑手对话', '跟骑手聊',
+        '和骑手沟通', '帮我和骑手', '帮我跟骑手沟通', '和配送员沟通',
+    ];
+    protected static array $exitXlate = [
+        '退出翻译', '不用翻译', '不翻译了', '结束翻译', '关闭翻译', '退出翻译模式', '不用翻了', '翻译结束',
+    ];
+
+    public static function isEnterTranslateMode(?string $text): bool
+    {
+        if (!$text) {
+            return false;
+        }
+        $t = mb_strtolower($text);
+        foreach (self::$enterXlate as $kw) {
+            if (mb_stripos($t, mb_strtolower($kw)) !== false) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static function isExitTranslateMode(?string $text): bool
+    {
+        if (!$text) {
+            return false;
+        }
+        $t = mb_strtolower($text);
+        foreach (self::$exitXlate as $kw) {
+            if (mb_stripos($t, mb_strtolower($kw)) !== false) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static function isTranslationRequest(?string $text): bool
     {
         if (!$text) {
