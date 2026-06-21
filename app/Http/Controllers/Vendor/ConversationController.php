@@ -147,7 +147,19 @@ class ConversationController extends Controller
         if ($convIds->isEmpty()) {
             return response()->json(['total_unread' => 0, 'latest_incoming_id' => 0]);
         }
+        // 哪吒: 拆分顾客会话与客服(admin)会话的最新「非本人发」消息 id，
+        // 让商家面板对顾客消息 / 客服消息播放不同音色提示音（前端按字段分别响铃）。
+        $adminConvIds = Conversation::whereUser($me->id)
+            ->where(function ($q) {
+                $q->where('receiver_type', 'admin')->orWhere('sender_type', 'admin');
+            })->pluck('id');
+        $customerConvIds = $convIds->diff($adminConvIds)->values();
+
         $latestIncomingId = (int) (Message::whereIn('conversation_id', $convIds)
+            ->where('sender_id', '!=', $me->id)->max('id') ?? 0);
+        $latestCustomerIncomingId = $customerConvIds->isEmpty() ? 0 : (int) (Message::whereIn('conversation_id', $customerConvIds)
+            ->where('sender_id', '!=', $me->id)->max('id') ?? 0);
+        $latestAdminIncomingId = $adminConvIds->isEmpty() ? 0 : (int) (Message::whereIn('conversation_id', $adminConvIds)
             ->where('sender_id', '!=', $me->id)->max('id') ?? 0);
         $totalUnread = (int) Conversation::whereUser($me->id)
             ->whereHas('last_message', function ($q) use ($me) {
@@ -156,6 +168,8 @@ class ConversationController extends Controller
         return response()->json([
             'total_unread' => $totalUnread,
             'latest_incoming_id' => $latestIncomingId,
+            'latest_customer_incoming_id' => $latestCustomerIncomingId,
+            'latest_admin_incoming_id' => $latestAdminIncomingId,
         ]);
     }
 

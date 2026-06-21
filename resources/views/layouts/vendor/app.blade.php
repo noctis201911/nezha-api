@@ -539,11 +539,15 @@
 <audio id="nzMsgAudio" preload="auto">
     <source src="{{dynamicAsset('assets/admin/sound/new-message-voice.mp3')}}" type="audio/mpeg">
 </audio>
+{{-- 哪吒: 客服(平台/admin)新消息专用提示音——前置叮咚铃 + 低音色人声，与顾客「新消息」音明显区别 --}}
+<audio id="nzAdminMsgAudio" preload="auto">
+    <source src="{{dynamicAsset('assets/admin/sound/new-admin-message-voice.wav')}}" type="audio/wav">
+</audio>
 <script>
     // 哪吒: 首次用户交互时解锁提示音(绕开浏览器自动播放限制)——之后轮询新消息能稳定响铃
     (function(){
         function nzUnlockAudio(){
-            ['myAudio','nzMsgAudio'].forEach(function(id){
+            ['myAudio','nzMsgAudio','nzAdminMsgAudio'].forEach(function(id){
                 var a = document.getElementById(id);
                 if(!a) return;
                 try {
@@ -964,6 +968,11 @@
             var stored = null;
             try { stored = localStorage.getItem(LS_KEY); } catch(e){}
             var lastSeen = stored === null ? null : (parseInt(stored, 10) || 0);
+            // 哪吒: 客服(admin)会话单独一条基线，与顾客会话分开计数，方便用不同音色提示
+            var ADMIN_LS_KEY = 'nz_seen_admin_msg_id_v1';
+            var storedAdmin = null;
+            try { storedAdmin = localStorage.getItem(ADMIN_LS_KEY); } catch(e){}
+            var lastSeenAdmin = storedAdmin === null ? null : (parseInt(storedAdmin, 10) || 0);
             var baseUrl = '{{url('/')}}';
 
             function refreshOpenThread(){
@@ -985,17 +994,55 @@
                     url: '{{ route('vendor.message.live-status') }}',
                     dataType: 'json',
                     success: function(res){
-                        var latest = parseInt((res && res.latest_incoming_id) || 0, 10) || 0;
+                        // 顾客会话最新「非本人发」消息 id；旧后端无该字段时回退 latest_incoming_id
+                        var latest = parseInt((res && (res.latest_customer_incoming_id !== undefined ? res.latest_customer_incoming_id : res.latest_incoming_id)) || 0, 10) || 0;
+                        // 客服(admin)会话最新「非本人发」消息 id
+                        var latestAdmin = parseInt((res && res.latest_admin_incoming_id) || 0, 10) || 0;
+
+                        // 本浏览器首次：仅校准基线，不为历史消息响铃
+                        if (lastSeenAdmin === null) {
+                            lastSeenAdmin = latestAdmin;
+                            try { localStorage.setItem(ADMIN_LS_KEY, String(latestAdmin)); } catch(e){}
+                        }
                         if (lastSeen === null) {
-                            // 本浏览器首次：仅校准基线，不为历史消息响铃
                             lastSeen = latest;
                             try { localStorage.setItem(LS_KEY, String(latest)); } catch(e){}
                             return;
                         }
+
+                        function nzPlay(id){ try { var a = document.getElementById(id); if (a) { a.currentTime = 0; var p = a.play(); if (p && p.catch) { p.catch(function(){}); } } } catch(e){} }
+                        function nzRefreshLists(){
+                            if (!document.getElementById('conversation-list')) { return; }
+                            var ctab = (typeof getUrlParameter === 'function' && getUrlParameter('tab') && getUrlParameter('tab') !== 'undefined') ? getUrlParameter('tab') : 'customer';
+                            $.get(baseUrl + '/restaurant-panel/message/list?tab=' + ctab, function(d){
+                                $('#conversation-list').empty().append(d.html);
+                                $('#admin-conversation-list').empty().append(d.admin_html);
+                                var uid = (typeof getUrlParameter === 'function') ? getUrlParameter('user') : null;
+                                if (uid) { $('.customer-list').removeClass('conv-active'); $('#customer-' + uid).addClass('conv-active'); }
+                            });
+                            refreshOpenThread();
+                        }
+
+                        // 客服(平台/admin)新消息：专用音色(叮咚铃+低音人声) + 蓝色 toast，与顾客消息区分
+                        if (latestAdmin > lastSeenAdmin) {
+                            lastSeenAdmin = latestAdmin;
+                            try { localStorage.setItem(ADMIN_LS_KEY, String(latestAdmin)); } catch(e){}
+                            nzPlay('nzAdminMsgAudio');
+                            if (typeof toastr !== 'undefined') {
+                                toastr.info('客服来新消息了', {
+                                    CloseButton: true,
+                                    ProgressBar: true,
+                                    onclick: function(){ location.href = baseUrl + '/restaurant-panel/message/list?tab=admin'; }
+                                });
+                            }
+                            nzRefreshLists();
+                        }
+
+                        // 顾客新消息：原音色 + 绿色 toast
                         if (latest > lastSeen) {
                             lastSeen = latest;
                             try { localStorage.setItem(LS_KEY, String(latest)); } catch(e){}
-                            try { var __ma = document.getElementById('nzMsgAudio'); if (__ma) { __ma.currentTime = 0; var __p = __ma.play(); if (__p && __p.catch) { __p.catch(function(){}); } } } catch(e){}
+                            nzPlay('nzMsgAudio');
                             if (typeof toastr !== 'undefined') {
                                 toastr.success('{{ translate('messages.New message arrived') }}', {
                                     CloseButton: true,
@@ -1003,16 +1050,7 @@
                                     onclick: function(){ location.href = baseUrl + '/restaurant-panel/message/list'; }
                                 });
                             }
-                            if (document.getElementById('conversation-list')) {
-                                var ctab = (typeof getUrlParameter === 'function' && getUrlParameter('tab') && getUrlParameter('tab') !== 'undefined') ? getUrlParameter('tab') : 'customer';
-                                $.get(baseUrl + '/restaurant-panel/message/list?tab=' + ctab, function(d){
-                                    $('#conversation-list').empty().append(d.html);
-                                    $('#admin-conversation-list').empty().append(d.admin_html);
-                                    var uid = (typeof getUrlParameter === 'function') ? getUrlParameter('user') : null;
-                                    if (uid) { $('.customer-list').removeClass('conv-active'); $('#customer-' + uid).addClass('conv-active'); }
-                                });
-                                refreshOpenThread();
-                            }
+                            nzRefreshLists();
                         }
                     }
                 });
