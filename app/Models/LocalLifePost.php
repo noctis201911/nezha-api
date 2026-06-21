@@ -37,11 +37,15 @@ class LocalLifePost extends Model
         'status',
         'reject_reason',
         'source',
+        'legal_hold',
+        'legal_hold_reason',
+        'legal_hold_at',
     ];
 
     protected $casts = [
         'is_free'    => 'boolean',
         'is_urgent'  => 'boolean',
+        'legal_hold' => 'boolean',
         'images'     => 'array',
         'expires_at' => 'datetime',
     ];

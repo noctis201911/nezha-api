@@ -166,6 +166,28 @@ class LocalLifeController extends Controller
         return back();
     }
 
+    // 证据冻结(legal hold): 对违规/需配合执法的帖豁免30天到期清除, 留 contact_info+图供留证(L1-7有限例外)。
+    // 运营人工设/解, 非举报自动触发; 用尽目的请解除冻结让其正常到期清。
+    public function legalHoldToggle(Request $request, $id)
+    {
+        $request->validate(['legal_hold_reason' => 'nullable|string|max:255']);
+        $post = LocalLifePost::findOrFail($id);
+        if ($post->legal_hold) {
+            $post->legal_hold = false;
+            $post->legal_hold_reason = null;
+            $post->legal_hold_at = null;
+            $post->save();
+            Toastr::success('已解除证据冻结：该帖联系方式/图片将按正常 30 天到期清除');
+        } else {
+            $post->legal_hold = true;
+            $post->legal_hold_reason = $request->legal_hold_reason ?: '违规留证 / 配合调查';
+            $post->legal_hold_at = now();
+            $post->save();
+            Toastr::warning('已冻结留证：该帖联系方式/图片豁免到期清除，供违规处理/配合调查；用尽后请解除');
+        }
+        return back();
+    }
+
     // 用户发帖入口总开关（真实影响开关，默认关；运营满意后手动开）
     public function ugcToggle(Request $request)
     {

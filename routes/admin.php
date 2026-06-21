@@ -1134,6 +1134,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::post('status/{id}', [AdminLocalLifeController::class, 'statusToggle'])->name('status');
             Route::post('approve/{id}', [AdminLocalLifeController::class, 'approve'])->name('approve');
             Route::post('reject/{id}', [AdminLocalLifeController::class, 'reject'])->name('reject');
+            Route::post('legal-hold/{id}', [AdminLocalLifeController::class, 'legalHoldToggle'])->name('legal-hold');
             Route::post('ugc-toggle', [AdminLocalLifeController::class, 'ugcToggle'])->name('ugc-toggle');
             Route::get('settings', [AdminLocalLifeController::class, 'settings'])->name('settings');
             Route::post('settings', [AdminLocalLifeController::class, 'settingsSave'])->name('settings.save');

@@ -110,3 +110,20 @@
 
 ### 2026-06-21 AI 客服增量C（联系不上商家工单 + 多语言，无 L1 影响）
 顾客「联系不上商家」时：给商家电话 + 自动邮件催商家 + 留工单（nezha_cs_tickets）+ 通知运营。仍属 B 方案「平台只协调通信」，平台不碰钱、不代退，无 L1-1 影响；工单/邮件不含金额承诺。多语言：按顾客语言回复。
+
+---
+
+## 2026-06-21 —— 🔴 L1 变更(L1-7)：本地生活违规帖「证据冻结」(legal hold)
+
+**背景**：本地生活帖联系方式默认 30 天自动清除(L1-7)；但违规帖 / 配合执法时需保留证据。经平台负责人(用户)明确批准实施。
+
+**改了什么**
+- `local_life_posts` 加 `legal_hold/legal_hold_reason/legal_hold_at`(迁移 `2026_06_21_140000_add_legal_hold_to_local_life_posts`)。
+- `nezha:purge-locallife-pii` 清除查询加 `->where('legal_hold', false)`：冻结帖 contact_info + 图片**豁免到期清除**。
+- 后台帖子列表加 🔒 冻结/解除按钮(`legalHoldToggle` + 路由 `admin.local-life.legal-hold`) + 「冻结留证」徽章。
+- **§5.3 用户承诺同步加例外**：正本 `legal/local-life-terms.md` + 线上 `business_settings.locallife_terms` 均加「(但依法律要求，或为处理违规内容、配合主管机关调查而确有必要时，相关信息将在必要范围与期限内保留)」。线上旧值备份 `_locallife_terms_backup.txt`。
+- 文档：`data-protection.md` + `ADMIN_GUIDE 8.8` + `INVARIANTS.md` L1-7 附注。
+
+**L1-7 边界(防过度留存)**：仅运营人工设/解(非举报自动触发)；目的限违规处理/配合执法；用尽目的应解除冻结让其正常到期清；举报人 PII(report detail)不随之冻结、仍按 180 天清。**仍不触 L1-1**(全程不碰钱)。
+
+**验证**：php -l 全过；迁移已跑(3 列存在)；dry-run 实测 legal_hold=1 帖不进清除名单、过期未冻结帖进清除名单；后台列表内部派发渲染 200、🔒 按钮与冻结徽章出现。

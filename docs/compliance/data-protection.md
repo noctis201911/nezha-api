@@ -52,3 +52,5 @@
 
 ## 6. 维护
 本政策随组③实施进度更新,变更记入 `CHANGELOG.md`。
+
+- **(2026-06-21)本地生活违规帖「证据冻结」(legal hold) — L1-7 到期删除的有限例外**：`local_life_posts` 加 `legal_hold/legal_hold_reason/legal_hold_at`。运营对**判定违规 / 需配合主管机关调查**的帖手动置 `legal_hold=1` → 清除任务 `nezha:purge-locallife-pii` **跳过该帖**（contact_info + 图片全留供留证）。**边界（防过度留存）**：① 仅运营**人工**设/解，**非用户举报自动触发**（否则任何人可借举报令他人 PII 永久留存）；② 目的限定违规处理 / 配合执法；③ **用尽目的应解除冻结**让其按正常 30 天到期清；④ 举报记录 `detail`(举报人 PII)**不随之冻结**，仍按 180 天清。§5.3 用户承诺文案（`legal/local-life-terms.md` 正本 + 线上 `business_settings.locallife_terms`）同步加「依法/配合调查需保留的除外」例外，保持政策与行为一致。线上文案旧值备份 `_locallife_terms_backup.txt`。

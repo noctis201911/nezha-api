@@ -133,6 +133,9 @@
                             <td class="text-center">
                                 @php $cls = ['badge-secondary','badge-success','badge-dark','badge-warning','badge-danger'][$post->status] ?? 'badge-secondary'; @endphp
                                 <label class="badge {{$cls}}">{{$post->statusLabel()}}</label>
+                                @if($post->legal_hold)
+                                    <div><label class="badge badge-dark mt-1" title="证据冻结中：豁免30天到期清除，供违规处理/配合调查"><i class="tio-lock"></i> 冻结留证</label></div>
+                                @endif
                             </td>
                             <td>
                                 <div class="btn--container">
@@ -172,6 +175,15 @@
                                         </form>
                                     @endif
 
+                                    {{-- 证据冻结/解除：违规帖豁免30天到期清除供留证(L1-7有限例外) --}}
+                                    <form action="{{route('admin.local-life.legal-hold',$post->id)}}" method="post" class="d-inline"
+                                        onsubmit="return confirm('{{$post->legal_hold ? '解除证据冻结？解除后该帖联系方式/图片将按正常30天到期清除。' : '冻结留证？该帖联系方式/图片将豁免到期清除，供违规处理/配合调查。仅用于违规/执法，用尽后请解除。'}}')">
+                                        @csrf
+                                        <button type="submit" title="{{$post->legal_hold ? '解除证据冻结' : '冻结留证（豁免到期清除）'}}"
+                                            class="btn btn-sm {{$post->legal_hold ? 'btn--dark btn-outline-dark' : 'btn--secondary btn-outline-secondary'}} action-btn">
+                                            <i class="{{$post->legal_hold ? 'tio-lock-opened' : 'tio-lock'}}"></i>
+                                        </button>
+                                    </form>
                                     <a class="btn btn-sm btn--danger btn-outline-danger action-btn form-alert" href="javascript:"
                                         data-id="post-{{$post->id}}" data-message="确定删除这条帖子吗？" title="删除"><i class="tio-delete-outlined"></i></a>
                                     <form action="{{route('admin.local-life.delete')}}" method="post" id="post-{{$post->id}}">

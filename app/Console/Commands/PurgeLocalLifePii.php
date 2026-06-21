@@ -46,6 +46,7 @@ class PurgeLocalLifePii extends Command
             ->whereNotNull('expires_at')
             ->where('expires_at', '<', $now)
             ->whereNotNull('contact_info')
+            ->where('legal_hold', false) // 证据冻结的违规帖豁免到期清除(L1-7有限例外): contact_info+图全留供留证
             ->get(['id', 'images', 'expires_at']);
 
         $this->info('命中待清除帖数: ' . $rows->count());
