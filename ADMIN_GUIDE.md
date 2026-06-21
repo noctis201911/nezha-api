@@ -999,3 +999,12 @@ B 方案下平台不自营配送（2026-06-19 起配送由商家代叫 Yandex；
 4. 前端「招聘」类目已加常驻风险提示，提醒用户核实工作真实性、警惕高薪诱饵。
 
 > ⚠️ 当前金刚区**尚无"招聘"类目**（`招聘` 只在 tab 白名单里）。若要开放招聘，先在类目管理新建一个 tab=招聘 的类目，**合规等级建议设「1 · 需牌照 / 人工审」**，让其发帖默认进人工队列；上线前务必先把本节红线和审核人手安排好。
+
+### 21.1 联系不上商家 → 工单跟进（增量C）
+顾客在客服里说"联系不上商家/商家不回"等，小哪会自动：① 把商家电话给顾客 ② 给商家发催办邮件 ③ 在 `nezha_cs_tickets` 表留一张工单（type=cant_reach, status=open）④ 推送通知运营。
+**这些工单需要后台人员主动跟进**（暂无后台页面，待加）。查看未处理工单：
+`node nz.js run "cd /www/wwwroot/api.nezha.am && php artisan tinker --execute='foreach(\Illuminate\Support\Facades\DB::table(\"nezha_cs_tickets\")->where(\"status\",\"open\")->get() as \$t){echo \$t->id.\" 订单\".\$t->order_id.\" 商家\".\$t->vendor_id.\" \".\$t->created_at.\"\n\";}'"`
+处理完把 status 改成 closed。
+
+### 21.2 多语言
+小哪会用顾客所用语言回复（中文/英文/俄语等，DeepSeek 多语言）；系统兜底话术（转商家/联系不上/答不准）支持中文与英文（非中文输入走英文）。
