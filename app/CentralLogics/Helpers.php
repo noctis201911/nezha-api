@@ -2039,6 +2039,31 @@ class Helpers
         return true;
     }
 
+    /**
+     * 哪吒: 顾客推送偏好闸。只拦截 FCM 推送, 不影响站内信入库(站内信永远保留历史)。
+     * 默认全开: notification_preferences 为 null/缺键 => 允许(不改变老用户行为)。
+     * 游客 / 拿不到顾客模型 => 一律允许(游客无设置页)。
+     * @param  \App\Models\User|null  $customer
+     * @param  string  $category  master|order_progress|chat
+     */
+    public static function customerWantsPush($customer, $category)
+    {
+        if (! $customer) {
+            return true;
+        }
+        $prefs = $customer->notification_preferences ?? null;
+        if (! is_array($prefs)) {
+            return true;
+        }
+        if (array_key_exists('master', $prefs) && $prefs['master'] === false) {
+            return false;
+        }
+        if (array_key_exists($category, $prefs) && $prefs[$category] === false) {
+            return false;
+        }
+        return true;
+    }
+
     public static function sentUserNotification($order)
     {
         $status = ($order->order_status == 'delivered' && $order->delivery_man) ? 'delivery_boy_delivered' : $order->order_status;
@@ -2080,7 +2105,8 @@ class Helpers
             $data = self::makeDataForPushNotification(title: $title, message: $value, orderId: $order->id, type: 'order_status', orderStatus: $order->order_status);
 
             // 实际 FCM 推送只在有 token 时发 (iOS Safari/Chrome 不支持 Web Push, 多数顾客无 token)
-            if ($user_fcm) {
+            // 哪吒: 顾客「订单进度」推送偏好闸(只拦 FCM, 站内信不受影响)。游客 $order->customer 为 null => 不拦截。
+            if ($user_fcm && self::customerWantsPush($order->customer, 'order_progress')) {
                 self::send_push_notif_to_device($user_fcm, $data);
             }
             // 站内信不再依赖 token: 登录顾客一律入库, 保证 iOS/未授权推送的顾客出餐后也能在消息中心看到提醒
@@ -5167,7 +5193,10 @@ class Helpers
         if ($message && isset($fcm_token)) {
             $title = $tableNumber && $tokenNumber ? translate('Here_is_your_Table_and_Token_Number') : ($tableNumber ? translate('Here_is_your_Table_Number') : translate('Here_is_your_Token_Number'));
             $data = Helpers::makeDataForPushNotification(title: $title, message: $message, orderId: $order->id, type: 'order_status', orderStatus: $order->order_status);
-            Helpers::send_push_notif_to_device($fcm_token, $data);
+            // 哪吒: 顾客「订单进度」推送偏好闸(堂食取餐号)
+            if (Helpers::customerWantsPush($order->customer, 'order_progress')) {
+                Helpers::send_push_notif_to_device($fcm_token, $data);
+            }
             Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id);
         }
 
