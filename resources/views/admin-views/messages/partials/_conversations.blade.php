@@ -248,7 +248,7 @@
 <script src="{{ dynamicAsset('assets/admin/js/chatting/select-multiple-image-for-message.js')}}"></script>
 
 <script src="{{ dynamicAsset('assets/admin/js/chatting/picmo-emoji.js')}}"></script>
-<script src="{{dynamicAsset('assets/admin')}}/js/view-pages/common.js"></script>
+{{-- common.js 由 admin 布局统一加载; 线程片段经 AJAX 注入,不再重复引入 (防 LinkValidator 重复声明 console 报错) --}}
 <script>
 
     $(document).ready(function () {
