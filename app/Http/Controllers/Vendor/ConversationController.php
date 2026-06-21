@@ -60,14 +60,16 @@ class ConversationController extends Controller
                         foreach ($key as $value) {
                             $query->where('f_name', 'like', "%{$value}%")
                             ->orWhere('l_name', 'like', "%{$value}%")
-                            ->orWhere('phone', 'like', "%{$value}%");
+                            ->orWhere('phone', 'like', "%{$value}%")
+                            ->orWhereHas('user', function($uq) use ($value){ $uq->where('f_name', 'like', "%{$value}%")->orWhere('l_name', 'like', "%{$value}%"); });
                         }
                     })
                     ->orWhereHas('receiver',function($query1)use($key){
                         foreach ($key as $value) {
                             $query1->where('f_name', 'like', "%{$value}%")
                             ->orWhere('l_name', 'like', "%{$value}%")
-                            ->orWhere('phone', 'like', "%{$value}%");
+                            ->orWhere('phone', 'like', "%{$value}%")
+                            ->orWhereHas('user', function($uq) use ($value){ $uq->where('f_name', 'like', "%{$value}%")->orWhere('l_name', 'like', "%{$value}%"); });
                         }
                     });
                 });

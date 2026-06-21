@@ -54,19 +54,19 @@ class ConversationController extends Controller
                 }
         }
 
-        $conversations = Conversation::with(['sender', 'receiver', 'last_message'])->WhereUserType('admin')->WhereUserType($tab);
+        $conversations = Conversation::with(['sender.user', 'receiver.user', 'last_message'])->WhereUserType('admin')->WhereUserType($tab);
 
         if($request->query('key')) {
             $key = explode(' ', $request->get('key'));
             $conversations = $conversations->where(function($qu)use($key){
                     $qu->whereHas('sender',function($query)use($key){
                     foreach ($key as $value) {
-                        $query->where('f_name', 'like', "%{$value}%")->orWhere('l_name', 'like', "%{$value}%")->orWhere('phone', 'like', "%{$value}%");
+                        $query->where('f_name', 'like', "%{$value}%")->orWhere('l_name', 'like', "%{$value}%")->orWhere('phone', 'like', "%{$value}%")->orWhereHas('user', function($uq) use ($value){ $uq->where('f_name', 'like', "%{$value}%")->orWhere('l_name', 'like', "%{$value}%"); });
                     }
                 })
                 ->orWhereHas('receiver',function($query1)use($key){
                     foreach ($key as $value) {
-                        $query1->where('f_name', 'like', "%{$value}%")->orWhere('l_name', 'like', "%{$value}%")->orWhere('phone', 'like', "%{$value}%");
+                        $query1->where('f_name', 'like', "%{$value}%")->orWhere('l_name', 'like', "%{$value}%")->orWhere('phone', 'like', "%{$value}%")->orWhereHas('user', function($uq) use ($value){ $uq->where('f_name', 'like', "%{$value}%")->orWhere('l_name', 'like', "%{$value}%"); });
                     }
                 });
             });

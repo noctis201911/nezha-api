@@ -9,7 +9,7 @@
         </div>
         <div class="chat-user-info-content">
             <h5 class="mb-0 text-capitalize">
-                {{$user['f_name'].' '.$user['l_name']}}</h5>
+                {{ (optional($user->user)->f_name) ? trim($user->user->f_name.' '.$user->user->l_name) : trim($user['f_name'].' '.$user['l_name']) }}</h5>
             <span dir="ltr"><a href="tel:{{ $user['phone'] }}" class="gray-dark fs-12"> {{ $user['phone'] }}</a></span>
         </div>
     </div>
