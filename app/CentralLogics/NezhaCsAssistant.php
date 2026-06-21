@@ -771,7 +771,7 @@ SYS;
             return '尚未配置 AI 接口密钥，暂时无法回答，请联系平台。';
         }
 
-        $kb = Helpers::get_business_settings('nezha_cs_merchant_faq') ?: self::merchantKbDefault();
+        $kb = self::merchantKb();
         $system = <<<SYS
 你是「哪吒外卖」的商家助手，帮商家用好商家后台、解答操作问题、还能帮商家把菜品名称/描述写得更好。语气像热心的平台运营同事，简洁、口语、用中文。
 
@@ -813,6 +813,30 @@ SYS;
         $json = json_decode($raw, true);
         $content = trim((string) ($json['choices'][0]['message']['content'] ?? ''));
         return $content !== '' ? $content : '没有得到有效回答，请换个问法试试。';
+    }
+
+    // 商家助手知识库：以权威的 MERCHANT_GUIDE.md 为准（手册一更新助手即同步）+ 后台补充 + 停用功能强化兜底。
+    protected static function merchantKb(): string
+    {
+        $parts = [];
+        try {
+            $manual = @file_get_contents(base_path('MERCHANT_GUIDE.md'));
+        } catch (\Throwable $e) {
+            $manual = false;
+        }
+        if ($manual && strlen(trim($manual)) > 100) {
+            $parts[] = "【哪吒商家手册（权威操作与规则，回答一律以此为准）】\n" . trim($manual);
+        }
+        $override = Helpers::get_business_settings('nezha_cs_merchant_faq');
+        if ($override && trim((string) $override) !== '') {
+            $parts[] = "【运营补充说明】\n" . trim((string) $override);
+        }
+        if (!$parts) {
+            $parts[] = self::merchantKbDefault();
+        }
+        // 停用功能强化：即使手册里提到，也一律按"没启用"处理，绝不照原系统逻辑教。
+        $parts[] = "【以下功能哪吒没启用——一律告诉商家『没用到、不用管它』，绝不照原系统逻辑解释、绝不教操作】\n钱包 / 提现 / 打款报表 / 收入报表、POS 点单、配送员管理（配送由商家自己安排，如叫 Yandex）、堂食 dine-in（哪吒只做外卖配送）、订阅单 / 我的套餐、营销活动 Campaign（用「优惠券」和「广告」即可）、支出 / 交易流水 / 税务 / 活动订单报表。";
+        return implode("\n\n", $parts);
     }
 
     public static function merchantKbDefault(): string
