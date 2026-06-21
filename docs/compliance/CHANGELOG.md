@@ -129,3 +129,7 @@
 **验证**：php -l 全过；迁移已跑(3 列存在)；dry-run 实测 legal_hold=1 帖不进清除名单、过期未冻结帖进清除名单；后台列表内部派发渲染 200、🔒 按钮与冻结徽章出现。
 ### 追加〔2026-06-21〕隐私政策对齐本地生活留存
 隐私政策(正本 docs/legal/privacy-policy.md + 线上 data_settings.privacy_policy)「第5条 保留与删除」加 (5)：本地生活帖联系方式默认 30 天清除 + 依法/配合调查留证例外，使**用户可见的隐私政策**与实际数据处理(§5.3 + legal hold)完全一致(透明度义务)。线上旧值备份 `_privacy_policy_live_backup.html`；改后清 Laravel 缓存 `data_settings_privacy_policy_*`，nginx 60s API 缓存自动过期；真机 /privacy-policy 验证条款渲染、console 0。属用户可见法律文案对齐,不触 L1。
+
+### 2026-06-21 AI 客服 运营助手 + 翻译增强（L3）
+- 运营助手(adminAssistant)：超管在后台问客服运营情况，会把近期顾客消息(最多80条)喂给 DeepSeek 做高频问题归纳——属内部运营分析，数据出境取舍同既有(低敏内容、内部用)；仅超管入口可达，顾客端不可达。
+- 翻译：增英语；翻译模式(Cache态)；FAQ 增平台禁发规则说明。均不碰资金，无 L1 影响。
