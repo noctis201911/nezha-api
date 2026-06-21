@@ -59,14 +59,23 @@ class NezhaCsAssistant
         if (!$inXlate && NezhaCsClassifier::isEnterTranslateMode($text)) {
             \Illuminate\Support\Facades\Cache::put($xlateKey, 1, 1800);
             self::reply($conversation, $customerUser, $zhIn
-                ? '好嘞，进入翻译协助啦～您把骑手发来的话、或想对骑手说的话直接发给我就行，我帮您互译（亚美尼亚语/俄语/英语+中文回译）。结束了跟我说一声"退出翻译"。'
-                : 'Translation mode on~ Just send me what the rider says, or what you want to tell them — I\'ll translate both ways. Say "exit translation" when done.', 'answer', null);
+                ? '好嘞，进入翻译协助啦～您把骑手发来的外语发我，我翻成中文；您想对骑手说的话发我，我翻成骑手用的语言（默认亚美尼亚语，要俄语/英语跟我说一声）并附中文回译。结束了跟我说"退出翻译"。'
+                : 'Translation mode on~ Send me the rider\'s message and I\'ll translate it to Chinese; tell me what you want to say and I\'ll translate it into the rider\'s language (Armenian by default; say if you need Russian/English). Say "exit translation" when done.', 'answer', null);
             return;
         }
         // 翻译模式中：每条都互译（模式内直接翻、不再问是否需要翻译）
         if ($inXlate) {
+            // 记住骑手用的语言，顾客回话时自动译成同一种语言（默认亚美尼亚语）
+            $langKey = 'nezha_cs_xlate_lang:' . $conversation->id;
+            $riderLang = NezhaCsClassifier::dominantForeignLang($text);
+            $hint = null;
+            if ($riderLang) {
+                \Illuminate\Support\Facades\Cache::put($langKey, $riderLang, 1800); // 本条是骑手外语→翻中文
+            } else {
+                $hint = \Illuminate\Support\Facades\Cache::get($langKey); // 本条是中文→翻成骑手语言
+            }
             try {
-                $t = self::translate($text, true);
+                $t = self::translate($text, true, $hint);
             } catch (\Throwable $e) {
                 $t = null;
             }
@@ -611,7 +620,7 @@ class NezhaCsAssistant
     }
 
     // 翻译模式：中文顾客 ↔ 本地骑手。返回给顾客直接看的译文（纯文本，非 JSON）。失败返回 null。
-    protected static function translate(string $text, bool $mode = false): ?string
+    protected static function translate(string $text, bool $mode = false, ?string $hint = null): ?string
     {
         $key = Helpers::get_business_settings('nezha_cs_ai_api_key');
         $base = rtrim((string) (Helpers::get_business_settings('nezha_cs_ai_base_url') ?: 'https://api.deepseek.com'), '/');
@@ -623,7 +632,7 @@ class NezhaCsAssistant
         $payload = [
             'model' => $model,
             'messages' => [
-                ['role' => 'system', 'content' => self::translatePrompt($mode)],
+                ['role' => 'system', 'content' => self::translatePrompt($mode, $hint)],
                 ['role' => 'user', 'content' => $text],
             ],
             'temperature' => 0.3,
@@ -650,25 +659,27 @@ class NezhaCsAssistant
         return trim((string) $content) !== '' ? trim((string) $content) : null;
     }
 
-    protected static function translatePrompt(bool $mode = false): string
+    protected static function translatePrompt(bool $mode = false, ?string $hint = null): string
     {
-        $rule4 = $mode
-            ? '4. 对方正处于翻译协助模式中，默认他发来的每一句都需要翻译：外语就翻成中文、中文就翻成发给骑手的话，直接翻译，不要再问"是否需要翻译"。'
-            : '4. 如果你拿不准对方到底是想让你翻译、还是在问别的问题（内容不像要发给骑手的话），先用一句话确认："您是想让我帮您翻译这句话、发给骑手吗？" 确认后再翻译，别擅自瞎翻。';
+        $names = ['hy' => '亚美尼亚语', 'ru' => '俄语', 'en' => '英语'];
+        $target = $names[$hint] ?? '亚美尼亚语';
+        $rule5 = $mode
+            ? '5. 对方正处于翻译协助模式中，默认他发来的每一句都需要翻译：外语就翻成中文、中文就翻成发给骑手的话，直接翻译，不要再问"是否需要翻译"。'
+            : '5. 如果你拿不准对方到底是想让你翻译、还是在问别的问题（内容不像要发给骑手的话），先用一句话确认："您是想让我帮您翻译这句话、发给骑手吗？" 确认后再翻译，别擅自瞎翻。';
         return <<<SYS
 你是「哪吒外卖」的客服小哪，正在帮说中文的顾客和亚美尼亚本地的骑手/配送员沟通、做翻译。你是真人客服，绝不自称 AI。称呼对方一律用"您"，不要说"顾客"。
 
 规则：
-1. 如果对方发来的是外语（亚美尼亚语 / 俄语 / 英语等），把它准确翻译成中文，并用一句话点明骑手大概想表达什么（比如"骑手在问您具体在哪栋楼"）。
-2. 如果对方用中文说了想对骑手说的话，把它翻译成骑手能看懂的语言：依次给【亚美尼亚语】【俄语】【英语】三种，最后再附一行【中文回译】（把你的译文再翻回中文），让对方确认意思没翻错、放心挑一条复制发给骑手。译文要自然、口语、礼貌。
-3. 只做翻译和帮忙沟通这件事，简洁亲切，别扯别的。如果对方只是问"能不能翻译"，就热情地说可以、请把要翻译的内容发过来。
-{$rule4}
+1. 如果对方发来的是外语（亚美尼亚语 / 俄语 / 英语），只把它准确翻译成中文，并用一句话点明骑手大概想表达什么（比如"骑手在问您具体在哪栋楼"）。这种情况只给中文，不要附别的语言。
+2. 如果对方用中文说了想对骑手说的话，默认只翻成【{$target}】一种（这是骑手当前在用的 / 本地常用语言），并另起一行附【中文回译】让对方核对语义。**绝不要一次堆叠多种语言**，保持简洁。
+3. 但如果对方明确指定了语言（如"用俄语""翻成英语""只要亚美尼亚语""三种都给我"），就严格按他说的来——他要几种给几种、要哪种给哪种。
+4. 译文要自然、口语、礼貌。只做翻译和帮忙沟通这件事，简洁亲切。如果对方只是问"能不能翻译"，就热情地说可以、请把要翻译的内容发过来。
+{$rule5}
 
-把对方要发给骑手的话翻译出来时，用这个格式（每条单独一行，方便复制）：
-亚美尼亚语：<译文>
-俄语：<译文>
-英语：<译文>
-中文回译：<把上面译文再翻回中文，供对方核对语义>
+把对方要发给骑手的话翻译出来时用这个格式（每行单独，方便复制），默认就这两行：
+{$target}：<译文>
+中文回译：<把译文再翻回中文，供核对>
+（只有当对方明确要求多种语言时，才每种各给一行，最后仍附一行中文回译。）
 SYS;
     }
 

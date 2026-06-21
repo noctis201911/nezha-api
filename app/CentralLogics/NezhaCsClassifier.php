@@ -142,6 +142,27 @@ class NezhaCsClassifier
         return $text ? (bool) preg_match('/\p{Han}/u', $text) : true;
     }
 
+    // 粗判外语种类(用于翻译模式记住骑手用的语言)：hy=亚美尼亚 ru=俄/西里尔 en=拉丁字母; 中文/无法判=null。
+    public static function dominantForeignLang(?string $text): ?string
+    {
+        if (!$text) {
+            return null;
+        }
+        if (preg_match('/[\x{0530}-\x{058F}]/u', $text)) {
+            return 'hy';
+        }
+        if (preg_match('/[\x{0400}-\x{04FF}]/u', $text)) {
+            return 'ru';
+        }
+        if (preg_match('/\p{Han}/u', $text)) {
+            return null; // 中文，不是骑手外语
+        }
+        if (preg_match('/[A-Za-z]/', $text)) {
+            return 'en';
+        }
+        return null;
+    }
+
     public static function isSensitive(?string $text): bool
     {
         if (!$text) {
