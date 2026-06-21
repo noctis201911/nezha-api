@@ -43,7 +43,7 @@
                                 @if(!$lead->seen)<span class="badge badge-danger ml-1">新</span>@endif
                             </td>
                             <td>{{$lead->contact_name}}</td>
-                            <td>{{$lead->phone}}</td>
+                            <td>{{$lead->email}}</td>
                             <td>{{$lead->category ?: '-'}}</td>
                             <td class="text-center">
                                 @php $cls = ['badge-primary','badge-warning','badge-success','badge-secondary'][$lead->status] ?? 'badge-primary'; @endphp

@@ -13,7 +13,7 @@
                     <table class="table table-bordered">
                         <tr><th style="width:30%">店铺名称</th><td>{{$lead->store_name}}</td></tr>
                         <tr><th>联系人</th><td>{{$lead->contact_name}}</td></tr>
-                        <tr><th>邮箱</th><td>{{$lead->phone}}</td></tr>
+                        <tr><th>邮箱</th><td>{{$lead->email}}</td></tr>
                         <tr><th>微信</th><td>{{$lead->wechat ?: '-'}}</td></tr>
                         <tr><th>店铺地址</th><td>{{$lead->address ?: '-'}}</td></tr>
                         <tr><th>经营品类</th><td>{{$lead->category ?: '-'}}</td></tr>

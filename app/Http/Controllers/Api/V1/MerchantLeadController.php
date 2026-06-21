@@ -13,6 +13,7 @@ class MerchantLeadController extends Controller
     // 商家入驻意向提交（H5「商家入驻」表单）
     public function store(Request $request)
     {
+        // 注：表单的「联系邮箱」以参数名 phone 提交、落在 phone 列（历史命名，未收电话号码）。
         $validator = Validator::make($request->all(), [
             'store_name'   => 'required|string|max:120',
             'contact_name' => 'required|string|max:60',
@@ -56,7 +57,7 @@ class MerchantLeadController extends Controller
             $body = "新的商家入驻申请\n\n"
                 . "店铺名称：{$lead->store_name}\n"
                 . "联系人：{$lead->contact_name}\n"
-                . "邮箱：{$lead->phone}\n"
+                . "联系邮箱：{$lead->email}\n"
                 . "微信：" . ($lead->wechat ?: '-') . "\n"
                 . "店铺地址：" . ($lead->address ?: '-') . "\n"
                 . "经营品类：" . ($lead->category ?: '-') . "\n"
