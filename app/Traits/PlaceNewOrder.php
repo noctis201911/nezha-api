@@ -71,7 +71,7 @@ trait PlaceNewOrder
                 }
 
                 $product = Helpers::product_data_formatting(data: $product, multi_data: false, trans: false, local: app()->getLocale(), maxDiscount: false);
-                $addon_data = Helpers::calculate_addon_price(AddOn::withoutGlobalScope(RestaurantScope::class)->whereIn('id', $c['add_on_ids'])->get(), $c['add_on_qtys']);
+                $addon_data = Helpers::calculate_addon_price(AddOn::withoutGlobalScope(RestaurantScope::class)->whereIn('id', (gettype($c['add_on_ids']) == 'array' ? $c['add_on_ids'] : json_decode($c['add_on_ids'], true)) ?? [])->get(), (gettype($c['add_on_qtys']) == 'array' ? $c['add_on_qtys'] : json_decode($c['add_on_qtys'], true)) ?? []);
                 $product_discount = Helpers::food_discount_calculate($product, $price, $restaurant, false);
 
                 $or_d = [
@@ -645,9 +645,9 @@ trait PlaceNewOrder
                 return $query->where('id', $request->cart_id);
             })
             ->get()->map(function ($data) {
-                $data->add_on_ids = json_decode($data->add_on_ids, true);
-                $data->add_on_qtys = json_decode($data->add_on_qtys, true);
-                $data->variation = json_decode($data->variation, true);
+                $data->add_on_ids = is_string($data->add_on_ids) ? json_decode($data->add_on_ids, true) : $data->add_on_ids;
+                $data->add_on_qtys = is_string($data->add_on_qtys) ? json_decode($data->add_on_qtys, true) : $data->add_on_qtys;
+                $data->variation = is_string($data->variation) ? json_decode($data->variation, true) : $data->variation;
                 return $data;
             });
 
