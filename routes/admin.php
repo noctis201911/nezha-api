@@ -513,6 +513,13 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::post('overdue/settings', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'overdueSettings'])->name('overdue.settings');
         });
 
+        // 哪吒 AI 在线客服「小哪」后台
+        Route::group(['prefix' => 'nezha-cs', 'as' => 'nezha-cs.', 'middleware' => ['module:order']], function () {
+            Route::get('/', [\App\Http\Controllers\Admin\NezhaCsController::class, 'index'])->name('index');
+            Route::post('settings', [\App\Http\Controllers\Admin\NezhaCsController::class, 'saveSettings'])->name('settings');
+            Route::post('ticket/close/{id}', [\App\Http\Controllers\Admin\NezhaCsController::class, 'closeTicket'])->name('ticket.close');
+        });
+
 
         Route::group(['prefix' => 'dispatch', 'as' => 'dispatch.', 'middleware' => ['module:order']], function () {
             Route::get('list/{status}', [OrderController::class, 'dispatch_list'])->name('list');

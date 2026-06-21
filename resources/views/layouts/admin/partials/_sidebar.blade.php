@@ -929,6 +929,18 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                             </a>
                         </li>
                     @endif
+                    @if (Helpers::module_permission_check('chat'))
+                        <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-cs*') ? 'active' : '' }}">
+                            <a class="js-navbar-vertical-aside-menu-link nav-link"
+                                href="{{ route('admin.nezha-cs.index') }}"
+                                title="{{ translate('AI在线客服') }}">
+                                <i class="tio-online nav-icon"></i>
+                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
+                                    {{ translate('AI在线客服') }}
+                                </span>
+                            </a>
+                        </li>
+                    @endif
                     @if (Helpers::module_permission_check('contact_message'))
                         <li
                             class="navbar-vertical-aside-has-menu {{ Request::is('admin/contact/*') ? 'active' : '' }}">
