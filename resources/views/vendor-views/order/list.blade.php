@@ -287,6 +287,12 @@
                                     @endif
 
 
+                                @php($nzTo = \App\CentralLogics\NezhaOrderTimeout::describe($order))
+                                @if($nzTo && in_array($nzTo['severity'], ['warning','error']) && !empty($nzTo['elapsed_minutes']))
+                                    <span class="badge {{ $nzTo['severity']==='error' ? 'badge-soft-danger' : 'badge-soft-warning' }} d-block mb-1" title="{{ $nzTo['title'] }}">
+                                        ⏱ {{ \App\CentralLogics\NezhaOrderTimeout::humanDuration($nzTo['elapsed_minutes']) }}
+                                    </span>
+                                @endif
                                 <div class="text-capitalze opacity-7">
                                     @if($order['order_type']=='take_away')
                                         <span>

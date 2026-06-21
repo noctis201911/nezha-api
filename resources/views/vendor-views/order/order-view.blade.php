@@ -947,6 +947,21 @@
                                 @endif
                             </div>
 
+                            {{-- 哪吒效率: 备餐中可更新本单预计出餐时间(单笔级, 不改店铺默认) --}}
+                            @if ($order->order_status == 'processing')
+                                <div class="mt-3 p-3" style="background:#F6F7F9;border:1px solid #E3E6EA;border-radius:12px;">
+                                    <div style="font-weight:700;margin-bottom:4px;color:#1A1A1A;">预计出餐时间</div>
+                                    <div style="font-size:12px;color:#6B7280;margin-bottom:8px;line-height:1.6;">顾客端按此显示还要等多久。做得慢/快了就更新这一单（只改本单，不影响店铺默认时长）。</div>
+                                    <form action="{{ route('vendor.order.update-processing-time', ['id' => $order['id']]) }}" method="post" class="d-flex align-items-center gap-2 flex-wrap">
+                                        @csrf
+                                        @method('put')
+                                        <input type="number" name="processing_time" min="1" max="1440" required value="{{ $order->processing_time }}" class="form-control form-control-sm" style="max-width:110px;border-radius:8px;">
+                                        <span style="font-size:13px;color:#555;">分钟</span>
+                                        <button type="submit" class="btn btn-sm btn-outline-primary" style="border-radius:8px;">更新</button>
+                                    </form>
+                                </div>
+                            @endif
+
                             {{-- 哪吒 B方案: 商家「无法接单 / 拒单」(仅 pending/confirmed, 必填原因) --}}
                             @if (in_array($order->order_status, ['pending', 'confirmed']))
                                 <div class="mt-2 text-center">

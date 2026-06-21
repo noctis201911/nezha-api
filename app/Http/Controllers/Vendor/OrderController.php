@@ -42,7 +42,7 @@ class OrderController extends Controller
 
         Order::where(['checked' => 0])->where('restaurant_id', Helpers::get_restaurant_id())->update(['checked' => 1]);
 
-        $orders = Order::with(['customer'])
+        $orders = Order::with(['customer', 'offline_payments'])
             ->when($status == 'searching_for_deliverymen', function ($query) {
                 return $query->SearchingForDeliveryman();
             })
@@ -344,6 +344,36 @@ class OrderController extends Controller
         \App\CentralLogics\NezhaRefundOverdue::lift_suspend_if_clear($record->restaurant_id);
 
         Toastr::success(translate('已标记为已退款，感谢您的原路退还。'));
+        return back();
+    }
+
+    /**
+     * 哪吒效率(2026-06-21): 商家在「备餐中」更新【本单】预计出餐时间(分钟)。
+     * 单笔级, 不改店铺默认时长(restaurant.delivery_time); 顾客端 track 实时读 processing_time 反映新 ETA。
+     * 对象级鉴权: 仅本店单; 仅 processing 态可改。纯展示数值更新, 不动状态机/资金(L3)。
+     */
+    public function update_processing_time(Request $request, $id)
+    {
+        $request->validate([
+            'processing_time' => 'required|integer|min:1|max:1440',
+        ], [
+            'processing_time.required' => '请填写预计出餐时间（分钟）',
+            'processing_time.integer'  => '预计出餐时间需为整数分钟',
+            'processing_time.min'      => '预计出餐时间至少 1 分钟',
+            'processing_time.max'      => '预计出餐时间过大（最多 1440 分钟）',
+        ]);
+        $order = Order::where(['id' => $id, 'restaurant_id' => Helpers::get_restaurant_id()])->first();
+        if (!$order) {
+            Toastr::warning('订单不存在或无权操作');
+            return back();
+        }
+        if ($order->order_status !== 'processing') {
+            Toastr::warning('仅在「备餐中」可更新预计出餐时间');
+            return back();
+        }
+        $order->processing_time = (int) $request->processing_time;
+        $order->save();
+        Toastr::success('本单预计出餐时间已更新为 ' . $order->processing_time . ' 分钟。');
         return back();
     }
 
