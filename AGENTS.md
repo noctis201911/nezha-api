@@ -58,4 +58,13 @@
 - [x] Claude(违规帖证据冻结窗口) ✅已完成(本次提交·🔴L1-7有限例外·已批准): local_life_posts加legal_hold/reason/at(迁移140000)+PurgeLocalLifePii跳过冻结帖(contact+图留证)+后台legalHoldToggle方法/路由/列表blade🔒按钮+冻结徽章+模型fillable/cast。§5.3承诺(正本+线上locallife_terms)加「依法/配合调查需保留除外」(线上旧值备份_locallife_terms_backup.txt)。docs:data-protection/ADMIN_GUIDE8.8/CHANGELOG(L1变更)/INVARIANTS(L1-7附注)。验证:dry-run冻结帖豁免/未冻帖被清+后台渲染200。未碰他窗WIP（2026-06-21）
 - [x] Claude(隐私政策对齐窗口) ✅已完成(本次提交): 隐私政策§5加(5)本地生活联系方式30天清除+留证例外(正本docs/legal/privacy-policy.md+线上data_settings.privacy_policy,旧值备份_privacy_policy_live_backup.html),清Laravel缓存+nginx60s自动过期,真机/privacy-policy验证渲染console0。仅privacy-policy.md+CHANGELOG+AGENTS。未碰他窗WIP/已暂存MM（2026-06-21）
 
-- [ ] Claude(后端部署边界改造窗口·架构债根治) 正在做【后端发布边界 Capistrano-lite·阶段1a】: 建 /www/wwwroot/api-deploy/{shared,releases}+current软链、storage 与 .env 抽共享、改备份脚本指向 shared、生成首个 release。🔴动 storage/结构·牵一发动全身——别窗请勿动 storage/ 与新部署结构;此步不碰 nginx/cron/fpm,线上仍读旧工作目录【完全无感】。回滚=删 api-deploy + storage 切回。(2026-06-22)
+- [x] Claude(后端部署边界改造窗口·架构债根治) 正在做【后端发布边界 Capistrano-lite·阶段1a】: 建 /www/wwwroot/api-deploy/{shared,releases}+current软链、storage 与 .env 抽共享、改备份脚本指向 shared、生成首个 release。🔴动 storage/结构·牵一发动全身——别窗请勿动 storage/ 与新部署结构;此步不碰 nginx/cron/fpm,线上仍读旧工作目录【完全无感】。回滚=删 api-deploy + storage 切回。(2026-06-22)
+
+---
+## 🔴🔴 后端部署契约已变更(2026-06-22 部署边界改造窗口) — 所有后端窗口必读
+**后端「存盘即上线」已废除。** production 现从 `/www/wwwroot/api-deploy/current`(→ releases/ 下不可变快照)跑,**只认 commit+push 到 origin/main 的代码**。
+- 改后端 = 工作树 `/www/wwwroot/api.nezha.am` 改 → 精确 `git add`+commit+**push** → 跑 `node nz.js run "bash /www/wwwroot/api-deploy/nzdeploy-api.sh"` 上线(干净ref+vendor硬链+原子切current+健康门+自动回滚)。
+- **未提交/未push 的改动不会上线**(只停工作树)。这是有意为之的墙,不是 bug。
+- 🔴 storage 与 .env 已抽到 `api-deploy/shared/`(L1凭证持久层),别动;工作树 storage/.env 是软链。备份脚本已指 shared。
+- 回滚: `ln -sfn $(readlink /www/wwwroot/api-deploy/previous) /www/wwwroot/api-deploy/current && kill -USR2 $(cat /www/server/php/82/var/run/php-fpm.pid)`。
+- 前端(nezha.am)暂未改,仍走 nzbuild.sh。
