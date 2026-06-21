@@ -155,12 +155,14 @@ class ConversationController extends Controller
             })->pluck('id');
         $customerConvIds = $convIds->diff($adminConvIds)->values();
 
-        $latestIncomingId = (int) (Message::whereIn('conversation_id', $convIds)
-            ->where('sender_id', '!=', $me->id)->max('id') ?? 0);
-        $latestCustomerIncomingId = $customerConvIds->isEmpty() ? 0 : (int) (Message::whereIn('conversation_id', $customerConvIds)
-            ->where('sender_id', '!=', $me->id)->max('id') ?? 0);
-        $latestAdminIncomingId = $adminConvIds->isEmpty() ? 0 : (int) (Message::whereIn('conversation_id', $adminConvIds)
-            ->where('sender_id', '!=', $me->id)->max('id') ?? 0);
+        // 取每个渠道最新「非本人发」消息(含所属会话 id，供前端判断是否正开着该会话以免重复打扰)
+        $latestCustomerMsg = $customerConvIds->isEmpty() ? null : Message::whereIn('conversation_id', $customerConvIds)
+            ->where('sender_id', '!=', $me->id)->orderByDesc('id')->first(['id', 'conversation_id']);
+        $latestAdminMsg = $adminConvIds->isEmpty() ? null : Message::whereIn('conversation_id', $adminConvIds)
+            ->where('sender_id', '!=', $me->id)->orderByDesc('id')->first(['id', 'conversation_id']);
+        $latestCustomerIncomingId = $latestCustomerMsg ? (int) $latestCustomerMsg->id : 0;
+        $latestAdminIncomingId = $latestAdminMsg ? (int) $latestAdminMsg->id : 0;
+        $latestIncomingId = max($latestCustomerIncomingId, $latestAdminIncomingId);
         $totalUnread = (int) Conversation::whereUser($me->id)
             ->whereHas('last_message', function ($q) use ($me) {
                 $q->where('sender_id', '!=', $me->id);
@@ -170,6 +172,8 @@ class ConversationController extends Controller
             'latest_incoming_id' => $latestIncomingId,
             'latest_customer_incoming_id' => $latestCustomerIncomingId,
             'latest_admin_incoming_id' => $latestAdminIncomingId,
+            'latest_customer_incoming_conv_id' => $latestCustomerMsg ? (int) $latestCustomerMsg->conversation_id : 0,
+            'latest_admin_incoming_conv_id' => $latestAdminMsg ? (int) $latestAdminMsg->conversation_id : 0,
         ]);
     }
 
@@ -311,7 +315,10 @@ class ConversationController extends Controller
                         'conversation_id'=> $conversation->id,
                         'sender_type'=> 'vendor'
                     ];
-                    Helpers::send_push_notif_to_device($fcm_token, $data);
+                    // 哪吒: 顾客「客服与商家消息」推送偏好闸(仅当收信方是顾客时拦截, 骑手不受影响)
+                    if ($user_type !== 'user' || Helpers::customerWantsPush($user, 'chat')) {
+                        Helpers::send_push_notif_to_device($fcm_token, $data);
+                    }
                 }
             }
 

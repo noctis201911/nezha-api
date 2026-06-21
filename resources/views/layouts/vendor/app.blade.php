@@ -541,7 +541,7 @@
 </audio>
 {{-- 哪吒: 客服(平台/admin)新消息专用提示音——前置叮咚铃 + 低音色人声，与顾客「新消息」音明显区别 --}}
 <audio id="nzAdminMsgAudio" preload="auto">
-    <source src="{{dynamicAsset('assets/admin/sound/new-admin-message-voice.wav')}}" type="audio/wav">
+    <source src="{{dynamicAsset('assets/admin/sound/new-admin-message-voice.wav')}}?v=2" type="audio/wav">
 </audio>
 <script>
     // 哪吒: 首次用户交互时解锁提示音(绕开浏览器自动播放限制)——之后轮询新消息能稳定响铃
@@ -1011,6 +1011,8 @@
                         }
 
                         function nzPlay(id){ try { var a = document.getElementById(id); if (a) { a.currentTime = 0; var p = a.play(); if (p && p.catch) { p.catch(function(){}); } } } catch(e){} }
+                        // 正开着该会话(conversation 参数=新消息所属会话)时不重复响铃/弹窗，仅静默刷新
+                        function nzViewing(convId){ if (!convId) return false; var oc = (typeof getUrlParameter === 'function') ? getUrlParameter('conversation') : null; return !!(oc && String(oc) === String(convId)); }
                         function nzRefreshLists(){
                             if (!document.getElementById('conversation-list')) { return; }
                             var ctab = (typeof getUrlParameter === 'function' && getUrlParameter('tab') && getUrlParameter('tab') !== 'undefined') ? getUrlParameter('tab') : 'customer';
@@ -1027,13 +1029,15 @@
                         if (latestAdmin > lastSeenAdmin) {
                             lastSeenAdmin = latestAdmin;
                             try { localStorage.setItem(ADMIN_LS_KEY, String(latestAdmin)); } catch(e){}
-                            nzPlay('nzAdminMsgAudio');
-                            if (typeof toastr !== 'undefined') {
-                                toastr.info('客服来新消息了', {
-                                    CloseButton: true,
-                                    ProgressBar: true,
-                                    onclick: function(){ location.href = baseUrl + '/restaurant-panel/message/list?tab=admin'; }
-                                });
+                            if (!nzViewing(res.latest_admin_incoming_conv_id)) {
+                                nzPlay('nzAdminMsgAudio');
+                                if (typeof toastr !== 'undefined') {
+                                    toastr.info('客服来消息了', {
+                                        CloseButton: true,
+                                        ProgressBar: true,
+                                        onclick: function(){ location.href = baseUrl + '/restaurant-panel/message/list?tab=admin'; }
+                                    });
+                                }
                             }
                             nzRefreshLists();
                         }
@@ -1042,13 +1046,15 @@
                         if (latest > lastSeen) {
                             lastSeen = latest;
                             try { localStorage.setItem(LS_KEY, String(latest)); } catch(e){}
-                            nzPlay('nzMsgAudio');
-                            if (typeof toastr !== 'undefined') {
-                                toastr.success('{{ translate('messages.New message arrived') }}', {
-                                    CloseButton: true,
-                                    ProgressBar: true,
-                                    onclick: function(){ location.href = baseUrl + '/restaurant-panel/message/list'; }
-                                });
+                            if (!nzViewing(res.latest_customer_incoming_conv_id)) {
+                                nzPlay('nzMsgAudio');
+                                if (typeof toastr !== 'undefined') {
+                                    toastr.success('{{ translate('messages.New message arrived') }}', {
+                                        CloseButton: true,
+                                        ProgressBar: true,
+                                        onclick: function(){ location.href = baseUrl + '/restaurant-panel/message/list'; }
+                                    });
+                                }
                             }
                             nzRefreshLists();
                         }
