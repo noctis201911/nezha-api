@@ -131,21 +131,21 @@ class DashboardController extends Controller
         // 排除「未上传凭证的待确认收款单」(那是等顾客付款, 商家无可为)。
         $timeout_alerts = [];
         try {
-            $open = AppModelsOrder::with(['offline_payments'])
+            $open = \App\Models\Order::with(['offline_payments'])
                 ->where('restaurant_id', $rid)
                 ->whereIn('order_status', ['pending', 'confirmed', 'processing'])
                 ->Notpos()->get();
             foreach ($open as $o) {
-                $phase = AppCentralLogicsNezhaOrderTimeout::phase($o);
+                $phase = \App\CentralLogics\NezhaOrderTimeout::phase($o);
                 if (! $phase) { continue; }
-                if ($phase === AppCentralLogicsNezhaOrderTimeout::PHASE_PROOF
-                    && ! AppCentralLogicsNezhaOrderTimeout::hasProofImage($o)) { continue; }
-                $d = AppCentralLogicsNezhaOrderTimeout::describe($o);
+                if ($phase === \App\CentralLogics\NezhaOrderTimeout::PHASE_PROOF
+                    && ! \App\CentralLogics\NezhaOrderTimeout::hasProofImage($o)) { continue; }
+                $d = \App\CentralLogics\NezhaOrderTimeout::describe($o);
                 if (! $d || ($d['severity'] ?? 'info') === 'info') { continue; }
                 $bucket = 'pending';
-                if ($phase === AppCentralLogicsNezhaOrderTimeout::PHASE_ACCEPT)    { $bucket = 'confirmed'; }
-                elseif ($phase === AppCentralLogicsNezhaOrderTimeout::PHASE_PREP)  { $bucket = 'processing'; }
-                elseif ($phase === AppCentralLogicsNezhaOrderTimeout::PHASE_PROOF) { $bucket = 'offline_pending'; }
+                if ($phase === \App\CentralLogics\NezhaOrderTimeout::PHASE_ACCEPT)    { $bucket = 'confirmed'; }
+                elseif ($phase === \App\CentralLogics\NezhaOrderTimeout::PHASE_PREP)  { $bucket = 'processing'; }
+                elseif ($phase === \App\CentralLogics\NezhaOrderTimeout::PHASE_PROOF) { $bucket = 'offline_pending'; }
                 $timeout_alerts[] = [
                     'order_id' => $o->id,
                     'minutes'  => (int) ($d['elapsed_minutes'] ?? 0),
