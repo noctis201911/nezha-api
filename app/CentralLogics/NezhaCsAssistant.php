@@ -823,6 +823,8 @@ FAQ;
     protected static function redactPii(string $s): string
     {
         $s = preg_replace('/[\w.+-]+@[\w-]+\.[\w.-]+/u', '[邮箱]', $s);
+        $s = preg_replace('/\bT[1-9A-HJ-NP-Za-km-z]{33}\b/', '[钱包地址]', $s);
+        $s = preg_replace('/\b0x[a-fA-F0-9]{40}\b/', '[钱包地址]', $s);
         $s = preg_replace('/\+?\d[\d().\-]{6,}\d/u', '[电话]', $s);
         return $s;
     }
