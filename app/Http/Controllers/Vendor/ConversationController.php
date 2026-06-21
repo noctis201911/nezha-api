@@ -52,7 +52,7 @@ class ConversationController extends Controller
 
 
         if($sender){
-            $conversations = Conversation::with(['sender','receiver', 'last_message'])->WhereUser($sender->id)->WhereUserType($tab);
+            $conversations = Conversation::with(['sender.user','receiver.user', 'last_message'])->WhereUser($sender->id)->WhereUserType($tab);
             if($request->query('key')) {
                 $key = explode(' ', $request->get('key'));
                 $conversations = $conversations->where(function($qu)use($key){

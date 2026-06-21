@@ -14,7 +14,7 @@
             </div>
             <div class="chat-user-info-content">
                 <h5 class="mb-0 d-flex justify-content-between">
-                    <span class=" mr-3">{{$user['f_name'].' '.$user['l_name']}}</span> <span
+                    <span class=" mr-3">{{ (optional($user->user)->f_name) ? trim($user->user->f_name.' '.$user->user->l_name) : trim($user['f_name'].' '.$user['l_name']) }}</span> <span
                         class="{{$unchecked ? 'badge badge-info' : ''}}">{{$unchecked ? $unchecked : ''}}</span>
                         <small>
                             {{-- {{ \App\CentralLogics\Helpers::time_format($conv->last_message?->created_at) }} --}}
