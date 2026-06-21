@@ -77,7 +77,7 @@
 
                     <!-- POS -->
 
-                    @if(\App\CentralLogics\Helpers::employee_module_permission_check('pos'))
+                    @if(false && \App\CentralLogics\Helpers::employee_module_permission_check('pos')) {{-- 哪吒停用·StackFood残留 --}}
                         <!-- POS -->
                         <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/pos')?'active':''}}">
                             <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{route('vendor.pos.index')}}" title="{{translate('Point Of Sale')}}"
@@ -242,6 +242,7 @@
                                         </span>
                                     </a>
                                 </li>
+                                @if(false){{-- 哪吒:堂食停用·仅外卖 --}}
                                 <li class="nav-item {{Request::is('restaurant-panel/order/list/dine_in')?'active':''}} @yield('dine_in')">
                                     <a class="nav-link " href="{{route('vendor.order.list',['dine_in'])}}"  title="{{translate('dine_in')}}">
                                         <span class="tio-circle nav-indicator-icon"></span>
@@ -253,6 +254,7 @@
                                         </span>
                                     </a>
                                 </li>
+                                @endif
                                 <li class="nav-item {{Request::is('restaurant-panel/order/list/refunded')?'active':''}} @yield('refunded')">
                                     <a class="nav-link " href="{{route('vendor.order.list',['refunded'])}}"  title="{{translate('Refunded')}}">
                                         <span class="tio-circle nav-indicator-icon"></span>
@@ -330,7 +332,7 @@
 
                     @endif
 
-                    @if(\App\CentralLogics\Helpers::employee_module_permission_check('subscription_order'))
+                    @if(false && \App\CentralLogics\Helpers::employee_module_permission_check('subscription_order')) {{-- 哪吒停用·StackFood残留 --}}
                         <li class="navbar-vertical-aside-has-menu {{ Request::is('restaurant-panel/order/subscription*') ? 'active' : '' }}">
                             <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{ route('vendor.order.subscription.index') }}" title="{{ translate('messages.subscription_orders') }}">
                                 <i class="tio-appointment nav-icon"></i>
@@ -465,7 +467,7 @@
                         </li>
                     @endif
 
-                    @if(\App\CentralLogics\Helpers::employee_module_permission_check('campaign'))
+                    @if(false && \App\CentralLogics\Helpers::employee_module_permission_check('campaign')) {{-- 哪吒停用·StackFood残留 --}}
                         <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/campaign*')?'active':''}}">
                             <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
                                title="{{translate('Campaign')}}">
@@ -605,7 +607,7 @@
 
                     <!-- Deliveryman Management-->
 
-                    @if(\App\CentralLogics\Helpers::employee_module_permission_check('deliveryman'))
+                    @if(false && \App\CentralLogics\Helpers::employee_module_permission_check('deliveryman')) {{-- 哪吒停用·StackFood残留 --}}
                         <li class="nav-item">
                             <small class="nav-subtitle"
                                    title="{{translate('messages.deliveryman_section')}}">{{translate('messages.deliveryman_management')}}</small>
@@ -659,7 +661,7 @@
                         </li>
                     @endif
 
-                    @if(\App\CentralLogics\Helpers::employee_module_permission_check('expense_report'))
+                    @if(false && \App\CentralLogics\Helpers::employee_module_permission_check('expense_report')) {{-- 哪吒停用·StackFood残留 --}}
                         <li class="navbar-vertical-aside-has-menu {{ Request::is('restaurant-panel/report/expense-report') ? 'active' : '' }}">
                             <a class="nav-link " href="{{ route('vendor.report.expense-report') }}" title="{{ translate('messages.expense_report') }}">
                                 <span class="tio-money nav-icon"></span>
@@ -668,7 +670,7 @@
                         </li>
                     @endif
 
-                    @if(\App\CentralLogics\Helpers::employee_module_permission_check('transaction'))
+                    @if(false && \App\CentralLogics\Helpers::employee_module_permission_check('transaction')) {{-- 哪吒停用·StackFood残留 --}}
                         <li class="navbar-vertical-aside-has-menu {{ Request::is('restaurant-panel/report/transaction-report') ? 'active' : '' }}">
                             <a class="nav-link " href="{{ route('vendor.report.day-wise-report') }}"
                                title="{{ translate('messages.transaction_report') }}">
@@ -704,12 +706,14 @@
                                         <span class="text-truncate text-capitalize">{{ translate('messages.Regular_order_report') }}</span>
                                     </a>
                                 </li>
+                                @if(false){{-- 哪吒:活动订单报表停用 --}}
                                 <li class="navbar-vertical-aside-has-menu {{ Request::is('restaurant-panel/report/campaign-order-report') ? 'active' : '' }}">
                                     <a class="nav-link " href="{{ route('vendor.report.campaign_order-report') }}" title="{{ translate('messages.Campaign_Order_Report') }}">
                                         <span class="tio-circle nav-indicator-icon"></span>
                                         <span class="text-truncate text-capitalize">{{ translate('messages.Campaign_Order_Report') }}</span>
                                     </a>
                                 </li>
+                                @endif
                             </ul>
                         </li>
                     @endif
@@ -724,7 +728,7 @@
                         </li>
                     @endif
 
-                    @if(\App\CentralLogics\Helpers::employee_module_permission_check('tax_report'))
+                    @if(false && \App\CentralLogics\Helpers::employee_module_permission_check('tax_report')) {{-- 哪吒停用·StackFood残留 --}}
                         <li class="navbar-vertical-aside-has-menu @yield('vendor_tax_report')">
                             <a class="nav-link " href="{{ route('vendor.report.vendorTax') }}"
                                title="{{ translate('messages.Tax_Report') }}">
@@ -782,7 +786,7 @@
                     @endif
 
 
-                @if(\App\CentralLogics\Helpers::employee_module_permission_check('business_plan'))
+                @if(false && \App\CentralLogics\Helpers::employee_module_permission_check('business_plan')) {{-- 哪吒停用·StackFood残留 --}}
                         <li class="navbar-vertical-aside-has-menu @yield('subscriberList')">
                             <a class="js-navbar-vertical-aside-menu-link nav-link"
                                href="{{route('vendor.subscriptionackage.subscriberDetail')}}"
