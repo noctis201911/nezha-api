@@ -920,7 +920,7 @@
                                         data-url="{{ route('vendor.order.status', ['id' => $order['id'], 'order_status' => 'confirmed']) }}"
                                         data-message="{{ translate('Change status to confirmed ?') }}"
                                         href="javascript:">
-                                        {{ translate('Confirm Order') }}
+                                        确认收款·接单
                                     </a>
                                 @elseif ($order['order_status'] == 'confirmed' || $order['order_status'] == 'accepted')
                                     <a class="btn btn-sm btn--primary order-status-change-alert"
