@@ -430,7 +430,7 @@
                                                         @if ($nzRefundRec->payment_channel === 'usdt')
                                                             <div class="form-group"><label style="font-size:13px;">USDT 退款交易哈希（选填，便于平台链上核对）</label><input type="text" name="refund_tx_hash" maxlength="120" class="form-control" style="border-radius:8px;" placeholder="0x... / TRC20 txid"></div>
                                                         @endif
-                                                        <div class="form-group mb-0"><label style="font-size:13px;">备注（选填）</label><textarea name="note" maxlength="255" rows="2" class="form-control" style="border-radius:8px;" placeholder="例如：已微信原路退回 / 已转回顾客支付宝"></textarea></div>
+                                                        <div class="form-group mb-0"><label style="font-size:13px;">备注（选填）</label><textarea name="note" maxlength="255" rows="2" class="form-control" style="border-radius:8px;" placeholder="例如：已按支付宝原路退回顾客 / USDT 已退回原地址"></textarea></div>
                                                     </div>
                                                     <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">取消</button><button type="submit" class="btn btn-success btn-sm">确认已退款</button></div>
                                                 </form>
