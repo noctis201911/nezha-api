@@ -624,19 +624,8 @@ class LocalLifeController extends Controller
 
     private function bannedWords(): array
     {
-        $raw = $this->setting('locallife_banned_words', null);
-        if ($raw === null || trim($raw) === '') {
-            return self::DEFAULT_BANNED_WORDS;
-        }
-        $parts = preg_split('/[\r\n,，]+/u', $raw);
-        $words = [];
-        foreach ($parts as $p) {
-            $p = trim($p);
-            if ($p !== '') {
-                $words[] = $p;
-            }
-        }
-        return $words ?: self::DEFAULT_BANNED_WORDS;
+        // 统一走共享筛查器（与本地生活商家录入同一套词库，避免两套词库漂移）
+        return \App\CentralLogics\NezhaContentScreen::words();
     }
 
     private function setting(string $key, $default)

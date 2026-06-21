@@ -52,3 +52,15 @@
 4. git commit 写清"L1变更:..."。
 
 相关: `docs/compliance/AML-policy.md` · `docs/compliance/business-flow.md` · `docs/compliance/data-protection.md`
+
+---
+
+## 附：本地生活/入驻「硬禁业务」机制定级〔2026-06-21〕
+
+「哪些业务坚决不能上线」已落成机制，定级如下（均为**强化**合规、不触 L1）：
+
+- 🟡 **L2 业务参数**：违禁词库 `business_settings.locallife_banned_words`（后台可增删，命中即拒）。改动只影响新发布内容、不回溯；改动留痕告知用户即可。
+- 🟢 **L3 实现/机制载体**：
+  - `local_life_categories.compliance_level` 三级（0 可上 / 1 需牌照人工审 / 2 硬禁）；等级 2 强制不上线、前端不渲染、不可启用。
+  - 共享筛查器 `app/CentralLogics/NezhaContentScreen.php`（UGC 发帖 + 商家录入共用）。
+- ⚠️ 与 L1 的关系：本机制**只拦内容/类目，不碰资金**，不改退款（L1-2/3）、制裁筛查（L1-6）、留存（L1-4）等既有红线机制。属于在 L1「平台不碰钱」之上对**业务准入**的额外护栏。

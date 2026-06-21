@@ -78,16 +78,23 @@
                             </div>
 
                             <div class="col-md-12">
-                                <div class="form-check mb-2">
-                                    <input type="checkbox" name="is_sensitive" value="1" class="form-check-input" id="is_sensitive" {{ $val('is_sensitive') ? 'checked' : '' }}>
-                                    <label class="form-check-label" for="is_sensitive">
-                                        <strong class="text-warning">敏感类目</strong> —— 移民 / 签证 / 按摩 等。勾选后：该类目下的<strong>用户发帖会被标红提示运营重点审核</strong>，并参与更严格的违禁词扫描。
-                                    </label>
+                                <div class="form-group mb-2">
+                                    <label class="input-label">合规等级 <span class="text-danger">*</span></label>
+                                    @php $lvl = (string) $val('compliance_level', '0'); @endphp
+                                    <select name="compliance_level" class="form-control">
+                                        <option value="0" {{ $lvl === '0' ? 'selected' : '' }}>0 · 可上线（普通类目，如租房 / 二手 / 包车 / 美发）</option>
+                                        <option value="1" {{ $lvl === '1' ? 'selected' : '' }}>1 · 需牌照 / 人工审（移民 · 签证 · 按摩 · 医疗等，可做信息墙但每个商家逐个人工核）</option>
+                                        <option value="2" {{ $lvl === '2' ? 'selected' : '' }}>2 · 硬禁（换汇 · 加密买卖 · 医美注射 · 性服务 · 赌博 · 制裁规避等，坚决不能上线）</option>
+                                    </select>
+                                    <small class="text-muted">
+                                        <strong class="text-warning">等级 1</strong>：发帖标红、加严违禁词扫描、商家逐个人工审。
+                                        <strong class="text-danger">等级 2（硬禁）</strong>：即使勾「启用」也<strong>强制不上线、前端不渲染</strong>，用于法律禁止 / 需牌照而平台无法核验的业务。
+                                    </small>
                                 </div>
                                 <div class="form-check">
                                     <input type="checkbox" name="status" value="1" class="form-check-input" id="status" {{ $val('status', $isEdit ? '' : '1') ? 'checked' : '' }}>
                                     <label class="form-check-label" for="status">
-                                        <strong>启用</strong> —— 启用后才显示在 H5 前端金刚区。停用只是隐藏，不删数据、不影响已发布帖子。
+                                        <strong>启用</strong> —— 启用后才显示在 H5 前端金刚区。停用只是隐藏，不删数据、不影响已发布帖子。（合规等级=硬禁时此项被忽略，强制停用）
                                     </label>
                                 </div>
                             </div>

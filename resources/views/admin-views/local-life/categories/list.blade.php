@@ -40,7 +40,7 @@
                         <th style="width:22%">类目名</th>
                         <th style="width:12%">归属频道</th>
                         <th style="width:12%">在用帖子</th>
-                        <th class="text-center" style="width:10%">敏感</th>
+                        <th class="text-center" style="width:10%">合规等级</th>
                         <th class="text-center" style="width:10%">状态</th>
                         <th style="width:18%">操作</th>
                     </tr>
@@ -56,10 +56,12 @@
                             <td><span class="badge badge-soft-secondary">{{ $cat->tab }}</span></td>
                             <td>{{ $postCounts[$cat->name] ?? 0 }} 条</td>
                             <td class="text-center">
-                                @if($cat->is_sensitive)
-                                    <span class="badge badge-warning"><i class="tio-warning"></i> 敏感</span>
+                                @if((int)$cat->compliance_level === 2)
+                                    <span class="badge badge-danger"><i class="tio-clear-circle"></i> 硬禁</span>
+                                @elseif((int)$cat->compliance_level === 1)
+                                    <span class="badge badge-warning"><i class="tio-warning"></i> 需牌照</span>
                                 @else
-                                    <span class="text-muted">—</span>
+                                    <span class="text-muted">可上</span>
                                 @endif
                             </td>
                             <td class="text-center">

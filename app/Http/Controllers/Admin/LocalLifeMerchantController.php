@@ -148,6 +148,14 @@ class LocalLifeMerchantController extends Controller
             'category.in'       => '类目不在允许范围（仅商家型类目）',
         ]);
 
+        // 硬禁业务词筛查：命中即拒（换汇/加密买卖/医美注射/性服务/赌博/制裁规避等）
+        $screenText = trim($request->name . "\n" . (string) $request->intro . "\n" . (string) $request->offer_text . "\n" . (string) $request->services);
+        if (\App\CentralLogics\NezhaContentScreen::hits($screenText)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'name' => '内容命中禁止经营 / 硬禁业务关键词，该商家不予上线。如确属正规持牌业务，请联系技术调整词库。',
+            ]);
+        }
+
         // 敏感类目自动置敏感旗标（移民/签证/按摩）
         $isSensitive = LocalLifeCategory::where('name', $request->category)->value('is_sensitive');
 
