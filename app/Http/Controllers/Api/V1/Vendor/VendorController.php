@@ -840,7 +840,7 @@ class VendorController extends Controller
     public function request_withdraw(Request $request)
     {
         // [哪吒 B方案 L1-1/L1-5 硬闸] 平台不碰钱、提现/打款腿已拔除,钱包余额永不入账;提现默认禁用。
-        if ((AppModelsBusinessSetting::where('key','nezha_withdraw_enabled')->first()?->value ?? 0) != 1) {
+        if ((\App\Models\BusinessSetting::where('key','nezha_withdraw_enabled')->first()?->value ?? 0) != 1) {
             return response()->json(['errors'=>[['code'=>'withdraw','message'=>'B方案下平台不经手提现,商家货款由顾客直付本人账户。']]],403);
         }
         $validator = Validator::make($request->all(), [
