@@ -73,8 +73,8 @@ class NezhaCsController extends Controller
         Cache::forget('business_settings_all_data');
 
         Toastr::success((int) $request->nezha_cs_ai_status === 1
-            ? translate('已保存。AI 在线客服已开启，顾客发客服消息会自动回复/转接。')
-            : translate('已保存。AI 在线客服已关闭，顾客客服消息不再自动处理。'));
+            ? '已保存。AI 在线客服已开启，顾客发客服消息会自动回复/转接。'
+            : '已保存。AI 在线客服已关闭，顾客客服消息不再自动处理。');
         return back();
     }
 
@@ -84,7 +84,7 @@ class NezhaCsController extends Controller
             'status' => 'closed',
             'updated_at' => now(),
         ]);
-        Toastr::success(translate('工单已标记为处理完成。'));
+        Toastr::success('工单已标记为处理完成。');
         return back();
     }
 }
