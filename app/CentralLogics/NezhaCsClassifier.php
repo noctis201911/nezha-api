@@ -23,6 +23,33 @@ class NezhaCsClassifier
         'overcharge', 'over charged', 'double charge', 'charged twice', 'compensation', 'human agent',
     ];
 
+    // 顾客表示「联系不上商家」→ 走升级处理（给电话+催商家邮件+工单），先于普通敏感判断。
+    protected static array $cantReach = [
+        '联系不上', '联系不到', '联系不了', '找不到商家', '商家不回', '商家没回', '商家不理',
+        '商家不接', '没人回我', '没人理我', '打不通', '打不进', '商家失联', '无法联系', '不回我消息',
+        "can't reach", 'cannot reach', 'no response from', 'merchant not responding', 'no reply from',
+    ];
+
+    public static function isCantReachMerchant(?string $text): bool
+    {
+        if (!$text) {
+            return false;
+        }
+        $t = mb_strtolower($text);
+        foreach (self::$cantReach as $kw) {
+            if (mb_stripos($t, mb_strtolower($kw)) !== false) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // 粗判是否中文（含 CJK）。用于确定性兜底话术的中/英选择。
+    public static function isChinese(?string $text): bool
+    {
+        return $text ? (bool) preg_match('/\p{Han}/u', $text) : true;
+    }
+
     public static function isSensitive(?string $text): bool
     {
         if (!$text) {
