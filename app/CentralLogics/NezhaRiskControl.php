@@ -143,6 +143,34 @@ class NezhaRiskControl
     }
 
     /**
+     * 服务端权威风控评估: 不信任客户端自由串 payment_channel(可伪报换更松阈值)。
+     * - 非线下支付(COD/钱包/数字支付/部分支付): 用 'other' 通道(法币阈值)评估。
+     * - 线下支付: 具体通道(USDT/法币)在下单后才由顾客提交凭证确定, 下单时服务端无法权威得知
+     *   → 对 rmb / usdt 两套阈值都评估, 取最严结果(reject>review>pass), 使伪报通道换不到更松阈值。
+     *   两套阈值相同则结果不变(零行为变化), 未来阈值分化也自动 fail-closed。
+     * @param array  $ctx           已含服务端权威 order_amount
+     * @param string $paymentMethod $order->payment_method (服务端值)
+     */
+    public static function evaluate_server_authoritative(array $ctx, string $paymentMethod): array
+    {
+        if ($paymentMethod !== 'offline_payment') {
+            $ctx['payment_channel'] = 'other';
+            return self::evaluate($ctx);
+        }
+        $rank = ['pass' => 0, 'review' => 1, 'reject' => 2];
+        $best = null;
+        foreach (['rmb', 'usdt'] as $ch) {
+            $c = $ctx;
+            $c['payment_channel'] = $ch;
+            $r = self::evaluate($c);
+            if ($best === null || ($rank[$r['action']] ?? 0) > ($rank[$best['action']] ?? 0)) {
+                $best = $r;
+            }
+        }
+        return $best;
+    }
+
+    /**
      * 命中后落库一条记录 (审计日志 + 进审核队列).
      * @return int 记录 id
      */

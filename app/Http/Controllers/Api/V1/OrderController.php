@@ -591,7 +591,8 @@ class OrderController extends Controller
         //   早评对诚实顾客已是权威; 低报者会在此处被真金额拦下。仍在事务内, 命中即记录+rollBack 不建单。
         $nezha_risk_ctx_authoritative = $nezha_risk_ctx;
         $nezha_risk_ctx_authoritative['order_amount'] = (float) $order->order_amount;
-        $nezha_risk_authoritative = \App\CentralLogics\NezhaRiskControl::evaluate($nezha_risk_ctx_authoritative);
+        // 哪吒[风控通道收口]: 不信任客户端 payment_channel(已在 ctx 内但此处忽略), 由服务端 order->payment_method 权威判定通道; 线下支付通道未定则对两套阈值取最严。
+        $nezha_risk_authoritative = \App\CentralLogics\NezhaRiskControl::evaluate_server_authoritative($nezha_risk_ctx_authoritative, (string) $order->payment_method);
         if ($nezha_risk_authoritative['action'] !== 'pass') {
             DB::rollBack();
             \App\CentralLogics\NezhaRiskControl::record($nezha_risk_ctx_authoritative, $nezha_risk_authoritative);

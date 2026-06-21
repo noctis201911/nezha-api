@@ -118,7 +118,7 @@
             "@php artisan key:generate --ansi"
         ],
         "test:redlines": [
-            "@php vendor/bin/phpunit tests/Feature/NezhaL1RedlineTest.php tests/Feature/NezhaIdorGuardTest.php"
+            "@php vendor/bin/phpunit tests/Feature/NezhaL1RedlineTest.php tests/Feature/NezhaIdorGuardTest.php tests/Feature/NezhaRiskChannelTest.php"
         ]
     },
     "extra": {
