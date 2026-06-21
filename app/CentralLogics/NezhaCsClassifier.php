@@ -200,7 +200,7 @@ class NezhaCsClassifier
         }
         $t = mb_strtolower($text);
         $aiWords = [
-            '人工智能', '大模型', '语言模型', 'ai助手', 'ai 助手', '智能助手', '机器人', '聊天机器人', '程序',
+            '人工智能', '大模型', '语言模型', 'ai助手', 'ai 助手', 'ai模型', 'ai 模型', 'ai客服', 'ai程序', 'ai技术', 'ai系统', '智能客服', '智能助手', '机器人', '聊天机器人', '程序',
             'deepseek', 'openai', 'chatgpt', 'gpt', '我是一个ai', '我是ai', '作为ai', '作为一个ai', '我是人工智能',
             'i am an ai', "i'm an ai", 'language model', 'as an ai', 'artificial intelligence', 'chatbot', 'a bot',
         ];
