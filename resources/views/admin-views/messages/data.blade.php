@@ -57,5 +57,5 @@
         </div>
     </div>
 @endif
-<script src="{{dynamicAsset('assets/admin')}}/js/view-pages/common.js"></script>
+{{-- common.js 由 admin 布局(layouts/admin/app.blade.php)统一加载; 此处不再重复引入——AJAX 重载本片段会二次注入致 jQuery-undefined + LinkValidator 重复声明 console 报错 (与 vendor 版同处理) --}}
 
