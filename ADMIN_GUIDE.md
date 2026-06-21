@@ -967,7 +967,7 @@ B 方案下平台不自营配送（2026-06-19 起配送由商家代叫 Yandex；
 **开关与配置（存 business_settings，改后必须清缓存 business_settings_all_data）：**
 - `nezha_cs_ai_status`：总开关（1 开 / 0 关）。当前=1。
 - `nezha_cs_merchant_relay_status`：商家转达开关（1=敏感时自动给商家发提醒；0=只引导顾客自己联系）。当前=1。
-- `nezha_cs_faq`：AI 能回答的资料文本（可改；空则用代码内置默认）。
+- `nezha_cs_faq`：AI 能回答的资料补充。主体知识库已改为读取仓库根的 `CUSTOMER_FAQ.md`（顾客版 FAQ，改这个文件即更新小哪的答疑内容，类似商家助手读 MERCHANT_GUIDE.md）；本设置项作为补充/临时覆盖，叠加在 CUSTOMER_FAQ.md 之上；两者都空时才回退代码内置默认。🔴 CUSTOMER_FAQ.md 务必保持精简（顾客端高频、每条消息都整份喂模型），且只写顾客视角内容、绝不放商家手册/内部信息。
 - `nezha_cs_ai_model` / `nezha_cs_ai_api_key` / `nezha_cs_ai_base_url`：模型 / 密钥 / 接口地址（默认 DeepSeek）。
 
 **临时开关命令（暂无后台页面，待加）：**
