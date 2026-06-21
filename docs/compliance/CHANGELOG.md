@@ -127,3 +127,5 @@
 **L1-7 边界(防过度留存)**：仅运营人工设/解(非举报自动触发)；目的限违规处理/配合执法；用尽目的应解除冻结让其正常到期清；举报人 PII(report detail)不随之冻结、仍按 180 天清。**仍不触 L1-1**(全程不碰钱)。
 
 **验证**：php -l 全过；迁移已跑(3 列存在)；dry-run 实测 legal_hold=1 帖不进清除名单、过期未冻结帖进清除名单；后台列表内部派发渲染 200、🔒 按钮与冻结徽章出现。
+### 追加〔2026-06-21〕隐私政策对齐本地生活留存
+隐私政策(正本 docs/legal/privacy-policy.md + 线上 data_settings.privacy_policy)「第5条 保留与删除」加 (5)：本地生活帖联系方式默认 30 天清除 + 依法/配合调查留证例外，使**用户可见的隐私政策**与实际数据处理(§5.3 + legal hold)完全一致(透明度义务)。线上旧值备份 `_privacy_policy_live_backup.html`；改后清 Laravel 缓存 `data_settings_privacy_policy_*`，nginx 60s API 缓存自动过期；真机 /privacy-policy 验证条款渲染、console 0。属用户可见法律文案对齐,不触 L1。
