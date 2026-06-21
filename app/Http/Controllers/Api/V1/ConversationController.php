@@ -210,6 +210,15 @@ class ConversationController extends Controller
             info($e->getMessage());
         }
 
+        // Nezha AI customer service: auto-reply / handoff for messages sent to platform support (admin).
+        if (($request->receiver_type == 'admin' || (isset($receiver_id) && $receiver_id == 0)) && isset($message)) {
+            try {
+                \App\CentralLogics\NezhaCsAssistant::handleCustomerMessage($conversation, $request?->user(), $message);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('nezha cs hook failed: ' . $e->getMessage());
+            }
+        }
+
         $messages = Message::with('order')->where(['conversation_id' => $conversation->id])->latest()->paginate($limit, ['*'], 'page', $offset);
 
         $conv = Conversation::with('sender','receiver','last_message.order')->find($conversation->id);
