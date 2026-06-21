@@ -132,7 +132,7 @@ class NezhaCsAssistant
             $result = self::callModel($text, $orderCtx);
         } catch (\Throwable $e) {
             Log::warning('nezha cs model call failed: ' . $e->getMessage());
-            self::softReply($conversation, $customerUser, null, 'error', null);
+            self::softReply($conversation, $customerUser, null, $text, 'error', null);
             return;
         }
 
