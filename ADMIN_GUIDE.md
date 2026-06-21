@@ -1044,3 +1044,6 @@ B 方案下平台不自营配送（2026-06-19 起配送由商家代叫 Yandex；
 商家在自己后台 /restaurant-panel/nezha-assistant 问操作问题 + 让 AI 帮写菜品文案。
 - 知识库（白名单）：`business_settings.nezha_cs_merchant_faq`（留空则用代码内置默认）。可后台命令编辑，改后清 `business_settings_all_data` 缓存。
 - 护栏：只依据知识库答；没列的功能说"没用到/联系平台"；🔴绝不提 StackFood、不照原系统逻辑解释、不教提现/钱包（哪吒平台不碰钱）。复用同一个 DeepSeek key。
+
+#### 22.1 商家助手知识库 = 商家手册（自动同步）
+商家助手的知识来源已改为**直接读取 `MERCHANT_GUIDE.md`（商家手册正本）**——你每次更新手册，助手回答即同步，无需另维护一份。`business_settings.nezha_cs_merchant_faq`（若设置）作为额外补充叠加在手册之后；两者都没有时回退到代码内置默认。停用功能（钱包/提现/POS/配送员/堂食/订阅/Campaign/财务报表）有强制兜底：即使手册提到也一律答"没启用、不用管"。
