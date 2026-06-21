@@ -551,6 +551,15 @@ class OrderLogic
         $symbol = BusinessSetting::where('key', 'currency_symbol')->first()?->value ?? '֏';
         $method = $order->payment_method;
         $method_name = trim(str_replace('_', ' ', (string) $method));
+        // 哪吒: method_name 缺失时不露英文(如 offline payment), 给中文兜底；真实 method_name 仍优先(下方 offline 块覆盖)
+        $method_fallback_zh = [
+            'offline_payment'  => '线下转账收款',
+            'cash_on_delivery' => '货到付款',
+            'digital_payment'  => '在线支付',
+        ];
+        if (isset($method_fallback_zh[$method])) {
+            $method_name = $method_fallback_zh[$method];
+        }
 
         $masked_fields = [];
         if ($method === 'offline_payment' && isset($order->offline_payments) && $order->offline_payments) {
