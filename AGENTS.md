@@ -52,3 +52,4 @@
 
 
 - [x] Claude(后台客服语音窗口) ✅已完成(本次提交): 商家后台新增「客服(平台/admin)来新消息」专用提示音(叮咚铃+低音人声 new-admin-message-voice.wav),与顾客「新消息」音区分。改 Vendor/ConversationController::live_status(拆顾客/客服两条最新id)+vendor app.blade.php(加nzAdminMsgAudio+轮询分流+蓝色toast「客服来新消息了」)+MERCHANT_GUIDE。未碰他窗WIP(CS assistant/notification_preferences等)（2026-06-21）
+- [x] Claude(AI在线客服窗口) ✅增量B已完成上线: 转人工改为「引导顾客联系对应商家」(去掉MVP无人手时的假承诺)+商家模板化转达(固定模板·30min限频·开关nezha_cs_merchant_relay_status, 以顾客身份发起+FCM/Telegram通知商家)+人设更口语化。两开关均已开(nezha_cs_ai_status=1/relay=1)生效。L1-1合规(只路由通信不碰钱)。真跑测试账号user6验证(FAQ自动答/退款引导找川味轩+转达店6/越狱限频不重复转达)全过,测试数据已清。未碰他窗WIP（2026-06-21）
