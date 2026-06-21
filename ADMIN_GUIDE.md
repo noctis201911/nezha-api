@@ -932,3 +932,20 @@ B 方案下平台不自营配送（2026-06-19 起配送由商家代叫 Yandex；
 5. 拿不准 → 先不上，记下来问平台负责人 / 律师。
 
 > ⚠️ 若将来开启商家自助注册，需把同一套关键词筛查接到注册入口（`VendorLoginController::register`）——当前自助注册关闭，故未接。
+
+## 21. AI 在线客服（小哪）
+顾客在 H5「联系客服」发消息后，系统自动处理：
+- 通用问题（营业范围 / 怎么下单 / 支付方式 / 订单状态）→ AI 以真人语气自动回答。
+- 涉及钱 / 退款 / 投诉 / 纠纷 → 不自动答，引导顾客直接联系对应商家（MVP 无客服人手，平台只协调），并可自动给商家捎一条提醒。
+
+**开关与配置（存 business_settings，改后必须清缓存 business_settings_all_data）：**
+- `nezha_cs_ai_status`：总开关（1 开 / 0 关）。当前=1。
+- `nezha_cs_merchant_relay_status`：商家转达开关（1=敏感时自动给商家发提醒；0=只引导顾客自己联系）。当前=1。
+- `nezha_cs_faq`：AI 能回答的资料文本（可改；空则用代码内置默认）。
+- `nezha_cs_ai_model` / `nezha_cs_ai_api_key` / `nezha_cs_ai_base_url`：模型 / 密钥 / 接口地址（默认 DeepSeek）。
+
+**临时开关命令（暂无后台页面，待加）：**
+把 X 改成 0 或 1：
+`node nz.js run "cd /www/wwwroot/api.nezha.am && php artisan tinker --execute='\Illuminate\Support\Facades\DB::table(\"business_settings\")->updateOrInsert([\"key\"=>\"nezha_cs_ai_status\"],[\"value\"=>\"X\"]); \Illuminate\Support\Facades\Cache::forget(\"business_settings_all_data\");'"`
+
+说明：AI 绝不承诺退款 / 不碰钱；对话审计在 `nezha_cs_logs`（只记分类/动作/模型/tokens，无消息正文、无 PII）。

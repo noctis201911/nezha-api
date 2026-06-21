@@ -94,3 +94,10 @@
 
 **验证**：php -l 全过；后台类目 list/create 内部派发渲染 200 且「合规等级」下拉出现；NezhaContentScreen 实测 换汇/医美注射/承兑usdt/包过签 BLOCK、正规美发/租房/积分兑换券/日本代购 不误伤；activeNames 仍 8 个无回归。
 **未覆盖（需运营/真人）**：后台真人点「新建类目选等级2+勾启用」确认强制停用提示；后台真人录入命中词商家看到拒绝提示；前端真机看硬禁类目不渲染。
+
+### 2026-06-21 AI 在线客服上线（L3 实现 + L1-1 / L1-7 合规说明）
+新增 H5 内置 AI 客服（`app/CentralLogics/NezhaCsAssistant.php` + `NezhaCsClassifier.php`），DeepSeek 驱动，接入 `Api/V1/ConversationController::messages_store` 的 admin 分支。
+- **L1-1（平台不碰钱）**：AI 绝不承诺退款、不谈金额、不处理资金。敏感词（退款/钱/投诉/纠纷等）确定性命中即不经模型，转为引导顾客直接联系商家。给商家的「转达」是固定模板的通信路由（不含金额/承诺、AI 不参与撰写），属 B 方案"平台只协调"，不构成代收代付，不触 L1-1。
+- **L1-7（PII / 数据保护）**：喂给 DeepSeek 的订单上下文已脱敏（仅状态/取餐号/餐厅名，无地址/电话/金额）；审计表 `nezha_cs_logs` 只记分类/动作/模型/tokens，不存消息正文（无 PII 复制）。数据出境提示：低风险 FAQ 消息经 DeepSeek（中国境内）处理、PII 面小；含 PII 的敏感问题不喂模型。
+- **越权 / 提示注入**：AI 进程不含任何密钥/后台信息（无从泄露）；输出过滤防吐疑似密钥、防自曝 AI 身份；商家转达 30 分钟限频防刷屏/武器化。
+- **开关**：`nezha_cs_ai_status` / `nezha_cs_merchant_relay_status`（L2 真实影响开关，当前均已开）。
