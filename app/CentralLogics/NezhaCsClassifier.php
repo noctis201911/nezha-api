@@ -23,6 +23,32 @@ class NezhaCsClassifier
         'overcharge', 'over charged', 'double charge', 'charged twice', 'compensation', 'human agent',
     ];
 
+    // 翻译诉求：中文顾客↔本地骑手沟通。最高优先（招牌功能），不被敏感/转商家抢走。
+    protected static array $translate = [
+        '翻译', '翻成', '翻一下', '帮我翻', '帮翻', '这句话什么意思', '这是什么意思', '什么意思啊', '啥意思',
+        '骑手说', '司机说', '配送员说', '送货的说', '送餐员说', '骑手发来', '骑手发的',
+        '怎么跟骑手说', '帮我跟骑手说', '帮我回复骑手', '帮我告诉骑手', '转告骑手', '跟骑手说', '给骑手说', '回复骑手',
+        '用亚美尼亚语', '用俄语', '用英语', '亚美尼亚语怎么', '俄语怎么', '英语怎么', '当地语言怎么', 'translate',
+    ];
+
+    public static function isTranslationRequest(?string $text): bool
+    {
+        if (!$text) {
+            return false;
+        }
+        // 含亚美尼亚字母 → 几乎必是中文顾客粘贴骑手的亚美尼亚语消息求翻译。
+        if (preg_match('/[\x{0530}-\x{058F}]/u', $text)) {
+            return true;
+        }
+        $t = mb_strtolower($text);
+        foreach (self::$translate as $kw) {
+            if (mb_stripos($t, mb_strtolower($kw)) !== false) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // 顾客表示「联系不上商家」→ 走升级处理（给电话+催商家邮件+工单），先于普通敏感判断。
     protected static array $cantReach = [
         '联系不上', '联系不到', '联系不了', '找不到商家', '商家不回', '商家没回', '商家不理',

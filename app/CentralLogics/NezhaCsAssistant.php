@@ -44,7 +44,23 @@ class NezhaCsAssistant
             return;
         }
 
-        // 0) 顾客联系不上商家 → 升级处理：给商家电话 + 自动催商家邮件 + 留工单 + 通知运营。
+        // 0) 翻译模式（中文顾客 ↔ 本地骑手沟通）——最高优先，招牌功能，不被其它逻辑抢走。
+        if (NezhaCsClassifier::isTranslationRequest($text)) {
+            try {
+                $t = self::translate($text);
+            } catch (\Throwable $e) {
+                Log::warning('nezha cs translate failed: ' . $e->getMessage());
+                $t = null;
+            }
+            if ($t !== null && trim($t) !== '') {
+                self::reply($conversation, $customerUser, $t, 'translate', null);
+            } else {
+                self::softReply($conversation, $customerUser, null, $text, 'soft', null);
+            }
+            return;
+        }
+
+        // 0.5) 顾客联系不上商家 → 升级处理：给商家电话 + 自动催商家邮件 + 留工单 + 通知运营。
         if (NezhaCsClassifier::isCantReachMerchant($text)) {
             self::cantReachMerchant($conversation, $customerUser, $text);
             return;
@@ -524,6 +540,62 @@ class NezhaCsAssistant
         return $parsed;
     }
 
+    // 翻译模式：中文顾客 ↔ 本地骑手。返回给顾客直接看的译文（纯文本，非 JSON）。失败返回 null。
+    protected static function translate(string $text): ?string
+    {
+        $key = Helpers::get_business_settings('nezha_cs_ai_api_key');
+        $base = rtrim((string) (Helpers::get_business_settings('nezha_cs_ai_base_url') ?: 'https://api.deepseek.com'), '/');
+        $model = Helpers::get_business_settings('nezha_cs_ai_model') ?: 'deepseek-chat';
+        if (!$key) {
+            return null;
+        }
+
+        $payload = [
+            'model' => $model,
+            'messages' => [
+                ['role' => 'system', 'content' => self::translatePrompt()],
+                ['role' => 'user', 'content' => $text],
+            ],
+            'temperature' => 0.3,
+            'max_tokens' => 800,
+            'stream' => false,
+        ];
+
+        $ch = curl_init($base . '/chat/completions');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_TIMEOUT => 20,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $key],
+            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+        ]);
+        $raw = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($raw === false || $code >= 400) {
+            return null;
+        }
+        $json = json_decode($raw, true);
+        $content = $json['choices'][0]['message']['content'] ?? '';
+        return trim((string) $content) !== '' ? trim((string) $content) : null;
+    }
+
+    protected static function translatePrompt(): string
+    {
+        return <<<SYS
+你是「哪吒外卖」的客服小哪，正在帮说中文的顾客和亚美尼亚本地的骑手/配送员沟通、做翻译。你是真人客服，绝不自称 AI。称呼对方一律用"您"，不要说"顾客"。
+
+规则：
+1. 如果对方发来的是外语（亚美尼亚语 / 俄语 / 英语等），把它准确翻译成中文，并用一句话点明骑手大概想表达什么（比如"骑手在问您具体在哪栋楼"）。
+2. 如果对方用中文说了想对骑手说的话，把它翻译成骑手能看懂的语言：默认给【亚美尼亚语】，再另起一行附【俄语】，让对方挑一条直接复制发给骑手。译文要自然、口语、礼貌。
+3. 只做翻译和帮忙沟通这件事，简洁亲切，别扯别的。如果对方只是问"能不能翻译"，就热情地说可以、请把要翻译的内容发过来。
+
+把顾客要发给骑手的话翻译出来时，用这个格式（每条单独一行，方便复制）：
+亚美尼亚语：<译文>
+俄语：<译文>
+SYS;
+    }
+
     protected static function systemPrompt(string $faq, string $orderCtx): string
     {
         $ctx = $orderCtx !== ''
@@ -567,6 +639,7 @@ SYS;
 - 怎么联系商家：在【我的订单】找到对应订单，点『联系商家』即可直接和店家沟通。
 - 退款：平台不经手货款，退款需要联系下单的商家协商、按原路退回（在订单页『联系商家』）。
 - 订单号 / 取餐号：下单后在订单页可以查看。
+- 翻译帮助：可以帮您和不懂中文的骑手/配送员沟通——把骑手发来的外语发给我，我翻成中文；您把想说的话用中文发给我，我翻成当地语言让您复制发给骑手。直接把内容发给我就行。
 FAQ;
     }
 
