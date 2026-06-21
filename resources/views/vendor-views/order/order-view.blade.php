@@ -407,7 +407,7 @@
                                         </p>
                                         <div style="font-size:13px;color:#333;line-height:1.9;">
                                             <div>应退金额：<strong>{{ Helpers::format_currency($nzRefundRec->refund_amount) }}</strong></div>
-                                            <div>原付款渠道：<strong>@if ($nzRefundRec->payment_channel === 'usdt') USDT（{{ $nzRefundRec->chain ?? '链上' }}）@elseif ($nzRefundRec->payment_channel === 'rmb') 微信 / 支付宝（人民币）@else 见付款凭证 @endif</strong></div>
+                                            <div>原付款渠道：<strong>@if ($nzRefundRec->payment_channel === 'usdt') USDT（{{ $nzRefundRec->chain ?? '链上' }}）@elseif ($nzRefundRec->payment_channel === 'rmb') 支付宝（人民币）@else 见付款凭证 @endif</strong></div>
                                             @if ($nzRefundRec->payment_channel === 'usdt')
                                                 <div style="word-break:break-all;">须退回的原地址：<strong>{{ $nzRefundRec->locked_to_address ?: '原始交易反查未果，请按付款凭证里的来源地址退回' }}</strong></div>
                                             @endif
