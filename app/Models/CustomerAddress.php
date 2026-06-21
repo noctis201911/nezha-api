@@ -8,7 +8,7 @@ use App\Traits\MasksSensitiveAttributes;
 
 class CustomerAddress extends Model
 {
-    use MasksSensitiveAttributes;
+    use MasksSensitiveAttributes, \App\Traits\OwnedByCustomer;
     protected $casts = [
         'user_id' => 'integer',
         'zone_id' => 'integer',

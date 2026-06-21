@@ -13,7 +13,7 @@ use Modules\TaxModule\Entities\OrderTax;
 
 class Order extends Model
 {
-    use ReportFilter,HasFactory ,MasksSensitiveAttributes;
+    use ReportFilter,HasFactory ,MasksSensitiveAttributes,\App\Traits\OwnedByCustomer;
     protected $guarded = ['id'];
     protected $casts = [
         'order_amount' => 'float',

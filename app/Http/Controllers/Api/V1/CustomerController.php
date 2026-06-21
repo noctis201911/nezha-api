@@ -644,7 +644,8 @@ class CustomerController extends Controller
         CustomerAddress::where('user_id', $userId)
             ->update(['is_default' => 0]);
 
-        CustomerAddress::where('id', $addressId)
+        // 哪吒[IDOR 加固·子项A]: 即便上方 addressExists 已校验归属, 这里也按归属圈定再写, 杜绝裸 by-id 写
+        CustomerAddress::forCustomer($userId)->where('id', $addressId)
             ->update(['is_default' => 1]);
 
         return response()->json([
