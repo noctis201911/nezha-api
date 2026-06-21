@@ -52,7 +52,7 @@ class MerchantLeadController extends Controller
     private function notifyOperator($lead)
     {
         try {
-            $to = 'noctis201914@gmail.com';
+            $to = 'support@nezha.am'; // 固定发到官方邮箱(写死,不依赖后台可空设置)
             $body = "新的商家入驻申请\n\n"
                 . "店铺名称：{$lead->store_name}\n"
                 . "联系人：{$lead->contact_name}\n"
