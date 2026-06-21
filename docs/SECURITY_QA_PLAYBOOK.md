@@ -129,4 +129,4 @@
   - **方法级粒度局限(诚实)**:方法体里别处恰好有归属 token 时,本方法内的裸查询不会被拦(false negative)。它拦的是"整段方法毫无归属概念"的新代码;语义级精确鉴权仍需人工审本轴。
   - 已加固:`CustomerController::set_default_address` 末句裸 `CustomerAddress::where('id')->update` → `forCustomer($userId)->where('id')`。Order/Cart/CustomerAddress 已 use OwnedByCustomer,其余顾客归属模型可增量采用。
 - **轴E place_order 前端 order_amount 已彻底不读**:删早赋值(原本被服务端重算覆盖),校验改 nullable;真实下单谎报 order_amount=1 → 存库 4500 验证客户端值被丢弃。
-- **新开放残留(待用户批准)**:`NezhaRiskController::build_context` 仍读 `$request->order_amount` 做 L2 风控阈值 → 顾客低报可绕单笔/大额风控(订单记录金额本身安全,此为风控入参的客户端信任缺口)。修法(金额重算后复评 / 早算服务端金额喂风控)待用户拍板,改 L2 风控行为前留痕告知。
+- **风控入参客户端信任缺口(已修 e3a1575)**:`NezhaRiskController::build_context` 早评读客户端 `$request->order_amount`,顾客低报可绕单笔/大额风控。修法:place_order 在服务端金额重算定型后(save前·事务内)用权威金额**复评一次风控**,命中 reject/review 即 rollBack+记审计(record 在 rollBack 后调用防审计被回滚)+返回 risk_reject/risk_review。**真单实测**:低报 order_amount=1 + 真实 qty25=112500>单笔限110437 → risk_reject「超过单笔上限」(客户端值1不可能触发=只能来自复评)·未建单·审计持久; 正常 qty1=4500 下单成功(不误伤)。仅改"用哪个金额评估"(客户端→服务端权威),阈值/开关未变。
