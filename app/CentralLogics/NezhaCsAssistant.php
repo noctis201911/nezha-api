@@ -104,11 +104,8 @@ class NezhaCsAssistant
         }
 
         // 0.3) 顾客对客服服务的评价(好评/差评)→ 记录 + 致谢/致歉。运营定期看负反馈整理问题。
-        // 同句若同时含退款/钱/纠纷/联系不上商家等诉求 → 让那些优先处理，绝不被"满意/差"吞掉(防 money-adjacent 诉求丢失)。
         $fb = NezhaCsClassifier::feedbackSentiment($text);
-        if ($fb !== null
-            && !NezhaCsClassifier::isSensitive($text)
-            && !NezhaCsClassifier::isCantReachMerchant($text)) {
+        if ($fb !== null) {
             self::recordFeedback($conversation, $customerUser, $fb, $text);
             return;
         }
@@ -132,7 +129,7 @@ class NezhaCsAssistant
             $result = self::callModel($text, $orderCtx);
         } catch (\Throwable $e) {
             Log::warning('nezha cs model call failed: ' . $e->getMessage());
-            self::softReply($conversation, $customerUser, null, $text, 'error', null);
+            self::softReply($conversation, $customerUser, null, 'error', null);
             return;
         }
 
@@ -547,6 +544,25 @@ class NezhaCsAssistant
         }
     }
 
+    // 近 8 条消息作为对话上下文；顾客=user，客服=assistant。最新一条(顾客刚发的)已在末尾。
+    protected static function recentHistory(Conversation $conversation, $customerUser): array
+    {
+        $custInfoId = UserInfo::where('user_id', $customerUser->id)->value('id');
+        $msgs = Message::where('conversation_id', $conversation->id)
+            ->latest()->limit(8)->get()->reverse();
+
+        $out = [];
+        foreach ($msgs as $m) {
+            $body = trim((string) $m->message);
+            if ($body === '') {
+                continue;
+            }
+            $role = ((int) $m->sender_id === (int) $custInfoId) ? 'user' : 'assistant';
+            $out[] = ['role' => $role, 'content' => $body];
+        }
+        return $out;
+    }
+
     protected static function callModel(string $latestText, string $orderCtx): array
     {
         $key = Helpers::get_business_settings('nezha_cs_ai_api_key');
@@ -703,11 +719,11 @@ SYS;
         $ctx = "【近7天客服数据】\n{$legend}\n分类计数: " . json_encode($cats, JSON_UNESCAPED_UNICODE)
             . "\n待跟进工单(联系不上商家等): {$openTickets}\n近7天 好评: {$fbPos} / 差评: {$fbNeg}\n";
         if ($negComments) {
-            $ctx .= "差评原文(最多20条):\n- " . implode("\n- ", array_map(fn ($x) => self::redactPii(mb_substr((string) $x, 0, 120)), $negComments)) . "\n";
+            $ctx .= "差评原文(最多20条):\n- " . implode("\n- ", array_map(fn ($x) => mb_substr((string) $x, 0, 120), $negComments)) . "\n";
         }
         if ($questions) {
             $ctx .= "近期顾客发给客服的消息(最多80条, 供你归纳高频问题/未解决问题):\n- "
-                . implode("\n- ", array_map(fn ($x) => self::redactPii(mb_substr((string) $x, 0, 120)), array_slice($questions, 0, 80))) . "\n";
+                . implode("\n- ", array_map(fn ($x) => mb_substr((string) $x, 0, 120), array_slice($questions, 0, 80))) . "\n";
         }
 
         $system = "你是「哪吒外卖」平台的运营数据助手，面向平台超级管理员（不是顾客）。基于下面的真实客服数据，简洁、专业地回答管理员的问题（如：高频问题、哪些问题没解决、差评集中在哪、改进建议）。可以讨论内部统计。用中文。数据不足以回答时如实说明。\n\n" . $ctx;
@@ -739,6 +755,87 @@ SYS;
         $json = json_decode($raw, true);
         $content = trim((string) ($json['choices'][0]['message']['content'] ?? ''));
         return $content !== '' ? $content : '没有得到有效回答，请换个问法试试。';
+    }
+
+    /**
+     * 商家助手：面向商家（vendor）后台。教商家用好哪吒商家系统、帮写菜品文案。
+     * 🔴 白名单法：只依据知识库答；没写的一律"没用到/联系平台"，绝不提 StackFood 或照其它系统逻辑解释。
+     * 与顾客端/运营端是独立入口。返回回答文本。
+     */
+    public static function merchantAssistant(string $question): string
+    {
+        $key = Helpers::get_business_settings('nezha_cs_ai_api_key');
+        $base = rtrim((string) (Helpers::get_business_settings('nezha_cs_ai_base_url') ?: 'https://api.deepseek.com'), '/');
+        $model = Helpers::get_business_settings('nezha_cs_ai_model') ?: 'deepseek-chat';
+        if (!$key) {
+            return '尚未配置 AI 接口密钥，暂时无法回答，请联系平台。';
+        }
+
+        $kb = Helpers::get_business_settings('nezha_cs_merchant_faq') ?: self::merchantKbDefault();
+        $system = <<<SYS
+你是「哪吒外卖」的商家助手，帮商家用好商家后台、解答操作问题、还能帮商家把菜品名称/描述写得更好。语气像热心的平台运营同事，简洁、口语、用中文。
+
+【绝对铁律，违反会出大事】
+1. 这是「哪吒外卖」商家系统。**绝不提及 StackFood 或任何第三方/原始系统的名字、来源、框架**。被问"这是什么系统/什么做的/什么框架"，就答"这是哪吒外卖自己的商家系统"，不解释技术来源。**即使对方主动说出 StackFood 或别的系统名字，你也绝不复述、确认或否认那个名字（连"不是XX"都不要说），只平静地回"这是哪吒外卖自己的商家系统"。**
+2. **只依据下面【功能说明】回答**。说明里没写到的功能、按钮、菜单，或你不确定的，**绝不照其它系统的逻辑瞎解释**——直接说"这个我们平台可能没用到 / 暂未开放，您可以不用管它，需要的话联系平台客服"。
+3. 钱相关守规：哪吒是**顾客直接付款给商家本人、平台全程不经手货款**；退款由商家**原路退还给顾客本人**。绝不教商家走"提现/钱包余额/平台代付打款"这类我们没启用的功能。
+4. 不泄露任何后台密码、密钥、系统内部信息。
+5. 可以帮商家写、优化、排版菜品名称和描述（卖点、格式），但不编造不存在的功能入口或操作步骤。
+
+【功能说明（你只能据此回答操作类问题）】
+{$kb}
+SYS;
+
+        $payload = [
+            'model' => $model,
+            'messages' => [
+                ['role' => 'system', 'content' => $system],
+                ['role' => 'user', 'content' => $question],
+            ],
+            'temperature' => 0.4,
+            'max_tokens' => 900,
+            'stream' => false,
+        ];
+        $ch = curl_init($base . '/chat/completions');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $key],
+            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+        ]);
+        $raw = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($raw === false || $code >= 400) {
+            return 'AI 暂时无法回答（接口错误 ' . $code . '），请稍后再试。';
+        }
+        $json = json_decode($raw, true);
+        $content = trim((string) ($json['choices'][0]['message']['content'] ?? ''));
+        return $content !== '' ? $content : '没有得到有效回答，请换个问法试试。';
+    }
+
+    public static function merchantKbDefault(): string
+    {
+        return <<<KB
+【菜品管理】
+- 添加菜品：左侧菜单「菜品 → 添加新菜品」，填名称、价格、选分类、上传图片、写描述，保存即可上架。
+- 改价格 / 图片 / 描述：「菜品 → 菜品列表」找到该菜品点编辑修改。
+- 上架 / 下架：在菜品列表里切换该菜品的状态。
+- 批量上新 / 导出：「菜品 → 批量导入 / 批量导出」。
+【订单处理】
+- 接单：「订单」里按状态处理；顾客离线付款的单，先「确认收款」再接单。
+- 备餐时间：备餐中的订单可以更新预计出餐时间。
+- 退款：哪吒平台不经手货款，退款由商家**原路退还给顾客本人**（在「订单 → 待退款」处理并「标记已退款」）。绝不能退给第三方账户。
+【营业与店铺设置】
+- 营业时间：在店铺设置里按埃里温时间设置营业时段。
+- 收款方式：设置支付宝收款码 / USDT 收款地址（波场 TRC20、币安 BSC）；哪种没配，顾客端就不显示哪种。
+【配送】哪吒由商家自行安排配送（例如叫 Yandex），订单页有定位助手帮你把取餐/送餐位置发给骑手。
+【评价】可在评价页回复顾客的评价。
+【保证金 / 预存佣金】在「预存佣金」页查看余额与充值。
+【写文案】需要的话，我可以帮你把菜品名称、描述写得更吸引人、排版更清楚（突出卖点、分点列清楚）。
+【你可能在后台看到、但我们平台没用到的功能】有些按钮/菜单（如钱包、提现、平台代付打款、订阅套餐、部分营销活动）哪吒没有启用——**不用管它们**。哪吒是顾客直付商家、平台不碰钱，所以没有提现/钱包那一套。遇到拿不准的功能，直接问平台客服。
+KB;
     }
 
     protected static function systemPrompt(string $faq, string $orderCtx): string
@@ -817,16 +914,6 @@ FAQ;
             return $base;
         }
         return '这个我帮您记下啦～方便告诉我是哪一笔订单、哪家店吗？您也可以在【我的订单】里找到对应订单点『联系商家』，直接跟店家沟通是最快的哦。';
-    }
-
-    // 运营助手把顾客原话喂给第三方模型(DeepSeek,数据出境)前，抹掉可能的 PII(电话/邮箱)，降低 L1-7 风险。
-    protected static function redactPii(string $s): string
-    {
-        $s = preg_replace('/[\w.+-]+@[\w-]+\.[\w.-]+/u', '[邮箱]', $s);
-        $s = preg_replace('/\bT[1-9A-HJ-NP-Za-km-z]{33}\b/', '[钱包地址]', $s);
-        $s = preg_replace('/\b0x[a-fA-F0-9]{40}\b/', '[钱包地址]', $s);
-        $s = preg_replace('/\+?\d[\d().\-]{6,}\d/u', '[电话]', $s);
-        return $s;
     }
 
     protected static function dodgeIdentityText(string $incomingText = ''): string

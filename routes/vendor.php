@@ -48,6 +48,10 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
         Route::get('/reviews', [ReviewController::class, 'index'])->name('reviews')->middleware(['module:reviews' ,'subscription:reviews']);
         Route::post('/store-reply/{id}', [ReviewController::class, 'update_reply'])->name('review-reply')->middleware(['module:reviews' ,'subscription:reviews']);
 
+        // 哪吒 商家助手 (AI)
+        Route::get('nezha-assistant', [\App\Http\Controllers\Vendor\NezhaAssistantController::class, 'index'])->name('nezha-assistant.index');
+        Route::post('nezha-assistant/ask', [\App\Http\Controllers\Vendor\NezhaAssistantController::class, 'ask'])->name('nezha-assistant.ask');
+
 
         Route::group(['prefix' => 'pos', 'as' => 'pos.'], function () {
             Route::post('variant_price', [POSController::class, 'variant_price'])->name('variant_price');

@@ -67,6 +67,14 @@
                         </a>
                     </li>
 
+                    <!-- 哪吒 商家助手 -->
+                    <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/nezha-assistant*')?'active':''}}">
+                        <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{route('vendor.nezha-assistant.index')}}" title="{{translate('哪吒商家助手')}}">
+                            <i class="tio-chat nav-icon"></i>
+                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{translate('哪吒商家助手')}}</span>
+                        </a>
+                    </li>
+
                     <!-- POS -->
 
                     @if(\App\CentralLogics\Helpers::employee_module_permission_check('pos'))
