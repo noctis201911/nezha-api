@@ -488,10 +488,12 @@
 
                                             $deleted_food = $detail->food == null ? 1 : 0;
                                             $detail->food = json_decode($detail->food_details, true);
-                                            $food = \App\Models\Food::where(['id' => $detail?->food['id']])
-                                                ->with('storage')
-                                                ->select('id', 'image')
-                                                ->first();
+                                            // 哪吡修(防 500): food_details 快照为空/缺 id(历史已删菜品/脏数据)时按未找到处理, 避免 null['id']
+                                            if (empty($detail->food) || !isset($detail->food['id'])) {
+                                                $deleted_food = 1; $food = null;
+                                            } else {
+                                                $food = \App\Models\Food::where(['id' => $detail->food['id']])->with('storage')->select('id', 'image')->first();
+                                            }
                                             ?>
                                             <!-- Media -->
                                             <tr>
@@ -588,9 +590,12 @@
                                             <?php
                                             $deleted_food = $detail->campaign == null ? 1 : 0;
                                             $detail->campaign = json_decode($detail->food_details, true);
-                                            $campaign = \App\Models\ItemCampaign::where(['id' => $detail->campaign['id']])
-                                                ->select('id', 'image')
-                                                ->first();
+                                            // 哪吡修(防 500): 快照为空/缺 id 时按未找到处理, 避免 null['id']
+                                            if (empty($detail->campaign) || !isset($detail->campaign['id'])) {
+                                                $deleted_food = 1; $campaign = null;
+                                            } else {
+                                                $campaign = \App\Models\ItemCampaign::where(['id' => $detail->campaign['id']])->select('id', 'image')->first();
+                                            }
                                             ?>
 
                                             <tr>
