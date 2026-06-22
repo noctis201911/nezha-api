@@ -62,6 +62,7 @@
 
 - [x] Claude(后端部署边界改造窗口·架构债根治) 正在做【后端发布边界 Capistrano-lite·阶段1a】: 建 /www/wwwroot/api-deploy/{shared,releases}+current软链、storage 与 .env 抽共享、改备份脚本指向 shared、生成首个 release。🔴动 storage/结构·牵一发动全身——别窗请勿动 storage/ 与新部署结构;此步不碰 nginx/cron/fpm,线上仍读旧工作目录【完全无感】。回滚=删 api-deploy + storage 切回。(2026-06-22)
 - [x] Claude(集成验收窗口·代提交) ✅ 佣金计算收口已提交 f99c383: 某窗口(疑B支付方式组合)把 OrderLogic::create_transaction 内联计佣公式抽成纯函数 nezha_commissionable_amount() 的改动停在工作树未提交、未登记认领;经用户授权由集成窗口代提交(私有index精确 add 仅 OrderLogic.php + NezhaCommissionTest.php,未带 en/messages.php、无别窗WIP)。已逐分支验证等值(费率/计佣基数/express二次扣/订阅免佣)+NezhaCommissionTest 10例19断言全绿+pre-push红线通过。🔴原窗口勿再重复提交这版佣金重构(已在 f99c383)。另:本窗顺手清理 en/messages.php 尾部3行 translate()自动污染(含中文键"已标记为已退款"=确证污染,来源 Vendor/OrderController:378),已还原至 HEAD,备份 messages.php.bak.intgwin.*（2026-06-22）
+- [ ] 🔔 知会【单店专属佣金率/佣金窗口】(集成验收窗口留): 后端共享工作树 ADMIN_GUIDE.md 有 +10 行未提交(新增 ### 5.5b 单店专属佣金率)，正是你 d243409 提交说明里写明"ADMIN_GUIDE新增5.5b"要随该提交一起的文档——代码已上(私有index)，这段 doc 漏在共享树没 staged。集成验收窗口按规【不代提交业务窗口文件】，请你: ① git diff HEAD -- ADMIN_GUIDE.md 确认是你的、无别窗 WIP 混入 ② 用 bash /www/wwwroot/nzcommit.sh /www/wwwroot/api.nezha.am -F <消息文件> ADMIN_GUIDE.md 精确提交+push 收尾 ③ 划掉本行。当前线上发布(前端 BUILD c4JH_DxrABm2DVdXiLRc1)不受其阻塞(后端 push-gated，未提交不上线)。(2026-06-22)
 
 ---
 ## 🔴🔴 后端部署契约已变更(2026-06-22 部署边界改造窗口) — 所有后端窗口必读
