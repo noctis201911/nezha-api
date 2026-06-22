@@ -357,7 +357,7 @@ class OrderController extends Controller
                 $amt = \App\CentralLogics\Helpers::format_currency($record->refund_amount);
                 $title = $isZh ? '退款已处理' : 'Refund processed';
                 $msg = $isZh
-                    ? "商家已为订单 #{$order->id} 按{$chanText}退回 {$amt}。到账时间以你的支付渠道为准；如未收到请联系商家或客服。"
+                    ? "商家已为订单 #{$order->id} 按{$chanText}退回 {$amt}。到账时间以您的支付渠道为准；如未收到请联系商家或客服。"
                     : "The restaurant refunded {$amt} for order #{$order->id} via {$chanText}. Arrival time depends on your payment channel; contact the restaurant or support if not received.";
                 $data = \App\CentralLogics\Helpers::makeDataForPushNotification(title: $title, message: $msg, orderId: $order->id, type: 'order_status', orderStatus: 'refunded');
                 \App\CentralLogics\Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id);

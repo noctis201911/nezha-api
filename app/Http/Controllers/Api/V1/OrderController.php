@@ -1185,7 +1185,7 @@ class OrderController extends Controller
             if ($vendorId) {
                 $data = Helpers::makeDataForPushNotification(
                     title: '顾客在催退款',
-                    message: '订单 #' . $order->id . ' 的顾客在催退款，请尽快按原路退还顾客付款，并在「订单→待退款」点「标记已退款」。',
+                    message: '订单 #' . $order->id . ' 的顾客在催退款，请您尽快按原路退还顾客付款，并在「订单→待退款」点「标记已退款」。',
                     orderId: $order->id, type: 'order_status', orderStatus: 'refunded'
                 );
                 Helpers::insertDataOnNotificationTable($data, 'vendor', $vendorId);
@@ -1199,7 +1199,7 @@ class OrderController extends Controller
         }
         try {
             Helpers::sendTelegramToRestaurant($order->restaurant,
-                "🔔 顾客在催退款\n订单 #{$order->id}\n请尽快按原路退还顾客付款（平台不经手此款），退款后在商家后台「订单 → 待退款」点「标记已退款」。");
+                "🔔 顾客在催退款\n订单 #{$order->id}\n请您尽快按原路退还顾客付款（平台不经手此款），退款后在商家后台「订单 → 待退款」点「标记已退款」。");
         } catch (\Throwable $e) {}
         return response()->json(['message' => '已替你提醒商家尽快退款，请稍候'], 200);
     }

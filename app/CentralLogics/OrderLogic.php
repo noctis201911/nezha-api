@@ -1212,7 +1212,7 @@ class OrderLogic
                 if ($vendorToken) {
                     $channelText = (($route['channel'] ?? '') === 'usdt') ? 'USDT 退回原地址' : '支付宝原路退回';
                     $title = '有一笔直付单需要您退款';
-                    $msg   = '订单 #' . $order->id . ' 已被平台取消/退款，请按原路退还顾客付款（' . $channelText . '），退款后在「订单→待退款」标记已退款。';
+                    $msg   = '订单 #' . $order->id . ' 已被平台取消/退款，请您按原路退还顾客付款（' . $channelText . '），退款后在「订单→待退款」标记已退款。';
                     $data = Helpers::makeDataForPushNotification(title: $title, message: $msg, orderId: $order->id, type: 'order_status', orderStatus: 'refunded');
                     Helpers::send_push_notif_to_device($vendorToken, $data);
                 }
