@@ -136,7 +136,50 @@ class NezhaOrderTimeout
     }
 
     /**
-     * 展示层：返回 nezha_timeout 对象供订单详情 API 下发。不在超时范围返回 null。
+     * 顾客是否已提交有效交易哈希(链下 USDT 等文本凭证)。
+     * = method_fields 中 input_type=text 且字段名含「哈希/Hash」的字段, 其 payment_info 值经
+     *   64位十六进制(0x 可选)正则校验通过。仅认哈希类文本(防把备注等可选文本误判为凭证);
+     *   格式不合(空/乱填)不算有效, 仍走未付款路径 —— 避免给未真付款单凭空造退款义务。
+     */
+    public static function hasValidHashText(Order $order): bool
+    {
+        $op = $order->offline_payments;
+        if (!$op) {
+            return false;
+        }
+        $info   = is_array($op->payment_info) ? $op->payment_info : json_decode((string) $op->payment_info, true);
+        $fields = is_array($op->method_fields) ? $op->method_fields : json_decode((string) $op->method_fields, true);
+        if (!is_array($info) || !is_array($fields)) {
+            return false;
+        }
+        foreach ($fields as $f) {
+            if (($f['input_type'] ?? null) !== 'text' || empty($f['input_field_name'])) {
+                continue;
+            }
+            $name = $f['input_field_name'];
+            if (stripos($name, '哈希') === false && stripos($name, 'hash') === false) {
+                continue; // 只认哈希类文本字段
+            }
+            $val = $info[$name] ?? '';
+            if (is_string($val) && preg_match('/^(0x)?[0-9a-fA-F]{64}$/', trim($val))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 顾客是否已提交「有效付款凭证」= 截图文件 或 有效交易哈希文本。
+     * USDT(链下)主推哈希、支付宝走截图; 二者任一有效即视为已提交凭证(对齐 PaymentDrawer 承诺)。
+     * 替代单一 hasProofImage 作为「已付待核」判定, 使哈希单与图片单走同一 20min + 退款留痕路径。
+     */
+    public static function hasPaymentProof(Order $order): bool
+    {
+        return self::hasProofImage($order) || self::hasValidHashText($order);
+    }
+
+    /**
+     * 展示层：返回 nezha_timeout 对象供订单详情 API 下发。不在超时范围返回 null。不在超时范围返回 null。
      * 字段（需求5）：phase / severity / title / next_step / contact_hint / deadline_at / refund_method / refund_eta。
      */
     public static function describe(Order $order): ?array
@@ -220,7 +263,7 @@ class NezhaOrderTimeout
         // 阶段 A / B：等待商家确认收款/接单
         $start   = self::clockStart($order, $phase);
         $elapsed = $start ? max(0, (int) floor($start->diffInSeconds($now) / 60)) : 0;
-        $hasProof = $phase === self::PHASE_PROOF ? self::hasProofImage($order) : true; // B 阶段钱已确认
+        $hasProof = $phase === self::PHASE_PROOF ? self::hasPaymentProof($order) : true; // B 阶段钱已确认
 
         // 终态截止与退款表述
         if ($phase === self::PHASE_PROOF && !$hasProof) {

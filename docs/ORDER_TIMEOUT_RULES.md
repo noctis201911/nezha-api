@@ -17,7 +17,7 @@
 | **E 配送中** | `order_status=picked_up` 且 `order_type=delivery` | order.picked_up（**仅此真实时间列，无则不判超时**） | 配送中长时间未送达 |
 
 > 其它状态（accepted/delivered/canceled/failed/refund_*）不在本规则范围。take_away 的 handover=可取餐，非配送延迟，**不计配送超时**。
-> 阶段 A 是否"已上传付款凭证图"= 解析 offline_payment.payment_info，其中 method_fields 标 `input_type=file` 的字段是否有非空文件值。
+> 阶段 A 是否"已提交有效付款凭证"(`hasPaymentProof`)= ① `hasProofImage`：method_fields 标 `input_type=file` 的字段有非空文件值（截图，支付宝路径）；**或** ② `hasValidHashText`：method_fields 标 `input_type=text` 且字段名含「哈希/Hash」的字段，其值经 64 位十六进制(0x 可选)正则校验通过（USDT 链下付款主推凭证）。**二者任一有效即视为已提交凭证**，与支付抽屉 PaymentDrawer「哈希或截图」承诺对齐。乱填/非 hex 文本不算有效（避免给未真付款单凭空造退款义务）。
 > **阶段 D/E 仅展示层（无动作层）**：饭已出/在配送、钱已付，按 L1 绝不自动取消，只对长时间无进展给诚实升级提示。时钟起点只认状态切换真实时间列（order.handover / order.picked_up），**无可靠记录时返回 `no_time_record` 诚实告知，绝不退用 created_at/updated_at 臆造超时**（需求3）。
 
 ## 二、规则矩阵（两层）
@@ -44,9 +44,9 @@
 
 | 阶段 | 条件 | 阈值 | 自动动作 |
 |---|---|---|---|
-| **A 无凭证图** | 顾客未上传付款凭证（=确定没付钱） | 10min | **自动取消**（无资金、无退款，安全）。canceled_by=`system_timeout` |
-| **A 有凭证图** | 顾客已上传凭证（可能已付待商家核对） | 10min | **邮件商家**催处理 + admin/客服打标通知 |
-| **A 有凭证图** | 同上 | 20min | **自动取消** + 生成待退款留痕 + **邮件商家**原路退款 + 通知顾客"商家接单超时，将通知商家联系退款" |
+| **A 无有效凭证** | 顾客未提交有效凭证（无截图且无有效哈希=确定没付钱） | 10min | **自动取消**（无资金、无退款，安全）。canceled_by=`system_timeout` |
+| **A 有有效凭证（图或哈希）** | 顾客已提交凭证（截图或有效交易哈希，可能已付待商家核对） | 10min | **邮件商家**催处理 + admin/客服打标通知 |
+| **A 有有效凭证（图或哈希）** | 同上 | 20min | **自动取消** + 生成待退款留痕 + **邮件商家**原路退款 + 通知顾客"商家接单超时，将通知商家联系退款" |
 | **B 待接单** | 钱已确认在商家 | 10min | **邮件商家** + admin/客服打标通知 |
 | **B 待接单** | 同上 | 20min | **自动取消** + 待退款留痕 + 邮件商家退款 + 通知顾客同上 |
 | **C 备餐** | 超 ETA+15min 或 ETA 未知(历史 processing_time=NULL) | ETA+15min | **升级客服**：邮件商家 + admin 打标通知（**不自动取消**：饭在做、钱已付，取消风险高） |

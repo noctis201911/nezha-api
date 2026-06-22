@@ -38,7 +38,7 @@ class SystemController extends Controller
                 $phase = \App\CentralLogics\NezhaOrderTimeout::phase($o);
                 if (! $phase) { continue; }
                 if ($phase === \App\CentralLogics\NezhaOrderTimeout::PHASE_PROOF
-                    && ! \App\CentralLogics\NezhaOrderTimeout::hasProofImage($o)) { continue; }
+                    && ! \App\CentralLogics\NezhaOrderTimeout::hasPaymentProof($o)) { continue; }
                 $d = \App\CentralLogics\NezhaOrderTimeout::describe($o);
                 if (! $d || ($d['severity'] ?? 'info') !== 'error') { continue; }
                 $abn_timeout_ids[] = $o->id;

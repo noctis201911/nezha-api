@@ -56,7 +56,7 @@ class OrderTimeoutSweep extends Command
             $start = NezhaOrderTimeout::clockStart($order, NezhaOrderTimeout::PHASE_PROOF);
             if (!$start) { continue; }
             $age = (int) floor($start->diffInSeconds($now) / 60);
-            $hasProof = NezhaOrderTimeout::hasProofImage($order);
+            $hasProof = NezhaOrderTimeout::hasPaymentProof($order);
 
             if (!$hasProof) {
                 if ($age >= $cfg['unpaid_cancel']) {
