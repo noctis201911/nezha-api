@@ -23,9 +23,59 @@ class SystemController extends Controller
         // 原裸 DB::table 会把 POS 单 / 跨 zone 单(列表 Notpos+ZoneScope 隐藏的) 也数进去 -> 报幽灵数+点进去对不上。
         // 同类修复见 DashboardController::restaurant_data(commit e2633db) 与 QA_PLAYBOOK O 轴。
         $new_order = \App\Models\Order::where('checked', 0)->Notpos()->count();
+
+        // 哪吒[2026-06-22]: 超管「异常订单」面板提醒——B方案平台不接单, 故超管不报新订单(噪音),
+        // 只报【需平台介入】两类: 已升级超时单(商家被催仍未处理) + 逾期未退款单。
+        // 自带「当前态」语义: 商家处理完即从集合消失, 浮窗自动清, 不假挂。零资金/零状态机, 纯只读统计(L3)。
+
+        // ① 超时单(需平台介入) = NezhaOrderTimeout::describe severity=='error'(此档 sweep 已升级通知商家+客服)。
+        $abn_timeout_ids = [];
+        try {
+            $open = \App\Models\Order::with(['offline_payments'])
+                ->whereIn('order_status', ['pending', 'confirmed', 'processing', 'handover', 'picked_up'])
+                ->Notpos()->get();
+            foreach ($open as $o) {
+                $phase = \App\CentralLogics\NezhaOrderTimeout::phase($o);
+                if (! $phase) { continue; }
+                if ($phase === \App\CentralLogics\NezhaOrderTimeout::PHASE_PROOF
+                    && ! \App\CentralLogics\NezhaOrderTimeout::hasProofImage($o)) { continue; }
+                $d = \App\CentralLogics\NezhaOrderTimeout::describe($o);
+                if (! $d || ($d['severity'] ?? 'info') !== 'error') { continue; }
+                $abn_timeout_ids[] = $o->id;
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('NEZHA_ADMIN_ABN timeout: ' . $e->getMessage());
+        }
+
+        // ② 逾期未退款单(需平台介入) = NezhaRefundRecord pending_merchant_refund 未退 且 超过催办阈值小时。
+        //    同 RefundOverdueSweep 口径(复用 thresholdHours), 返回订单 id 供浮窗直达订单详情。
+        $abn_refund_ids = [];
+        try {
+            $remindHours = \App\CentralLogics\NezhaRefundOverdue::thresholdHours('nezha_refund_overdue_remind_hours', 'nezha_refund_overdue_remind_days', 12);
+            if ($remindHours < 1) { $remindHours = 1; }
+            $cutoff = \Carbon\Carbon::now()->subHours($remindHours);
+            $abn_refund_ids = \App\Models\NezhaRefundRecord::where('status', 'pending_merchant_refund')
+                ->whereNull('merchant_refunded_at')
+                ->where('created_at', '<=', $cutoff)
+                ->orderBy('created_at')
+                ->pluck('order_id')->filter()->unique()->values()->all();
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('NEZHA_ADMIN_ABN refund: ' . $e->getMessage());
+        }
+
+        $abn_first = $abn_timeout_ids[0] ?? ($abn_refund_ids[0] ?? null);
+
         return response()->json([
             'success' => 1,
-            'data' => ['new_order' => $new_order]
+            'data' => [
+                'new_order'         => $new_order,
+                'abn_timeout_ids'   => $abn_timeout_ids,
+                'abn_timeout_total' => count($abn_timeout_ids),
+                'abn_refund_ids'    => $abn_refund_ids,
+                'abn_refund_total'  => count($abn_refund_ids),
+                'abn_total'         => count($abn_timeout_ids) + count($abn_refund_ids),
+                'abn_first_order'   => $abn_first,
+            ]
         ]);
     }
 

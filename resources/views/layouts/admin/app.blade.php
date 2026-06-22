@@ -99,6 +99,17 @@ $countryCode = strtolower($country ?? 'auto');
             </div>
         </div>
 
+        <!-- 哪吒[2026-06-22]: 超管「异常订单」非阻塞提示条(超时单+逾期退款单, 响一次不反复弹; 集合清零自动收起) -->
+        <div id="nz-admin-abn-toast" style="display:none;position:fixed;right:20px;bottom:20px;z-index:100000;background:#fff;border:1px solid #f0f0f0;border-left:4px solid #C4193E;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.15);padding:14px 16px;min-width:260px;max-width:340px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+                <div>
+                    <div style="font-weight:600;color:#1f1f1f;font-size:15px;margin-bottom:2px;"><span id="nz-abn-count">0</span> 个异常订单待处理</div>
+                    <div style="color:#888;font-size:12px;" id="nz-abn-detail">超时 0 · 退款逾期 0</div>
+                </div>
+                <button type="button" id="nz-abn-close" aria-label="关闭" style="border:none;background:none;color:#bbb;font-size:20px;line-height:1;cursor:pointer;padding:0;">&times;</button>
+            </div>
+            <button type="button" id="nz-abn-go" style="margin-top:10px;width:100%;background:#C4193E;color:#fff;border:none;border-radius:8px;padding:9px 0;font-size:14px;font-weight:600;cursor:pointer;">去处理</button>
+        </div>
         <div class="modal fade" id="popup-modal-msg">
             <div class="modal-dialog modal-dialog-centered" role="document">
                 <div class="modal-content">
@@ -577,8 +588,11 @@ $countryCode = strtolower($country ?? 'auto');
         "use strict";
         var audio = document.getElementById("myAudio");
 
+        var nzAudioPrimed = false;
+        function nzPrimeAudio(){ if(nzAudioPrimed){return;} nzAudioPrimed = true; try { var p = audio.play(); if(p&&p.then){ p.then(function(){ audio.pause(); audio.currentTime=0; }).catch(function(){}); } } catch(e){} }
+        ['click','keydown','touchstart'].forEach(function(ev){ document.addEventListener(ev, nzPrimeAudio); });
         function playAudio() {
-            audio.play();
+            try { audio.currentTime = 0; var p = audio.play(); if(p&&p.catch){ p.catch(function(){}); } } catch(e){}
         }
 
         function pauseAudio() {
@@ -1073,6 +1087,59 @@ $countryCode = strtolower($country ?? 'auto');
 
     </script>
 
+    <script>
+    @if(\App\CentralLogics\Helpers::module_permission_check('order'))
+        "use strict";
+        // 哪吒[2026-06-22]: 超管异常订单提醒(超时单/逾期退款单)。B方案平台不接单故不报新订单;
+        // 只报需平台介入异常单, 响一次不反复弹(localStorage seen-set), 集合清零自动收起。
+        (function(){
+            var SEEN_KEY = 'nz_admin_abn_seen_v1';
+            var toast   = document.getElementById('nz-admin-abn-toast');
+            var countEl = document.getElementById('nz-abn-count');
+            var detailEl= document.getElementById('nz-abn-detail');
+            var goBtn   = document.getElementById('nz-abn-go');
+            var closeBtn= document.getElementById('nz-abn-close');
+            var detailsBase = '{{ url('/admin/order/details') }}';
+            var firstId = null;
+            var dismissed = false;
+            var memSeen = new Set();
+            function loadSeen(){ try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); } catch(e){ return memSeen; } }
+            function saveSeen(set){ memSeen = set; try { var arr = Array.from(set); if (arr.length > 200) { arr = arr.slice(arr.length - 200); } localStorage.setItem(SEEN_KEY, JSON.stringify(arr)); } catch(e){} }
+            function show(total, tCount, rCount){ if(countEl){countEl.textContent=total;} if(detailEl){detailEl.textContent='超时 '+tCount+' · 退款逾期 '+rCount;} if(toast){toast.style.display='block';} }
+            function hide(){ if(toast){toast.style.display='none';} }
+            if (goBtn){ goBtn.addEventListener('click', function(){ if(firstId){ location.href = detailsBase + '/' + firstId; } }); }
+            if (closeBtn){ closeBtn.addEventListener('click', function(){ dismissed = true; hide(); }); }
+            function poll(){
+                $.get({
+                    url: '{{ route('admin.get-restaurant-data') }}',
+                    dataType: 'json',
+                    success: function(response){
+                        var data = response.data || {};
+                        var tIds = (data.abn_timeout_ids || []).map(String);
+                        var rIds = (data.abn_refund_ids || []).map(String);
+                        var ids = tIds.concat(rIds);
+                        var total = data.abn_total || 0;
+                        firstId = data.abn_first_order || (ids.length ? ids[0] : null);
+                        if (total === 0){ hide(); dismissed = false; return; }
+                        var seen = loadSeen();
+                        var freshIds = ids.filter(function(id){ return !seen.has(id); });
+                        if (freshIds.length > 0){
+                            if (typeof playAudio === 'function') { playAudio(); }
+                            dismissed = false;
+                            freshIds.forEach(function(id){ seen.add(id); });
+                            saveSeen(seen);
+                            show(total, data.abn_timeout_total||0, data.abn_refund_total||0);
+                        } else if (!dismissed) {
+                            show(total, data.abn_timeout_total||0, data.abn_refund_total||0);
+                        }
+                    }
+                });
+            }
+            poll();
+            setInterval(poll, 12000);
+        })();
+    @endif
+    </script>
 </body>
 
 </html>
