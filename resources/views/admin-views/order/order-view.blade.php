@@ -290,6 +290,19 @@ $max_processing_time = $order->restaurant?explode('-', $order->restaurant['deliv
                                     <span>{{ translate('messages.payment_method') }} :</span>
                                     <strong>{{   translate(str_replace('_', ' ', $order['payment_method']))  }}</strong>
                                 </h6>
+                                {{-- 哪吒: 商家回传的 Yandex 配送链接(平台核查用)。仅配送单显示; 链接送达后 Yandex 会自己失效, 这里留作"商家是否叫车"的凭据。 --}}
+                                @if ($order->order_type == 'delivery')
+                                <h6>
+                                    <span>配送链接 (Yandex) :</span>
+                                    @if (!empty($order->yandex_tracking_url))
+                                        <a href="{{ $order->yandex_tracking_url }}" target="_blank" rel="noopener noreferrer" class="text-info" style="word-break:break-all;">{{ $order->yandex_tracking_url }}</a>
+                                    @elseif ($order->delivery_link_reminded_at)
+                                        <strong class="text-warning">顾客已催 · 商家尚未回传</strong>
+                                    @else
+                                        <strong class="text-muted">—（商家未回传）</strong>
+                                    @endif
+                                </h6>
+                                @endif
                                 <h6>
                                     <span>{{translate('messages.payment_status')}} :</span>
                                     @if ($order['payment_status'] == 'paid')
