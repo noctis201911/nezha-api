@@ -96,6 +96,10 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
 
         Route::post('firebase-verify-token', [CustomerAuthController::class, 'firebase_auth_verify']);
 
+        // Nezha: Google 整页跳转登录(ux_mode:redirect) — redirect-login 校验 id_token 返回一次性短码, social/exchange 凭短码换 token
+        Route::post('google/redirect-login', [CustomerAuthController::class, 'google_redirect_login']);
+        Route::post('social/exchange', [CustomerAuthController::class, 'social_exchange']);
+
         Route::group(['prefix' => 'delivery-man', 'as' => 'delivery-man.', 'middleware' => 'actch:deliveryman_app'], function () {
             Route::post('login', [DeliveryManLoginController::class, 'login'])->name('login');
             Route::post('biometric-login', [DeliveryManLoginController::class, 'biometricLogin']);

@@ -24,6 +24,8 @@ use Illuminate\Support\Facades\Mail;
 use Modules\Gateways\Traits\SmsGateway;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 
 class CustomerAuthController extends Controller
@@ -883,6 +885,85 @@ class CustomerAuthController extends Controller
 
 
     }
+    /**
+     * Nezha: Google 整页跳转登录(ux_mode:redirect)第一步——校验 id_token + 一次性短码暂存登录结果。
+     * 替代弹窗模式(iOS Safari 把弹窗开成无 opener 新标签, 2FA 后 postMessage 回传不到原窗 -> origin 400)。
+     * 安全点: token 不进 URL/历史, 浏览器只拿到短码, 凭短码再换真 token(见 social_exchange)。
+     * 入参 credential=Google id_token(必填), guest_id(可选)。不碰现有弹窗 login, 纯新增。
+     */
+    public function google_redirect_login(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'credential' => 'required',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
+        }
+
+        $client = new Client(['connect_timeout' => 5, 'timeout' => 8]);
+        try {
+            $res = $client->request('GET', 'https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=' . $request->credential);
+            $data = json_decode($res->getBody()->getContents(), true);
+        } catch (\Throwable $e) {
+            return response()->json(['errors' => [['code' => 'credential', 'message' => 'Invalid Google credential']]], 403);
+        }
+
+        // 🔴 必须校验 aud == 我们的 client_id: 防别的应用签发的 id_token 冒用本接口登录
+        // (现有弹窗 login 没查 aud, redirect 流是直接拿浏览器传来的 credential, 必须查)
+        $expected_aud = '786035188808-o9imoj11p6kvhf2ujgd9uunqub1s3d2l.apps.googleusercontent.com';
+        if (!isset($data['aud']) || $data['aud'] !== $expected_aud) {
+            return response()->json(['errors' => [['code' => 'credential', 'message' => 'Token audience mismatch']]], 403);
+        }
+        if (empty($data['email']) || empty($data['sub'])) {
+            return response()->json(['errors' => [['code' => 'credential', 'message' => 'Incomplete Google profile']]], 403);
+        }
+
+        $request_data = [
+            'token' => $request->credential,
+            'email' => $data['email'],
+            'unique_id' => $data['sub'],
+            'medium' => 'google',
+            'verified' => 'default',
+            'guest_id' => $request->guest_id,
+        ];
+
+        $resp = $this->social_login($data, $request_data);
+        $payload = $resp->getData(true);
+
+        // 自动合并: 命中既有未验证邮箱账号(is_exist_user)时, 因 Google 已验证该邮箱所有权, 直接登入既有账号并发 token。
+        // redirect 模式浏览器不持有 credential, 无法像弹窗那样让用户二次确认; 此自动合并安全语义已经用户批准。
+        if (isset($payload['is_exist_user']) && $payload['is_exist_user'] !== null && empty($payload['token'])) {
+            $request_data['verified'] = 'yes';
+            $resp = $this->social_login($data, $request_data);
+            $payload = $resp->getData(true);
+        }
+
+        $code = Str::random(48);
+        Cache::put('gauth_' . $code, $payload, 60); // 60 秒短码, 单次使用(social_exchange 取出即删)
+        return response()->json(['code' => $code], 200);
+    }
+
+    /**
+     * Nezha: Google 整页跳转登录第二步——用一次性短码换回登录结果。
+     * 返回 social_login 原始 payload(token/is_personal_info/is_exist_user/email 或 errors)。
+     * Cache::pull 取出即删, 单次有效; 无效/过期返 403。
+     */
+    public function social_exchange(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'code' => 'required',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
+        }
+
+        $payload = Cache::pull('gauth_' . $request->code);
+        if (!$payload) {
+            return response()->json(['errors' => [['code' => 'code', 'message' => 'Login code expired or already used']]], 403);
+        }
+        return response()->json($payload, 200);
+    }
+
     private function social_login($data, $request_data){
 
         $user = User::where('email', $data['email'])->first();
