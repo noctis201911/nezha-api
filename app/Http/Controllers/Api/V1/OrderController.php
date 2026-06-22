@@ -1010,7 +1010,7 @@ class OrderController extends Controller
                         : 'Your order #' . $order->id . ' is canceled. For the amount paid directly to the restaurant, please contact the restaurant for an original-route refund.';
                     $nezha_fcm = $order->is_guest == 0 ? $order?->customer?->cm_firebase_token : null;
                     $nezha_ndata = Helpers::makeDataForPushNotification(title: $nezha_ntitle, message: $nezha_nmsg, orderId: $order->id, type: 'order_status', orderStatus: 'canceled');
-                    if ($nezha_fcm && Helpers::customerWantsPush($order->customer, 'order_progress')) { Helpers::send_push_notif_to_device($nezha_fcm, $nezha_ndata); }
+                    if ($nezha_fcm && Helpers::customerWantsPush($order->customer, 'refund')) { Helpers::send_push_notif_to_device($nezha_fcm, $nezha_ndata); }
                     if ($order->is_guest == 0) { Helpers::insertDataOnNotificationTable($nezha_ndata, 'user', $order->user_id); }
                 } catch (\Throwable $e) { info('nezha cancel refund-notice failed: ' . $e->getMessage()); }
                 return response()->json(['message' => translate('messages.order_canceled_contact_restaurant_for_refund')], 200);

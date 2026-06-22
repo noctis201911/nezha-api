@@ -1356,7 +1356,7 @@ class OrderLogic
             $fcm = $order->is_guest == 0 ? $order?->customer?->cm_firebase_token : null;
             $data = Helpers::makeDataForPushNotification(title: $title, message: $msg, orderId: $order->id, type: 'order_status', orderStatus: 'canceled');
             // 哪吒: 顾客「订单进度」推送偏好闸(B方案取消退款提醒)
-            if ($fcm && Helpers::customerWantsPush($order->customer, 'order_progress')) { Helpers::send_push_notif_to_device($fcm, $data); }
+            if ($fcm && Helpers::customerWantsPush($order->customer, 'refund')) { Helpers::send_push_notif_to_device($fcm, $data); }
             if ($order->is_guest == 0) { Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id); }
         } catch (\Throwable $e) {
             info('notify_customer_cancel_refund failed: ' . $e->getMessage());

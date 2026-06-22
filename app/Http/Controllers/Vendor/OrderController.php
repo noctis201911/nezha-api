@@ -367,7 +367,7 @@ class OrderController extends Controller
                 $data = \App\CentralLogics\Helpers::makeDataForPushNotification(title: $title, message: $msg, orderId: $order->id, type: 'order_status', orderStatus: 'refunded');
                 \App\CentralLogics\Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id);
                 $token = $order->customer?->cm_firebase_token;
-                if ($token && \App\CentralLogics\Helpers::customerWantsPush($order->customer, 'order_progress')) {
+                if ($token && \App\CentralLogics\Helpers::customerWantsPush($order->customer, 'refund')) {
                     \App\CentralLogics\Helpers::send_push_notif_to_device($token, $data);
                 }
             }
