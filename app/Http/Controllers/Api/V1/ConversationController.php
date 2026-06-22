@@ -346,12 +346,26 @@ class ConversationController extends Controller
         })
         ->orderBy('last_message_time', 'DESC')->paginate($limit, ['*'], 'page', $offset);
 
+        // Fix fake red dot: unread_message_count is a single directional counter
+        // (it belongs to the recipient of the latest message). When the customer
+        // sent the last message and the other party has not replied, that count is
+        // the OTHER party's unread and must not inflate the customer's own badge.
+        // Keep unread only when the last message is from the other party; otherwise
+        // zero it for this viewer (output only, the DB column is left untouched).
+        $conv_items = $conversations->items();
+        foreach ($conv_items as $cv) {
+            $lm = $cv->last_message;
+            if (!$lm || $lm->sender_id == $sender->id) {
+                $cv->unread_message_count = 0;
+            }
+        }
+
         $data =  [
             'type'=>$request->type ?? null,
             'total_size' => intval($conversations->total()),
             'limit' => intval($limit),
             'offset' => intval($offset),
-            'conversations' => $conversations->items()
+            'conversations' => $conv_items
         ];
         return response()->json($data, 200);
     }
