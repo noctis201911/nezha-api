@@ -759,6 +759,7 @@
                                             </dd>
                                         @endif
 
+                                        @if ($order['dm_tips'] > 0)
                                         <dt class="col-6">{{ translate('messages.delivery_man_tips') }}
 
                                         </dt>
@@ -767,6 +768,7 @@
                                             + {{ Helpers::format_currency($order['dm_tips']) }}
 
                                         </dd>
+                                        @endif
                                         @if ($order['delivery_type_charge'] > 0)
                                         <dt class="col-6">
                                         {{ translate($order['delivery_type'].'_delivery') }}
