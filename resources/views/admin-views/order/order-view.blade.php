@@ -430,7 +430,8 @@ $max_processing_time = $order->restaurant?explode('-', $order->restaurant['deliv
 
                                             $deleted_food = $detail->food == null?1:0;
                                             $detail->food = json_decode($detail->food_details, true);
-                                            $food = \App\Models\Food::where(['id' => $detail?->food['id']])->with('storage')->select('id','image')->first();
+                                            if (!is_array($detail->food) || !isset($detail->food['id'])) { $deleted_food = 1; } // 哪吒: 快照缺失也按已删菜处理, 防数组取null崩整页
+                                            $food = $deleted_food ? null : \App\Models\Food::where(['id' => $detail->food['id']])->with('storage')->select('id','image')->first();
                                             ?>
                                             <!-- Media -->
                                             <tr>
