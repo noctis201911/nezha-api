@@ -103,6 +103,16 @@ class NezhaCommissionTest extends TestCase
         $this->assertEqualsWithDelta(150, $r['amount'], 0.01);
     }
 
+    public function test_zero_commission_is_free_not_global(): void
+    {
+        // 0=免佣(有效值), 必须区别于 留空=沿用全局10%。isset() 而非 ?: 才能区分 0 与 null。
+        // 扣佣端 if(deposit_mode==1 && comission_amount>0) -> 0 时不写 commission_deduction 行, 即实扣0。
+        $r = OrderLogic::nezha_commissionable_amount($this->mkOrder(['order_amount' => 1000], 0));
+        $this->assertEqualsWithDelta(0, $r['rate'], 0.01);
+        $this->assertEqualsWithDelta(0, $r['amount'], 0.01);
+        $this->assertFalse($r['subscription']);
+    }
+
     public function test_express_subtracts_type_charge_twice(): void
     {
         // 4000 - 200(基数内) - 200(express 再扣) = 3600 (镜像引擎行为)
