@@ -50,7 +50,7 @@
                     <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel')?'active':''}}">
                         <a class="js-navbar-vertical-aside-menu-link nav-link"
                            href="{{route('vendor.dashboard')}}" title="{{translate('messages.dashboard')}}">
-                            <i class="tio-home-vs-1-outlined nav-icon"></i>
+                            <i class="tio-dashboard nav-icon"></i>
                             <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
                                 {{translate('messages.dashboard')}}
                             </span>
@@ -361,7 +361,7 @@
                         <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/food*')?'active':''}}">
                             <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:" title="{{translate('Food')}}"
                             >
-                                <i class="tio-premium-outlined nav-icon"></i>
+                                <i class="tio-restaurant nav-icon"></i>
                                 <span
                                     class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{translate('messages.foods')}}</span>
                             </a>
@@ -694,7 +694,7 @@
                         <li class="navbar-vertical-aside-has-menu  {{Request::is('restaurant-panel/report/order-report') || Request::is('restaurant-panel/report/campaign-order-report') ? 'active' : '' }}">
                             <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
                                title="{{ translate('messages.Order_Report') }}">
-                                <i class="tio-user nav-icon"></i>
+                                <i class="tio-report nav-icon"></i>
                                 <span
                                     class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.Order_Report') }}</span>
                             </a>
