@@ -130,3 +130,13 @@
   - 已加固:`CustomerController::set_default_address` 末句裸 `CustomerAddress::where('id')->update` → `forCustomer($userId)->where('id')`。Order/Cart/CustomerAddress 已 use OwnedByCustomer,其余顾客归属模型可增量采用。
 - **轴E place_order 前端 order_amount 已彻底不读**:删早赋值(原本被服务端重算覆盖),校验改 nullable;真实下单谎报 order_amount=1 → 存库 4500 验证客户端值被丢弃。
 - **风控入参客户端信任缺口(已修 e3a1575)**:`NezhaRiskController::build_context` 早评读客户端 `$request->order_amount`,顾客低报可绕单笔/大额风控。修法:place_order 在服务端金额重算定型后(save前·事务内)用权威金额**复评一次风控**,命中 reject/review 即 rollBack+记审计(record 在 rollBack 后调用防审计被回滚)+返回 risk_reject/risk_review。**真单实测**:低报 order_amount=1 + 真实 qty25=112500>单笔限110437 → risk_reject「超过单笔上限」(客户端值1不可能触发=只能来自复评)·未建单·审计持久; 正常 qty1=4500 下单成功(不误伤)。仅改"用哪个金额评估"(客户端→服务端权威),阈值/开关未变。
+
+### 2026-06-22 第三轮 vendor 端多租户越权簇(commit 085e1b0 + 另窗 a487ff8) — 已修
+补上轮明确标注未审的 **vendor 端**(轴 A/C/F)。根因同既有 IDOR 簇:商家 web 面板 by-id 改写不校验 restaurant 归属。**隔离 PoC 双轮坐实**(throwaway 数据标记假店 999001,攻击者=demo vendor#6,绝不碰真数据;修前 6/6 VULN,修后 6/6 BLOCKED 且 rest6 真顾客 getUserData 不误伤)。
+- `CouponController` status/delete:加 where(restaurant_id)+null 守卫(原任意商家启停/删他店券)。
+- `AddOnController` status/delete:同上(他店加料)。
+- `Vendor/OrderController::updateSchedule`:订单查询加 restaurant_id+404 守卫(原改他店订单 schedule_at+触发推送给他店顾客)。
+- `POSController` getUserData/getUserAddress/chooseAddress/editAddress:顾客信息仅返回"在本店下过单的顾客"(原按 id 泄露任意用户 phone/email/wallet 可枚举;POS 实测 0 使用故非破坏)。
+- `DeliveryManController` status/earning/update/delete/edit:find 加 restaurant_id(delivery_men=0+module gated,潜伏加固)。
+- 另窗并发 a487ff8:`Vendor/OrderController` add_order_proof/remove_proof_image 也补 restaurant_id(凭证图越权)。
+- **未覆盖(诚实)**:轴 B/I/K/E 全量本轮沿用旧结论未重跑;vendor WalletMethod/Wallet 提现 by-id 未深核(B方案平台不放款,低优)。网络/主机层审计另见 memory nezha-network-security-audit。
