@@ -93,6 +93,13 @@ class BusinessSettingsController extends Controller
             'gst.required_if' => translate('messages.gst_can_not_be_empty'),
         ]);
 
+        // 分享缩略图必填(已有则不强制重传): 新店/从未上传过的必须先传一张分享图才能保存本页;
+        // 已有图的商家改其它设置时不被打扰。该图用于顾客把店铺分享到微信/Telegram等时的封面缩略图。
+        if (!$request->hasFile('meta_image') && empty($restaurant->meta_image)) {
+            Toastr::error('请先上传「分享缩略图」——顾客把您的店分享到微信/Telegram等时显示的就是这张图，关系到点击率与拉新');
+            return back()->withInput();
+        }
+
         if ($request->schedule_advance_dine_in_booking_duration_time_format == 'min' &&   $request->schedule_advance_dine_in_booking_duration > 60) {
             Toastr::error(translate('messages.Dine_in_dine_in_booking_duration_time_must_be_in_60_minute'));
             return back();

@@ -14,6 +14,105 @@
         <form action="{{ route('vendor.business-settings.update-setup', [$restaurant['id']]) }}" method="post"
             enctype="multipart/form-data">
             @csrf
+                <div class="card card-body mb-20">
+                    <div class="mb-20">
+                        <h4 class="mb-1">分享缩略图 / 搜索信息 <span class="text-danger">*</span></h4>
+                        <div class="alert alert-info fs-12 mb-0" style="border-left:4px solid #0d6efd;">
+                            <b class="text-danger">【必填】</b>「分享缩略图」是顾客把您的店铺链接分享到微信、Telegram、WhatsApp 等聊天或朋友圈时，对方看到的那张封面图。一张清晰、带招牌菜或店面的横图能明显提高点击率、帮您拉新客。未上传将无法保存本页设置。
+                        </div>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-xl-8 col-lg-7">
+                            <div class="bg-light2 rounded">
+                                <div class="card-body">
+
+                                        <div class="" id="">
+                                            <div class="form-group">
+                                                <label class="input-label"
+                                                    for="default_title">{{ translate('messages.meta_title') }}
+
+                                                </label>
+                                                <input maxlength="100" type="text" name="meta_title"
+                                                    id="default_title" class="form-control"
+                                                    placeholder="{{ translate('messages.meta_title') }}"
+                                                    value="{{ $restaurant->getRawOriginal('meta_title') }}">
+                                                <div class="d-flex justify-content-end">
+                                                    <span class="text-body-light text-right d-block mt-1">0/160</span>
+                                                </div>
+                                            </div>
+
+                                            <div class="form-group mb-0">
+                                                <label class="input-label"
+                                                    for="exampleFormControlInput1">{{ translate('messages.meta_description') }}
+                                                </label>
+                                                <textarea maxlength="160" type="text" name="meta_description"
+                                                    placeholder="{{ translate('messages.meta_description') }}" class="form-control min-h-90px ckeditor">{{ $restaurant->getRawOriginal('meta_description') }}</textarea>
+                                                <div class="d-flex justify-content-end">
+                                                    <span class="text-body-light text-right d-block mt-1">0/160</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-xl-4 col-lg-5">
+                            <div class="p-xxl-20 p-12 global-bg-box rounded h-100">
+                                <div class="pb-lg-1">
+                                    <div class="mb-4">
+                                        <h5 class="mb-1">
+                                            分享缩略图 <span class="text-danger">*</span>
+                                        </h5>
+                                        <p class="mb-0 fs-12 gray-dark">
+                                            顾客分享您的店铺时显示的就是这张图</p>
+                                    </div>
+                                    <div class="text-center">
+                                        <div class="upload-file mx-auto">
+                                            <input type="file" name="meta_image"
+                                                class="upload-file__input single_file_input"
+                                                accept=".jpg, .png, .jpeg, .gif, .bmp, .tif, .tiff|image/*">
+                                            <label class="upload-file__wrapper ratio-1 mx-auto m-0">
+                                                <div class="upload-file-textbox text-center" style="">
+                                                    <img width="34" class="svg"
+                                                        src="{{ dynamicAsset('assets/admin/img/image-upload.png') }}"
+                                                        alt="img">
+                                                    <h6 class="mt-1 text-gray1 fw-medium fs-10 lh-base text-center">
+                                                        <span
+                                                            class="text-info">{{ translate('messages.Click_to_upload') }}</span>
+                                                        <br>
+                                                        {{ translate('messages.or_drag_and_drop') }}
+                                                    </h6>
+                                                </div>
+                                                <img class="upload-file-img" loading="lazy"
+                                                    src="{{ $restaurant?->meta_image_full_url ?? dynamicAsset('assets/admin/img/upload.png') }}"
+                                                    data-default-src="{{ $restaurant?->meta_image_full_url ?? dynamicAsset('assets/admin/img/upload.png') }}"
+                                                    alt="" style="display: none;">
+                                            </label>
+                                            <div class="overlay">
+                                                <div class="d-flex gap-1 justify-content-center align-items-center h-100">
+                                                    <button type="button" class="btn btn-outline-info icon-btn view_btn">
+                                                        <i class="tio-invisible"></i>
+                                                    </button>
+                                                    <button type="button" class="btn btn-outline-info icon-btn edit_btn">
+                                                        <i class="tio-edit"></i>
+                                                    </button>
+                                                    {{--                                                    <button type="button" class="remove_btn btn icon-btn"> --}}
+                                                    {{--                                                        <i class="tio-delete text-danger"></i> --}}
+                                                    {{--                                                    </button> --}}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p class="fs-10 text-center mb-0 mt-4">
+                                        建议横图，比例约 1.91:1（如 1200×630），JPG/PNG，≤2MB；放招牌菜或店面照，避免大段文字 <span
+                                            class="font-medium text-title">(横图优先)</span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             <div class="card card-body mb-20">
                 <div class="card card-body mb-20">
                     <div class="mb-20">
@@ -706,105 +805,6 @@
                         @endif
 
 
-                    </div>
-                </div>
-                <div class="card card-body mb-20">
-                    <div class="mb-20">
-                        <h4 class="mb-1">{{ translate('messages.Restaurant Meta Data') }}</h4>
-                        <p class="fs-12 mb-0">
-                            {{ translate('messages.Here you setup website meta data for your business easy finding during search on website.') }}
-                        </p>
-                    </div>
-                    <div class="row g-2">
-                        <div class="col-xl-8 col-lg-7">
-                            <div class="bg-light2 rounded">
-                                <div class="card-body">
-
-                                        <div class="" id="">
-                                            <div class="form-group">
-                                                <label class="input-label"
-                                                    for="default_title">{{ translate('messages.meta_title') }}
-
-                                                </label>
-                                                <input maxlength="100" type="text" name="meta_title"
-                                                    id="default_title" class="form-control"
-                                                    placeholder="{{ translate('messages.meta_title') }}"
-                                                    value="{{ $restaurant->getRawOriginal('meta_title') }}">
-                                                <div class="d-flex justify-content-end">
-                                                    <span class="text-body-light text-right d-block mt-1">0/160</span>
-                                                </div>
-                                            </div>
-
-                                            <div class="form-group mb-0">
-                                                <label class="input-label"
-                                                    for="exampleFormControlInput1">{{ translate('messages.meta_description') }}
-                                                </label>
-                                                <textarea maxlength="160" type="text" name="meta_description"
-                                                    placeholder="{{ translate('messages.meta_description') }}" class="form-control min-h-90px ckeditor">{{ $restaurant->getRawOriginal('meta_description') }}</textarea>
-                                                <div class="d-flex justify-content-end">
-                                                    <span class="text-body-light text-right d-block mt-1">0/160</span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-xl-4 col-lg-5">
-                            <div class="p-xxl-20 p-12 global-bg-box rounded h-100">
-                                <div class="pb-lg-1">
-                                    <div class="mb-4">
-                                        <h5 class="mb-1">
-                                            {{ translate('messages.Restaurant_Meta_Image') }}
-                                        </h5>
-                                        <p class="mb-0 fs-12 gray-dark">
-                                            {{ translate('messages.Upload_your_website_favicon') }}</p>
-                                    </div>
-                                    <div class="text-center">
-                                        <div class="upload-file mx-auto">
-                                            <input type="file" name="meta_image"
-                                                class="upload-file__input single_file_input"
-                                                accept=".jpg, .png, .jpeg, .gif, .bmp, .tif, .tiff|image/*">
-                                            <label class="upload-file__wrapper ratio-1 mx-auto m-0">
-                                                <div class="upload-file-textbox text-center" style="">
-                                                    <img width="34" class="svg"
-                                                        src="{{ dynamicAsset('assets/admin/img/image-upload.png') }}"
-                                                        alt="img">
-                                                    <h6 class="mt-1 text-gray1 fw-medium fs-10 lh-base text-center">
-                                                        <span
-                                                            class="text-info">{{ translate('messages.Click_to_upload') }}</span>
-                                                        <br>
-                                                        {{ translate('messages.or_drag_and_drop') }}
-                                                    </h6>
-                                                </div>
-                                                <img class="upload-file-img" loading="lazy"
-                                                    src="{{ $restaurant?->meta_image_full_url ?? dynamicAsset('assets/admin/img/upload.png') }}"
-                                                    data-default-src="{{ $restaurant?->meta_image_full_url ?? dynamicAsset('assets/admin/img/upload.png') }}"
-                                                    alt="" style="display: none;">
-                                            </label>
-                                            <div class="overlay">
-                                                <div class="d-flex gap-1 justify-content-center align-items-center h-100">
-                                                    <button type="button" class="btn btn-outline-info icon-btn view_btn">
-                                                        <i class="tio-invisible"></i>
-                                                    </button>
-                                                    <button type="button" class="btn btn-outline-info icon-btn edit_btn">
-                                                        <i class="tio-edit"></i>
-                                                    </button>
-                                                    {{--                                                    <button type="button" class="remove_btn btn icon-btn"> --}}
-                                                    {{--                                                        <i class="tio-delete text-danger"></i> --}}
-                                                    {{--                                                    </button> --}}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <p class="fs-10 text-center mb-0 mt-4">
-                                        {{ translate('messages.JPG, JPEG, PNG, Gif Image size : Max 2 MB') }} <span
-                                            class="font-medium text-title">({{ translate('messages.1:1') }})</span>
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
                 <div class="btn--container justify-content-end">
