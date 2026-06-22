@@ -424,7 +424,11 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                     <!-- End Orders -->
 
                     <!-- 哪吒风控中心 -->
-                    @if (Helpers::module_permission_check('order'))
+                    {{-- 权限位对齐(UI-1): 路由已拆 module:risk/risk_settings/refund/kyc(提交8cb8b83), 组壳判「任一新位」, 各子项各自判对应位, 使侧栏可见性=路由可达性 --}}
+                    @if (Helpers::module_permission_check('risk') ||
+                            Helpers::module_permission_check('risk_settings') ||
+                            Helpers::module_permission_check('refund') ||
+                            Helpers::module_permission_check('kyc'))
                         <li class="navbar-vertical-aside-has-menu {{ (Request::is('admin/nezha-risk*') || Request::is('admin/nezha-refund*') || Request::is('admin/nezha-kyc*')) ? 'active' : '' }}">
                             <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
                                 title="{{ translate('风控中心') }}">
@@ -435,6 +439,7 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                             </a>
                             <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
                                 style="display: {{ (Request::is('admin/nezha-risk*') || Request::is('admin/nezha-refund*') || Request::is('admin/nezha-kyc*')) ? 'block' : 'none' }}">
+                                @if (Helpers::module_permission_check('risk'))
                                 <li class="nav-item {{ Request::is('admin/nezha-risk/queue') ? 'active' : '' }}">
                                     <a class="nav-link" href="{{ route('admin.nezha-risk.queue') }}" title="{{ translate('审核队列') }}">
                                         <span class="tio-circle nav-indicator-icon"></span>
@@ -447,12 +452,16 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                                         <span class="text-truncate">{{ translate('风控日志') }}</span>
                                     </a>
                                 </li>
+                                @endif
+                                @if (Helpers::module_permission_check('risk_settings'))
                                 <li class="nav-item {{ Request::is('admin/nezha-risk/settings') ? 'active' : '' }}">
                                     <a class="nav-link" href="{{ route('admin.nezha-risk.settings') }}" title="{{ translate('风控设置') }}">
                                         <span class="tio-circle nav-indicator-icon"></span>
                                         <span class="text-truncate">{{ translate('风控设置') }}</span>
                                     </a>
                                 </li>
+                                @endif
+                                @if (Helpers::module_permission_check('refund'))
                                 <li class="nav-item {{ Request::is('admin/nezha-refund/records') ? 'active' : '' }}">
                                     <a class="nav-link" href="{{ route('admin.nezha-refund.records') }}" title="{{ translate('退款留痕/审核') }}">
                                         <span class="tio-circle nav-indicator-icon"></span>
@@ -465,12 +474,15 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                                         <span class="text-truncate">{{ translate('逾期未退款') }}</span>
                                     </a>
                                 </li>
+                                @endif
+                                @if (Helpers::module_permission_check('kyc'))
                                 <li class="nav-item {{ Request::is('admin/nezha-kyc*') ? 'active' : '' }}">
                                     <a class="nav-link" href="{{ route('admin.nezha-kyc.index') }}" title="{{ translate('商家KYC') }}">
                                         <span class="tio-circle nav-indicator-icon"></span>
                                         <span class="text-truncate">{{ translate('商家KYC') }}</span>
                                     </a>
                                 </li>
+                                @endif
                             </ul>
                         </li>
                     @endif
@@ -1502,6 +1514,7 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
 
 
                     @if (Helpers::module_permission_check('account') ||
+                            Helpers::module_permission_check('deposit') ||
                             Helpers::module_permission_check('withdraw_list') ||
                             Helpers::module_permission_check('provide_dm_earning'))
                         <!-- transaction_management -->
@@ -1527,7 +1540,7 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                         </li>
                     @endif
                     <!-- End account -->
-                    @if (Helpers::module_permission_check('account'))
+                    @if (Helpers::module_permission_check('deposit'))
                         <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-deposit*') ? 'active' : '' }}">
                             <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{ route('admin.nezha-deposit.index') }}" title="{{ translate('佣金充值管理') }}">
                                 <i class="tio-wallet nav-icon"></i>
