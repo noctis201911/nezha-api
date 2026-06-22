@@ -567,6 +567,10 @@
 <audio id="nzAdminMsgAudio" preload="auto">
     <source src="{{dynamicAsset('assets/admin/sound/new-admin-message-voice.wav')}}?v=3" type="audio/wav">
 </audio>
+{{-- 哪吒: 顾客催「分享配送进度」专用提示音——与新订单/新消息声明显区别, 商家一听就知是催物流 --}}
+<audio id="nzDelivAudio" preload="auto">
+    <source src="{{dynamicAsset('assets/admin/sound/deliv-link-voice.mp3')}}?v=1" type="audio/mpeg">
+</audio>
 <script>
     // 哪吒: 首次用户交互时解锁提示音(绕开浏览器自动播放限制)——之后轮询新消息能稳定响铃
     (function(){
@@ -970,6 +974,8 @@
             var dvFirstId  = null;
             var dvDismissed = false;
             var dvMemSeen  = new Set();
+            var dvAudioEl  = document.getElementById('nzDelivAudio');
+            function dvPlay(){ try { if (dvAudioEl) { dvAudioEl.currentTime = 0; var p = dvAudioEl.play(); if (p && p.catch) { p.catch(function(){}); } } } catch(e){} }
             function dvLoadSeen(){ try { return new Set(JSON.parse(localStorage.getItem(DELIV_SEEN_KEY) || '[]')); } catch(e){ return dvMemSeen; } }
             function dvSaveSeen(set){ dvMemSeen = set; try { var arr = Array.from(set); if (arr.length > 200) { arr = arr.slice(arr.length - 200); } localStorage.setItem(DELIV_SEEN_KEY, JSON.stringify(arr)); } catch(e){} }
             function dvShow(count){ if (dvCountEl) { dvCountEl.textContent = count; } if (dvToast) { dvToast.style.display = 'block'; } }
@@ -984,7 +990,7 @@
                 var seen = dvLoadSeen();
                 var freshIds = ids.filter(function(id){ return !seen.has(id); });
                 if (freshIds.length > 0) {
-                    playAudio();
+                    dvPlay();
                     dvDismissed = false;
                     freshIds.forEach(function(id){ seen.add(id); });
                     dvSaveSeen(seen);
