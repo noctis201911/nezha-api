@@ -34,9 +34,13 @@ class NezhaCsClassifier
     protected static array $enterXlate = [
         '需要翻译', '要翻译', '进入翻译', '翻译模式', '开启翻译', '和骑手对话', '跟骑手对话', '跟骑手聊',
         '和骑手沟通', '帮我和骑手', '帮我跟骑手沟通', '和配送员沟通',
+        // 英文(给英文顾客的确认提示里指引的关键词，必须真能用)
+        'talk to rider', 'talk to the rider', 'talk to driver', 'talk to courier', 'translation mode', 'translate mode',
     ];
     protected static array $exitXlate = [
         '退出翻译', '不用翻译', '不翻译了', '结束翻译', '关闭翻译', '退出翻译模式', '不用翻了', '翻译结束',
+        // 英文(进模式回复里写了 Say "exit translation"，必须真能退出)
+        'exit translation', 'exit translate', 'stop translating', 'stop translation', 'end translation',
     ];
 
     public static function isEnterTranslateMode(?string $text): bool

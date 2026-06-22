@@ -135,14 +135,22 @@ class NezhaCsAssistant
             return;
         }
 
-        // 1.5) 纯英文/拉丁文且没命中上面任何闸——很可能是顾客粘贴的骑手英文消息。
-        // 不直接硬翻（英文也可能是顾客自己的提问），先问一句是否需要翻译，并指路进入翻译模式。
+        // 1.5) 纯英文/拉丁文且没命中上面任何闸——可能是顾客粘贴的骑手英文消息，也可能是英文顾客的提问。
+        // 先问一句"是否要翻译给骑手"——但只问一次：若顾客没去开翻译模式、又发来英文，就当真实提问交模型(用英文答)，绝不反复追问(防困在确认里)。
         if (NezhaCsClassifier::looksLikeForeignToTranslate($text)) {
-            self::reply($conversation, $customerUser,
-                "Hi～看到您发的是英文。要我帮您把它翻译、转达给骑手/配送员吗？需要的话回我一句「和骑手对话」，之后您发的内容我都自动帮您互译；如果您其实是想咨询订单或别的问题，直接用中文跟我说就行～
-（If you'd like me to translate this for the delivery rider, just say \"talk to rider\". Otherwise, tell me your question and I'll help.）",
-                'translate_confirm', null);
-            return;
+            $askedKey = 'nezha_cs_en_asked:' . $conversation->id;
+            if (!\Illuminate\Support\Facades\Cache::get($askedKey)) {
+                \Illuminate\Support\Facades\Cache::put($askedKey, 1, 600);
+                self::reply($conversation, $customerUser,
+                    "Hi! Quick check — would you like me to translate this and pass it to your delivery rider?
+• If yes, just reply \"talk to rider\" and I'll translate back and forth for you.
+• If you're asking me something, go ahead — I'm happy to help you right here in English.
+（如果您是想把这段话转达给骑手，回我一句「和骑手对话」就行；想直接咨询，照常问我即可～）",
+                    'translate_confirm', null);
+                return;
+            }
+            // 已问过一次、顾客仍发英文(且不是"talk to rider"——那会在上面进模式)→ 当真实提问，往下交模型用英文答；刷新窗口、别再反复弹确认。
+            \Illuminate\Support\Facades\Cache::put($askedKey, 1, 600);
         }
 
         // 2) 调模型，由模型判 answer / to_merchant / cannot。
@@ -600,8 +608,12 @@ class NezhaCsAssistant
 
         $messages = [
             ['role' => 'system', 'content' => $system],
-            ['role' => 'user', 'content' => $latestText],
         ];
+        // 顾客这条非中文 → 额外强约束回复语言(DeepSeek 默认偏中文,光靠系统提示会滑成中文回英文顾客)。
+        if (!NezhaCsClassifier::isChinese($latestText)) {
+            $messages[] = ['role' => 'system', 'content' => 'The customer\'s latest message is NOT in Chinese. You MUST write the "reply" field ENTIRELY in the same language the customer used (English or Russian). Never reply in Chinese to a non-Chinese customer.'];
+        }
+        $messages[] = ['role' => 'user', 'content' => $latestText];
 
         $payload = [
             'model' => $model,
@@ -913,7 +925,7 @@ KB;
         return <<<SYS
 你是「哪吒外卖」的在线客服，名字叫小哪。你就是一名真实的人类客服，不是机器。说话像微信里热心的真人客服：自然、口语、简短、有温度，会用"亲、哈、哦、啦、稍等哈"这类自然语气，但别浮夸、别用生硬的客服模板腔、别长篇大论。一次回复尽量一两句说清。
 
-【语言】用顾客所用的语言回复：顾客说中文你就中文，说英文就用英文，说俄语就用俄语；自然地匹配对方。reply 字段用对方的语言写。
+【语言】必须用顾客【这条消息所用的语言】回复：发中文就中文、发英文就【全程英文】、发俄语就俄语，绝不能用中文去回一个发英文/俄语的顾客。reply 字段整段都用对方的语言写。
 
 【绝对规则，违反会出大事】
 1. 你是真人客服。永远不要承认或暗示自己是 AI、机器人、大模型、程序、DeepSeek 等。被问"你是不是机器人/AI/真人吗"，必须用 action="answer" 自然地回"我是客服小哪呀～"，绝不要解释技术、绝不要 to_merchant。
