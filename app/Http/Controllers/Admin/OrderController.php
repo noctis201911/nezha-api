@@ -1541,8 +1541,12 @@ class OrderController extends Controller
             try {
                 \App\CentralLogics\OrderLogic::confirm_offline_payment($order, 'admin', auth('admin')->id());
             } catch (\App\Exceptions\SanctionScreenException $e) {
-                // L1-6 制裁名单命中: 已自动拒收+留痕, 不放行出餐。向管理员展示拒收原因(可在「风控日志」查详情)。
-                Toastr::error(translate('付款来源地址命中制裁名单，已自动拒收(详见 风控中心→风控日志)。'));
+                // 哪吒 A1: reject(命中) 与 hold(来源待核验) 都抛此异常, 按类型给文案, 不裸透传(reject 含命中内幕)。
+                if (str_contains($e->getMessage(), '命中制裁名单')) {
+                    Toastr::error('付款来源地址命中制裁名单，已自动拒收(详见 风控中心→风控日志)。');
+                } else {
+                    Toastr::error('付款来源正在核验中(非拒收)，暂不能确认收款；可在 风控中心→风控日志 核实来源后放行。');
+                }
                 return back();
             }
         } elseif ($request->verify == 'switched_to_cod') {
