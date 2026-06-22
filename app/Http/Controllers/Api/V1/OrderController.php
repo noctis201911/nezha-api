@@ -1989,7 +1989,7 @@ class OrderController extends Controller
         }
         $threshold = (float) (BusinessSetting::where('key','nezha_min_deposit_threshold')->first()?->value ?? 0);
         $balance = (float) (\App\Models\RestaurantWallet::where('vendor_id', $restaurant->vendor_id)->value('deposit_balance') ?? 0);
-        return $balance < $threshold;
+        return $balance <= $threshold;
     }
 
     public static function order_validation_check($request){
@@ -2020,7 +2020,7 @@ class OrderController extends Controller
             ],
             $nezha_deposit_low => [
                 'code' => 'restaurant',
-                'message' => 'restaurant_temporarily_unavailable_low_deposit',
+                'message' => translate('该店休息中，暂时无法下单，请稍后再来'),
                 'status' => 403
             ],
             $nezha_order_suspended => [
@@ -2233,7 +2233,7 @@ class OrderController extends Controller
 
             $nezha_deposit_low => [
                 'code' => 'restaurant',
-                'message' => 'restaurant_temporarily_unavailable_low_deposit',
+                'message' => translate('该店休息中，暂时无法下单，请稍后再来'),
                 'status' => 403
             ],
             $nezha_order_suspended => [

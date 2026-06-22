@@ -845,6 +845,8 @@ class Helpers
                 $item['delivery_fee'] = self::getDeliveryFee($item);
 
                 $item['restaurant_status'] = (int) $item->status;
+                // [哪吒 组4] 保证金≤0(开关开时)自动下线: 顾客端复用休息中展示, 不露内部术语; 关闭(switch=0)恒false零开销
+                $item['nezha_deposit_paused'] = (bool) \App\Http\Controllers\Api\V1\OrderController::nezha_deposit_below_threshold($item);
                 $item['cuisine'] = $item->cuisine;
 
                 if ($item->opening_time) {
@@ -902,6 +904,8 @@ class Helpers
                 $data['self_delivery_system'] = (int) $data->restaurant_sub->self_delivery;
             }
             $data['restaurant_status'] = (int) $data->status;
+            // [哪吒 组4] 保证金≤0(开关开时)自动下线: 顾客端复用休息中展示
+            $data['nezha_deposit_paused'] = (bool) \App\Http\Controllers\Api\V1\OrderController::nezha_deposit_below_threshold($data);
             if ($data->opening_time) {
                 $data['available_time_starts'] = $data->opening_time->format('H:i');
                 unset($data['opening_time']);
