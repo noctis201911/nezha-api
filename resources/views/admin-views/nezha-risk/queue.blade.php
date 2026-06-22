@@ -38,6 +38,10 @@
                         </thead>
                         <tbody>
                             @forelse ($records as $r)
+                                @php
+                                    $isInc = collect($r->hit_rules ?? [])->contains(fn ($h) => ($h['rule'] ?? '') === 'sanction_inconclusive');
+                                    $isKyc = collect($r->hit_rules ?? [])->contains(fn ($h) => \Illuminate\Support\Str::startsWith($h['rule'] ?? '', 'sanction_kyc_name'));
+                                @endphp
                                 <tr>
                                     <td>{{ $r->id }}</td>
                                     <td>{{ $r->created_at?->format('m-d H:i') }}</td>
@@ -53,7 +57,9 @@
                                     </td>
                                     <td>{{ $r->restaurant->name ?? ('#' . $r->restaurant_id) }}</td>
                                     <td>
-                                        @if ($r->payment_channel == 'usdt')
+                                        @if ($isKyc)
+                                            <span class="text-muted">—</span>
+                                        @elseif ($r->payment_channel == 'usdt')
                                             <span class="badge badge-soft-warning">USDT</span>
                                         @elseif ($r->payment_channel == 'rmb')
                                             <span class="badge badge-soft-info">{{ translate('人民币') }}</span>
@@ -61,19 +67,24 @@
                                             {{ $r->payment_channel }}
                                         @endif
                                     </td>
-                                    <td class="text-right">{{ \App\CentralLogics\Helpers::format_currency($r->order_amount) }}</td>
+                                    <td class="text-right">@if ($isKyc)<span class="text-muted">—</span>@else{{ \App\CentralLogics\Helpers::format_currency($r->order_amount) }}@endif</td>
                                     <td>
                                         @foreach (($r->hit_rules ?? []) as $h)
                                             <span class="badge badge-soft-danger d-block mb-1" title="{{ $h['detail'] ?? '' }}">{{ $h['rule'] ?? '' }}</span>
                                         @endforeach
                                     </td>
                                     <td>
-                                        @php
-                                            $isInc = collect($r->hit_rules ?? [])->contains(fn ($h) => ($h['rule'] ?? '') === 'sanction_inconclusive');
-                                        @endphp
                                         <form method="post">
                                             @csrf
-                                            @if ($isInc)
+                                            @if ($isKyc)
+                                                <div class="mb-1"><small class="text-muted">{{ translate('商家 KYC 姓名筛查疑似命中 — 非订单·无付款; 请核对是否同一人后处置') }}</small></div>
+                                                @if ($r->restaurant_id)
+                                                    <a href="{{ route('admin.nezha-kyc.edit', $r->restaurant_id) }}" class="btn btn-sm btn-outline-primary mb-1">{{ translate('去商家KYC处置') }}</a>
+                                                @endif
+                                                <input type="text" name="note" class="form-control form-control-sm mb-1" placeholder="{{ translate('核对结论(选填): 已核实非同一人 / 确认命中') }}">
+                                                <button formaction="{{ route('admin.nezha-risk.approve', $r->id) }}" class="btn btn-sm btn-success mr-1" onclick="return confirm('{{ translate('确认已核实非同一人, 解除该疑似标记?') }}')">{{ translate('核实无误·解除') }}</button>
+                                                <button formaction="{{ route('admin.nezha-risk.reject', $r->id) }}" class="btn btn-sm btn-danger" onclick="return confirm('{{ translate('确认命中制裁名单, 标记拒绝?') }}')">{{ translate('确认命中·拒绝') }}</button>
+                                            @elseif ($isInc)
                                                 <input type="text" name="note" class="form-control form-control-sm mb-1" placeholder="{{ translate('核实结论(必填): 已在区块浏览器核对来源地址不在制裁名单') }}">
                                                 <button formaction="{{ route('admin.nezha-risk.release-inconclusive', $r->id) }}" class="btn btn-sm btn-warning mr-1" onclick="return confirm('{{ translate('确认已核实该笔付款来源地址不在制裁名单, 放行并确认收款? (重新筛查若命中仍会拦)') }}')">{{ translate('核实放行+确认收款') }}</button>
                                                 <button formaction="{{ route('admin.nezha-risk.reject', $r->id) }}" class="btn btn-sm btn-danger" onclick="return confirm('{{ translate('确认清退该订单?') }}')">{{ translate('清退') }}</button>
