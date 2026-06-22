@@ -1220,6 +1220,35 @@ class OrderLogic
                 info('record_direct_pay_refund_pending push failed: ' . $e->getMessage());
             }
 
+            // 哪吒[退款专项2026-06-22 信任闭环]: 顾客/商家/系统侧触发的退款 → 邮件提醒超管(平台方)来看,
+            // 让「顾客发起退款」不再只有商家知道。admin 自己操作的(confirmer_type='admin')不重复提醒。L1-1: 仅通知不碰钱。
+            try {
+                if ($confirmer_type !== 'admin' && config('mail.status')) {
+                    $admin = \App\Models\Admin::where('role_id', 1)->first();
+                    $adminEmail = $admin ? $admin->getRawOriginal('email') : null;
+                    if ($adminEmail) {
+                        $whoMap = ['customer' => '顾客', 'restaurant' => '商家', 'system' => '系统(超时自动)'];
+                        $who = $whoMap[$confirmer_type] ?? $confirmer_type;
+                        $channelText = (($route['channel'] ?? '') === 'usdt')
+                            ? 'USDT 退回原地址'
+                            : ((($route['channel'] ?? '') === 'rmb') ? '支付宝原路退回' : '见付款凭证');
+                        $body = "有一笔直付订单进入待退款。\n\n"
+                            . "订单号: #{$order->id}\n"
+                            . "发起方: {$who}\n"
+                            . "应退金额: " . \App\CentralLogics\Helpers::format_currency($refundAmount) . "\n"
+                            . "原路渠道: {$channelText}\n"
+                            . "商家: " . ($order->restaurant?->name ?? '-') . "\n"
+                            . "原因: " . ($reasonNote ?: '-') . "\n\n"
+                            . "平台不经手此款，退款由商家按原路退回顾客。请在后台「风控中心→逾期未退款」跟进商家是否按时退款。";
+                        \Illuminate\Support\Facades\Mail::raw($body, function ($m) use ($adminEmail, $order) {
+                            $m->to($adminEmail)->subject('【哪吒退款提醒】订单 #' . $order->id . ' 待商家退款');
+                        });
+                    }
+                }
+            } catch (\Throwable $e) {
+                info('record_direct_pay_refund_pending admin mail failed: ' . $e->getMessage());
+            }
+
             self::log_offline_payment_action($order, 'direct_pay_refund_pending', $order->order_status, $order->order_status, $confirmer_type, $confirmer_id);
         } catch (\Throwable $e) {
             info('record_direct_pay_refund_pending failed: order=' . ($order->id ?? '?') . ' ' . $e->getMessage());

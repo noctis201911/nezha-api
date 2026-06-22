@@ -343,6 +343,33 @@ class OrderController extends Controller
         // 哪吒: 商家标记已退款后, 若该店已无逾期未退款留痕, 自动解除退款逾期接单暂停(非资金)。
         \App\CentralLogics\NezhaRefundOverdue::lift_suspend_if_clear($record->restaurant_id);
 
+        // 哪吒[退款专项2026-06-22 信任闭环]: 商家标记已退款 → 主动给顾客站内信(+FCM若有token),
+        // 让顾客知道钱已按原路退回、不必干等; 不再只依赖顾客重开订单页才看到。L1-1: 仅通知不碰钱。
+        try {
+            if ($order->user_id && !$order->is_guest) {
+                $lang = $order->customer?->current_language_key ?: 'zh-CN';
+                $isZh = stripos($lang, 'zh') === 0;
+                $chanText = $record->payment_channel === 'usdt'
+                    ? ($isZh ? 'USDT 原地址' : 'your original USDT address')
+                    : ($record->payment_channel === 'rmb'
+                        ? ($isZh ? '支付宝原路' : 'Alipay (original method)')
+                        : ($isZh ? '原支付方式' : 'your original payment method'));
+                $amt = \App\CentralLogics\Helpers::format_currency($record->refund_amount);
+                $title = $isZh ? '退款已处理' : 'Refund processed';
+                $msg = $isZh
+                    ? "商家已为订单 #{$order->id} 按{$chanText}退回 {$amt}。到账时间以你的支付渠道为准；如未收到请联系商家或客服。"
+                    : "The restaurant refunded {$amt} for order #{$order->id} via {$chanText}. Arrival time depends on your payment channel; contact the restaurant or support if not received.";
+                $data = \App\CentralLogics\Helpers::makeDataForPushNotification(title: $title, message: $msg, orderId: $order->id, type: 'order_status', orderStatus: 'refunded');
+                \App\CentralLogics\Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id);
+                $token = $order->customer?->cm_firebase_token;
+                if ($token && \App\CentralLogics\Helpers::customerWantsPush($order->customer, 'order_progress')) {
+                    \App\CentralLogics\Helpers::send_push_notif_to_device($token, $data);
+                }
+            }
+        } catch (\Throwable $e) {
+            info('mark_refunded notify customer failed: ' . $e->getMessage());
+        }
+
         Toastr::success(translate('已标记为已退款，感谢您的原路退还。'));
         return back();
     }
