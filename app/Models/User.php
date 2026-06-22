@@ -61,6 +61,7 @@ class User extends Authenticatable
         'ref_by' => 'integer',
         'social_id' => 'integer',
         'notification_preferences' => 'array',
+        'system_notif_seen_at' => 'datetime',
     ];
 
     protected $appends = ['image_full_url'];

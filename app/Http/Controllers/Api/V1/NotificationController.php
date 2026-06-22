@@ -83,4 +83,51 @@ class NotificationController extends Controller
         }
     }
 
+    // 哪吒(系统通知红点 06-22): 个人系统通知(订单更新)未读数 = created_at > system_notif_seen_at,
+    // 且与展示一致地过滤孤儿(指向已删/非本人订单的通知)。只数 UserNotification, 不数平台公告(防发公告即骚扰所有人)。
+    public function unread_count(Request $request)
+    {
+        try {
+            $userId = $request?->user()?->id;
+            $seenAt = $request->user()?->system_notif_seen_at;
+            $rows = UserNotification::where('user_id', $userId)
+                ->where('created_at', '>=', \Carbon\Carbon::today()->subDays(15))
+                ->when($seenAt, function ($q) use ($seenAt) {
+                    $q->where('created_at', '>', $seenAt);
+                })
+                ->get();
+            $orderIds = $rows->map(function ($n) {
+                $oid = is_array($n->data) ? ($n->data['order_id'] ?? null) : null;
+                return ($oid === null || $oid === '') ? null : (int) $oid;
+            })->filter()->unique()->values();
+            $orders = $orderIds->isNotEmpty()
+                ? Order::where('user_id', $userId)->whereIn('id', $orderIds->all())->pluck('id')->flip()
+                : collect();
+            $count = $rows->filter(function ($n) use ($orders) {
+                $data = is_array($n->data) ? $n->data : [];
+                $oid = $data['order_id'] ?? null;
+                if ($oid === null || $oid === '') {
+                    return true;
+                }
+                return $orders->has((int) $oid);
+            })->count();
+            return response()->json(['count' => $count], 200);
+        } catch (\Exception $e) {
+            return response()->json(['count' => 0], 200);
+        }
+    }
+
+    // 哪吒: 顾客查看了"系统通知"tab -> 记 system_notif_seen_at=now, 清未读(在场感知: 看了才清)。
+    public function mark_seen(Request $request)
+    {
+        try {
+            \Illuminate\Support\Facades\DB::table('users')
+                ->where('id', $request?->user()?->id)
+                ->update(['system_notif_seen_at' => now()]);
+            return response()->json(['message' => 'ok'], 200);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'ok'], 200);
+        }
+    }
+
 }

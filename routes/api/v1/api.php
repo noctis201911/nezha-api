@@ -412,6 +412,8 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
 
     Route::group(['prefix' => 'customer', 'middleware' => 'auth:api'], function () {
         Route::get('notifications', [NotificationController::class, 'get_notifications']);
+        Route::get('notifications/unread-count', [NotificationController::class, 'unread_count']);
+        Route::post('notifications/mark-seen', [NotificationController::class, 'mark_seen']);
         Route::get('info', [CustomerController::class, 'info']);
         Route::get('update-zone', [CustomerController::class, 'update_zone']);
         Route::post('update-profile', [CustomerController::class, 'update_profile']);
