@@ -483,6 +483,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
             Route::post('remind-delivery-link', [OrderController::class, 'remind_delivery_link']); // 哪吒B方案: 配送中无链接时顾客一键提醒商家分享Yandex追踪
             Route::post('delivery-appeal', [OrderController::class, 'submit_delivery_appeal']); // 哪吒B方案: 「没有收到餐/配送异常」专用申诉留痕(req 4), 不自动退款
             Route::post('refund-request', [OrderController::class, 'refund_request']);
+            Route::post('nudge-refund', [OrderController::class, 'nudge_refund']); // 哪吒B方案: 待退款单顾客「催一下」→平台替顾客提醒商家(站内信+Telegram), 不碰钱
             Route::get('refund-reasons', [OrderController::class, 'refund_reasons']);
             Route::get('track', [OrderController::class, 'track_order']);
             Route::put('payment-method', [OrderController::class, 'update_payment_method']);

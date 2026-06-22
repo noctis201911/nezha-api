@@ -1145,6 +1145,65 @@ class OrderController extends Controller
         return response()->json(['message' => '已提醒商家分享配送进度，请稍候'], 200);
     }
 
+    /**
+     * 哪吒[退款专项2026-06-22 Piece2]: 顾客「催一下商家退款」。
+     * 待退款单上点「催一下」→ 平台替顾客提醒商家(站内信进商家消息中心 + Telegram)尽快原路退款。
+     * L1-1: 平台不碰钱, 仅转达提醒。对象级鉴权: 只能催【本人】且【确处于待退款】的单。防刷: 6 小时一次。
+     */
+    public function nudge_refund(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'order_id' => 'required',
+            'guest_id' => $request->user ? 'nullable' : 'required',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
+        }
+        $user_id = $request->user ? $request->user->id : $request['guest_id'];
+        $order = Order::where(['id' => $request['order_id'], 'user_id' => $user_id])
+            ->when(!isset($request->user), function ($q) { $q->where('is_guest', 1); })
+            ->when(isset($request->user), function ($q) { $q->where('is_guest', 0); })
+            ->Notpos()->first();
+        if (!$order) {
+            return response()->json(['errors' => [['code' => 'order', 'message' => translate('messages.not_found')]]], 404);
+        }
+        // 仅「待退款」单可催: 有 pending_merchant_refund 留痕, 或订单态=refund_requested。
+        $hasPendingRecord = \App\Models\NezhaRefundRecord::where('order_id', $order->id)
+            ->where('status', 'pending_merchant_refund')->exists();
+        if (!$hasPendingRecord && $order->order_status !== 'refund_requested') {
+            return response()->json(['errors' => [['code' => 'order', 'message' => '当前订单不在待退款状态']]], 403);
+        }
+        // 防刷: 6 小时内只替顾客转达一次提醒。
+        $key = 'nezha_refund_nudge_' . $order->id;
+        if (\Illuminate\Support\Facades\Cache::has($key)) {
+            return response()->json(['message' => '已提醒商家，请耐心等待；如长时间未退可联系商家或客服'], 200);
+        }
+        \Illuminate\Support\Facades\Cache::put($key, now()->toDateTimeString(), now()->addHours(6));
+        // 给商家发消息: 后台消息中心站内信 + Telegram(商家主渠道)。失败不阻断。
+        try {
+            $vendorId = $order->restaurant?->vendor_id;
+            if ($vendorId) {
+                $data = Helpers::makeDataForPushNotification(
+                    title: '顾客在催退款',
+                    message: '订单 #' . $order->id . ' 的顾客在催退款，请尽快按原路退还顾客付款，并在「订单→待退款」点「标记已退款」。',
+                    orderId: $order->id, type: 'order_status', orderStatus: 'refunded'
+                );
+                Helpers::insertDataOnNotificationTable($data, 'vendor', $vendorId);
+                $vendorToken = $order->restaurant?->vendor?->firebase_token;
+                if ($vendorToken) {
+                    Helpers::send_push_notif_to_device($vendorToken, $data);
+                }
+            }
+        } catch (\Throwable $e) {
+            info('nudge_refund vendor notify failed: ' . $e->getMessage());
+        }
+        try {
+            Helpers::sendTelegramToRestaurant($order->restaurant,
+                "🔔 顾客在催退款\n订单 #{$order->id}\n请尽快按原路退还顾客付款（平台不经手此款），退款后在商家后台「订单 → 待退款」点「标记已退款」。");
+        } catch (\Throwable $e) {}
+        return response()->json(['message' => '已替你提醒商家尽快退款，请稍候'], 200);
+    }
+
     public function confirm_delivery(Request $request)
     {
         $validator = Validator::make($request->all(), [
