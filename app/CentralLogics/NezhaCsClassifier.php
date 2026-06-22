@@ -16,11 +16,10 @@ class NezhaCsClassifier
         '没收到', '没送到', '少了', '漏了', '发错', '送错', '做错', '少给', '少送',
         '多扣', '乱扣', '扣错', '重复扣', '扣款', '扣多', '没到账', '钱没退', '钱不对', '金额不对',
         '余额', '提现', '钱包', '支付失败', '付款失败', '重复支付', '多付', '付了钱', '付款了', '已付款',
-        '人工客服', '转人工', '客服电话', '打电话', '电话联系',
         // —— 英文 ——
         'refund', 'money back', 'chargeback', 'complaint', 'scam', 'fraud', 'lawyer', 'sue', 'police',
         'wrong order', 'missing', "didn't receive", 'did not receive', 'not received',
-        'overcharge', 'over charged', 'double charge', 'charged twice', 'compensation', 'human agent',
+        'overcharge', 'over charged', 'double charge', 'charged twice', 'compensation',
     ];
 
     // 翻译诉求：中文顾客↔本地骑手沟通。最高优先（招牌功能），不被敏感/转商家抢走。

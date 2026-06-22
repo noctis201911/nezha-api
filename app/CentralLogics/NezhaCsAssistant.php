@@ -63,6 +63,14 @@ class NezhaCsAssistant
                 : 'Translation mode on~ Send me the rider\'s message and I\'ll translate it to Chinese; tell me what you want to say and I\'ll translate it into the rider\'s language (Armenian by default; say if you need Russian/English). Say "exit translation" when done.', 'answer', null);
             return;
         }
+        // 不在翻译模式却说"退出翻译"等 → 友好提示（避免被一次性翻译闸误接成翻译请求）。
+        if (!$inXlate && NezhaCsClassifier::isExitTranslateMode($text)) {
+            self::reply($conversation, $customerUser, $zhIn
+                ? '您当前没有在翻译模式哦～需要我帮您和骑手沟通时，跟我说一句「和骑手对话」就能开启。'
+                : 'You\'re not in translation mode right now~ Say "talk to rider" anytime and I\'ll start translating for you.', 'answer', null);
+            return;
+        }
+
         // 翻译模式中：每条都互译（模式内直接翻、不再问是否需要翻译）
         if ($inXlate) {
             // 记住骑手用的语言，顾客回话时自动译成同一种语言（默认亚美尼亚语）
