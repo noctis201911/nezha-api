@@ -18,6 +18,20 @@
 - **第二段（你回来后）**：你看报告 + **一次性批一串 🟡** → 我再跑第二段。
 > 🔴 为什么 🟡 必须停：money-write 仿真(哪怕零落库)会被 auto 分类器拦；翻开关/清演示数据是**真实影响所有商家顾客**的破坏性操作（INVARIANTS 强制拍板）；真下单写真库发真通知。**QA 不值得为省事冒翻错开关的险。**
 
+## 0.6 🔴 资金硬门(must): 货到付款(COD)必须全平台关闭
+
+B方案平台不碰钱、无现金代收路径，`cash_on_delivery` 必须恒为 0。若被(误)开启，failed/pending 单的「切换货到付款」会把订单改成 `cash_on_delivery` 产出脏单。
+
+**一键 go/no-go 自检**：
+```
+node nz.js run "bash /www/wwwroot/api.nezha.am/nzcheck-cod.sh"
+```
+- 同时校验两层：① DB `business_settings.cash_on_delivery.status == 0` ② 线上 `/api/v1/config` 的 `cash_on_delivery == false`。
+- 两项全绿 → 通过；任一红字 → **no-go**（脚本 exit 1，可用于阻断/CI）。
+- 修复：后台 `/admin/business-settings/payment-setup` 关闭「Cash on Delivery」(保留 Offline 支付)，保存即生效（BusinessSetting saved-observer 自动清 `business_settings_all_data` 缓存）。
+- 已接入 `nzhealth.sh`（[9] 节）与前后端部署脚本（`nzdeploy-api.sh`/`nzdeploy-web.sh` 部署后红字告警，不阻断部署）。
+- 由来：2026-06-23 PAYMENT-COD-CLEANUP；前端 COD 入口已移除(墙=后端开关，牌=前端入口)，本硬门防开关被误翻回。
+
 ## 1. 上线前 18 维度总表
 
 > 自动化分级：🟢 无人值守可跑(只读/grep/带token真机浏览) · 🟡 需你批准(money-write仿真/真下单/翻开关/破坏性) · 👤 需真人(AI够不到)
