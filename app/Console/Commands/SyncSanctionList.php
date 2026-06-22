@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Log;
 use App\CentralLogics\Helpers;
 use App\CentralLogics\NezhaSanctionScreen;
 use App\Models\NezhaSanctionAddress;
+use App\Models\NezhaSanctionName;
+use App\CentralLogics\NezhaKycScreen;
 use Carbon\Carbon;
 
 /**
@@ -97,6 +99,8 @@ class SyncSanctionList extends Command
 
             if ($dry) {
                 $this->info('[DRY-RUN] ' . $summary . ' — 未落库');
+                $nameRes = $this->syncNames($body, true);
+                $this->info('[DRY-RUN] 人名解析 ' . $nameRes['parsed'] . ' 条 — 未落库');
                 $this->recordStatus('dry-run', $summary, $total);
                 return self::SUCCESS;
             }
@@ -125,7 +129,9 @@ class SyncSanctionList extends Command
                 }
             }
 
-            $msg = "{$summary}; 新增 {$inserted} / 更新 {$updated}";
+            // —— 阶段1: 同步 OFAC SDN 人名/实体名到 nezha_sanction_names ——
+            $nameRes = $this->syncNames($body, false);
+            $msg = "{$summary}; 地址 新增 {$inserted}/更新 {$updated}; 人名 解析 {$nameRes['parsed']} 新增 {$nameRes['inserted']}/更新 {$nameRes['updated']}";
             $this->info('已同步: ' . $msg);
             Log::info('[nezha-sanction] 同步成功: ' . $msg);
             $this->recordStatus('ok', $msg, $total);
@@ -185,6 +191,118 @@ class SyncSanctionList extends Command
         return $out;
     }
 
+    /**
+     * 解析 OFAC SDN 人名/实体名 + 别名(aka), upsert 入 nezha_sanction_names.
+     * 失败安全: 解析 0 条则不动既有人名名单(与地址同准则)。dry=true 只解析不落库。
+     * @return array{parsed:int,inserted:int,updated:int}
+     */
+    private function syncNames(string $body, bool $dry): array
+    {
+        $names = $this->parseIndividualNames($body);
+
+        // 同一 run 内去重(name_norm|type|uid)
+        $uniq = [];
+        foreach ($names as $n) {
+            $uniq[$n['name_norm'] . '|' . $n['name_type'] . '|' . $n['sdn_uid']] = $n;
+        }
+        $names = array_values($uniq);
+
+        $res = ['parsed' => count($names), 'inserted' => 0, 'updated' => 0];
+        if (empty($names)) {
+            Log::warning('[nezha-sanction] 人名解析 0 条(疑似源结构变更), 保留既有人名名单不动。');
+            return $res;
+        }
+        if ($dry) {
+            return $res;
+        }
+
+        $now = now();
+        foreach ($names as $n) {
+            $existing = NezhaSanctionName::where('name_norm', $n['name_norm'])
+                ->where('name_type', $n['name_type'])
+                ->where('sdn_uid', $n['sdn_uid'])
+                ->where('source', 'OFAC_SDN')
+                ->first();
+            if ($existing) {
+                $existing->name_raw       = $n['name_raw'] ?: $existing->name_raw;
+                $existing->programs       = $n['programs'] ?: $existing->programs;
+                $existing->last_seen_sync = $now;
+                $existing->save();
+                $res['updated']++;
+            } else {
+                NezhaSanctionName::create($n + [
+                    'source'         => 'OFAC_SDN',
+                    'added_at'       => $now,
+                    'last_seen_sync' => $now,
+                ]);
+                $res['inserted']++;
+            }
+        }
+        Log::info('[nezha-sanction] 人名同步: 解析 ' . $res['parsed'] . ' 新增 ' . $res['inserted'] . ' 更新 ' . $res['updated']);
+        return $res;
+    }
+
+    /**
+     * 解析 SDN XML 的人名/实体名 + 别名.
+     * 结构: <sdnEntry><uid/><firstName/><lastName/><sdnType>Individual|Entity</sdnType>
+     *        <programList><program/></programList>
+     *        <akaList><aka><type>a.k.a.</type><lastName/><firstName/></aka></akaList></sdnEntry>
+     * 实体(Entity)通常只有 lastName 存全名; 个人(Individual)有 first+last。
+     * @return array<int,array{name_norm:string,name_raw:string,name_type:string,sdn_uid:string,programs:string}>
+     */
+    private function parseIndividualNames(string $body): array
+    {
+        $out = [];
+        $clean = preg_replace('/\sxmlns="[^"]*"/', '', $body, 1);
+        $prev = libxml_use_internal_errors(true);
+        $xml  = simplexml_load_string($clean);
+        libxml_use_internal_errors($prev);
+        if ($xml === false) {
+            return [];
+        }
+
+        foreach ($xml->sdnEntry as $entry) {
+            $uid  = trim((string) ($entry->uid ?? ''));
+            $type = strtolower(trim((string) ($entry->sdnType ?? '')));
+            $ntype = $type === 'individual' ? 'individual' : ($type === 'entity' ? 'entity' : ($type !== '' ? 'other' : 'other'));
+
+            $progs = [];
+            if (isset($entry->programList) && isset($entry->programList->program)) {
+                foreach ($entry->programList->program as $p) {
+                    $pp = trim((string) $p);
+                    if ($pp !== '') $progs[] = $pp;
+                }
+            }
+            $programs = implode(',', array_unique($progs));
+
+            // 主名
+            $this->pushName($out, trim((string) ($entry->firstName ?? '')), trim((string) ($entry->lastName ?? '')), $ntype, $uid, $programs);
+
+            // 别名 aka
+            if (isset($entry->akaList) && isset($entry->akaList->aka)) {
+                foreach ($entry->akaList->aka as $aka) {
+                    $this->pushName($out, trim((string) ($aka->firstName ?? '')), trim((string) ($aka->lastName ?? '')), $ntype, $uid, $programs);
+                }
+            }
+        }
+        return $out;
+    }
+
+    /** 组装一条人名记录(规范化 + 截断), 空名跳过。 */
+    private function pushName(array &$out, string $first, string $last, string $ntype, string $uid, string $programs): void
+    {
+        $raw = preg_replace('/\s+/', ' ', trim($first . ' ' . $last));
+        if ($raw === '') return;
+        $norm = NezhaKycScreen::normalize_name($raw);
+        if ($norm === '') return;
+        $out[] = [
+            'name_norm' => mb_substr($norm, 0, 191),
+            'name_raw'  => mb_substr($raw, 0, 250),
+            'name_type' => $ntype,
+            'sdn_uid'   => $uid !== '' ? $uid : '',
+            'programs'  => mb_substr($programs, 0, 250),
+        ];
+    }
     /** 护栏触发: 不动名单, 记录告警状态, 命令以成功退出(避免调度器反复报错告警)。 */
     private function bail(string $reason)
     {

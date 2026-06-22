@@ -98,6 +98,25 @@ class NezhaKycController extends Controller
 
         $profile->save();
 
+        // 阶段1 制裁名字筛查(L1-6): 对法人 + 受益人姓名比对 OFAC SDN 人名名单 →
+        // 写回 screen_*; possible/hit 进风控审核队列/日志。失败不阻断录入(纯告知)。
+        try {
+            if (\App\CentralLogics\NezhaKycScreen::enabled()) {
+                $names  = array_filter([$request->input('legal_name'), $request->input('beneficial_owner_name')]);
+                $screen = \App\CentralLogics\NezhaKycScreen::screen_names($names);
+                \App\CentralLogics\NezhaKycScreen::apply_to_profile($profile, $screen);
+                \App\CentralLogics\NezhaKycScreen::record_risk($restaurant->id, null, $screen, 'kyc_save');
+
+                if (($screen['status'] ?? '') === 'hit') {
+                    Toastr::error(translate('⚠️ 制裁名单命中: 该姓名与 OFAC SDN 名单完全一致, 平台不得与受制裁主体合作, 建议拒绝。已记风控日志。'));
+                } elseif (($screen['status'] ?? '') === 'possible') {
+                    Toastr::warning(translate('制裁名单疑似命中(姓名近似), 已转风控审核队列, 请人工核对后据实处置。'));
+                }
+            }
+        } catch (\Throwable $e) {
+            info(['kyc-screen-save', $e->getMessage()]);
+        }
+
         Toastr::success(translate('KYC 资料已保存, 状态: 待审核'));
         return back();
     }

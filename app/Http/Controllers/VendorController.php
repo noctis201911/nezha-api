@@ -192,6 +192,21 @@ class VendorController extends Controller
             Helpers::add_or_update_translations(request: $request, key_data: 'address', name_field: 'address', model_name: 'Restaurant', data_id: $restaurant->id, data_value: $restaurant->address);
 
             DB::commit();
+
+            // 阶段1 制裁名字筛查(L1-6): 自注册法人姓名比对 OFAC SDN 人名名单 → 命中/疑似写风控队列。
+            // 非阻断(商家本就 status=0 待运营审核), 由运营在审核队列/入驻审核处据实拒绝。
+            try {
+                if (\App\CentralLogics\NezhaKycScreen::enabled()) {
+                    $kycName = trim(($vendor->f_name ?? '') . ' ' . ($vendor->l_name ?? ''));
+                    $kycScreen = \App\CentralLogics\NezhaKycScreen::screen_names([$kycName]);
+                    if (in_array($kycScreen['status'] ?? 'clear', ['possible', 'hit'], true)) {
+                        \App\CentralLogics\NezhaKycScreen::record_risk($restaurant->id, null, $kycScreen, 'vendor_self_register');
+                    }
+                }
+            } catch (\Throwable $e) {
+                info(['kyc-screen-store', $e->getMessage()]);
+            }
+
             try {
                 $admin = Admin::where('role_id', 1)->first();
                 $notification_status = Helpers::getNotificationStatusData('restaurant', 'restaurant_registration');
