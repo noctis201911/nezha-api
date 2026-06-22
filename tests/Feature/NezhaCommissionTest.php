@@ -118,4 +118,33 @@ class NezhaCommissionTest extends TestCase
         $this->assertTrue($r['subscription']);
         $this->assertEqualsWithDelta(0, $r['amount'], 0.01);
     }
+
+    public function test_slightly_delay_addss_type_charge_back(): void
+    {
+        // 4000 - 200(基数内) + 200(slightly_delay 加回) = 4000 (镜像引擎)
+        $r = OrderLogic::nezha_commissionable_amount($this->mkOrder([
+            'order_amount' => 4000, 'delivery_type' => 'slightly_delay', 'delivery_type_charge' => 200,
+        ]));
+        $this->assertEqualsWithDelta(4000, $r['base'], 0.01);
+    }
+
+    public function test_ref_bonus_added_back_to_base(): void
+    {
+        // 首单返 ref_bonus 加回基数: order_amount 2900 + 100 = 3000
+        $r = OrderLogic::nezha_commissionable_amount($this->mkOrder([
+            'order_amount' => 2900, 'ref_bonus_amount' => 100,
+        ]));
+        $this->assertEqualsWithDelta(3000, $r['base'], 0.01);
+        $this->assertEqualsWithDelta(300, $r['amount'], 0.01);
+    }
+
+    /** 结构性同源断言: 引擎 create_transaction 必须委托给唯一公式源 nezha_commissionable_amount, 防两份公式漂移。 */
+    public function test_engine_create_transaction_delegates_to_pure_function(): void
+    {
+        $rm = new \ReflectionMethod(OrderLogic::class, 'create_transaction');
+        $lines = file($rm->getFileName());
+        $body = implode('', array_slice($lines, $rm->getStartLine() - 1, $rm->getEndLine() - $rm->getStartLine() + 1));
+        $this->assertStringContainsString('nezha_commissionable_amount(', $body,
+            '引擎必须调用 nezha_commissionable_amount() 单一公式源, 否则显示≠实扣会复活');
+    }
 }

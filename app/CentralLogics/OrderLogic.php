@@ -163,24 +163,14 @@ class OrderLogic
         }
 
 
-        $order_amount = $order->order_amount - $order->additional_charge - $order->extra_packaging_amount - $order->delivery_charge - $order->total_tax_amount - $order->dm_tips - $order->delivery_type_charge + $order->coupon_discount_amount + $restaurant_discount_amount + $ref_bonus_amount;
-
-        if ($order->delivery_type === 'express') {
-            $order_amount -= $order->delivery_type_charge;
-        } elseif ($order->delivery_type === 'slightly_delay') {
-            $order_amount += $order->delivery_type_charge;
-        }
-
-        if($restaurant->restaurant_model == 'subscription' && isset($rest_sub)){
-            $comission_amount =0;
-            $subscription_mode= 1;
-            $commission_percentage= 0;
-        }
-        else{
-            $comission_amount = $comission?($order_amount/ 100) * $comission:0;
-            $subscription_mode= 0;
-            $commission_percentage= $comission;
-        }
+        // [哪吒 B方案/组4] 计佣基数(净商品额)+ 佣金额 统一走唯一纯函数 nezha_commissionable_amount(),
+        // 与 admin/商家订单详情展示行同源, 杜绝"两份公式各自漂移"。$order_amount 即计佣基数,
+        // 含 express/slightly_delay 二次调整与 admin 出资折扣 addback, 与原内联公式逐分支等值。
+        $nz_comm = self::nezha_commissionable_amount($order);
+        $order_amount = $nz_comm['base'];
+        $comission_amount = $nz_comm['amount'];
+        $subscription_mode = $nz_comm['subscription'] ? 1 : 0;
+        $commission_percentage = $nz_comm['subscription'] ? 0 : $comission;
 
         if(($restaurant->restaurant_model == 'subscription' &&  $rest_sub?->self_delivery == 1) || ($restaurant->restaurant_model != 'subscription' && $restaurant->self_delivery_system)){
             $comission_on_delivery =0;
