@@ -126,13 +126,13 @@ class DeliveryManController extends Controller
 
     public function edit($id)
     {
-        $delivery_man = DeliveryMan::find($id);
+        $delivery_man = DeliveryMan::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->find($id);
         return view('vendor-views.delivery-man.edit', compact('delivery_man'));
     }
 
     public function status(Request $request)
     {
-        $delivery_man = DeliveryMan::find($request->id);
+        $delivery_man = DeliveryMan::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->find($request->id);
         $delivery_man->status = $request->status;
 
         try
@@ -170,7 +170,7 @@ class DeliveryManController extends Controller
 
     public function earning(Request $request)
     {
-        $delivery_man = DeliveryMan::find($request->id);
+        $delivery_man = DeliveryMan::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->find($request->id);
         $delivery_man->earning = $request->status;
 
         $delivery_man->save();
@@ -205,7 +205,7 @@ class DeliveryManController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)]);
         }
 
-        $delivery_man = DeliveryMan::find($id);
+        $delivery_man = DeliveryMan::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->find($id);
 
         if ($request->has('image')) {
             $image_name = Helpers::update(dir:'delivery-man/',old_image: $delivery_man->image, format:'png',image: $request->file('image'));
@@ -246,7 +246,7 @@ class DeliveryManController extends Controller
 
     public function delete(Request $request)
     {
-        $delivery_man = DeliveryMan::find($request->id);
+        $delivery_man = DeliveryMan::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->find($request->id);
 
         Helpers::check_and_delete('delivery-man/' , $delivery_man['image']);
 

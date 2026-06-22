@@ -468,6 +468,7 @@ class POSController extends Controller
     public function getUserData(Request $request)
     {
         if ($request->customer_id) {
+            if(!\App\Models\Order::where('user_id', $request->customer_id)->where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->exists()){ return response()->json(['user'=>null,'view'=>''], 200); }
             $user = User::where('id', $request->customer_id)->select('id', 'f_name', 'l_name', 'phone', 'wallet_balance', 'email')->first();
             if ($user) {
                 $user = [
@@ -499,6 +500,7 @@ class POSController extends Controller
     }
     public function getUserAddress(Request $request)
     {
+        if(!\App\Models\Order::where('user_id', $request->customer_id)->where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->exists()){ return response()->json(['view'=>'','cart'=>''], 200); }
         $address = CustomerAddress::where('user_id', $request->customer_id)->get();
         $selectedAddress = $address->sortByDesc('created_at')->first();
         Session::put('address_id', $selectedAddress?->id);
@@ -516,6 +518,7 @@ class POSController extends Controller
 
     public function chooseAddress(Request $request)
     {
+        if(!\App\Models\Order::where('user_id', $request->customer_id)->where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->exists()){ return response()->json(['id'=>null,'view'=>''], 200); }
         $address = CustomerAddress::where('user_id', $request->customer_id)->get();
         $selectedAddress = $address->where('id', $request->address_id)->first();
         Session::put('address_id', $selectedAddress?->id);
@@ -531,6 +534,7 @@ class POSController extends Controller
     public function editAddress(Request $request)
     {
         $address = CustomerAddress::where('id', $request->address_id)->first();
+        if($address && !\App\Models\Order::where('user_id', $address->user_id)->where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->exists()){ return response()->json(['latitude'=>null,'longitude'=>null,'view'=>''], 200); }
         return response()->json([
             'latitude' => $address?->latitude,
             'longitude' => $address?->longitude,

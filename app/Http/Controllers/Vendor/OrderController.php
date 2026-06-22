@@ -1085,7 +1085,8 @@ class OrderController extends Controller
     public function updateSchedule(Request $request)
     {
 
-        $order = Order::where('id', $request->order_id)->first();
+        $order = Order::where('id', $request->order_id)->where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->first();
+        if(!$order){ return response()->json(['status'=>'error','message'=>translate('messages.not_found')], 404); }
         $schedule_at = Carbon::parse($request->date);
 
         $restaurant = Restaurant::selectRaw('*, IF(((select count(*) from `restaurant_schedule` where `restaurants`.`id` = `restaurant_schedule`.`restaurant_id` and `restaurant_schedule`.`day` = ' . (int) $schedule_at->format('w') . ' and `restaurant_schedule`.`opening_time` < "' . $schedule_at->format('H:i:s') . '" and `restaurant_schedule`.`closing_time` >"' . $schedule_at->format('H:i:s') . '") > 0), true, false) as open')->where('id', Helpers::get_restaurant_id())->first();

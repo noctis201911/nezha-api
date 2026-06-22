@@ -174,7 +174,8 @@ class CouponController extends Controller
 
     public function status(Request $request)
     {
-        $coupon = Coupon::find($request->id);
+        $coupon = Coupon::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->find($request->id);
+        if(!$coupon){ Toastr::error(translate('messages.not_found')); return back(); }
         $coupon->status = $request->status;
         $coupon->save();
         Toastr::success(translate('messages.coupon_status_updated'));
@@ -183,7 +184,8 @@ class CouponController extends Controller
 
     public function delete(Request $request)
     {
-        $coupon = Coupon::find($request->id);
+        $coupon = Coupon::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->find($request->id);
+        if(!$coupon){ Toastr::error(translate('messages.not_found')); return back(); }
         $coupon?->translations()?->delete();
         $coupon->delete();
         Toastr::success(translate('messages.coupon_deleted_successfully'));

@@ -165,7 +165,8 @@ class AddOnController extends Controller
             Toastr::warning(translate('messages.permission_denied'));
             return back();
         }
-        $addon = AddOn::find($request->id);
+        $addon = AddOn::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->find($request->id);
+        if(!$addon){ Toastr::error(translate('messages.not_found')); return back(); }
         $addon?->taxVats()->delete();
         $addon?->delete();
         Toastr::success(translate('messages.addon_deleted_successfully'));
@@ -174,7 +175,8 @@ class AddOnController extends Controller
 
     public function status(Request $request)
     {
-        $coupon = AddOn::find($request->id);
+        $coupon = AddOn::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->find($request->id);
+        if(!$coupon){ Toastr::error(translate('messages.not_found')); return back(); }
         $coupon->status = $request->status;
         $coupon->save();
         Toastr::success(translate('messages.Addon_status_updated'));
