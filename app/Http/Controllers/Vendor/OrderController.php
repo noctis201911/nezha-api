@@ -918,7 +918,11 @@ class OrderController extends Controller
 
     public function add_order_proof(Request $request, $id)
     {
-        $order = Order::find($id);
+        $order = Order::where(['id' => $id, 'restaurant_id' => Helpers::get_restaurant_id()])->first();
+        if (!$order) {
+            Toastr::error(translate('messages.not_found'));
+            return back();
+        }
         $img_names = $order->order_proof ? json_decode($order->order_proof) : [];
         $images = [];
         $total_file =  (is_array($request->order_proof) ? count($request->order_proof)  : 0) + count($img_names);
@@ -956,7 +960,11 @@ class OrderController extends Controller
             'name' => 'required|string',
         ]);
 
-        $order = Order::find($request->id);
+        $order = Order::where(['id' => $request->id, 'restaurant_id' => Helpers::get_restaurant_id()])->first();
+        if (!$order) {
+            Toastr::error(translate('messages.not_found'));
+            return back();
+        }
         $proof = json_decode($order->order_proof, true) ?? [];
 
         if (count($proof) <= 1) {
