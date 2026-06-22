@@ -192,6 +192,9 @@ class NezhaSanctionScreen
         $rec->disposal_result = 'L1-6 制裁名单命中: 自动拒收, 不予放行出餐(平台不与受制裁主体交易)。';
         $rec->save();
 
+        // 哪吒 A2: 真命中制裁 → admin 告警(原静默落库, 真命中却无人知是更危险盲区)。
+        \App\CentralLogics\Helpers::sendTelegramToAdmin("🔴哪吒风控·USDT来源命中制裁名单\n订单 #{$order->id} 金额 " . (int) ($order->order_amount ?? 0) . "\n已自动拒收。详见 后台→风控中心→风控日志。");
+
         return $rec->id;
     }
 
@@ -232,6 +235,9 @@ class NezhaSanctionScreen
         ];
         $rec->disposal_result = '制裁筛查未决(来源地址反查失败), 待人工核对来源地址。';
         $rec->save();
+
+        // 哪吒 A2: USDT 来源待人工核验 → admin 告警(防 hold 单积压无人知)。已过 dedup, 仅新建记录发一次。
+        \App\CentralLogics\Helpers::sendTelegramToAdmin("🟡哪吒风控·USDT来源待核验\n订单 #{$order->id} 金额 " . (int) ($order->order_amount ?? 0) . "\n来源地址反查不出,商家暂无法确认收款。请到 后台→风控中心→风控日志 核实来源后放行。");
 
         return $rec->id;
     }
