@@ -43,7 +43,7 @@
 | 预存佣金（履约保证金）阈值/扣佣开关 | 0/关 | 后台 |
 | **广告计费总开关 nezha_ad_billing_status** | 0(关) | 后台「广告管理→广告计费设置」;开=商家投广按天从保证金扣 advertisement_fee(平台收自有广告服务费、不碰顾客钱,非二清),属"真实影响开关",开前确认单价/商家知情/有保证金充值通道 |
 | 广告单价/曝光加权/平台下架退费 | nezha_ad_price_per_day 1000֏·天 / nezha_ad_boost_weight 0.5 / nezha_ad_refund_on_platform_takedown 1(开) | 后台「广告计费设置」,不改代码 |
-| **逾期未退款考核总开关 nezha_refund_overdue_status** | 0(关) | 后台「风控中心→逾期未退款」;开=对超期未原路退款的商家施加非资金约束(记风控refund_overdue+催办+告警+运营手动停接单),平台不碰钱/不代退/不扣保证金赔顾客;属"真实影响开关"(会暂停商家经营),开前确认默认阈值;阈值 nezha_refund_overdue_remind_days(默认3催办)/nezha_refund_overdue_suspend_days(默认7建议停接单)同处可调 |
+| **逾期未退款考核总开关 nezha_refund_overdue_status** | 0(关) | 后台「风控中心→逾期未退款」;开=对超期未原路退款的商家施加非资金约束(记风控refund_overdue+催办+告警+运营手动停接单),平台不碰钱/不代退/不扣保证金赔顾客;属"真实影响开关"(会暂停商家经营),开前确认默认阈值;阈值改小时级 nezha_refund_overdue_remind_hours(默认12催办)/nezha_refund_overdue_suspend_hours(默认72=3天建议停接单)同处可调(缺则回退旧*_days×24);cron每小时扫 |
 
 ## 改动 L1 的标准流程
 1. 在工作窗口中**停下**,向用户说明:要改哪条 L1、为什么、影响什么。
