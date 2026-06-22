@@ -212,8 +212,8 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         Route::put('campaign-join', [VendorController::class, 'addrestaurant']);
         Route::get('get-withdraw-list', [VendorController::class, 'withdraw_list']);
         Route::get('get-products-list', [VendorController::class, 'get_products']);
-        Route::put('update-bank-info', [VendorController::class, 'update_bank_info']);
-        Route::post('request-withdraw', [VendorController::class, 'request_withdraw']);
+        Route::put('update-bank-info', [VendorController::class, 'update_bank_info'])->middleware('vmodule:settings');
+        Route::post('request-withdraw', [VendorController::class, 'request_withdraw'])->middleware('vmodule:settings');
 
         Route::get('get-searched-food', [VendorOrderController::class, 'getSearchedFoods']);
         Route::put('customer-address-update', [VendorOrderController::class, 'customerAddressUpdate']);
@@ -242,7 +242,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
 
         Route::get('get-withdraw-method-list', [VendorController::class, 'withdraw_method_list']);
 
-        Route::group(['prefix' => 'withdraw-method'], function () {
+        Route::group(['prefix' => 'withdraw-method', 'middleware' => ['vmodule:settings']], function () {
             Route::get('list', [WithdrawMethodController::class, 'get_disbursement_withdrawal_methods']);
             Route::post('store', [WithdrawMethodController::class, 'disbursement_withdrawal_method_store']);
             Route::post('make-default', [WithdrawMethodController::class, 'disbursement_withdrawal_method_default']);

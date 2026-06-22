@@ -69,6 +69,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'vendor.api' => VendorTokenIsValid::class,
             'dm.api' => DmTokenIsValid::class,
             'module' => ModulePermissionMiddleware::class,
+            'vmodule' => \App\Http\Middleware\VendorApiModulePermission::class,
             'installation-check' => InstallationMiddleware::class,
             'actch' => ActivationCheckMiddleware::class,
             'localization' => LocalizationMiddleware::class,

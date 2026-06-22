@@ -128,7 +128,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
         Route::post('search-account-transaction', [AccountTransactionController::class, 'search_account_transaction'])->name('search-account-transaction');
 
         // 哪吒 B方案 组4: 商家预存佣金(充值/扣佣)管理
-        Route::group(['prefix' => 'nezha-deposit', 'as' => 'nezha-deposit.'], function () {
+        Route::group(['prefix' => 'nezha-deposit', 'as' => 'nezha-deposit.', 'middleware' => ['module:restaurant']], function () {
             Route::get('/', [NezhaDepositController::class, 'index'])->name('index');
             Route::get('transactions', [NezhaDepositController::class, 'transactions'])->name('transactions');
             Route::post('store-recharge', [NezhaDepositController::class, 'store_recharge'])->name('store-recharge');
@@ -382,7 +382,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
         Route::get('addon/system-addons', function () {
             return to_route('admin.system-addon.index');
         })->name('addon.index');
-        Route::group(['prefix' => 'addon-activation', 'as' => 'addon-activation.'], function () {
+        Route::group(['prefix' => 'addon-activation', 'as' => 'addon-activation.', 'middleware' => ['module:system_addon']], function () {
             Route::get('', [AddonActivationController::class, 'index'])->name('index');
             Route::post('activation', [AddonActivationController::class, 'activation'])->name('activation');
         });
@@ -562,7 +562,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('export', [NotificationController::class, 'export'])->name('export');
         });
 
-        Route::group(['prefix' => 'business-settings', 'as' => 'business-settings.'], function () {
+        Route::group(['prefix' => 'business-settings', 'as' => 'business-settings.', 'middleware' => ['module:settings']], function () {
 
         Route::middleware(['module:settings'])->group(function () {
             Route::get('business-setup/{tab?}', [BusinessSettingsController::class, 'business_index'])->name('business-setup');
@@ -1067,7 +1067,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
         });
 
 
-        Route::group(['prefix' => 'file-manager', 'as' => 'file-manager.'], function () {
+        Route::group(['prefix' => 'file-manager', 'as' => 'file-manager.', 'middleware' => ['module:settings']], function () {
             Route::get('/download/{file_name}/{storage?}', [FileManagerController::class, 'download'])->name('download');
             Route::get('/index/{folder_path?}/{storage?}', [FileManagerController::class, 'index'])->name('index');
             Route::post('/image-upload', [FileManagerController::class, 'upload'])->name('image-upload');
@@ -1128,13 +1128,13 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::post('send-mail/{id}', [ContactMessages::class, 'send_mail'])->name('send-mail');
         });
 
-        Route::group(['prefix' => 'merchant-lead', 'as' => 'merchant-lead.'], function () {
+        Route::group(['prefix' => 'merchant-lead', 'as' => 'merchant-lead.', 'middleware' => ['module:restaurant']], function () {
             Route::get('list', [MerchantLeadController::class, 'list'])->name('list');
             Route::get('view/{id}', [MerchantLeadController::class, 'view'])->name('view');
             Route::post('update-status/{id}', [MerchantLeadController::class, 'updateStatus'])->name('update-status');
             Route::delete('delete', [MerchantLeadController::class, 'destroy'])->name('delete');
         });
-        Route::group(['prefix' => 'local-life', 'as' => 'local-life.'], function () {
+        Route::group(['prefix' => 'local-life', 'as' => 'local-life.', 'middleware' => ['module:settings']], function () {
             Route::get('list', [AdminLocalLifeController::class, 'list'])->name('list');
             Route::get('create', [AdminLocalLifeController::class, 'create'])->name('create');
             Route::post('store', [AdminLocalLifeController::class, 'store'])->name('store');
