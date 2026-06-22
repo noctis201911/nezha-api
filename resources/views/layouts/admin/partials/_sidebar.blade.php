@@ -423,7 +423,7 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
 
                     <!-- 哪吒风控中心 -->
                     @if (Helpers::module_permission_check('order'))
-                        <li class="navbar-vertical-aside-has-menu {{ (Request::is('admin/nezha-risk*') || Request::is('admin/nezha-refund*')) ? 'active' : '' }}">
+                        <li class="navbar-vertical-aside-has-menu {{ (Request::is('admin/nezha-risk*') || Request::is('admin/nezha-refund*') || Request::is('admin/nezha-kyc*')) ? 'active' : '' }}">
                             <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
                                 title="{{ translate('风控中心') }}">
                                 <i class="tio-shield nav-icon"></i>
@@ -432,7 +432,7 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                                 </span>
                             </a>
                             <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                                style="display: {{ (Request::is('admin/nezha-risk*') || Request::is('admin/nezha-refund*')) ? 'block' : 'none' }}">
+                                style="display: {{ (Request::is('admin/nezha-risk*') || Request::is('admin/nezha-refund*') || Request::is('admin/nezha-kyc*')) ? 'block' : 'none' }}">
                                 <li class="nav-item {{ Request::is('admin/nezha-risk/queue') ? 'active' : '' }}">
                                     <a class="nav-link" href="{{ route('admin.nezha-risk.queue') }}" title="{{ translate('审核队列') }}">
                                         <span class="tio-circle nav-indicator-icon"></span>
@@ -461,6 +461,12 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                                     <a class="nav-link" href="{{ route('admin.nezha-refund.overdue') }}" title="{{ translate('逾期未退款') }}">
                                         <span class="tio-circle nav-indicator-icon"></span>
                                         <span class="text-truncate">{{ translate('逾期未退款') }}</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item {{ Request::is('admin/nezha-kyc*') ? 'active' : '' }}">
+                                    <a class="nav-link" href="{{ route('admin.nezha-kyc.index') }}" title="{{ translate('商家KYC') }}">
+                                        <span class="tio-circle nav-indicator-icon"></span>
+                                        <span class="text-truncate">{{ translate('商家KYC') }}</span>
                                     </a>
                                 </li>
                             </ul>

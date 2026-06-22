@@ -498,6 +498,14 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::post('release-inconclusive/{id}', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'release_inconclusive'])->name('release-inconclusive');
         });
 
+        // 哪吒 商家 KYC: 轻量核验结论录入/审核(方案B, 只存结论不存扫描件)
+        Route::group(['prefix' => 'nezha-kyc', 'as' => 'nezha-kyc.', 'middleware' => ['module:restaurant']], function () {
+            Route::get('/', [\App\Http\Controllers\Admin\NezhaKycController::class, 'index'])->name('index');
+            Route::get('edit/{restaurant_id}', [\App\Http\Controllers\Admin\NezhaKycController::class, 'edit'])->name('edit');
+            Route::post('save/{restaurant_id}', [\App\Http\Controllers\Admin\NezhaKycController::class, 'save'])->name('save');
+            Route::post('review/{restaurant_id}', [\App\Http\Controllers\Admin\NezhaKycController::class, 'review'])->name('review');
+        });
+
         // 哪吒 退款机制② 退款留痕/审核
         Route::group(['prefix' => 'nezha-refund', 'as' => 'nezha-refund.', 'middleware' => ['module:order']], function () {
             Route::get('records', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'records'])->name('records');

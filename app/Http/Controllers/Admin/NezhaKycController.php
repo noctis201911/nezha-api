@@ -1,0 +1,140 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\Restaurant;
+use App\Models\VendorKycProfile;
+use Brian2694\Toastr\Facades\Toastr;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+/**
+ * 哪吒 商家 KYC 资料 后台（轻量·方案B, 只存核验结论, 默认不存扫描件）。
+ *
+ *  - index()  : 商家 KYC 状态列表(只显示状态徽章, 不在列表暴露 PII)。
+ *  - edit()   : 单店 KYC 录入/审核页(运营当面/视频核验后录入结论)。
+ *  - save()   : 保存核验结论 → kyc_status=pending(待审核)。
+ *  - review() : 审核 通过 / 拒绝(拒绝写 closed_at 作留存锚点)。
+ *
+ * 合规: 录入字段为 AML/CDD 核验记录(PII, 模型层 encrypted), 表已 ENCRYPTION='Y'。
+ * 阶段1(制裁名字筛查)接入后, save() 会对 legal_name/beneficial_owner_name 过筛查。
+ */
+class NezhaKycController extends Controller
+{
+    /** 录入表单允许写入的字段(全部来自运营当面核验)。 */
+    private array $fillable = [
+        'legal_name', 'legal_name_local', 'beneficial_owner_name',
+        'id_doc_type', 'id_doc_number', 'bank_account', 'contact_phone',
+        'verify_method', 'note',
+    ];
+
+    public function index(Request $request)
+    {
+        $search = trim((string) $request->get('search', ''));
+        $status = (string) $request->get('status', '');
+
+        $query = Restaurant::query()
+            ->select('id', 'name', 'phone', 'email', 'status', 'created_at')
+            ->orderByDesc('id');
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%");
+            });
+        }
+
+        $restaurants = $query->paginate(config('default_pagination', 25))->appends($request->all());
+
+        // 批量取 KYC 状态(不取 PII 字段, 只要状态), 避免 N+1。
+        $ids = $restaurants->getCollection()->pluck('id')->all();
+        $profiles = VendorKycProfile::whereIn('restaurant_id', $ids)
+            ->get(['restaurant_id', 'kyc_status', 'screen_status', 'reviewed_at'])
+            ->keyBy('restaurant_id');
+
+        // 按状态筛选(在当前页结果上过滤; KYC 状态不在 restaurants 表, 故不做 DB 级分页过滤)
+        return view('admin-views.nezha-kyc.index', compact('restaurants', 'profiles', 'search', 'status'));
+    }
+
+    public function edit($restaurant_id)
+    {
+        $restaurant = Restaurant::select('id', 'name', 'phone', 'email', 'address', 'status')->findOrFail($restaurant_id);
+        $profile = VendorKycProfile::where('restaurant_id', $restaurant_id)->first();
+
+        return view('admin-views.nezha-kyc.edit', compact('restaurant', 'profile'));
+    }
+
+    public function save(Request $request, $restaurant_id)
+    {
+        $restaurant = Restaurant::findOrFail($restaurant_id);
+
+        $request->validate([
+            'legal_name'            => 'required|string|max:191',
+            'legal_name_local'      => 'nullable|string|max:191',
+            'beneficial_owner_name' => 'nullable|string|max:191',
+            'id_doc_type'           => 'nullable|in:passport,national_id,residence_permit,business_license,other',
+            'id_doc_number'         => 'nullable|string|max:191',
+            'bank_account'          => 'nullable|string|max:500',
+            'contact_phone'         => 'nullable|string|max:60',
+            'verify_method'         => 'nullable|in:in_person,video,document',
+            'note'                  => 'nullable|string|max:1000',
+        ]);
+
+        $profile = VendorKycProfile::firstOrNew(['restaurant_id' => $restaurant->id]);
+
+        foreach ($this->fillable as $f) {
+            $profile->{$f} = $request->input($f);
+        }
+
+        // 录入/更新即转「待审核」(除非已通过则保持, 让运营可在不改状态下补字段)
+        if ($profile->kyc_status !== 'approved') {
+            $profile->kyc_status = 'pending';
+        }
+        // 重新录入时清掉旧的拒绝锚点
+        $profile->reject_reason = null;
+        $profile->closed_at = null;
+
+        $profile->save();
+
+        Toastr::success(translate('KYC 资料已保存, 状态: 待审核'));
+        return back();
+    }
+
+    public function review(Request $request, $restaurant_id)
+    {
+        $request->validate([
+            'decision'      => 'required|in:approved,rejected',
+            'reject_reason' => 'nullable|string|max:500',
+        ]);
+
+        $profile = VendorKycProfile::where('restaurant_id', $restaurant_id)->firstOrFail();
+
+        if ($profile->kyc_status === 'none') {
+            Toastr::warning(translate('请先录入 KYC 资料再审核'));
+            return back();
+        }
+
+        $admin = Auth::guard('admin')->user();
+        $reviewer = $admin?->email ?? ($admin?->f_name ?? 'admin');
+
+        if ($request->decision === 'approved') {
+            $profile->kyc_status   = 'approved';
+            $profile->reject_reason = null;
+            $profile->closed_at     = null;
+            Toastr::success(translate('KYC 审核通过'));
+        } else {
+            $profile->kyc_status   = 'rejected';
+            $profile->reject_reason = $request->input('reject_reason');
+            $profile->closed_at     = now();   // 留存倒计时锚点(>=5 年后才清, 当前不删)
+            Toastr::success(translate('KYC 已拒绝'));
+        }
+
+        $profile->reviewer    = $reviewer;
+        $profile->reviewed_at = now();
+        $profile->save();
+
+        return back();
+    }
+}
