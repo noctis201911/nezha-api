@@ -14,9 +14,11 @@
             <li class="nav-item">
                 <a class="nav-link {{ Request::is('admin/business-settings/business-setup/order') ?'active':'' }}" href="{{ route('admin.business-settings.business-setup',  ['tab' => 'order']) }}"  aria-disabled="true">{{translate('messages.orders')}}</a>
             </li>
+            @if(false){{-- 哪吒隐藏: StackFood 原生退款设置(退款总开关 refund_active_status 所在页)已停用——B方案退款走「哪吒→退款留痕/逾期」, 不用此页; 路由/页面仍在, 恢复即删 @if(false)/@endif --}}
             <li class="nav-item">
                 <a class="nav-link {{ Request::is('admin/business-settings/refund/settings') ?'active':'' }}" href="{{ route('admin.refund.refund_settings') }}"  aria-disabled="true">{{translate('messages.refund_settings')}}</a>
             </li>
+            @endif
             <li class="nav-item">
                 <a class="nav-link {{ Request::is('admin/business-settings/business-setup/restaurant') ?'active':'' }}" href="{{ route('admin.business-settings.business-setup',  ['tab' => 'restaurant']) }}"  aria-disabled="true">{{translate('messages.restaurant')}}</a>
             </li>

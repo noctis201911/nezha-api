@@ -385,7 +385,8 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                         <!-- Order dispachment End-->
 
                         <!-- Order refund -->
-                        <li
+                        @if(false){{-- 哪吒隐藏: StackFood 退款申请列表已停用(refund_active_status 已关+顾客端入口已删, 再造不出 refund_requested); 路由/页面仍在, 恢复即删 @if(false)/@endif --}}
+<li
                             class="navbar-vertical-aside-has-menu {{ Request::is('admin/refund/*') ? 'active' : '' }}">
                             <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
                                 title="{{ translate('messages.Order_Refunds') }}">
@@ -417,6 +418,7 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                                 </li>
                             </ul>
                         </li>
+                        @endif
                         <!-- Order refund End-->
                     @endif
                     <!-- End Orders -->
