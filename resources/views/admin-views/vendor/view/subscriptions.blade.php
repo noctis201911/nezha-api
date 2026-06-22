@@ -53,9 +53,9 @@
                 <div class="d-flex flex-wrap flex-md-nowrap justify-content-between __plan-details-top">
                     <div class="w-100">
                         <h2 class="name text--primary">{{ translate('Commission Base Plan') }}</h2>
-                        <h4 class="title mt-2"><span class="text-180">{{ $restaurant->comission > 0 ?  $restaurant->comission :  $admin_commission }} %</span> {{ translate('messages.Commission_per_order') }}</h4>
+                        <h4 class="title mt-2"><span class="text-180">{{ isset($restaurant->comission) ?  $restaurant->comission :  $admin_commission }} %</span> {{ translate('messages.Commission_per_order') }} <span class="badge ml-2 {{ isset($restaurant->comission) ? 'badge-soft-primary' : 'badge-soft-secondary' }}">{{ isset($restaurant->comission) ? '该店专属佣金' : '沿用全局默认' }}</span></h4>
                         <div class="info-text ">
-                            {{ translate('Restaurant will pay') }} {{ $restaurant->comission > 0 ?  $restaurant->comission :  $admin_commission }}% {{ translate('commission to') }} <strong>{{ $business_name }}</strong> {{ translate('from each order. You will get access of all the features and options  in restaurant panel , app and interaction with user.') }}
+                            {{ translate('Restaurant will pay') }} {{ isset($restaurant->comission) ?  $restaurant->comission :  $admin_commission }}% {{ translate('commission to') }} <strong>{{ $business_name }}</strong> {{ translate('from each order. You will get access of all the features and options  in restaurant panel , app and interaction with user.') }}
                         </div>
                                 <div class="mt-3">
                                     <form action="{{route('admin.restaurant.update-settings',[$restaurant['id'] , 'tab' => 'business_plan'])}}" method="post">
@@ -72,7 +72,7 @@
                                                         </span>
                                                     </label>
                                                     <div class="d-flex flex-wrap gap-3">
-                                                        <input type="number" id="comission" min="0" max="10000" step="0.01" name="comission" class="form-control w-200px flex-grow-1 bg-white" required value="{{$restaurant->comission??'0'}}" {{isset($restaurant->comission)?'':'readonly'}}>
+                                                        <input type="number" id="comission" min="0" max="100" step="0.01" name="comission" class="form-control w-200px flex-grow-1 bg-white" required value="{{$restaurant->comission??'0'}}" {{isset($restaurant->comission)?'':'readonly'}}>
                                                         <button type="submit" class="btn btn--primary">{{ translate('Change') }}</button>
                                                     </div>
                                                 </div>

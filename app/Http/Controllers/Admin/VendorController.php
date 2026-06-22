@@ -1304,7 +1304,20 @@ class VendorController extends Controller
     {
 
         if ($request?->tab == 'business_plan') {
-            $restaurant->comission = $request->comission_status ? $request->comission : null;
+            // 哪吒 L2 单店专属佣金率: 开关开=该店专属率(0~100, 0=免佣为有效值); 关=写NULL沿用全局admin_commission。
+            // NULL vs 0 在计佣端靠 isset() 区分(OrderLogic::create_transaction:85), 务必保持"关->null, 开->数值(含0)"。
+            if ($request->comission_status) {
+                $request->validate([
+                    'comission' => 'required|numeric|min:0|max:100',
+                ], [
+                    'comission.numeric' => '佣金率必须是数字',
+                    'comission.min' => '佣金率需在 0-100 之间',
+                    'comission.max' => '佣金率需在 0-100 之间',
+                ]);
+                $restaurant->comission = $request->comission;
+            } else {
+                $restaurant->comission = null;
+            }
             $restaurant->save();
             Toastr::success(translate('messages.Commission_updated'));
 
