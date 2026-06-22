@@ -107,6 +107,14 @@ class NezhaRiskController extends Controller
         return back();
     }
 
+    /** 该风控记录是否为商家 KYC 姓名筛查(非订单)记录 —— 决定处置结论/提示用 KYC 语境而非订单语境。 */
+    private static function isKycRecord(NezhaRiskRecord $rec): bool
+    {
+        return collect($rec->hit_rules ?? [])->contains(
+            fn ($h) => \Illuminate\Support\Str::startsWith($h['rule'] ?? '', 'sanction_kyc_name')
+        );
+    }
+
     /** 放行: 该顾客在宽限期内重新下单直接通过 */
     public function approve(Request $request, $id)
     {
@@ -115,9 +123,15 @@ class NezhaRiskController extends Controller
         $rec->reviewed_by     = auth('admin')->id();
         $rec->reviewed_at     = now();
         $rec->review_note     = $request->input('note');
-        $rec->disposal_result = '放行 (顾客可在宽限期内重新下单付款)';
-        $rec->save();
-        Toastr::success(translate('已放行, 顾客可在宽限期内重新下单付款'));
+        if (self::isKycRecord($rec)) {
+            $rec->disposal_result = '核实无误·解除疑似标记 (已人工核对: 非制裁名单同一人, 商家 KYC 姓名筛查疑似解除)';
+            $rec->save();
+            Toastr::success(translate('已核实无误, 解除该商家 KYC 姓名疑似标记'));
+        } else {
+            $rec->disposal_result = '放行 (顾客可在宽限期内重新下单付款)';
+            $rec->save();
+            Toastr::success(translate('已放行, 顾客可在宽限期内重新下单付款'));
+        }
 
         return back();
     }
@@ -130,9 +144,15 @@ class NezhaRiskController extends Controller
         $rec->reviewed_by     = auth('admin')->id();
         $rec->reviewed_at     = now();
         $rec->review_note     = $request->input('note');
-        $rec->disposal_result = '清退/拒绝 (不予放行)';
-        $rec->save();
-        Toastr::warning(translate('已清退该订单'));
+        if (self::isKycRecord($rec)) {
+            $rec->disposal_result = '确认命中制裁名单 (法人/受益人姓名经核实确认命中 OFAC SDN, 不予合作/拒绝入驻, L1-6)';
+            $rec->save();
+            Toastr::warning(translate('已确认命中制裁名单, 已标记拒绝该商家 KYC'));
+        } else {
+            $rec->disposal_result = '清退/拒绝 (不予放行)';
+            $rec->save();
+            Toastr::warning(translate('已清退该订单'));
+        }
 
         return back();
     }
