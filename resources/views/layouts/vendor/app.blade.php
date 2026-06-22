@@ -575,7 +575,7 @@
     // 哪吒: 首次用户交互时解锁提示音(绕开浏览器自动播放限制)——之后轮询新消息能稳定响铃
     (function(){
         function nzUnlockAudio(){
-            ['myAudio','nzMsgAudio','nzAdminMsgAudio'].forEach(function(id){
+            ['myAudio','nzMsgAudio','nzAdminMsgAudio','nzDelivAudio'].forEach(function(id){
                 var a = document.getElementById(id);
                 if(!a) return;
                 try {
