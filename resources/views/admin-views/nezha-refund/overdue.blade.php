@@ -9,7 +9,7 @@
         <div class="alert alert-warning" role="alert">
             <i class="tio-info"></i>
             {{ translate('哪吒为点对点直付、平台不碰钱: 平台已取消/退款的订单, 退款须由商家在自己账户原路退还顾客。此页列出商家「待退款、尚未标记已退款」的留痕。逾期') }}
-            {{ $remindDays }}{{ translate('天起系统自动催办商家+计入风控; 逾期') }}{{ $suspendDays }}{{ translate('天起升级告警。') }}
+            {{ $remindHours }}{{ translate('小时起系统自动催办商家+计入风控; 逾期') }}{{ $suspendHours }}{{ translate('小时起升级告警。') }}
             <strong>{{ translate('停接单为非资金约束、需由您在此手动执行(留人工复核口子, 避免误伤已退款但忘标记的商家)。平台绝不从保证金扣钱代退。') }}</strong>
             @if ($status != 1)
                 <br><span class="text-danger">{{ translate('注意: 兜底总开关当前关闭(nezha_refund_overdue_status=0), 系统不会自动催办/记风控/告警; 本列表仍可查看与手动处置。') }}</span>
@@ -27,23 +27,23 @@
                             <label class="input-label">{{ translate('兜底总开关') }}</label>
                             <select name="nezha_refund_overdue_status" class="form-control">
                                 <option value="0" {{ $status != 1 ? 'selected' : '' }}>{{ translate('关闭(只看与手动处置, 不自动催办)') }}</option>
-                                <option value="1" {{ $status == 1 ? 'selected' : '' }}>{{ translate('开启(每天自动催办+记风控+告警)') }}</option>
+                                <option value="1" {{ $status == 1 ? 'selected' : '' }}>{{ translate('开启(每小时自动催办+记风控+告警)') }}</option>
                             </select>
                             <small class="text-danger">{{ translate('⚠️ 开启=真实影响: 会自动催办逾期商家并计入风控。停接单仍需您手动。') }}</small>
                         </div>
                         <div class="col-sm-3 form-group mb-2">
-                            <label class="input-label">{{ translate('逾期几天起 催办+记风控') }}</label>
-                            <input type="number" name="nezha_refund_overdue_remind_days" class="form-control" min="1" max="60" value="{{ $remindDays }}" required>
+                            <label class="input-label">{{ translate('逾期几小时起 催办+记风控') }}</label>
+                            <input type="number" name="nezha_refund_overdue_remind_hours" class="form-control" min="1" max="720" value="{{ $remindHours }}" required>
                         </div>
                         <div class="col-sm-3 form-group mb-2">
-                            <label class="input-label">{{ translate('逾期几天起 升级告警建议停接单') }}</label>
-                            <input type="number" name="nezha_refund_overdue_suspend_days" class="form-control" min="1" max="90" value="{{ $suspendDays }}" required>
+                            <label class="input-label">{{ translate('逾期几小时起 升级告警建议停接单') }}</label>
+                            <input type="number" name="nezha_refund_overdue_suspend_hours" class="form-control" min="1" max="2160" value="{{ $suspendHours }}" required>
                         </div>
                         <div class="col-sm-2 form-group mb-2">
                             <button type="submit" class="btn btn-primary btn-block">{{ translate('保存') }}</button>
                         </div>
                     </div>
-                    <small class="text-muted">{{ translate('停接单天数应≥催办天数; 系统每天09:30自动扫描一次。') }}</small>
+                    <small class="text-muted">{{ translate('停接单小时数应≥催办小时数; 系统每小时自动扫描一次。') }}</small>
                 </form>
             </div>
         </div>
@@ -100,7 +100,8 @@
                     <tbody>
                         @forelse ($records as $rec)
                             @php
-                                $overdueDays = $rec->created_at ? (int) floor($rec->created_at->diffInSeconds(\Carbon\Carbon::now()) / 86400) : 0;
+                                $overdueHours = $rec->created_at ? (int) floor($rec->created_at->diffInSeconds(\Carbon\Carbon::now()) / 3600) : 0;
+                                $overdueLabel = \App\CentralLogics\NezhaRefundOverdue::humanizeHours($overdueHours);
                                 $isSuspended = $rec->restaurant && (int) ($rec->restaurant->nezha_order_suspended ?? 0) === 1;
                             @endphp
                             <tr>
@@ -112,12 +113,12 @@
                                 <td>{{ \App\CentralLogics\Helpers::format_currency($rec->refund_amount) }}</td>
                                 <td>{{ $rec->created_at }}</td>
                                 <td>
-                                    @if ($overdueDays >= $suspendDays)
-                                        <span class="badge badge-soft-danger">{{ $overdueDays }} {{ translate('天') }}</span>
-                                    @elseif ($overdueDays >= $remindDays)
-                                        <span class="badge badge-soft-warning">{{ $overdueDays }} {{ translate('天') }}</span>
+                                    @if ($overdueHours >= $suspendHours)
+                                        <span class="badge badge-soft-danger">{{ $overdueLabel }}</span>
+                                    @elseif ($overdueHours >= $remindHours)
+                                        <span class="badge badge-soft-warning">{{ $overdueLabel }}</span>
                                     @else
-                                        <span class="badge badge-soft-secondary">{{ $overdueDays }} {{ translate('天') }}</span>
+                                        <span class="badge badge-soft-secondary">{{ $overdueLabel }}</span>
                                     @endif
                                 </td>
                                 <td style="min-width:260px;">

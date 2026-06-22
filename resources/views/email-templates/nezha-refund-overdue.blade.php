@@ -12,7 +12,7 @@
                     <p style="font-size:15px;color:#333;margin:0 0 12px;">{{ translate('尊敬的商家') }}{{ $restaurant_name ? '（'.$restaurant_name.'）' : '' }}：</p>
 
                     <p style="font-size:15px;color:#C4193E;font-weight:bold;margin:0 0 12px;">
-                        {{ translate('您有一笔待退款订单已逾期') }} {{ $overdue_days }} {{ translate('天未处理。') }}
+                        {{ translate('您有一笔待退款订单已逾期') }} {{ $overdue_label }} {{ translate('未处理，请尽快原路退款。') }}
                     </p>
                     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
                         <tr><td style="font-size:14px;color:#777;padding:2px 16px 2px 0;">{{ translate('订单号') }}</td>

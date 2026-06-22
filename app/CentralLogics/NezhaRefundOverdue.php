@@ -79,4 +79,32 @@ class NezhaRefundOverdue
     {
         return $restaurant && (int) ($restaurant->nezha_order_suspended ?? 0) === 1;
     }
+
+    /**
+     * 读「逾期催办」小时阈值: 优先新「小时」键; 缺失回退旧「天」键×24兼容; 再缺用默认。L2 参数。
+     * 哪吒[退款专项2026-06-22]: 外卖即时消费, 退款催办由「天」改「小时」粒度。
+     */
+    public static function thresholdHours(string $hoursKey, string $daysKey, int $defaultHours): int
+    {
+        $h = \App\Models\BusinessSetting::where('key', $hoursKey)->value('value');
+        if ($h !== null && $h !== '') {
+            return (int) $h;
+        }
+        $d = \App\Models\BusinessSetting::where('key', $daysKey)->value('value');
+        if ($d !== null && $d !== '') {
+            return ((int) $d) * 24;
+        }
+        return $defaultHours;
+    }
+
+    /** 把逾期小时数 humanize 成中文标签: <24h→「X小时」; ≥24h→「Y天」或「Y天Z小时」。 */
+    public static function humanizeHours(int $hours): string
+    {
+        if ($hours < 24) {
+            return max(0, $hours) . '小时';
+        }
+        $d = intdiv($hours, 24);
+        $h = $hours % 24;
+        return $h > 0 ? ($d . '天' . $h . '小时') : ($d . '天');
+    }
 }

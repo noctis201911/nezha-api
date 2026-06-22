@@ -44,13 +44,15 @@ class RefundOverdueSweep extends Command
             return self::SUCCESS;
         }
 
-        $remindDays  = (int) (BusinessSetting::where('key', 'nezha_refund_overdue_remind_days')->value('value') ?? 3);
-        $suspendDays = (int) (BusinessSetting::where('key', 'nezha_refund_overdue_suspend_days')->value('value') ?? 7);
-        if ($remindDays < 1) { $remindDays = 1; }
-        if ($suspendDays < $remindDays) { $suspendDays = $remindDays; }
+        // 哪吒[退款专项2026-06-22 小时级]: 催办/停接单阈值改以「小时」为主单位(外卖即时消费,退款要快)。
+        // 新键 *_hours 优先; 缺失回退旧「天」键×24兼容(见 NezhaRefundOverdue::thresholdHours)。
+        $remindHours  = \App\CentralLogics\NezhaRefundOverdue::thresholdHours('nezha_refund_overdue_remind_hours', 'nezha_refund_overdue_remind_days', 12);
+        $suspendHours = \App\CentralLogics\NezhaRefundOverdue::thresholdHours('nezha_refund_overdue_suspend_hours', 'nezha_refund_overdue_suspend_days', 72);
+        if ($remindHours < 1) { $remindHours = 1; }
+        if ($suspendHours < $remindHours) { $suspendHours = $remindHours; }
 
         $now    = Carbon::now();
-        $cutoff = $now->copy()->subDays($remindDays);
+        $cutoff = $now->copy()->subHours($remindHours);
 
         $records = NezhaRefundRecord::with(['restaurant.vendor', 'order'])
             ->where('status', 'pending_merchant_refund')
@@ -60,26 +62,27 @@ class RefundOverdueSweep extends Command
 
         $acted = 0;
         foreach ($records as $rec) {
-            $overdueDays = (int) floor($rec->created_at->diffInSeconds($now) / 86400);
+            $overdueHours = (int) floor($rec->created_at->diffInSeconds($now) / 3600);
+            $overdueLabel = \App\CentralLogics\NezhaRefundOverdue::humanizeHours($overdueHours);
 
             // T1: 风控记录 + 催办商家 + 告警运营
-            $acted += $this->fireOnce($rec->id, $rec->restaurant_id, 'risk_record', function () use ($rec, $overdueDays) {
-                $this->writeRiskRecord($rec, $overdueDays);
-            }, "逾期{$overdueDays}天 记风控 refund_overdue") ? 1 : 0;
+            $acted += $this->fireOnce($rec->id, $rec->restaurant_id, 'risk_record', function () use ($rec, $overdueLabel, $overdueHours) {
+                $this->writeRiskRecord($rec, $overdueLabel, $overdueHours);
+            }, "逾期{$overdueLabel} 记风控 refund_overdue") ? 1 : 0;
 
-            $acted += $this->fireOnce($rec->id, $rec->restaurant_id, 'remind_merchant', function () use ($rec, $overdueDays) {
-                $this->remindMerchant($rec, $overdueDays);
-            }, "逾期{$overdueDays}天 催办商家") ? 1 : 0;
+            $acted += $this->fireOnce($rec->id, $rec->restaurant_id, 'remind_merchant', function () use ($rec, $overdueLabel) {
+                $this->remindMerchant($rec, $overdueLabel);
+            }, "逾期{$overdueLabel} 催办商家") ? 1 : 0;
 
-            $acted += $this->fireOnce($rec->id, $rec->restaurant_id, 'escalate_t1', function () use ($rec, $overdueDays) {
-                $this->escalate($rec, $overdueDays, false);
-            }, "逾期{$overdueDays}天 告警运营") ? 1 : 0;
+            $acted += $this->fireOnce($rec->id, $rec->restaurant_id, 'escalate_t1', function () use ($rec, $overdueLabel) {
+                $this->escalate($rec, $overdueLabel, false);
+            }, "逾期{$overdueLabel} 告警运营") ? 1 : 0;
 
             // T2: 升级告警「建议停接单」(实际停接单仍由运营在后台手动)
-            if ($overdueDays >= $suspendDays) {
-                $acted += $this->fireOnce($rec->id, $rec->restaurant_id, 'escalate_t2', function () use ($rec, $overdueDays) {
-                    $this->escalate($rec, $overdueDays, true);
-                }, "逾期{$overdueDays}天 升级告警建议停接单") ? 1 : 0;
+            if ($overdueHours >= $suspendHours) {
+                $acted += $this->fireOnce($rec->id, $rec->restaurant_id, 'escalate_t2', function () use ($rec, $overdueLabel) {
+                    $this->escalate($rec, $overdueLabel, true);
+                }, "逾期{$overdueLabel} 升级告警建议停接单") ? 1 : 0;
             }
         }
 
@@ -131,7 +134,7 @@ class RefundOverdueSweep extends Command
     }
 
     /** 写一条商家风控记录(rule=refund_overdue, 进商家风控档案/人工审核队列)。零资金。 */
-    private function writeRiskRecord(NezhaRefundRecord $rec, int $overdueDays): void
+    private function writeRiskRecord(NezhaRefundRecord $rec, string $overdueLabel, int $overdueHours): void
     {
         NezhaRiskRecord::create([
             'order_id'        => $rec->order_id,
@@ -141,7 +144,7 @@ class RefundOverdueSweep extends Command
             'order_amount'    => (float) $rec->refund_amount,
             'hit_rules'       => [[
                 'rule'   => 'refund_overdue',
-                'detail' => "退款留痕#{$rec->id} 订单#{$rec->order_id} 逾期 {$overdueDays} 天未原路退款",
+                'detail' => "退款留痕#{$rec->id} 订单#{$rec->order_id} 逾期 {$overdueLabel} 未原路退款",
             ]],
             'action'          => 'review',
             'status'          => 'pending',
@@ -149,14 +152,14 @@ class RefundOverdueSweep extends Command
                 'refund_record_id' => $rec->id,
                 'refund_amount'    => (float) $rec->refund_amount,
                 'created_at'       => optional($rec->created_at)->toDateTimeString(),
-                'overdue_days'     => $overdueDays,
+                'overdue_hours'    => $overdueHours,
             ],
             'review_note'     => '系统: 商家逾期未退款(refund_overdue), 待人工跟进',
         ]);
     }
 
     /** 催办邮件商家(失败抛出 -> 回滚重试)。引导商家原路退 + 去后台「待退款」标记。 */
-    private function remindMerchant(NezhaRefundRecord $rec, int $overdueDays): void
+    private function remindMerchant(NezhaRefundRecord $rec, string $overdueLabel): void
     {
         $r     = $rec->restaurant;
         $email = $r?->email ?? $r?->vendor?->email;
@@ -165,19 +168,19 @@ class RefundOverdueSweep extends Command
             Log::warning('NEZHA_REFUND_OVERDUE 商家无邮箱, 跳过催办 refund#' . $rec->id);
             return;
         }
-        Mail::to($email)->send(new NezhaRefundOverdueMail($name, (int) $rec->order_id, (float) $rec->refund_amount, $overdueDays));
+        Mail::to($email)->send(new NezhaRefundOverdueMail($name, (int) $rec->order_id, (float) $rec->refund_amount, $overdueLabel));
     }
 
     /**
      * 告警运营(平台客服信箱)。发信失败吞掉(账本行已占, 不反复重发), 仅记日志。
      * $suggestSuspend=true 时升级为「建议停接单」(运营据此手动处置)。
      */
-    private function escalate(NezhaRefundRecord $rec, int $overdueDays, bool $suggestSuspend): void
+    private function escalate(NezhaRefundRecord $rec, string $overdueLabel, bool $suggestSuspend): void
     {
         $name = $rec->restaurant?->name ?? ('餐厅#' . $rec->restaurant_id);
         $head = $suggestSuspend
-            ? "商家逾期未退款已达 {$overdueDays} 天, 建议在后台「逾期未退款」一键停接单。"
-            : "商家逾期未退款 {$overdueDays} 天, 已记风控并催办商家。";
+            ? "商家逾期未退款已达 {$overdueLabel}, 建议在后台「逾期未退款」一键停接单。"
+            : "商家逾期未退款 {$overdueLabel}, 已记风控并催办商家。";
         $body = $head . "\n\n商家: {$name}\n退款留痕#{$rec->id} 订单#{$rec->order_id} 应退≈{$rec->refund_amount}"
             . "\n请登录后台「风控中心 → 逾期未退款」跟进(平台不代退, 仅约束/催办)。";
         try {

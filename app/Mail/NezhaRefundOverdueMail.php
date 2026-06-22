@@ -19,14 +19,14 @@ class NezhaRefundOverdueMail extends Mailable
     public $restaurant_name;
     public $order_id;
     public $refund_amount;
-    public $overdue_days;
+    public $overdue_label;
 
-    public function __construct($restaurant_name, $order_id, $refund_amount, $overdue_days)
+    public function __construct($restaurant_name, $order_id, $refund_amount, $overdue_label)
     {
         $this->restaurant_name = $restaurant_name;
         $this->order_id        = $order_id;
         $this->refund_amount   = $refund_amount;
-        $this->overdue_days    = $overdue_days;
+        $this->overdue_label   = $overdue_label;
     }
 
     public function build()
@@ -36,7 +36,7 @@ class NezhaRefundOverdueMail extends Mailable
                 'restaurant_name' => $this->restaurant_name,
                 'order_id'        => $this->order_id,
                 'refund_amount'   => $this->refund_amount,
-                'overdue_days'    => $this->overdue_days,
+                'overdue_label'  => $this->overdue_label,
             ]);
     }
 }
