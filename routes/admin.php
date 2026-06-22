@@ -527,7 +527,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
         });
 
         // 哪吒 AI 在线客服「小哪」后台
-        Route::group(['prefix' => 'nezha-cs', 'as' => 'nezha-cs.', 'middleware' => ['module:order']], function () {
+        Route::group(['prefix' => 'nezha-cs', 'as' => 'nezha-cs.', 'middleware' => ['module:nezha_cs']], function () {
             Route::get('/', [\App\Http\Controllers\Admin\NezhaCsController::class, 'index'])->name('index');
             Route::post('settings', [\App\Http\Controllers\Admin\NezhaCsController::class, 'saveSettings'])->name('settings');
             Route::post('ticket/close/{id}', [\App\Http\Controllers\Admin\NezhaCsController::class, 'closeTicket'])->name('ticket.close');

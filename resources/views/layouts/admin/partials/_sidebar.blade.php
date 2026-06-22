@@ -937,7 +937,7 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                             </a>
                         </li>
                     @endif
-                    @if (Helpers::module_permission_check('chat'))
+                    @if (Helpers::module_permission_check('nezha_cs'))
                         <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-cs*') ? 'active' : '' }}">
                             <a class="js-navbar-vertical-aside-menu-link nav-link"
                                 href="{{ route('admin.nezha-cs.index') }}"

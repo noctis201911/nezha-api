@@ -242,6 +242,13 @@
                                     <label class="form-check-label  text-dark" for="kyc">{{translate('商家KYC')}}</label>
                                 </div>
                             </div>
+                            <div class="col-md-3">
+                                <div class="form-group form-check">
+                                    <input type="checkbox" name="modules[]" value="nezha_cs" class="form-check-input"
+                                           id="nezha_cs"  {{in_array('nezha_cs',(array)json_decode($role['modules']))?'checked':''}}>
+                                    <label class="form-check-label  text-dark" for="nezha_cs">{{translate('AI在线客服')}}</label>
+                                </div>
+                            </div>
 
                             <div class="col-md-3">
                                 <div class="form-group form-check">
