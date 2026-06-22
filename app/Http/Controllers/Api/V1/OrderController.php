@@ -1394,7 +1394,18 @@ class OrderController extends Controller
             ], 404);
         }
 
-        else if ($order->order_status == 'delivered' && $order->payment_status == 'paid') {
+        // 哪吒 B方案 L1-1 纵深封堵(2026-06-22 QA辩论): 直付订单(顾客直付商家本人账户)平台不经手退款,
+        // refund_request 钱包代退腿对直付单结构性关闭 —— 即便 refund_active_status 误开也不为直付单建钱包退款记录;
+        // 顾客退款统一走「联系商家原路退」(NezhaRefundRecord 闭环)。叠加 refund_active_status=403 + Admin isDirectPay 护栏, 此为第4层纵深。
+        if ($order->payment_method == 'offline_payment') {
+            return response()->json([
+                'errors' => [
+                    ['code' => 'order', 'message' => '您的款项是直接支付给商家的，退款由商家按您的原付款方式原路退回，平台不经手此款。请联系商家或客服处理。']
+                ]
+            ], 410);
+        }
+
+        if ($order->order_status == 'delivered' && $order->payment_status == 'paid') {
 
             $id_img_names = [];
             if ($request->has('image')) {
