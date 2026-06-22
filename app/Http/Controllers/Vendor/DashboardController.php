@@ -80,10 +80,29 @@ class DashboardController extends Controller
                     })->first();
             }
 
-        return view('vendor-views.dashboard', compact('data', 'earning', 'commission', 'params','delivery_earning','out_out_count','food'));
+        // 哪吒 M-01: 首屏工作台 —— 待办行动条 + 今日经营卡, 与轮询端点 restaurant_data() 同源(nezha_todo_counts)。
+        $nz_todo  = self::nezha_todo_counts();
+        $nz_today = self::nezha_today_summary();
+
+        return view('vendor-views.dashboard', compact('data', 'earning', 'commission', 'params','delivery_earning','out_out_count','food','nz_todo','nz_today'));
     }
 
     public function restaurant_data()
+    {
+        // 哪吒 M-01: 待办计数收口到单一同源方法, 供轮询(JSON)与首屏(dashboard 视图)共用,
+        // 杜绝"首屏数字 vs 轮询数字"两套口径打架(参考 [[nezha-merchant-sees-offline-order]])。
+        return response()->json([
+            'success' => 1,
+            'data'    => self::nezha_todo_counts(),
+        ]);
+    }
+
+    /**
+     * 哪吒 M-01: 商家待办行动条计数(同源唯一出口)。
+     * 全部复用既有作用域/口径, 不新建状态机、不改任何业务规则(L3 只读聚合)。
+     * 返回: 待确认收款/待处理/已确认/待退款/超时/配送催办 各计数 + 跳转落点 key。
+     */
+    private function nezha_todo_counts()
     {
         $restaurant = Helpers::get_restaurant_data();
         $rid = $restaurant?->id;
@@ -170,23 +189,100 @@ class DashboardController extends Controller
             ->Notpos()->pluck('id')->values();
         $deliv_link_total = $deliv_link_ids->count();
 
-        return response()->json([
-            'success' => 1,
-            'data' => [
-                'new_pending_order'   => $new_pending_order,
-                'new_confirmed_order' => $new_confirmed_order,
-                'new_offline_order'   => $new_offline_order,
-                'new_total'           => $target_ids->count(),
-                'new_order_ids'       => $target_ids->values(),
-                'target'              => $target,
-                'target_label'        => $target_label,
-                'timeout_total'       => $timeout_total,
-                'timeout_order_ids'   => $timeout_ids,
-                'timeout_target'      => $timeout_target,
-                'deliv_link_total'    => $deliv_link_total,
-                'deliv_link_order_ids'=> $deliv_link_ids,
-            ]
-        ]);
+        // 哪吒 M-01[待退款]: 与侧栏徽标/列表过滤同源 —— 本店有 pending_merchant_refund 留痕的单
+        // (平台已取消/退款, 等商家原路退)。口径=订单存在的 nezha_refund_records.status=pending_merchant_refund,
+        // 与 _sidebar.blade.php 角标 + OrderController::list('refund_pending') 完全一致。
+        // 注意: 这是 B方案"待商家原路退"(refund_pending), 不是原生"顾客向平台申请退款"(refund_requested), 两者语义不同勿混。
+        $refund_pending = \App\Models\Order::where('restaurant_id', $rid)
+            ->whereIn('id', \App\Models\NezhaRefundRecord::where('status', 'pending_merchant_refund')->pluck('order_id'))
+            ->count();
+
+        // 哪吒 M-01[超时卡过渡落点]: OrderController::list() 无 'processing' 分支(processing 单走 'cooking' tab),
+        // 故把 timeout_target 桶名映射成合法 list key, 避免点进去落到"无过滤=全部单"。M-02 虚拟过滤上线后改指向它。
+        $timeout_list_map = ['processing' => 'cooking'];
+        $timeout_list_key = $timeout_list_map[$timeout_target] ?? $timeout_target;
+
+        return [
+            'new_pending_order'    => $new_pending_order,
+            'new_confirmed_order'  => $new_confirmed_order,
+            'new_offline_order'    => $new_offline_order,
+            'new_total'            => $target_ids->count(),
+            'new_order_ids'        => $target_ids->values(),
+            'target'               => $target,
+            'target_label'         => $target_label,
+            'timeout_total'        => $timeout_total,
+            'timeout_order_ids'    => $timeout_ids,
+            'timeout_target'       => $timeout_target,
+            'timeout_list_key'     => $timeout_list_key,
+            'deliv_link_total'     => $deliv_link_total,
+            'deliv_link_order_ids' => $deliv_link_ids,
+            'refund_pending'       => $refund_pending,
+        ];
+    }
+
+    /**
+     * 哪吒 M-01: 今日经营卡数据(今日订单数 / 今日已确认到账 / 保证金健康四档 / 店铺评分累计)。
+     * 全部 L3 只读聚合, 口径已拍板(见规格 §0.1/§5):
+     *  - 今日已确认到账: payment_status='paid'(离线确认收款会原子写 paid+offline_payments.verified,
+     *    在线已付同样 paid); 自然排除"已传凭证未确认"(仍 unpaid), 不误导商家。再排除终态负向单(退款/取消/失败)。
+     *  - 保证金健康: 与接单闸 nezha_deposit_below_threshold 同源(开关 nezha_deposit_mode_status + 下线阈值
+     *    nezha_min_deposit_threshold), 不显精确 N 天。
+     *  - 店铺评分: Restaurant::withAvg/withCount('reviews') 累计, 与顾客端餐厅页同源, 不造"今日评分"维度。
+     */
+    private function nezha_today_summary()
+    {
+        $restaurant = Helpers::get_restaurant_data();
+        $rid = $restaurant?->id;
+        $vendorId = Helpers::get_vendor_id();
+
+        $today_orders = Order::whereDate('created_at', Carbon::today())
+            ->where('restaurant_id', $rid)->Notpos()->count();
+
+        $today_collected = (float) Order::whereDate('created_at', Carbon::today())
+            ->where('restaurant_id', $rid)
+            ->where('payment_status', 'paid')
+            ->whereNotIn('order_status', ['canceled', 'failed', 'refunded'])
+            ->Notpos()->sum('order_amount');
+
+        // 保证金余额 + 健康四档
+        $balance = (float) (\App\Models\RestaurantWallet::where('vendor_id', $vendorId)->value('deposit_balance') ?? 0);
+        $mode = \App\Models\BusinessSetting::where('key', 'nezha_deposit_mode_status')->first()?->value;
+        $threshold = (float) (\App\Models\BusinessSetting::where('key', 'nezha_min_deposit_threshold')->first()?->value ?? 0);
+        $hasHistory = \App\Models\RestaurantDepositTransaction::where('vendor_id', $vendorId)->exists();
+
+        if ($mode != 1 || ! $hasHistory) {
+            // 未启用佣金预存扣佣 / 无扣佣历史 → 无从评估健康, 诚实显"样本不足", 不伪造"充足"。
+            $deposit_tier = 'sample';
+        } elseif ($balance <= $threshold) {
+            // 已达下线阈值 → 可能无法接新单(与接单闸 nezha_deposit_below_threshold 同源)。
+            $deposit_tier = 'insufficient';
+        } else {
+            // 偏低线: 用商家自设的低额告警阈值(deposit_alert_threshold)作"偏低"区; 未设则只分充足/不足。
+            $alertT = ($restaurant && $restaurant->deposit_alert_enabled && $restaurant->deposit_alert_threshold !== null)
+                ? (float) $restaurant->deposit_alert_threshold : null;
+            $deposit_tier = ($alertT !== null && $balance <= $alertT) ? 'low' : 'sufficient';
+        }
+
+        // 店铺评分(累计) — 与顾客端餐厅页同源
+        $rating_agg = \App\Models\Restaurant::where('id', $rid)
+            ->withAvg('reviews', 'rating')->withCount('reviews')->first();
+        $rating_avg = round((float) ($rating_agg->reviews_avg_rating ?? 0), 1);
+        $rating_count = (int) ($rating_agg->reviews_count ?? 0);
+
+        // ≈¥/≈$ 折算汇率(与商家端保证金页/全站顾客折算同源, 缺省回退)
+        $rateCny = (float) (DB::table('business_settings')->where('key', 'nezha_rate_cny_to_amd')->value('value') ?: 55);
+        $rateUsd = (float) (DB::table('business_settings')->where('key', 'nezha_rate_usd_to_amd')->value('value') ?: 400);
+
+        return [
+            'today_orders'    => $today_orders,
+            'today_collected' => $today_collected,
+            'deposit_balance' => $balance,
+            'deposit_tier'    => $deposit_tier,
+            'rating_avg'      => $rating_avg,
+            'rating_count'    => $rating_count,
+            'rate_cny'        => $rateCny,
+            'rate_usd'        => $rateUsd,
+        ];
     }
 
     public function order_stats(Request $request)

@@ -76,6 +76,10 @@
 
 
 
+        {{-- 哪吒 M-01: 首屏工作台 —— 待办行动条 + 今日经营卡(置顶, 原订单统计/年度图下移保留) --}}
+        @include('vendor-views.partials._todo-actionbar', ['nz_todo' => $nz_todo ?? []])
+        @include('vendor-views.partials._today-summary', ['nz_today' => $nz_today ?? []])
+
         <div class="restaurant-dashboard-wrapper d-flex flex-wrap gap-3 mb-3">
             <div class="card restaurant-dashboard-wrapper-card">
                 <div class="card-header p-2">
