@@ -38,6 +38,9 @@ use App\Http\Controllers\WalletPaymentController;
 Route::post('/subscribeToTopic', [FirebaseController::class, 'subscribeToTopic']);
  Route::get('/', [HomeController::class, 'index'])->name('home');
 
+// 分享缩略图(og:image)统一出 JPG, 解决微信等对 webp 不显缩略图 (OgImageController)
+Route::get('og-image/restaurant/{id}', [\App\Http\Controllers\OgImageController::class, 'restaurant'])->name('og-image.restaurant')->where('id', '[0-9]+');
+
 
 Route::view('subscription/payment/view' , 'Subscription_payment_view')->name('subscription_payment_view');
 Route::get('maintenance-mode', [HomeController::class, 'maintenanceMode'])->name('maintenance_mode');
