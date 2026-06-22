@@ -101,6 +101,19 @@
             </div>
         </div>
     </div>
+    {{-- 哪吒#4: 商家面板提示浮层移动端响应式——窄屏改顶部锚定+全宽细条, 绝不遮挡底部操作按钮(确认收款/接单/出餐) --}}
+    <style>
+    @media (max-width: 600px) {
+        #nz-new-order-toast, #nz-timeout-toast, #nz-deliv-toast {
+            left: 10px !important; right: 10px !important;
+            min-width: 0 !important; max-width: none !important; width: auto !important;
+            bottom: auto !important; padding: 10px 12px !important;
+        }
+        #nz-new-order-toast { top: 66px !important; }
+        #nz-timeout-toast   { top: 142px !important; }
+        #nz-deliv-toast     { top: 218px !important; }
+    }
+    </style>
     <!-- 哪吒: 新订单非阻塞提示条 (响一次不反复弹窗) -->
     <div id="nz-new-order-toast" style="display:none;position:fixed;right:20px;bottom:20px;z-index:100000;background:#fff;border:1px solid #f0f0f0;border-left:4px solid #C4193E;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.15);padding:14px 16px;min-width:248px;max-width:320px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">
         <div style="display:flex;align-items:flex-start;gap:10px;">
@@ -1008,6 +1021,8 @@
                 } catch(e){}
             }
             function showToast(count, label){
+                // 哪吒#4: 订单详情页不弹「新订单」浮层(商家已在处理某单, 该提示冗余且会遮挡「确认收款」按钮)
+                if (location.pathname.indexOf('/restaurant-panel/order/details/') !== -1) { hideToast(); return; }
                 if (countEl) { countEl.textContent = count; }
                 if (labelEl && label) { labelEl.textContent = label; }
                 if (toast) { toast.style.display = 'block'; }
