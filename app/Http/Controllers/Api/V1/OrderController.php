@@ -1201,7 +1201,7 @@ class OrderController extends Controller
             Helpers::sendTelegramToRestaurant($order->restaurant,
                 "🔔 顾客在催退款\n订单 #{$order->id}\n请您尽快按原路退还顾客付款（平台不经手此款），退款后在商家后台「订单 → 待退款」点「标记已退款」。");
         } catch (\Throwable $e) {}
-        return response()->json(['message' => '已替你提醒商家尽快退款，请稍候'], 200);
+        return response()->json(['message' => '已替您提醒商家尽快退款，请稍候'], 200);
     }
 
     public function confirm_delivery(Request $request)
