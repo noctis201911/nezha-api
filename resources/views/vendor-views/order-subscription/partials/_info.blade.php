@@ -39,27 +39,27 @@ $schedules = $subscription->schedules()->get();
                             if (isset($detail->food_id))
                             {
                                 $detail->food = json_decode($detail->food_details, true);
-                                $food = \App\Models\Food::where(['id' => $detail->food['id']])->first();
+                                $food = isset($detail->food['id']) ? \App\Models\Food::where(['id' => $detail->food['id']])->first() : null;
                             }else{
                                 $detail->campaign = json_decode($detail->food_details, true);
-                                $campaign = \App\Models\ItemCampaign::where(['id' => $detail->campaign['id']])->first();
+                                $campaign = isset($detail->campaign['id']) ? \App\Models\ItemCampaign::where(['id' => $detail->campaign['id']])->first() : null;
                             }
                         @endphp
 
                     <tr>
                         <td>{{$key+1}}</td>
                         <td>
-                            <a class="media align-items-center"  href="{{isset($detail->food_id) ? route('vendor.food.view',[$detail->food['id']]) :  '#'}}">
+                            <a class="media align-items-center"  href="{{isset($detail->food_id) ? route('vendor.food.view',[$detail->food['id'] ?? 0]) :  '#'}}">
                             <img class="avatar avatar-lg mr-3"
                                 @if (isset($detail->food['image']))
                                 src="{{ $food?->image_full_url }}"
                                 @else
                                 src="{{ $campaign->image_full_url }}"
                                 @endif
-                                alt="{{isset($detail->food_id) ? $detail->food['name'] : $detail->campaign['name']}} image">
+                                alt="{{isset($detail->food_id) ? ($detail->food['name'] ?? 'Not Found') : ($detail->campaign['name'] ?? 'Not Found')}} image">
 
                                 <div class="media-body">
-                                    <h5 class="text-hover-primary mb-0">{{isset($detail->food_id) ? Str::limit($detail->food['name'],30)  : Str::limit($detail->campaign['name'],30)  }}</h5>
+                                    <h5 class="text-hover-primary mb-0">{{isset($detail->food_id) ? Str::limit($detail->food['name'] ?? 'Not Found',30)  : Str::limit($detail->campaign['name'] ?? 'Not Found',30)  }}</h5>
                                     @if (count(json_decode($detail['variation'], true)) > 0)
                                         @foreach(json_decode($detail['variation'],true) as  $variation)
                                             @if ( isset($variation['name'])  && isset($variation['values']))

@@ -527,7 +527,8 @@ $max_processing_time = $order->restaurant?explode('-', $order->restaurant['deliv
                                             <?php
                                             $deleted_food = $detail->campaign == null?1:0;
                                             $detail->campaign = json_decode($detail->food_details, true);
-                                            $campaign = \App\Models\ItemCampaign::where(['id' => $detail->campaign['id']])->select('id','image')->first();
+                                            if (!is_array($detail->campaign) || !isset($detail->campaign['id'])) { $deleted_food = 1; } // 哪吒: 快照缺失按已删处理, 防数组取null崩
+                                            $campaign = $deleted_food ? null : \App\Models\ItemCampaign::where(['id' => $detail->campaign['id']])->select('id','image')->first();
                                             ?>
 
                                             <tr>

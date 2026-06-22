@@ -163,7 +163,7 @@
                                         {{ $detail['quantity'] }}x
                                     </td>
                                     <td class="text-break text-left">
-                                        {{ json_decode($detail->food_details, true)['name'] }} <br>
+                                        {{ json_decode($detail->food_details, true)['name'] ?? 'Not Found' }} <br>
 
                                         @if (count(json_decode($detail['variation'], true)) > 0)
                                             <strong>{{ translate('messages.variation') }} : </strong>

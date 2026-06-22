@@ -101,10 +101,10 @@ $restaurant_discount_amount=0;
                         if (isset($detail->food_id))
                         {
                             $detail->food = json_decode($detail->food_details, true);
-                            $food = \App\Models\Food::where(['id' => $detail->food['id']])->first();
+                            $food = isset($detail->food['id']) ? \App\Models\Food::where(['id' => $detail->food['id']])->first() : null;
                         }else{
                             $detail->campaign = json_decode($detail->food_details, true);
-                            $campaign = \App\Models\ItemCampaign::where(['id' => $detail->campaign['id']])->first();
+                            $campaign = isset($detail->campaign['id']) ? \App\Models\ItemCampaign::where(['id' => $detail->campaign['id']])->first() : null;
                         }
                     @endphp
 
@@ -113,16 +113,16 @@ $restaurant_discount_amount=0;
                         <h5>{{$key+1}}</h5>
                     </td>
                     <td>
-                        <a class="media" href="{{isset($detail->food_id) ? route('admin.food.view',[$detail->food['id']]) :  route('admin.campaign.view', ['food', $detail->campaign['id']])}}">
+                        <a class="media" href="{{isset($detail->food_id) ? route('admin.food.view',[$detail->food['id'] ?? 0]) :  route('admin.campaign.view', ['food', $detail->campaign['id'] ?? 0])}}">
                             <img class="avatar avatar-xl mr-3 onerror-image"
                             @if (isset($detail->food['image']))
                                 src="{{ $food['image_full_url'] }}"
                             @else
                                 src="{{isset($detail->campaign['image']) ? $campaign['image_full_url'] : dynamicAsset('assets/admin/img/100x100/food-default-image.png') }}"
                             @endif
-                            data-onerror-image="{{dynamicAsset('assets/admin/img/160x160/img2.jpg')}}" alt="{{isset($detail->food_id) ? $detail->food['name'] : $detail->campaign['name']}} image">
+                            data-onerror-image="{{dynamicAsset('assets/admin/img/160x160/img2.jpg')}}" alt="{{isset($detail->food_id) ? ($detail->food['name'] ?? 'Not Found') : ($detail->campaign['name'] ?? 'Not Found')}} image">
                             <div class="media-body align-self-center">
-                                <h5 class="text-hover-primary mb-0">{{isset($detail->food_id) ?  Str::limit($detail->food['name'],30)  : Str::limit($detail->campaign['name'],30) }}</h5>
+                                <h5 class="text-hover-primary mb-0">{{isset($detail->food_id) ?  Str::limit($detail->food['name'] ?? 'Not Found',30)  : Str::limit($detail->campaign['name'] ?? 'Not Found',30) }}</h5>
                                 @if (count(json_decode($detail['variation'], true)) > 0)
                                     @foreach(json_decode($detail['variation'],true) as  $variation)
                                         @if ( isset($variation['name'])  && isset($variation['values']))
