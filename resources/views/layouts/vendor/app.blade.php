@@ -585,6 +585,7 @@
                     else { a.pause(); a.currentTime = 0; a.muted = false; }
                 } catch(e){ a.muted = false; }
             });
+            window.nzAudioUnlocked = true;
             document.removeEventListener('click', nzUnlockAudio);
             document.removeEventListener('keydown', nzUnlockAudio);
             document.removeEventListener('touchstart', nzUnlockAudio);
@@ -975,6 +976,7 @@
             var dvDismissed = false;
             var dvMemSeen  = new Set();
             var dvAudioEl  = document.getElementById('nzDelivAudio');
+            var dvSounded  = false;
             function dvPlay(){ try { if (dvAudioEl) { dvAudioEl.currentTime = 0; var p = dvAudioEl.play(); if (p && p.catch) { p.catch(function(){}); } } } catch(e){} }
             function dvLoadSeen(){ try { return new Set(JSON.parse(localStorage.getItem(DELIV_SEEN_KEY) || '[]')); } catch(e){ return dvMemSeen; } }
             function dvSaveSeen(set){ dvMemSeen = set; try { var arr = Array.from(set); if (arr.length > 200) { arr = arr.slice(arr.length - 200); } localStorage.setItem(DELIV_SEEN_KEY, JSON.stringify(arr)); } catch(e){} }
@@ -986,18 +988,11 @@
                 var ids = (data.deliv_link_order_ids || []).map(String);
                 var total = data.deliv_link_total || 0;
                 dvFirstId = ids.length > 0 ? ids[0] : null;
-                if (total === 0) { dvHide(); dvDismissed = false; return; }
-                var seen = dvLoadSeen();
-                var freshIds = ids.filter(function(id){ return !seen.has(id); });
-                if (freshIds.length > 0) {
-                    dvPlay();
-                    dvDismissed = false;
-                    freshIds.forEach(function(id){ seen.add(id); });
-                    dvSaveSeen(seen);
-                    dvShow(total);
-                } else if (!dvDismissed) {
-                    dvShow(total);
-                }
+                if (total === 0) { dvHide(); dvDismissed = false; dvSounded = false; return; }
+                // 哪吒: 声音独立于「已看」去重——只要音频已解锁就把当前还挂着的催单补响一次(解决冷启动时 poll 早于解锁的竞争);
+                // 一个活动告警只响一次, 告警清零(贴链接/无催单)后重置, 下次新催单再响。
+                if (!dvSounded && window.nzAudioUnlocked) { dvPlay(); dvSounded = true; }
+                if (!dvDismissed) { dvShow(total); }
             }
 
             function loadSeen(){
