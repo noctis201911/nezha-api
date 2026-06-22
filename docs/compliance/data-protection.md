@@ -44,6 +44,7 @@
 - 本地生活举报记录(`local_life_reports`,`detail` 偶含 PII):随表静态加密;**到期清理已实施(2026-06-15)**——`detail`(举报"补充说明","其他"理由必填,可能含联系方式)超过保留期(默认 180 天,后台「护栏与文案设置」页 `locallife_report_retention_days` 可调)由计划任务 `nezha:purge-locallife-pii` 每日 03:40 一并置空,**保留举报行/`reason`/`status` 供审计**(`--dry-run` 可预演)。
 - 商家入驻线索(`merchant_leads`,含联系人/电话/微信/地址 PII):随表静态加密;**到期清理已实施(2026-06-15)**——线索**结案后**(`status`=2已完成/3无效)超过保留期(默认 90 天,自结案起算,`business_settings.merchant_leads_retention_days` 可调)由计划任务 `nezha:purge-merchant-leads` 每日 03:50 抹除 contact_name/phone/wechat/address/note,**保留 行/store_name/category/status 供审计**;**进行中线索(0待跟进/1跟进中)绝不触碰**,避免误删尚未跟进的真实潜在商家(`--dry-run` 可预演)。
 - 链上交易记录:合规要求留存 ≥ 5 年(见 `AML-policy.md`)。
+- 商家 KYC 资料(`vendor_kyc_profiles`,含法人姓名/证件号/收款账户/联系方式 PII):随表静态加密(模型 `encrypted` cast + 表 `ENCRYPTION='Y'`);作为 AML/CDD 核验记录须**留存 ≥5 年**(见 `AML-policy.md`),**豁免 PII 自动清除**——三个 purge 任务(payment-proofs/locallife-pii/merchant-leads)均不涉及本表,代码无自动删 KYC 路径(2026-06-22 KYC 后台处置专项核实)。默认不存证件扫描件;`closed_at`(审核拒绝/结案时间)仅为留存锚点,当前无定时清除 actor(≥5年为下限)。
 - 账户数据:账户存续期间保留,注销后按政策清理。
 - 数据库备份:每日加密备份(AES-256),保留最近 14 份(**已实施 2026-06-14**)。
 
