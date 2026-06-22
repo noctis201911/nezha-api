@@ -90,3 +90,4 @@
    注: 墙比的是本地 origin/main ref(未 fetch 会偏旧)，是提交期 best-effort；catastrophic 路径 push/deploy 自己会 fetch。
 
 这两道只堵"提交卫生"。两窗同时物理改同一文件盖盘仍靠【认领区】。完整 worktree 隔离(路线A)暂缓，待并发变密集再升级。
+- [ ] Claude(窗口SEC-CS-PERMISSION) 正在做【nezha-cs 拆独立权限位 module:nezha_cs(原搭 module:order)+侧栏 guard 由 'chat' 对齐到 'nezha_cs'+custom-role create/edit.blade 补 nezha_cs checkbox】；顺带审 DeepSeek key 脱敏。改: routes/admin.php / _sidebar.blade / custom-role create+edit.blade。不碰别窗 WIP(ADMIN_GUIDE.md / en messages.php)（2026-06-23）
