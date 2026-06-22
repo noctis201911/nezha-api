@@ -20,8 +20,8 @@ use Illuminate\Support\Facades\Mail;
  * 仍未 merchant_refunded 的记录, 施加【非资金性】约束。全部经 nezha_refund_overdue_events
  * 幂等账本保证每留痕每动作恰好一次(防重复催办/重复扣分):
  *   T1(逾期 remind_days 天): risk_record 写商家风控档案 + remind_merchant 催办邮件 + escalate_t1 告警运营
- *   T2(逾期 suspend_days 天): escalate_t2 升级告警运营「建议停接单」
- *                            (🔴 实际停接单仍由运营在后台手动一键执行, 留人工复核口子防误伤)
+ *   T2(逾期 suspend_hours 小时): auto_suspend 自动停接单(非资金) + 超管 Telegram 提醒 + 运营邮件留痕
+ *                            (🔴 商家原路退款并标记后, 由 lift_suspend_if_clear 自动解除接单挂起=自愈; 运营仍可后台手动解除/维持)
  *
  * 🔴 L1 红线: 零资金操作。不碰保证金、不代退、不向顾客打钱。实际退款永远靠商家原路退。
  * 总开关 business_settings.nezha_refund_overdue_status(默认 0 关)。
@@ -30,7 +30,7 @@ class RefundOverdueSweep extends Command
 {
     protected $signature = 'nezha:refund-overdue-sweep {--dry-run : 只报告将执行哪些动作, 不实际改动}';
 
-    protected $description = '哪吒: 扫描商家逾期未退款的留痕, 施加非资金约束(记风控/催办商家/告警运营; 停接单由运营手动)';
+    protected $description = '哪吒: 扫描商家逾期未退款的留痕, 施加非资金约束(记风控/催办商家/告警运营; 逾期达阈值自动停接单, 退款后自动恢复)';
 
     private bool $dry = false;
 
@@ -78,11 +78,12 @@ class RefundOverdueSweep extends Command
                 $this->escalate($rec, $overdueLabel, false);
             }, "逾期{$overdueLabel} 告警运营") ? 1 : 0;
 
-            // T2: 升级告警「建议停接单」(实际停接单仍由运营在后台手动)
+            // T2: 逾期达停接单阈值 -> 自动停接单(非资金) + 超管 Telegram 提醒 + 运营邮件留痕。幂等一次。
+            //     商家原路退款并标记后, lift_suspend_if_clear 自动解除接单挂起(见 Vendor/OrderController::mark_refunded)=自愈。
             if ($overdueHours >= $suspendHours) {
-                $acted += $this->fireOnce($rec->id, $rec->restaurant_id, 'escalate_t2', function () use ($rec, $overdueLabel) {
-                    $this->escalate($rec, $overdueLabel, true);
-                }, "逾期{$overdueLabel} 升级告警建议停接单") ? 1 : 0;
+                $acted += $this->fireOnce($rec->id, $rec->restaurant_id, 'auto_suspend', function () use ($rec, $overdueLabel) {
+                    $this->autoSuspend($rec, $overdueLabel);
+                }, "逾期{$overdueLabel} 自动停接单+提醒超管") ? 1 : 0;
             }
         }
 
@@ -172,6 +173,35 @@ class RefundOverdueSweep extends Command
     }
 
     /**
+     * T2: 自动停接单(非资金) + 超管 Telegram 提醒 + 运营邮件留痕。
+     * 🔴 L1-1: 仅置 restaurants「接单挂起标记」(与钱无关), 不碰保证金/不代退/不给顾客打钱。
+     * 商家原路退款并标记后, lift_suspend_if_clear 自动解除该挂起(自愈)。
+     */
+    private function autoSuspend(NezhaRefundRecord $rec, string $overdueLabel): void
+    {
+        if (!$rec->restaurant_id) {
+            Log::warning('NEZHA_REFUND_OVERDUE auto_suspend 留痕无关联商家, 跳过 refund#' . $rec->id);
+            return;
+        }
+        $reason = '退款逾期未处理(留痕#' . $rec->id . ' 订单#' . $rec->order_id . ' 逾期' . $overdueLabel . ')';
+        // 非资金: 仅置接单挂起标记; suspend() 内部 save 失败会抛出 -> fireOnce 回滚账本行, 下轮重试。
+        \App\CentralLogics\NezhaRefundOverdue::suspend((int) $rec->restaurant_id, $reason);
+
+        $name = $rec->restaurant?->name ?? ('餐厅#' . $rec->restaurant_id);
+        // 超管 Telegram 提醒(未配 nezha_risk_admin_chat_id 自动静默降级, 不抛错)。
+        \App\CentralLogics\Helpers::sendTelegramToAdmin(
+            "⛔ 哪吒 · 商家逾期未退款已【自动停接单】\n"
+            . "商家: {$name} (#{$rec->restaurant_id})\n"
+            . "退款留痕#{$rec->id} 订单#{$rec->order_id} 应退≈{$rec->refund_amount}\n"
+            . "已逾期 {$overdueLabel}。商家原路退款并标记后将自动恢复接单。\n"
+            . "后台「风控中心 → 逾期未退款」可手动解除/维持。"
+        );
+        // 运营邮件留痕(失败吞掉, 不反复重发)。
+        $this->escalate($rec, $overdueLabel, true);
+        Log::warning("NEZHA_REFUND_OVERDUE auto_suspend restaurant#{$rec->restaurant_id} refund#{$rec->id} 逾期{$overdueLabel}");
+    }
+
+    /**
      * 告警运营(平台客服信箱)。发信失败吞掉(账本行已占, 不反复重发), 仅记日志。
      * $suggestSuspend=true 时升级为「建议停接单」(运营据此手动处置)。
      */
@@ -179,7 +209,7 @@ class RefundOverdueSweep extends Command
     {
         $name = $rec->restaurant?->name ?? ('餐厅#' . $rec->restaurant_id);
         $head = $suggestSuspend
-            ? "商家逾期未退款已达 {$overdueLabel}, 建议在后台「逾期未退款」一键停接单。"
+            ? "商家逾期未退款已达 {$overdueLabel}, 系统已【自动停接单】(非资金), 商家原路退款并标记后自动恢复。"
             : "商家逾期未退款 {$overdueLabel}, 已记风控并催办商家。";
         $body = $head . "\n\n商家: {$name}\n退款留痕#{$rec->id} 订单#{$rec->order_id} 应退≈{$rec->refund_amount}"
             . "\n请登录后台「风控中心 → 逾期未退款」跟进(平台不代退, 仅约束/催办)。";

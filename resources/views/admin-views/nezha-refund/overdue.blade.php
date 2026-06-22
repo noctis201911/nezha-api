@@ -9,8 +9,8 @@
         <div class="alert alert-warning" role="alert">
             <i class="tio-info"></i>
             {{ translate('哪吒为点对点直付、平台不碰钱: 平台已取消/退款的订单, 退款须由商家在自己账户原路退还顾客。此页列出商家「待退款、尚未标记已退款」的留痕。逾期') }}
-            {{ $remindHours }}{{ translate('小时起系统自动催办商家+计入风控; 逾期') }}{{ $suspendHours }}{{ translate('小时起升级告警。') }}
-            <strong>{{ translate('停接单为非资金约束、需由您在此手动执行(留人工复核口子, 避免误伤已退款但忘标记的商家)。平台绝不从保证金扣钱代退。') }}</strong>
+            {{ $remindHours }}{{ translate('小时起系统自动催办商家+计入风控; 逾期') }}{{ $suspendHours }}{{ translate('小时起【系统自动停接单】并 Telegram 提醒超管。') }}
+            <strong>{{ translate('自动停接单为非资金约束; 商家原路退款并标记后系统自动恢复其接单。您仍可在下方手动解除/维持(留人工复核口子, 避免误伤已退款但忘标记的商家)。平台绝不从保证金扣钱代退。') }}</strong>
             @if ($status != 1)
                 <br><span class="text-danger">{{ translate('注意: 兜底总开关当前关闭(nezha_refund_overdue_status=0), 系统不会自动催办/记风控/告警; 本列表仍可查看与手动处置。') }}</span>
             @endif
@@ -27,30 +27,30 @@
                             <label class="input-label">{{ translate('兜底总开关') }}</label>
                             <select name="nezha_refund_overdue_status" class="form-control">
                                 <option value="0" {{ $status != 1 ? 'selected' : '' }}>{{ translate('关闭(只看与手动处置, 不自动催办)') }}</option>
-                                <option value="1" {{ $status == 1 ? 'selected' : '' }}>{{ translate('开启(每小时自动催办+记风控+告警)') }}</option>
+                                <option value="1" {{ $status == 1 ? 'selected' : '' }}>{{ translate('开启(每小时自动催办+记风控+告警+逾期自动停接单)') }}</option>
                             </select>
-                            <small class="text-danger">{{ translate('⚠️ 开启=真实影响: 会自动催办逾期商家并计入风控。停接单仍需您手动。') }}</small>
+                            <small class="text-danger">{{ translate('⚠️ 开启=真实影响: 会自动催办逾期商家、计入风控, 并在逾期达阈值时自动停其接单(退款后自动恢复)。') }}</small>
                         </div>
                         <div class="col-sm-3 form-group mb-2">
                             <label class="input-label">{{ translate('逾期几小时起 催办+记风控') }}</label>
                             <input type="number" name="nezha_refund_overdue_remind_hours" class="form-control" min="1" max="720" value="{{ $remindHours }}" required>
                         </div>
                         <div class="col-sm-3 form-group mb-2">
-                            <label class="input-label">{{ translate('逾期几小时起 升级告警建议停接单') }}</label>
+                            <label class="input-label">{{ translate('逾期几小时起 自动停接单') }}</label>
                             <input type="number" name="nezha_refund_overdue_suspend_hours" class="form-control" min="1" max="2160" value="{{ $suspendHours }}" required>
                         </div>
                         <div class="col-sm-2 form-group mb-2">
                             <button type="submit" class="btn btn-primary btn-block">{{ translate('保存') }}</button>
                         </div>
                     </div>
-                    <small class="text-muted">{{ translate('停接单小时数应≥催办小时数; 系统每小时自动扫描一次。') }}</small>
+                    <small class="text-muted">{{ translate('自动停接单小时数应≥催办小时数; 系统每小时自动扫描一次。') }}</small>
                 </form>
             </div>
         </div>
 
         {{-- 当前被「退款逾期」停接单的商家 --}}
         <div class="card mb-3">
-            <div class="card-header"><h5 class="card-header-title">{{ translate('当前因退款逾期被暂停接单的商家') }} ({{ count($suspended) }})</h5></div>
+            <div class="card-header"><h5 class="card-header-title">{{ translate('当前因退款逾期被停接单的商家(系统自动或运营手动)') }} ({{ count($suspended) }})</h5></div>
             <div class="table-responsive">
                 <table class="table table-borderless table-thead-bordered table-align-middle card-table mb-0">
                     <thead class="thead-light">
