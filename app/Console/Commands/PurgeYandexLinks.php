@@ -18,7 +18,7 @@ use Carbon\Carbon;
  * 做法: 只把终态、且超过保留期的订单的 yandex_tracking_url + delivery_link_reminded_at
  * 两个字段置空; 【保留订单行本身与全部财务/状态字段】(订单是财务记录, L1-4/合规另行留存)。
  *
- * 保留天数: business_settings.nezha_yandex_link_retention_days (默认 30)。
+ * 保留天数: business_settings.nezha_yandex_link_retention_days (默认 10)。
  * 开关:     business_settings.nezha_yandex_link_purge_status     (默认 1=开; 设 0 停用)。
  */
 class PurgeYandexLinks extends Command
@@ -37,9 +37,9 @@ class PurgeYandexLinks extends Command
         }
 
         $days = (int) (DB::table('business_settings')
-            ->where('key', 'nezha_yandex_link_retention_days')->value('value') ?? 30);
+            ->where('key', 'nezha_yandex_link_retention_days')->value('value') ?? 10);
         if ($days < 1) {
-            $days = 30;
+            $days = 10;
         }
 
         $cutoff = Carbon::now()->subDays($days);
