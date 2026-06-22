@@ -965,6 +965,13 @@ class OrderController extends Controller
         }
         else if ($order->order_status == 'pending' || $order->order_status == 'failed' || $order->order_status == 'canceled'  ) {
 
+            // 哪吒(幂等守卫 2026-06-22 QA辩论): 已是 canceled 的单重复调用 cancel_order → 直接幂等返回,
+            //   不再二次 decreaseSellCount / 重复 send_order_notification / 重复 increment_order_count(防销量被错误下扣、重复推送)。
+            //   退款留痕本就幂等(offline_payments 已 canceled → 下方 whereIn 取不到, 不重复 record_direct_pay_refund_pending)。
+            if ($order->order_status == 'canceled') {
+                return response()->json(['message' => translate('messages.order_canceled_successfully')], 200);
+            }
+
             if(!$request->reason && !$request->note){
                 return response()->json([
                     'errors' => [
