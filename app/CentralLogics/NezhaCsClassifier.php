@@ -85,6 +85,28 @@ class NezhaCsClassifier
         return false;
     }
 
+    // 纯外文（拉丁/英文，无中文 CJK，多词成句）——可能是顾客粘贴的骑手英文消息（埃里温骑手偶用英文）。
+    // 调用点放在敏感/联系不上之后，故英文的退款/投诉等资金诉求仍先走转商家，不会被这里抢走。
+    // 单个短词(ok/hi/yes)不算，避免误打扰；命中后走一次性翻译路径，translatePrompt rule5 会让模型先确认是否要翻译。
+    public static function looksLikeForeignToTranslate(?string $text): bool
+    {
+        if (!$text) {
+            return false;
+        }
+        $t = trim($text);
+        if (preg_match('/\p{Han}/u', $t)) {
+            return false; // 含中文 → 不是骑手外语
+        }
+        if (!preg_match('/[A-Za-z]/', $t)) {
+            return false; // 无拉丁字母（亚美尼亚/西里尔已被 isTranslationRequest 提前处理）
+        }
+        // 至少两个词（一个字母词 + 空格 + 后续内容），避免 ok / hi 这类短应答被误判。
+        if (!preg_match('/[A-Za-z]+\s+\S+/u', $t)) {
+            return false;
+        }
+        return true;
+    }
+
     // 顾客对「客服服务」的评价。先判负面(防 不满意 被 满意 误命中)。限服务语境，避免抓订单投诉。
     public static function feedbackSentiment(?string $text): ?string
     {

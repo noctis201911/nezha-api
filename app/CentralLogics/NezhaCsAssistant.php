@@ -135,6 +135,16 @@ class NezhaCsAssistant
             return;
         }
 
+        // 1.5) 纯英文/拉丁文且没命中上面任何闸——很可能是顾客粘贴的骑手英文消息。
+        // 不直接硬翻（英文也可能是顾客自己的提问），先问一句是否需要翻译，并指路进入翻译模式。
+        if (NezhaCsClassifier::looksLikeForeignToTranslate($text)) {
+            self::reply($conversation, $customerUser,
+                "Hi～看到您发的是英文。要我帮您把它翻译、转达给骑手/配送员吗？需要的话回我一句「和骑手对话」，之后您发的内容我都自动帮您互译；如果您其实是想咨询订单或别的问题，直接用中文跟我说就行～
+（If you'd like me to translate this for the delivery rider, just say \"talk to rider\". Otherwise, tell me your question and I'll help.）",
+                'translate_confirm', null);
+            return;
+        }
+
         // 2) 调模型，由模型判 answer / to_merchant / cannot。
         // 每条消息独立处理（不喂历史）——flash 模型喂历史会抄自己上一条/判断被带偏；订单状态本就在系统提示里不丢。
         try {
