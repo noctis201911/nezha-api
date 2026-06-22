@@ -25,6 +25,61 @@ use Illuminate\Support\Facades\Mail;
 
 class OrderLogic
 {
+    /**
+     * [哪吒 B方案/组4 佣金展示] 计算某订单「平台应收佣金」。
+     *
+     * ⚠️ 本方法是 create_transaction() 内 $comission_amount 计算的【只读镜像】, 公式必须保持一致:
+     *   - 费率   : $comission = 餐馆 comission ?? 全局 admin_commission
+     *   - 计佣基数: $order_amount(净商品额: 订单总额扣各项费/税/小费, 加回券与 admin 出资折扣/首单返)
+     *   - 佣金额 : ($order_amount / 100) * 费率; 订阅制餐馆免佣 = 0
+     * 仅供 admin / 商家 订单详情页【只读展示】, 本身不扣款、无副作用。
+     * 改 create_transaction() 佣金公式时务必同步本方法 + tests/Feature/NezhaCommissionTest.php(测试锁公式)。
+     *
+     * @return array{rate:float, base:float, amount:float, subscription:bool}
+     */
+    public static function nezha_commissionable_amount($order): array
+    {
+        $restaurant = $order->restaurant ?? null;
+        $rest_sub   = $restaurant?->restaurant_sub;
+
+        // 费率: 餐馆自定 comission 优先(含 0%), 未设则用全局 admin_commission。镜像 create_transaction 费率行。
+        $rate = !isset($restaurant?->comission)
+            ? (float) (\App\Models\BusinessSetting::where('key', 'admin_commission')->first()?->value ?? 0)
+            : (float) $restaurant->comission;
+
+        // 订阅制(月费)餐馆免佣。镜像 create_transaction 订阅分支。
+        if ($restaurant && $restaurant->restaurant_model == 'subscription' && isset($rest_sub)) {
+            return ['rate' => 0.0, 'base' => 0.0, 'amount' => 0.0, 'subscription' => true];
+        }
+
+        // 计佣基数 = 净商品额。镜像 create_transaction $order_amount 行:
+        // 仅当折扣由 admin 出资(discount_on_product_by=='admin')时, restaurant_discount_amount 计回基数。
+        $restaurant_discount_addback = (($order->discount_on_product_by ?? null) == 'admin')
+            ? (float) ($order->restaurant_discount_amount ?? 0) : 0.0;
+
+        $base = (float) $order->order_amount
+            - (float) ($order->additional_charge ?? 0)
+            - (float) ($order->extra_packaging_amount ?? 0)
+            - (float) ($order->delivery_charge ?? 0)
+            - (float) ($order->total_tax_amount ?? 0)
+            - (float) ($order->dm_tips ?? 0)
+            - (float) ($order->delivery_type_charge ?? 0)
+            + (float) ($order->coupon_discount_amount ?? 0)
+            + $restaurant_discount_addback
+            + (float) ($order->ref_bonus_amount ?? 0);
+
+        // 加急/稍后送二次调整。镜像 create_transaction express/slightly_delay 分支。
+        if (($order->delivery_type ?? null) === 'express') {
+            $base -= (float) ($order->delivery_type_charge ?? 0);
+        } elseif (($order->delivery_type ?? null) === 'slightly_delay') {
+            $base += (float) ($order->delivery_type_charge ?? 0);
+        }
+
+        $amount = $rate ? ($base / 100) * $rate : 0.0;
+
+        return ['rate' => $rate, 'base' => $base, 'amount' => $amount, 'subscription' => false];
+    }
+
     public static function create_transaction($order, $received_by=false, $status = null)
     {
         $comission = !isset($order?->restaurant?->comission)?\App\Models\BusinessSetting::where('key','admin_commission')->first()?->value:$order?->restaurant?->comission;
@@ -586,7 +641,7 @@ class OrderLogic
             'order_id'        => $order->id,
             'created_at'      => $order->created_at ? (string) $order->created_at : null,
             'paid_at'         => $order->payment_status === 'paid'
-                ? ($order->delivered ? (string) $order->delivered : (string) $order->updated_at) : null,
+                ? ($order->confirmed ? (string) $order->confirmed : (string) $order->updated_at) : null,
             'payment_method'  => $method,
             'method_name'     => $method_name,
             'payment_status'  => $order->payment_status,

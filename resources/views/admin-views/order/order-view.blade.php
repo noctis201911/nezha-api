@@ -722,7 +722,7 @@ $max_processing_time = $order->restaurant?explode('-', $order->restaurant['deliv
                                         @endif
                                     </dd>
                                     @endif
-                                        @if ($order['additional_charge'] > 0)
+                                        @if (Helpers::get_business_data('additional_charge_status') == 1 || $order['additional_charge'] > 0)
                                             <dt class="col-6">
                                                 {{ Helpers::get_business_data('additional_charge_name')??translate('messages.additional_charge') }}
                                                 <hr>
@@ -785,6 +785,24 @@ $max_processing_time = $order->restaurant?explode('-', $order->restaurant['deliv
                                             {{ Helpers::format_currency($order->order_amount) }}
                                         </dt>
                                     </dl>
+                                    {{-- [哪吒 B方案/组4] 平台应收佣金 只读展示: 不计入顾客应付, 免佣期暂不实扣(开关 nezha_deposit_mode_status) --}}
+                                    @php($nz_comm = \App\CentralLogics\OrderLogic::nezha_commissionable_amount($order))
+                                    <dl class="row align-items-center mt-2 mb-0">
+                                        <dd class="col-7 mb-0 text-muted" style="font-size:13px;">
+                                            🧾 {{ translate('平台应收佣金') }}
+                                            @if ($nz_comm['subscription'])
+                                                <span class="badge badge-soft-info">{{ translate('订阅制·免佣') }}</span>
+                                            @else
+                                                ({{ rtrim(rtrim(number_format($nz_comm['rate'], 2), '0'), '.') }}%)
+                                            @endif
+                                            <span class="badge badge-soft-secondary ml-1">{{ translate('只读·不计入顾客应付') }}</span>
+                                        </dd>
+                                        <dt class="col-5 text-right text-muted" style="font-size:13px;font-weight:normal;">
+                                            {{ Helpers::format_currency($nz_comm['amount']) }}
+                                        </dt>
+                                    </dl>
+                                    <div class="row mb-2"><div class="col-12 text-right text-muted" style="font-size:11px;">{{ translate('计佣基数(净商品额)') }} {{ Helpers::format_currency($nz_comm['base']) }} × {{ rtrim(rtrim(number_format($nz_comm['rate'],2),'0'),'.') }}% · {{ translate('免佣期暂不实扣') }}</div></div>
+
                                 </div>
                             </div>
                         </div>
