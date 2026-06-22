@@ -88,7 +88,13 @@ class NezhaRiskController extends Controller
     /** 保存风控设置 (开关用下拉传 1/0, 阈值用数字; 未提交的字段保留原值) */
     public function updateSettings(Request $request)
     {
+        // 安全(P0-b): 链上 API 密钥仅超级管理员可改; 非超管提交一律跳过(防掩码值覆盖真值)
+        $nzIsSuper  = auth('admin')->check() && auth('admin')->user()->role_id == 1;
+        $secretKeys = ['nezha_refund_bscscan_api_key', 'nezha_refund_trongrid_api_key'];
         foreach (array_keys($this->cfgKeys) as $key) {
+            if (in_array($key, $secretKeys, true) && ! $nzIsSuper) {
+                continue;
+            }
             if ($key === 'nezha_risk_contact_info') {
                 $value = (string) $request->input($key, '');   // 客服联系方式允许清空
             } else {

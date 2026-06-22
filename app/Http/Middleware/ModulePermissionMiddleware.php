@@ -28,6 +28,10 @@ class ModulePermissionMiddleware
         }
 
         Toastr::error(translate('messages.access_denied'));
+        if (auth('admin')->check()) {
+            // 安全(P2): admin 无权限落正式品牌化中文 403 页, 不糊回上一页
+            return response()->view('admin-views.errors.no-permission', ['module' => $module], 403);
+        }
         return back();
     }
 }

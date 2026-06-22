@@ -128,7 +128,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
         Route::post('search-account-transaction', [AccountTransactionController::class, 'search_account_transaction'])->name('search-account-transaction');
 
         // 哪吒 B方案 组4: 商家预存佣金(充值/扣佣)管理
-        Route::group(['prefix' => 'nezha-deposit', 'as' => 'nezha-deposit.', 'middleware' => ['module:restaurant']], function () {
+        Route::group(['prefix' => 'nezha-deposit', 'as' => 'nezha-deposit.', 'middleware' => ['module:deposit']], function () {
             Route::get('/', [NezhaDepositController::class, 'index'])->name('index');
             Route::get('transactions', [NezhaDepositController::class, 'transactions'])->name('transactions');
             Route::post('store-recharge', [NezhaDepositController::class, 'store_recharge'])->name('store-recharge');
@@ -486,20 +486,25 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
         });
 
         // 哪吒风控① 风控中心: 审核队列 + 风控日志 + 风控设置
-        Route::group(['prefix' => 'nezha-risk', 'as' => 'nezha-risk.', 'middleware' => ['module:order']], function () {
-            Route::get('queue', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'queue'])->name('queue');
-            Route::get('logs', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'logs'])->name('logs');
-            Route::get('settings', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'settings'])->name('settings');
-            Route::post('settings', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'updateSettings'])->name('settings.update');
-            Route::post('approve/{id}', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'approve'])->name('approve');
-            Route::post('reject/{id}', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'reject'])->name('reject');
-            Route::post('refund/{id}', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'refund'])->name('refund');
-            // L1-6 制裁筛查未决(反查不出来源): 人工核实来源后放行并确认收款(重新筛查, 真命中仍拦)
-            Route::post('release-inconclusive/{id}', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'release_inconclusive'])->name('release-inconclusive');
+        // 安全(P0-a): 队列/日志/处置 = module:risk; 改阈值设置 = module:risk_settings(更高敏感独立位)
+        Route::group(['prefix' => 'nezha-risk', 'as' => 'nezha-risk.'], function () {
+            Route::group(['middleware' => ['module:risk']], function () {
+                Route::get('queue', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'queue'])->name('queue');
+                Route::get('logs', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'logs'])->name('logs');
+                Route::post('approve/{id}', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'approve'])->name('approve');
+                Route::post('reject/{id}', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'reject'])->name('reject');
+                Route::post('refund/{id}', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'refund'])->name('refund');
+                // L1-6 制裁筛查未决(反查不出来源): 人工核实来源后放行并确认收款(重新筛查, 真命中仍拦)
+                Route::post('release-inconclusive/{id}', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'release_inconclusive'])->name('release-inconclusive');
+            });
+            Route::group(['middleware' => ['module:risk_settings']], function () {
+                Route::get('settings', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'settings'])->name('settings');
+                Route::post('settings', [\App\Http\Controllers\Admin\NezhaRiskController::class, 'updateSettings'])->name('settings.update');
+            });
         });
 
         // 哪吒 商家 KYC: 轻量核验结论录入/审核(方案B, 只存结论不存扫描件)
-        Route::group(['prefix' => 'nezha-kyc', 'as' => 'nezha-kyc.', 'middleware' => ['module:restaurant']], function () {
+        Route::group(['prefix' => 'nezha-kyc', 'as' => 'nezha-kyc.', 'middleware' => ['module:kyc']], function () {
             Route::get('/', [\App\Http\Controllers\Admin\NezhaKycController::class, 'index'])->name('index');
             Route::get('edit/{restaurant_id}', [\App\Http\Controllers\Admin\NezhaKycController::class, 'edit'])->name('edit');
             Route::post('save/{restaurant_id}', [\App\Http\Controllers\Admin\NezhaKycController::class, 'save'])->name('save');
@@ -507,7 +512,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
         });
 
         // 哪吒 退款机制② 退款留痕/审核
-        Route::group(['prefix' => 'nezha-refund', 'as' => 'nezha-refund.', 'middleware' => ['module:order']], function () {
+        Route::group(['prefix' => 'nezha-refund', 'as' => 'nezha-refund.', 'middleware' => ['module:refund']], function () {
             Route::get('records', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'records'])->name('records');
             Route::post('submit-tx/{id}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'submitTx'])->name('submit-tx');
             Route::post('upload-proof/{id}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'uploadProof'])->name('upload-proof');

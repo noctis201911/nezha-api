@@ -197,6 +197,41 @@
                             <label class="form-check-label ml-2 ml-sm-3  text-dark" for="settings">{{translate('messages.business_settings')}}</label>
                         </div>
                     </div>
+                    <div class="check-item">
+                        <div class="form-group form-check form--check">
+                            <input type="checkbox" name="modules[]" value="risk" class="form-check-input"
+                                    id="risk">
+                            <label class="form-check-label ml-2 ml-sm-3  text-dark" for="risk">{{translate('风控中心')}}</label>
+                        </div>
+                    </div>
+                    <div class="check-item">
+                        <div class="form-group form-check form--check">
+                            <input type="checkbox" name="modules[]" value="risk_settings" class="form-check-input"
+                                    id="risk_settings">
+                            <label class="form-check-label ml-2 ml-sm-3  text-dark" for="risk_settings">{{translate('风控设置')}}</label>
+                        </div>
+                    </div>
+                    <div class="check-item">
+                        <div class="form-group form-check form--check">
+                            <input type="checkbox" name="modules[]" value="refund" class="form-check-input"
+                                    id="refund">
+                            <label class="form-check-label ml-2 ml-sm-3  text-dark" for="refund">{{translate('退款留痕/审核')}}</label>
+                        </div>
+                    </div>
+                    <div class="check-item">
+                        <div class="form-group form-check form--check">
+                            <input type="checkbox" name="modules[]" value="deposit" class="form-check-input"
+                                    id="deposit">
+                            <label class="form-check-label ml-2 ml-sm-3  text-dark" for="deposit">{{translate('佣金充值管理')}}</label>
+                        </div>
+                    </div>
+                    <div class="check-item">
+                        <div class="form-group form-check form--check">
+                            <input type="checkbox" name="modules[]" value="kyc" class="form-check-input"
+                                    id="kyc">
+                            <label class="form-check-label ml-2 ml-sm-3  text-dark" for="kyc">{{translate('商家KYC')}}</label>
+                        </div>
+                    </div>
 
                     <div class="check-item">
                         <div class="form-group form-check form--check">

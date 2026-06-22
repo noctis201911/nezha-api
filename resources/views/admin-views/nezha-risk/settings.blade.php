@@ -1,6 +1,7 @@
 @extends('layouts.admin.app')
 @section('title', translate('风控设置'))
 @section('content')
+    @php $nzIsSuper = auth('admin')->check() && auth('admin')->user()->role_id == 1; @endphp
     <div class="content container-fluid">
         <div class="page-header">
             <h1 class="page-header-title"><i class="tio-shield"></i> {{ translate('交易风控设置') }}</h1>
@@ -125,11 +126,21 @@
                         </div>
                         <div class="col-md-6">
                             <label class="input-label">{{ translate('BscScan API Key (选填, 空则用公共RPC节点)') }}</label>
+                            @if ($nzIsSuper)
                             <input type="text" name="nezha_refund_bscscan_api_key" class="form-control" maxlength="191" value="{{ $cfg['nezha_refund_bscscan_api_key'] ?? '' }}" placeholder="{{ translate('留空即可, 免密钥公共节点') }}">
+                            @else
+                            <input type="text" class="form-control" value="{{ !empty($cfg['nezha_refund_bscscan_api_key']) ? '••••••' : '' }}" placeholder="{{ translate('未配置') }}" disabled>
+                            <small class="text-muted">{{ translate('密钥仅超级管理员可查看与修改') }}</small>
+                            @endif
                         </div>
                         <div class="col-md-6">
                             <label class="input-label">{{ translate('TronGrid API Key (选填, 空则用公共端点)') }}</label>
+                            @if ($nzIsSuper)
                             <input type="text" name="nezha_refund_trongrid_api_key" class="form-control" maxlength="191" value="{{ $cfg['nezha_refund_trongrid_api_key'] ?? '' }}" placeholder="{{ translate('留空即可, 免密钥公共端点') }}">
+                            @else
+                            <input type="text" class="form-control" value="{{ !empty($cfg['nezha_refund_trongrid_api_key']) ? '••••••' : '' }}" placeholder="{{ translate('未配置') }}" disabled>
+                            <small class="text-muted">{{ translate('密钥仅超级管理员可查看与修改') }}</small>
+                            @endif
                         </div>
                     </div>
                     <small class="text-muted">{{ translate('退款留痕(含原路锁定地址/链上校验结果)记入 nezha_refund_records, 合规留存 ≥5年。') }}</small>
