@@ -927,12 +927,7 @@ $countryCode = strtolower($country ?? 'auto');
         messaging.onMessage(function (payload) {
             console.log(payload.data);
             if (payload.data.order_id && payload.data.type == "order_request") {
-                @php($admin_order_notification = \App\CentralLogics\Helpers::get_business_settings('admin_order_notification') ?? 0)
-                @if (\App\CentralLogics\Helpers::module_permission_check('order') && $admin_order_notification && $order_notification_type == 'firebase')
-                    new_order_type = payload.data.order_type
-                    playAudio();
-                    $('#popup-modal').appendTo("body").modal('show');
-                @endif
+                // 哪吒[2026-06-22]: B方案平台不接单, 超管不报新订单(铃声+居中弹窗已彻底停用); 异常订单提醒走下方 nz-admin-abn-toast。
 
             } else if (payload.data.type == 'message') {
                 var conversation_id = getUrlParameter('conversation');
@@ -958,25 +953,7 @@ $countryCode = strtolower($country ?? 'auto');
         @endif
 
 
-        @if(\App\CentralLogics\Helpers::module_permission_check('order') && $order_notification_type == 'manual')
-        @php($admin_order_notification = \App\CentralLogics\Helpers::get_business_settings('admin_order_notification') ?? 0)
-        @if($admin_order_notification)
-            setInterval(function () {
-                $.get({
-                    url: '{{route('admin.get-restaurant-data')}}',
-                    dataType: 'json',
-                    success: function (response) {
-                        let data = response.data;
-                        new_order_type = data.type;
-                        if (data.new_order > 0) {
-                            playAudio();
-                            $('#popup-modal').appendTo("body").modal('show');
-                        }
-                    },
-                });
-            }, 10000);
-        @endif
-        @endif
+        {{-- 哪吒[2026-06-22]: 超管新订单轮询弹窗已停用(B方案平台不接单)。异常订单(超时/逾期退款)提醒走 nz-admin-abn-toast 独立轮询块。 --}}
 
         @if (isset($fcm_credentials['apiKey']) && is_string($fcm_credentials['apiKey']) && strlen($fcm_credentials['apiKey']) > 3)
             startFCM();

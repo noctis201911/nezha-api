@@ -665,6 +665,21 @@
 - 目前仅平台运营在后台设置；商家端自助绑定后续可做。
 - 实现：`Helpers::sendTelegramOrderAlert()`（发送）+ 后台「设置」页卡片（`admin.restaurant.update-telegram` / `admin.restaurant.telegram-recent-chats`）+ 字段 `restaurants.telegram_chat_id`。
 
+### 9.9 超管后台订单提醒（不报新订单，只报「异常订单」）〔2026-06-22〕
+
+B 方案下平台不接单、不碰钱、不派骑手——**一笔新订单进来，超管没有任何要当场做的动作**（接单/备餐/确认全是商家的事）。所以超管后台**已彻底关闭新订单提醒**：不再响铃、不再弹居中弹窗（StackFood 原版「You have new order」弹窗的两段触发代码已从 admin 布局删除，不再依赖任何开关；旧的 `admin_order_notification` 开关对超管已无作用，即使被误点回开也不会再弹）。
+
+取而代之，超管只在**需要平台介入的「异常订单」**出现时，于屏幕**右下角弹一个不挡屏的提示条 + 提示音**（响一次不反复弹，商家处理完自动收起；点「去处理」直达该订单详情）。只报两类：
+
+| 类型 | 触发条件（= 已升级到「需平台介入」） |
+|---|---|
+| **超时单** | 订单超时已严重到系统**已通知商家+客服**那一档（`NezhaOrderTimeout` severity=error）。商家正常处理中的不报，避免噪音。 |
+| **逾期退款单** | 待商家退款（`pending_merchant_refund`）且**超过催办阈值小时**仍未退（同「逾期未退款」引擎口径 `nezha_refund_overdue_remind_hours`，默认 12 小时）。 |
+
+- 右下角提示条文案：「X 个异常订单待处理 · 超时 Y · 退款逾期 Z」。
+- 数据接口：`SystemController::restaurant_data`（路由 `admin.get-restaurant-data`，超管页每 12 秒轮询）。
+- **逾期退款提示独立于催办引擎开关**：就算「逾期未退款」执行引擎（`nezha_refund_overdue_status`）关着，超管这个提示条仍会显示逾期退款单——监管露出不依赖执行动作。
+- 实现：`resources/views/layouts/admin/app.blade.php`（`nz-admin-abn-toast` + 独立轮询块）。零资金 / 零状态机改动，纯只读统计（L3）。
 ## 10. 佣金充值管理（商家预存佣金）
 
 **入口**：后台左侧栏「交易管理」区 →「佣金充值管理」（`/admin/nezha-deposit`）。
