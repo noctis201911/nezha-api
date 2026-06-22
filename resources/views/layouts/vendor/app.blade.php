@@ -125,6 +125,18 @@
         </div>
         <button type="button" id="nz-timeout-go" style="margin-top:10px;width:100%;background:#d32029;color:#fff;border:none;border-radius:8px;padding:9px 0;font-size:14px;font-weight:600;cursor:pointer;">立即处理</button>
     </div>
+    <!-- 哪吒: 顾客催「分享配送进度」提示条(系统/面板渠道, 蓝色, 独立于新单/超时; 商家贴 Yandex 链接即消) -->
+    <div id="nz-deliv-toast" style="display:none;position:fixed;right:20px;bottom:172px;z-index:100002;background:#fff;border:1px solid #c9def3;border-left:4px solid #1f6fd0;border-radius:12px;box-shadow:0 6px 24px rgba(31,111,208,.2);padding:14px 16px;min-width:248px;max-width:320px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+            <div style="font-size:22px;line-height:1;">&#128276;</div>
+            <div style="flex:1;">
+                <div style="font-weight:600;color:#1f6fd0;font-size:15px;margin-bottom:2px;"><span id="nz-deliv-count">0</span> 单顾客在催配送进度</div>
+                <div style="color:#8a8a8a;font-size:12px;">顾客想实时看配送，请在 Yandex Go 点「分享」复制追踪链接，贴到订单里</div>
+            </div>
+            <button type="button" id="nz-deliv-close" aria-label="关闭" style="border:none;background:none;color:#bbb;font-size:20px;line-height:1;cursor:pointer;padding:0;">&times;</button>
+        </div>
+        <button type="button" id="nz-deliv-go" style="margin-top:10px;width:100%;background:#1f6fd0;color:#fff;border:none;border-radius:8px;padding:9px 0;font-size:14px;font-weight:600;cursor:pointer;">去贴链接</button>
+    </div>
     <div class="modal fade" id="popup-modal-msg">
         <div class="modal-dialog modal-dialog-centered" role="document">
             <div class="modal-content">
@@ -948,6 +960,40 @@
                 }
             }
 
+            // 哪吒: 顾客催「分享配送进度」提示(系统渠道)——独立 seen-set, 与新单/超时互不干扰; 点「去贴链接」直达该单详情页
+            var DELIV_SEEN_KEY = 'nz_seen_deliv_ids_v1';
+            var dvToast    = document.getElementById('nz-deliv-toast');
+            var dvCountEl  = document.getElementById('nz-deliv-count');
+            var dvGoBtn    = document.getElementById('nz-deliv-go');
+            var dvCloseBtn = document.getElementById('nz-deliv-close');
+            var detailsBase = '{{url('/')}}/restaurant-panel/order/details/';
+            var dvFirstId  = null;
+            var dvDismissed = false;
+            var dvMemSeen  = new Set();
+            function dvLoadSeen(){ try { return new Set(JSON.parse(localStorage.getItem(DELIV_SEEN_KEY) || '[]')); } catch(e){ return dvMemSeen; } }
+            function dvSaveSeen(set){ dvMemSeen = set; try { var arr = Array.from(set); if (arr.length > 200) { arr = arr.slice(arr.length - 200); } localStorage.setItem(DELIV_SEEN_KEY, JSON.stringify(arr)); } catch(e){} }
+            function dvShow(count){ if (dvCountEl) { dvCountEl.textContent = count; } if (dvToast) { dvToast.style.display = 'block'; } }
+            function dvHide(){ if (dvToast) { dvToast.style.display = 'none'; } }
+            if (dvGoBtn) { dvGoBtn.addEventListener('click', function(){ if (dvFirstId) { location.href = detailsBase + dvFirstId; } }); }
+            if (dvCloseBtn) { dvCloseBtn.addEventListener('click', function(){ dvDismissed = true; dvHide(); }); }
+            function updateDelivToast(data){
+                var ids = (data.deliv_link_order_ids || []).map(String);
+                var total = data.deliv_link_total || 0;
+                dvFirstId = ids.length > 0 ? ids[0] : null;
+                if (total === 0) { dvHide(); dvDismissed = false; return; }
+                var seen = dvLoadSeen();
+                var freshIds = ids.filter(function(id){ return !seen.has(id); });
+                if (freshIds.length > 0) {
+                    playAudio();
+                    dvDismissed = false;
+                    freshIds.forEach(function(id){ seen.add(id); });
+                    dvSaveSeen(seen);
+                    dvShow(total);
+                } else if (!dvDismissed) {
+                    dvShow(total);
+                }
+            }
+
             function loadSeen(){
                 try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); }
                 catch(e){ return memSeen; }
@@ -978,6 +1024,7 @@
                     success: function (response) {
                         var data = response.data || {};
                         updateTimeoutToast(data);
+                        updateDelivToast(data);
                         var ids = (data.new_order_ids || []).map(String);
                         var total = data.new_total || 0;
                         currentTarget = data.target || 'pending';

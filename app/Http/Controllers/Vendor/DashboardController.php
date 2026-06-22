@@ -159,6 +159,17 @@ class DashboardController extends Controller
         $timeout_ids    = array_map(function ($a) { return $a['order_id']; }, $timeout_alerts);
         $timeout_target = $timeout_total > 0 ? $timeout_alerts[0]['bucket'] : 'pending';
 
+        // 哪吒[配送链接催办 2026-06-22]: 顾客在追踪页戳「提醒商家分享配送进度」后, 原仅发 Telegram(多数商家未配=失声)
+        // + 订单详情页一个被动徽标(商家不会主动回看已推「配送中」的单)。这里接进商家本就在盯的面板轮询渠道:
+        // 配送单已到 picked_up(配送中) 且顾客已催 且商家还没贴 Yandex 链接 → 响铃+浮窗叫到商家(贴上链接即消)。
+        $deliv_link_ids = \App\Models\Order::where('restaurant_id', $rid)
+            ->where('order_type', 'delivery')
+            ->where('order_status', 'picked_up')
+            ->whereNotNull('delivery_link_reminded_at')
+            ->where(function ($q) { $q->whereNull('yandex_tracking_url')->orWhere('yandex_tracking_url', ''); })
+            ->Notpos()->pluck('id')->values();
+        $deliv_link_total = $deliv_link_ids->count();
+
         return response()->json([
             'success' => 1,
             'data' => [
@@ -172,6 +183,8 @@ class DashboardController extends Controller
                 'timeout_total'       => $timeout_total,
                 'timeout_order_ids'   => $timeout_ids,
                 'timeout_target'      => $timeout_target,
+                'deliv_link_total'    => $deliv_link_total,
+                'deliv_link_order_ids'=> $deliv_link_ids,
             ]
         ]);
     }
