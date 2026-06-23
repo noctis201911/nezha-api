@@ -2456,7 +2456,17 @@ class Helpers
         }
 
         if ($data && Storage::disk('public')->exists($path.'/'.$data)) {
-            return dynamicStorage('storage/app/public').'/'.$path.'/'.$data;
+            $url = dynamicStorage('storage/app/public').'/'.$path.'/'.$data;
+            // 缓存破除: 用文件磁盘修改时间作版本号, 内容变(含原地覆盖同名文件)即换v,
+            // CF/nginx 缓存随之失效; 文件未变则v不变, 不影响命中. 失败回退无版本URL.
+            try {
+                $mtime = Storage::disk('public')->lastModified($path.'/'.$data);
+                if ($mtime) {
+                    $url .= (strpos($url, '?') !== false ? '&' : '?').'v='.$mtime;
+                }
+            } catch (\Throwable $e) {
+            }
+            return $url;
         }
 
         if (request()->is('api/*')) {
