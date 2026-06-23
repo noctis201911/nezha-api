@@ -203,3 +203,4 @@ dashboard
 /list/timeout
 仍200+标题超时单+空态暂无数据。(2026-06-23)
 - [x] Claude(SEC-3审计日志窗口) ✅已完成上线(提交 a88a530 / deploy release 20260623-193612-a88a530): 新增 admin_audit_logs 表(append-only,batch145已migrate)+AdminAuditLog模型(fail-open) + 改风控阈值/角色增改删/员工增改删共8处写审计。补 ADMIN-SEC-P0(8cb8b83)交接的 SEC-3 缺口。密钥/密码明文不入库(密钥只记键名·员工只记password_changed布尔)。验证:php -l全过+三控制器diff零删除+迁移batch145 Ran+record()自测写读JSON cast正确并清零无残留;未在生产触发真实改阈值/建角色。纯增量L3不碰资金/合规/状态机/路由/权限位。(2026-06-24)
+- [ ] Claude(遗留模块隐藏窗口·跨全站) 正在改 admin _sidebar.blade.php：用 false&& 守卫隐藏 B方案不用的遗留菜单(顾客钱包+加款/返现+钱包报表·骑手deliveryman全块·分账disbursement全块·骑手收入报表·收取现金account)，保留路由可逆。🔴不碰:顾客列表/佣金充值管理deposit/已隐藏的提现。用户已拍板(2026-06-24)。(2026-06-24)
