@@ -1,4 +1,7 @@
 <?php return array (
+  'Verified Customer' => '已验证顾客',
+  'Select Category' => '选择分类',
+  'Select Type' => '选择类型',
   'access_denied' => '无访问权限',
   'review_btn_pass' => '通过',
   'review_btn_reject' => '驳回',

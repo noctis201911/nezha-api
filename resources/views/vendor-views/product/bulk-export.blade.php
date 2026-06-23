@@ -50,7 +50,7 @@
                             <div class="form-group">
                                 <label class="input-label" for="exampleFormControlSelect1">{{translate('select type')}}<span
                                         class="input-label-secondary"></span></label>
-                                <select name="type" id="type" data-placeholder="{{translate('select type')}}" class="form-control" required title="Select Type">
+                                <select name="type" id="type" data-placeholder="{{translate('select type')}}" class="form-control" required title="{{ translate('messages.Select Type') }}">
                                     <option value="all">{{translate('all data')}}</option>
                                     <option value="date_wise">{{translate('date wise')}}</option>
                                     <option value="id_wise">{{translate('id wise')}}</option>

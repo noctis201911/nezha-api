@@ -34,13 +34,9 @@ class Localization
         }
 
         if ($request->is('restaurant-panel*')) {
-            if (session()->has('vendor_local')) {
-                App::setLocale(session()->get('vendor_local'));
-            }
-            else{
-                session()->put('vendor_site_direction', $direction);
-                App::setLocale($lang);
-            }
+            // 哪吒商家端全中文(华人商家为主·用户拍板2026-06-24): 强制 zh, 忽略 vendor_local 旧会话/切换器, 防被困英文。恢复多语言把下面两行换回上面被替换的逻辑。
+            session()->put('vendor_site_direction', 'ltr');
+            App::setLocale('zh');
 
 
         }elseif($request->is('admin*')){

@@ -47,7 +47,8 @@
                             <div>
                                 @php($local = session()->has('vendor_local') ? session('vendor_local') : null)
                                 @php($lang = \App\CentralLogics\Helpers::get_business_settings('system_language'))
-                                @if ($lang)
+                                {{-- 哪吒商家端全中文: 隐藏语言切换器(已强制zh) --}}
+                                @if (false && $lang)
                                     <div class="topbar-text dropdown disable-autohide text-capitalize d-flex">
                                         <a class="text-dark dropdown-toggle d-flex align-items-center nav-link"
                                             href="#" data-toggle="dropdown">

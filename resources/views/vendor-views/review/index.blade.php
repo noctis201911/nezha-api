@@ -121,7 +121,7 @@
                                 <div>
                                     <h5 class="d-block text-hover-primary mb-1">{{Str::limit($review->customer['f_name']." ".$review->customer['l_name'])}} <i
                                             class="tio-verified text-primary" data-toggle="tooltip" data-placement="top"
-                                            title="Verified Customer"></i></h5>
+                                            title="{{ translate('messages.Verified Customer') }}"></i></h5>
                                     <span class="d-block font-size-sm gray-dark">{{Str::limit($review->customer->phone)}}</span>
                                 </div>
                                 @else
@@ -149,7 +149,7 @@
                             @if($restaurant_review_reply == '1')
                             <td>
                                 <div class="btn--container justify-content-center">
-                                    <a  class="btn btn-sm h-35 d-center min-w-105 px-2 btn--primary {{ $review->reply ? 'btn-outline-primary' : ''}}" data-toggle="modal" data-target="#reply-{{$review->id}}" title="View Details">
+                                    <a  class="btn btn-sm h-35 d-center min-w-105 px-2 btn--primary {{ $review->reply ? 'btn-outline-primary' : ''}}" data-toggle="modal" data-target="#reply-{{$review->id}}" title="{{ translate('messages.View Details') }}">
                                         {{ $review->reply ? translate('view_reply') : translate('give_reply')}}
                                     </a>
                                 </div>
@@ -276,7 +276,7 @@
                                                     <div class="min-w-160">
                                                         <h5 class="d-block text-hover-primary mb-1">{{Str::limit($review->customer['f_name']." ".$review->customer['l_name'])}} <i
                                                                 class="tio-verified text-primary" data-toggle="tooltip" data-placement="top"
-                                                                title="Verified Customer"></i></h5>
+                                                                title="{{ translate('messages.Verified Customer') }}"></i></h5>
                                                         <span class="d-block font-size-sm gray-dark">{{Str::limit($review->comment)}}</span>
                                                     </div>
                                                 @else

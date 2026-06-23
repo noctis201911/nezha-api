@@ -111,7 +111,7 @@
                                         <div class="form-group">
                                             <span class="mb-2 d-block title-clr fw-normal">{{ translate('Category') }}</span>
                                             <select name="category_id" required class="form-control js-select2-custom1"
-                                                placeholder="Select Category">
+                                                placeholder="{{ translate('messages.Select Category') }}">
                                                 <option selected disabled value=""> {{ translate('messages.select_category') }}
                                                 </option>
                                                 @foreach ($addonCategories as $addonCategory)

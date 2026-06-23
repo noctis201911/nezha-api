@@ -501,7 +501,7 @@
                                         <div class="ml-3">
                                         <span class="d-block h5 mb-0">{{$review->customer['f_name']." ".$review->customer['l_name']}} <i
                                                 class="tio-verified text-primary" data-toggle="tooltip" data-placement="top"
-                                                title="Verified Customer"></i></span>
+                                                title="{{ translate('messages.Verified Customer') }}"></i></span>
                                             <span class="d-block font-size-sm text-body">{{$review->customer->email}}</span>
                                         </div>
                                     </div>
