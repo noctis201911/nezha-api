@@ -15,6 +15,7 @@ class NezhaCsClassifier
         '投诉', '差评', '举报', '报警', '律师', '起诉', '曝光', '维权', '纠纷', '骗', '欺诈', '诈骗', '假的',
         '没收到', '没送到', '少了', '漏了', '发错', '送错', '做错', '少给', '少送',
         '多扣', '乱扣', '扣错', '重复扣', '扣款', '扣多', '没到账', '钱没退', '钱不对', '金额不对',
+        '把钱给我', '钱给我', '钱还我', '还我钱', '钱呢', '我的钱呢', '多收', '收多', '价格不对', '算错钱', '算错了', '退个款', '退我款', '把钱退给', '退我的钱',
         '余额', '提现', '钱包', '支付失败', '付款失败', '重复支付', '多付', '付了钱', '付款了', '已付款',
         // —— 英文 ——
         'refund', 'money back', 'chargeback', 'complaint', 'scam', 'fraud', 'lawyer', 'sue', 'police',
@@ -120,7 +121,7 @@ class NezhaCsClassifier
         $t = mb_strtolower($text);
         $neg = [
             '👎', '不满意', '没帮到', '没帮上', '没解决', '答非所问', '客服没用', '客服太差', '客服差',
-            '客服态度', '你们客服', '小哪没用', '小哪太差', '服务太差', '服务差', '很失望', '太失望',
+            '客服态度', '你们客服', '小哪没用', '小哪太差', '客服服务太差', '客服服务差', '很失望', '太失望',
             '一点用都没有', '一点用没有', '没什么用', '太差劲', '垃圾客服',
         ];
         foreach ($neg as $w) {
@@ -194,8 +195,11 @@ class NezhaCsClassifier
             return false;
         }
         $t = mb_strtolower($text);
+        // 去掉空白再比一次，防"退 一下 款"这类拆字绕过敏感闸（中文关键词无空格；英文关键词在原串已匹配）。
+        $tns = preg_replace('/\s+/u', '', $t);
         foreach (self::$sensitive as $kw) {
-            if (mb_stripos($t, mb_strtolower($kw)) !== false) {
+            $k = mb_strtolower($kw);
+            if (mb_stripos($t, $k) !== false || ($tns !== null && $tns !== '' && mb_stripos($tns, $k) !== false)) {
                 return true;
             }
         }
@@ -228,6 +232,7 @@ class NezhaCsClassifier
             '人工智能', '大模型', '语言模型', 'ai助手', 'ai 助手', 'ai模型', 'ai 模型', 'ai客服', 'ai程序', 'ai技术', 'ai系统', '智能客服', '智能助手', '机器人', '聊天机器人', '程序',
             'deepseek', 'openai', 'chatgpt', 'gpt', '我是一个ai', '我是ai', '作为ai', '作为一个ai', '我是人工智能',
             'i am an ai', "i'm an ai", 'language model', 'as an ai', 'artificial intelligence', 'chatbot', 'a bot',
+            '虚拟助手', '数字人', '大语言', '神经网络', '自动回复', '算法生成', 'neural network', 'virtual assistant', 'automated response', 'automated system', 'an automated',
         ];
         foreach ($aiWords as $w) {
             if (mb_stripos($t, $w) !== false) {
