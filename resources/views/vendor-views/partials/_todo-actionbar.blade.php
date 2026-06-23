@@ -8,7 +8,6 @@
     $nz_refund   = (int) ($nz_todo['refund_pending'] ?? 0);
     $nz_timeout  = (int) ($nz_todo['timeout_total'] ?? 0);
     $nz_deliv    = (int) ($nz_todo['deliv_link_total'] ?? 0);
-    $nz_timeout_key = $nz_todo['timeout_list_key'] ?? 'pending';
 @endphp
 
 <div class="card mb-3 nz-todo-actionbar">
@@ -59,9 +58,9 @@
                 </a>
             </div>
 
-            {{-- 超时单 (过渡期落第一桶主列表; M-02 虚拟过滤上线后改指向它) --}}
+            {{-- 超时单 (M-02 虚拟过滤: 落点 /list/timeout, 计数与列表同源 NezhaOrderTimeout::alertOrderIds) --}}
             <div class="col-6 col-lg">
-                <a href="{{ route('vendor.order.list', [$nz_timeout_key]) }}"
+                <a href="{{ route('vendor.order.list', ['timeout']) }}"
                    class="order--card h-100 d-block {{ $nz_timeout > 0 ? 'border-danger' : '' }}">
                     <div class="d-flex justify-content-between align-items-center">
                         <h6 class="card-subtitle m-0 d-flex align-items-center">

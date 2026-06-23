@@ -101,6 +101,15 @@ class OrderController extends Controller
                     $sub->select('order_id')->from('nezha_refund_records')->where('status', 'pending_merchant_refund');
                 });
             })
+            // 哪吒 M-02: 「超时单」虚拟过滤 = 本店当前 warning/error 超时的开放单(offline_pending+confirmed+processing 并集)。
+            // 计数口径与 Dashboard 超时卡完全同源(NezhaOrderTimeout::alertOrderIds)。severity 判定纯 SQL 表达不出,
+            // 故走 PHP 预算 ID 集合 → whereIn('id',$ids); 空集用 [0] 保证返回空, 不退化成"全部单"。
+            ->when($status == 'timeout', function ($query) {
+                $ids = \App\CentralLogics\NezhaOrderTimeout::alertOrderIds(
+                    \App\CentralLogics\Helpers::get_restaurant_id()
+                );
+                return $query->whereIn('id', $ids ?: [0]);
+            })
             // ->when($status == 'assinged', function($query){
             //     return $query->whereNotIn('order_status',['failed','canceled', 'refund_requested', 'refunded','delivered','refund_request_canceled'])->whereNotNull('delivery_man_id');
             // })
@@ -139,8 +148,9 @@ class OrderController extends Controller
                 });
             })
             ->Notpos()
-            // 哪吒: 「待确认收款」+「待退款」视图放开 NotDigitalOrder(它会隐藏 pending+offline 单); 其余视图行为不变。
-            ->when(!in_array($status, ['offline_pending', 'refund_pending'], true), function ($query) {
+            // 哪吒: 「待确认收款」+「待退款」+「超时单」视图放开 NotDigitalOrder(它会隐藏 pending+offline 单); 其余视图行为不变。
+            // 超时集合含 pending+offline_payment 单, 漏放行会被 NotDigitalOrder 静默隐藏 → 列表数<卡数, 破坏数字同源。
+            ->when(!in_array($status, ['offline_pending', 'refund_pending', 'timeout'], true), function ($query) {
                 return $query->NotDigitalOrder();
             })
             ->hasSubscriptionToday()
@@ -149,8 +159,11 @@ class OrderController extends Controller
             ->paginate(config('default_pagination'));
 
         $st = $status;
-        // 哪吒: offline_pending / refund_pending 无翻译 key, 直接给中文标题避免显示英文键名。
-        $status = $status == 'offline_pending' ? '待确认收款' : ($status == 'refund_pending' ? '待退款' : translate('messages.' . $status));
+        // 哪吒: offline_pending / refund_pending / timeout 无翻译 key, 直接给中文标题避免显示英文键名(messages.timeout)。
+        $status = $status == 'offline_pending' ? '待确认收款'
+            : ($status == 'refund_pending' ? '待退款'
+            : ($status == 'timeout' ? '超时单'
+            : translate('messages.' . $status)));
         return view('vendor-views.order.list', compact('orders', 'status', 'st'));
     }
 

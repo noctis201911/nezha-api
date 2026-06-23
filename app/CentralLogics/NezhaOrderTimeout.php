@@ -394,6 +394,42 @@ class NezhaOrderTimeout
         ];
     }
 
+    /**
+     * 哪吒 M-02: 本店当前处于 warning/error 超时的开放单 ID（只读聚合）。
+     * Dashboard「超时单」卡计数 与 OrderController::list('timeout') 过滤共用此单一口径，
+     * 保证「卡上数字」== 「点进去列表条数」（数字同源）。
+     *
+     * 聚合 = offline_pending(已传凭证且超时) + confirmed(待接单超时) + processing(备餐超时) 三类并集，
+     * 不含 handover/picked_up 配送阶段（与超时卡当前口径保持一致，本期不扩）。
+     * 纯新增只读方法，不改 phase()/describe()/clockStart()/settings()/sweep 状态机。
+     */
+    public static function alertOrderIds(int $restaurantId): array
+    {
+        $ids = [];
+        // 镜像 OrderController::list() 公共收尾的同一组作用域(Notpos + HasSubscriptionToday + restaurant_id),
+        // 保证「卡计数」与「list('timeout') 列表条数」在订阅单等边界也严格相等(NotDigitalOrder 两处都对 timeout 关闭)。
+        $open = Order::with('offline_payments')
+            ->where('restaurant_id', $restaurantId)
+            ->whereIn('order_status', ['pending', 'confirmed', 'processing'])
+            ->Notpos()->HasSubscriptionToday()->get();
+        foreach ($open as $o) {
+            $phase = self::phase($o);
+            if (! $phase) {
+                continue;
+            }
+            // 未传凭证的离线待付款单：在等顾客付款，商家无可为 → 不算超时
+            if ($phase === self::PHASE_PROOF && ! self::hasPaymentProof($o)) {
+                continue;
+            }
+            $d = self::describe($o);
+            if (! $d || ($d['severity'] ?? 'info') === 'info') {
+                continue;
+            }
+            $ids[] = $o->id;
+        }
+        return $ids;
+    }
+
     public static function humanDuration(int $minutes): string
     {
         if ($minutes < 60) {

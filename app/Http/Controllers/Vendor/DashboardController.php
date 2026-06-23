@@ -145,38 +145,28 @@ class DashboardController extends Controller
         elseif ($new_pending_order > 0)   { $target = 'pending';         $target_label = '待处理'; $target_ids = $pending_ids; }
         elseif ($new_confirmed_order > 0) { $target = 'confirmed';       $target_label = '待处理'; $target_ids = $confirmed_ids; }
 
-        // 哪吒: 超时提醒(系统/面板渠道)——独立于「新订单」横幅, 专门兜住现有横幅照不到的「备餐超时」等;
-        // 复用 NezhaOrderTimeout::describe 的 severity(warning/error)判定是否需商家立即处理,
-        // 排除「未上传凭证的待确认收款单」(那是等顾客付款, 商家无可为)。
-        $timeout_alerts = [];
-        try {
-            $open = \App\Models\Order::with(['offline_payments'])
-                ->where('restaurant_id', $rid)
-                ->whereIn('order_status', ['pending', 'confirmed', 'processing'])
-                ->Notpos()->get();
-            foreach ($open as $o) {
-                $phase = \App\CentralLogics\NezhaOrderTimeout::phase($o);
-                if (! $phase) { continue; }
-                if ($phase === \App\CentralLogics\NezhaOrderTimeout::PHASE_PROOF
-                    && ! \App\CentralLogics\NezhaOrderTimeout::hasPaymentProof($o)) { continue; }
-                $d = \App\CentralLogics\NezhaOrderTimeout::describe($o);
-                if (! $d || ($d['severity'] ?? 'info') === 'info') { continue; }
-                $bucket = 'pending';
-                if ($phase === \App\CentralLogics\NezhaOrderTimeout::PHASE_ACCEPT)    { $bucket = 'confirmed'; }
-                elseif ($phase === \App\CentralLogics\NezhaOrderTimeout::PHASE_PREP)  { $bucket = 'processing'; }
-                elseif ($phase === \App\CentralLogics\NezhaOrderTimeout::PHASE_PROOF) { $bucket = 'offline_pending'; }
-                $timeout_alerts[] = [
-                    'order_id' => $o->id,
-                    'minutes'  => (int) ($d['elapsed_minutes'] ?? 0),
-                    'bucket'   => $bucket,
-                ];
+        // 哪吒 M-02: 超时提醒(系统/面板渠道)的计数与 ID 收口到 NezhaOrderTimeout::alertOrderIds()
+        // ——只读聚合·单一口径, 与 OrderController::list('timeout') 过滤完全同源,
+        // 保证「超时卡数字」==「点进去 /list/timeout 列表条数」(根除 M-01 过渡期"卡数 vs 列表数"漂移)。
+        // 集合 = offline_pending(已传凭证且超时) + confirmed(待接单超时) + processing(备餐超时) 三类并集,
+        // 已排除「未传凭证待付款单」(等顾客付款, 商家无可为)与 info 级未到阈值单。
+        $timeout_ids   = \App\CentralLogics\NezhaOrderTimeout::alertOrderIds($rid);
+        $timeout_total = count($timeout_ids);
+
+        // timeout_target: 仅供 vendor 布局超时弹窗(app.blade.php「去处理」按钮)落点用, 取第一条超时单的阶段桶,
+        // 保持原弹窗行为不变(本期不改 app.blade.php)。计数不依赖它, 故不影响"数字同源"。
+        $timeout_target = 'pending';
+        if ($timeout_total > 0) {
+            try {
+                $first = \App\Models\Order::find($timeout_ids[0]);
+                $fp = $first ? \App\CentralLogics\NezhaOrderTimeout::phase($first) : null;
+                if ($fp === \App\CentralLogics\NezhaOrderTimeout::PHASE_ACCEPT)    { $timeout_target = 'confirmed'; }
+                elseif ($fp === \App\CentralLogics\NezhaOrderTimeout::PHASE_PREP)  { $timeout_target = 'processing'; }
+                elseif ($fp === \App\CentralLogics\NezhaOrderTimeout::PHASE_PROOF) { $timeout_target = 'offline_pending'; }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('NEZHA_TIMEOUT panel target: ' . $e->getMessage());
             }
-        } catch (Throwable $e) {
-            IlluminateSupportFacadesLog::warning('NEZHA_TIMEOUT panel alert: ' . $e->getMessage());
         }
-        $timeout_total  = count($timeout_alerts);
-        $timeout_ids    = array_map(function ($a) { return $a['order_id']; }, $timeout_alerts);
-        $timeout_target = $timeout_total > 0 ? $timeout_alerts[0]['bucket'] : 'pending';
 
         // 哪吒[配送链接催办 2026-06-22]: 顾客在追踪页戳「提醒商家分享配送进度」后, 原仅发 Telegram(多数商家未配=失声)
         // + 订单详情页一个被动徽标(商家不会主动回看已推「配送中」的单)。这里接进商家本就在盯的面板轮询渠道:
@@ -197,10 +187,7 @@ class DashboardController extends Controller
             ->whereIn('id', \App\Models\NezhaRefundRecord::where('status', 'pending_merchant_refund')->pluck('order_id'))
             ->count();
 
-        // 哪吒 M-01[超时卡过渡落点]: OrderController::list() 无 'processing' 分支(processing 单走 'cooking' tab),
-        // 故把 timeout_target 桶名映射成合法 list key, 避免点进去落到"无过滤=全部单"。M-02 虚拟过滤上线后改指向它。
-        $timeout_list_map = ['processing' => 'cooking'];
-        $timeout_list_key = $timeout_list_map[$timeout_target] ?? $timeout_target;
+        // 哪吒 M-02: 超时卡落点已改为虚拟过滤 /list/timeout(同源), M-01 过渡 hack timeout_list_map/timeout_list_key 已删。
 
         return [
             'new_pending_order'    => $new_pending_order,
@@ -213,7 +200,6 @@ class DashboardController extends Controller
             'timeout_total'        => $timeout_total,
             'timeout_order_ids'    => $timeout_ids,
             'timeout_target'       => $timeout_target,
-            'timeout_list_key'     => $timeout_list_key,
             'deliv_link_total'     => $deliv_link_total,
             'deliv_link_order_ids' => $deliv_link_ids,
             'refund_pending'       => $refund_pending,
