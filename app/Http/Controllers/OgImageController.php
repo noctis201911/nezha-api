@@ -163,7 +163,7 @@ class OgImageController extends Controller
         $cacheRel = 'og-cache/poster-' . $keyPrefix . '-' . substr(md5($srcPath . $mtime . $url . ($priceText ?? '') . self::POSTER_VER), 0, 16) . '.jpg';
         if (Storage::disk($disk)->exists($cacheRel)) {
             return response(Storage::disk($disk)->get($cacheRel), 200, [
-                'Content-Type' => 'image/jpeg', 'Cache-Control' => 'public, max-age=86400',
+                'Content-Type' => 'image/jpeg', 'Cache-Control' => 'public, max-age=86400', 'Access-Control-Allow-Origin' => '*',
             ]);
         }
 
@@ -228,7 +228,7 @@ class OgImageController extends Controller
 
         Storage::disk($disk)->put($cacheRel, $bytes);
         return response($bytes, 200, [
-            'Content-Type' => 'image/jpeg', 'Cache-Control' => 'public, max-age=86400',
+            'Content-Type' => 'image/jpeg', 'Cache-Control' => 'public, max-age=86400', 'Access-Control-Allow-Origin' => '*',
         ]);
     }
 
