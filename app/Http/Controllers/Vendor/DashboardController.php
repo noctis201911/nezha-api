@@ -153,20 +153,10 @@ class DashboardController extends Controller
         $timeout_ids   = \App\CentralLogics\NezhaOrderTimeout::alertOrderIds($rid);
         $timeout_total = count($timeout_ids);
 
-        // timeout_target: 仅供 vendor 布局超时弹窗(app.blade.php「去处理」按钮)落点用, 取第一条超时单的阶段桶,
-        // 保持原弹窗行为不变(本期不改 app.blade.php)。计数不依赖它, 故不影响"数字同源"。
-        $timeout_target = 'pending';
-        if ($timeout_total > 0) {
-            try {
-                $first = \App\Models\Order::find($timeout_ids[0]);
-                $fp = $first ? \App\CentralLogics\NezhaOrderTimeout::phase($first) : null;
-                if ($fp === \App\CentralLogics\NezhaOrderTimeout::PHASE_ACCEPT)    { $timeout_target = 'confirmed'; }
-                elseif ($fp === \App\CentralLogics\NezhaOrderTimeout::PHASE_PREP)  { $timeout_target = 'processing'; }
-                elseif ($fp === \App\CentralLogics\NezhaOrderTimeout::PHASE_PROOF) { $timeout_target = 'offline_pending'; }
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('NEZHA_TIMEOUT panel target: ' . $e->getMessage());
-            }
-        }
+        // 哪吒 M-02: timeout_target 仅供 vendor 布局超时弹窗(app.blade.php「去处理」按钮 location.href=listBase+toTarget)落点,
+        // 统一指向虚拟过滤 /list/timeout —— 与超时卡同源同落点。(之前取"第一条超时单的桶名"会落到无过滤的整桶甚至全部单,
+        // 如 processing 落 /list/processing=全部单, 与卡不一致; 现对齐。timeout_target 现仅此一个消费方。)
+        $timeout_target = 'timeout';
 
         // 哪吒[配送链接催办 2026-06-22]: 顾客在追踪页戳「提醒商家分享配送进度」后, 原仅发 Telegram(多数商家未配=失声)
         // + 订单详情页一个被动徽标(商家不会主动回看已推「配送中」的单)。这里接进商家本就在盯的面板轮询渠道:
