@@ -65,6 +65,12 @@ class CustomRoleController extends Controller
 
         Translation::insert($data);
 
+        // SEC-3 审计: 角色权限新增
+        \App\Models\AdminAuditLog::record('admin_role_create', 'admin_role', $role->id, null, [
+            'name'    => $role->name,
+            'modules' => $request['modules'],
+        ]);
+
         Toastr::success(translate('messages.role_added_successfully'));
         return back();
     }
@@ -98,10 +104,20 @@ class CustomRoleController extends Controller
             }
 
         $role = AdminRole::find($id);
+        // SEC-3 审计: 改名/改 modules 前先快照旧值
+        $auditBefore = [
+            'name'    => $role->name,
+            'modules' => json_decode($role->modules, true),
+        ];
         $role->name = $request->name[array_search('default', $request->lang)];
         $role->modules = json_encode($request['modules']);
         $role->status = 1;
         $role->save();
+
+        \App\Models\AdminAuditLog::record('admin_role_update', 'admin_role', $role->id, $auditBefore, [
+            'name'    => $role->name,
+            'modules' => $request['modules'],
+        ]);
 
         $default_lang = str_replace('_', '-', app()->getLocale());
         foreach ($request->lang as $index => $key) {
@@ -142,6 +158,11 @@ class CustomRoleController extends Controller
             return view('errors.404');
         }
         $role=AdminRole::find($id);
+        // SEC-3 审计: 删除前快照
+        \App\Models\AdminAuditLog::record('admin_role_delete', 'admin_role', $role?->id, [
+            'name'    => $role?->name,
+            'modules' => $role ? json_decode($role->modules, true) : null,
+        ], null);
         $role?->translations()?->delete();
         $role->delete();
         Toastr::success(translate('messages.role_deleted_successfully'));

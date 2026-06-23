@@ -91,6 +91,13 @@ class NezhaRiskController extends Controller
         // 安全(P0-b): 链上 API 密钥仅超级管理员可改; 非超管提交一律跳过(防掩码值覆盖真值)
         $nzIsSuper  = auth('admin')->check() && auth('admin')->user()->role_id == 1;
         $secretKeys = ['nezha_refund_bscscan_api_key', 'nezha_refund_trongrid_api_key'];
+
+        // SEC-3 审计: 风控阈值=L2 业务参数(须留痕)。收集本次实际变更, 写一行审计。
+        // 🔴 密钥(secretKeys)只记"键名已变更", 绝不把明文写进 before/after。
+        $auditBefore    = [];
+        $auditAfter     = [];
+        $secretsChanged = [];
+
         foreach (array_keys($this->cfgKeys) as $key) {
             if (in_array($key, $secretKeys, true) && ! $nzIsSuper) {
                 continue;
@@ -103,11 +110,31 @@ class NezhaRiskController extends Controller
                 }
                 $value = (string) $request->input($key);
             }
+
+            $old = optional(BusinessSetting::where('key', $key)->first())->value;
+            if ((string) $old !== $value) {
+                if (in_array($key, $secretKeys, true)) {
+                    $secretsChanged[] = $key;                   // 密钥: 只记键名, 不记任何明文
+                } else {
+                    $auditBefore[$key] = $old;
+                    $auditAfter[$key]  = $value;
+                }
+            }
+
             BusinessSetting::updateOrInsert(
                 ['key' => $key],
                 ['value' => $value, 'updated_at' => now()]
             );
         }
+
+        if (!empty($auditBefore) || !empty($secretsChanged)) {
+            $after = $auditAfter;
+            if (!empty($secretsChanged)) {
+                $after['_secrets_changed'] = $secretsChanged;   // 仅键名
+            }
+            \App\Models\AdminAuditLog::record('risk_settings_update', 'business_settings', null, $auditBefore, $after);
+        }
+
         Toastr::success(translate('风控设置已保存'));
 
         return back();

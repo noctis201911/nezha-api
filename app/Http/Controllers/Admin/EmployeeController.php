@@ -61,6 +61,13 @@ class EmployeeController extends Controller
         $employee->image = Helpers::upload(dir:'admin/', format:'png', image: $request->file('image'));
         $employee->save();
 
+        // SEC-3 审计: 员工新增 (🔴 不记密码)
+        \App\Models\AdminAuditLog::record('admin_employee_create', 'admin', $employee->id, null, [
+            'name'    => trim($employee->f_name . ' ' . $employee->l_name),
+            'email'   => $employee->email,
+            'role_id' => $employee->role_id,
+        ]);
+
         Toastr::success(translate('messages.employee_added_successfully'));
         return redirect()->route('admin.employee.list');
     }
@@ -130,6 +137,13 @@ class EmployeeController extends Controller
             return redirect()->route('admin.employee.list');
         }
 
+        // SEC-3 审计: 改前快照 (🔴 不记密码)
+        $auditBefore = [
+            'name'    => trim(($e->f_name ?? '') . ' ' . ($e->l_name ?? '')),
+            'email'   => $e->email,
+            'role_id' => $e->role_id,
+        ];
+
         if ($request['password'] == null) {
             $pass = $e['password'];
         } else {
@@ -153,6 +167,13 @@ class EmployeeController extends Controller
         $employee->image = $e['image'];
         $employee->save();
 
+        // SEC-3 审计: 员工变更 (password_changed 只记布尔, 🔴 不记明文)
+        \App\Models\AdminAuditLog::record('admin_employee_update', 'admin', $employee->id, $auditBefore, [
+            'name'             => trim($employee->f_name . ' ' . $employee->l_name),
+            'email'            => $employee->email,
+            'role_id'          => $employee->role_id,
+            'password_changed' => $request['password'] != null,
+        ]);
 
         Toastr::success(translate('messages.employee_updated_successfully'));
         return redirect()->route('admin.employee.list');
@@ -165,6 +186,12 @@ class EmployeeController extends Controller
             Toastr::error(translate('messages.You_can_not_edit_your_own_info'));
             return redirect()->route('admin.employee.list');
         }
+        // SEC-3 审计: 删除前快照
+        \App\Models\AdminAuditLog::record('admin_employee_delete', 'admin', $role?->id, [
+            'name'    => trim(($role->f_name ?? '') . ' ' . ($role->l_name ?? '')),
+            'email'   => $role?->email,
+            'role_id' => $role?->role_id,
+        ], null);
         $role->delete();
         Toastr::info(translate('messages.employee_deleted_successfully'));
         return back();
