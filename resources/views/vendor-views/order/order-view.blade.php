@@ -138,6 +138,27 @@
             </div>
         @endif
 
+        {{-- 哪吒 M-04 状态铺开 batch1(2026-06-23): confirmed/accepted「开始备餐」+ processing 自取/堂食「出餐完成待取」主操作上移置顶状态条。镜像原位 order-status-change-alert(同路由/同 data-*/同 JS 确认弹窗); 原位按钮已去重为提示。不碰路由/控制器/状态机。 --}}
+        @php
+            $nzLiftLink = $nzPrimary['visible'] && $nzPrimary['kind'] == 'link'
+                && (in_array($nzOs, ['confirmed', 'accepted'], true)
+                    || ($nzOs == 'processing' && in_array($nzType, ['take_away', 'dine_in'], true)));
+            $nzLiftBadge = in_array($nzOs, ['confirmed', 'accepted'], true) ? '已接单 · 待备餐' : '备餐中 · 待出餐';
+            $nzLiftBadgeClass = in_array($nzOs, ['confirmed', 'accepted'], true) ? 'badge-soft-info' : 'badge-soft-warning';
+        @endphp
+        @if ($nzLiftLink)
+            <div class="nz-order-statusbar" style="position:sticky;top:0;z-index:1020;background:#fff;border:1px solid #FFE2A8;border-radius:12px;box-shadow:0 2px 10px rgba(23,25,29,.06);padding:10px 14px;margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
+                <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 160px;">
+                    <span style="font-weight:800;color:#17191D;white-space:nowrap;">订单 #{{ $order['id'] }}</span>
+                    <span class="badge {{ $nzLiftBadgeClass }}" style="white-space:nowrap;">{{ $nzLiftBadge }}</span>
+                </div>
+                <a class="btn btn-success btn-sm order-status-change-alert" href="javascript:"
+                    data-url="{{ $nzPrimary['route'] }}"
+                    @foreach ($nzPrimary['data'] as $nzK => $nzV) data-{{ $nzK }}="{{ $nzV }}" @endforeach
+                    style="border-radius:8px;font-weight:700;white-space:nowrap;">{{ $nzPrimary['label'] }}</a>
+            </div>
+        @endif
+
         <div class="row g-1" id="printableArea">
             <div class="col-lg-8 order-print-area-left">
                 <!-- Card -->
@@ -1024,16 +1045,11 @@
                                     </a>
                                     @endif
                                 @elseif ($order['order_status'] == 'confirmed' || $order['order_status'] == 'accepted')
-                                    <a class="btn btn-sm btn--primary order-status-change-alert"
-                                        data-url="{{ route('vendor.order.status', ['id' => $order['id'], 'order_status' => 'processing']) }}"
-                                        data-message="{{ translate('Change status to cooking ?') }}"
-                                        data-verification="false" data-processing-time="{{ $max_processing_time }}"
-                                        href="javascript:">{{ translate('messages.Proceed_for_cooking') }}</a>
+                                    {{-- 哪吒 M-04: 主操作「开始备餐」已上移至顶部状态条, 原位去重 --}}
+                                    <span class="text-muted" style="font-size:12px;">▲ 主操作「{{ translate('messages.Proceed_for_cooking') }}」已移至顶部</span>
                                 @elseif ($order['order_status'] == 'processing' && in_array($order['order_type'], ['take_away', 'dine_in']))
-                                    <a class="btn btn-sm btn--primary order-status-change-alert"
-                                        data-url="{{ route('vendor.order.status', ['id' => $order['id'], 'order_status' => 'handover']) }}"
-                                        data-message="{{ translate('Change status to ready for handover ?') }}"
-                                        href="javascript:">{{ translate('messages.make_ready_for_handover') }}</a>
+                                    {{-- 哪吒 M-04: 主操作「出餐完成待取」已上移至顶部状态条, 原位去重 --}}
+                                    <span class="text-muted" style="font-size:12px;">▲ 主操作「{{ translate('messages.make_ready_for_handover') }}」已移至顶部</span>
                                 @elseif (
                                     $order['order_status'] == 'handover' &&
                                         (in_array($order['order_type'], ['dine_in', 'take_away']) || $restaurant->sub_self_delivery == 1))
