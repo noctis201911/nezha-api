@@ -40,6 +40,9 @@ Route::post('/subscribeToTopic', [FirebaseController::class, 'subscribeToTopic']
 
 // 分享缩略图(og:image)统一出 JPG, 解决微信等对 webp 不显缩略图 (OgImageController)
 Route::get('og-image/restaurant/{id}', [\App\Http\Controllers\OgImageController::class, 'restaurant'])->name('og-image.restaurant')->where('id', '[0-9]+');
+// 微信推广海报(图+店名/菜名+二维码),供分享抽屉长按保存发微信
+Route::get('share-poster/restaurant/{id}', [\App\Http\Controllers\OgImageController::class, 'restaurantPoster'])->name('share-poster.restaurant')->where('id', '[0-9]+');
+Route::get('share-poster/food/{id}', [\App\Http\Controllers\OgImageController::class, 'foodPoster'])->name('share-poster.food')->where('id', '[0-9]+');
 Route::get('og-image/food/{id}', [\App\Http\Controllers\OgImageController::class, 'food'])->name('og-image.food')->where('id', '[0-9]+');
 
 
