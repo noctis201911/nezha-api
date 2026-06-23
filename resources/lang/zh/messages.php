@@ -1,4 +1,5 @@
 <?php return array (
+  'access_denied' => '无访问权限',
   'review_btn_pass' => '通过',
   'review_btn_reject' => '驳回',
   'image_upload_failed' => '图片上传失败，请重试',

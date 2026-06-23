@@ -975,6 +975,7 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                         </li>
                     @endif
 
+                    @if (Helpers::module_permission_check('settings'))
                     <li
                         class="navbar-vertical-aside-has-menu {{ Request::is('admin/local-life*') ? 'active' : '' }}">
                         <a class="js-navbar-vertical-aside-menu-link nav-link"
@@ -1011,6 +1012,9 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                         </a>
                     </li>
 
+                    @endif
+
+                    @if (Helpers::module_permission_check('restaurant'))
                     <li
                         class="navbar-vertical-aside-has-menu {{ Request::is('admin/merchant-lead/*') ? 'active' : '' }}">
                         <a class="js-navbar-vertical-aside-menu-link nav-link"
@@ -1022,6 +1026,7 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                             </span>
                         </a>
                     </li>
+                    @endif
 
 
 
