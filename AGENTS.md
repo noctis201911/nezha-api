@@ -102,3 +102,5 @@
 - [x] Claude(DEPLOY-SCRIPTS-VERSIONING窗口) ✅已完成: api-deploy/nzdeploy-api.sh 纳入版本控制(方案A)。新增 deploy/nzdeploy-api.sh(就地cp字节一致)+运行路径改软链指向repo正本+时间戳.bak。不改部署逻辑/不碰shared/releases/current/previous/.env/PM2/COD策略。仅add deploy/nzdeploy-api.sh+本行（2026-06-23）
 
   ↳ ✅ 真链路补验(2026-06-23): 真商家会话(vendor6·CookieValuePrefix伪造·php-fpm GET200)+Playwright真点「确认收款」→ dialog接受→POST经真实路由/控制器→订单 1999009035(take_away·RMB离线) BEFORE pending/unpaid/offline=pending → AFTER order_status=processing·payment_status=paid·offline=verified·confirmed&processing时间戳·processing_time=30; 页面无500·console=0·confirm期无错误日志。测试单已删(残留0)。附:首试误用method_id=2(=usdt)触发制裁inconclusive→hold→未推进(=fail-closed正常+证明控制器路径真执行);改method_id=1(rmb)走通成功路径。会话伪造上次坑=漏CookieValuePrefix(已补,见[[nezha-merchant-panel-ui-verify]])。
+
+- [ ] Claude(窗口M04-STATE-EXPANSION) 正在改 resources/views/vendor-views/order/order-view.blade.php —— M-04/M-05 第二阶段 batch1: 把 confirmed/accepted(开始备餐) 与 processing 自取/堂食(出餐完成待取) 两组状态的主操作上移到顶部状态条 + 原位去重(镜像现有 order-status-change-alert 同路由/同data-*/同JS确认弹窗)。复用 dcea3ad 的 $nzPrimary 决策块。不碰路由/控制器/状态机/退款/取消/Yandex/M-02 timeout。(2026-06-23)
