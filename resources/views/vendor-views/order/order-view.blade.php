@@ -32,6 +32,68 @@
     $can_restaurant_edit_order = Helpers::get_business_settings('can_restaurant_edit_order') ?? 0;
     ?>
 
+    @php
+        // 哪吒 M-04: 「当前唯一主操作」决策块(单一真相, 仅计算)。复用现有路由, 不新增路由/不碰控制器/不碰状态机。
+        // 映射经 /debate 源码核验: A离线确认收款(三合一) / B非离线接单 / C开始备餐 / D·D'配送标记配送中(mark-dispatched,processing+handover) /
+        // E自取堂食出餐待取 / F自配或自取堂食已送达(门槛=餐厅级 sub_self_delivery) / G配送中picked_up无手动主操作(约24h自动完成) / 终态只读默认。
+        $nzOs = $order->order_status;
+        $nzType = $order->order_type;
+        $nzOffline = $order->payment_method == 'offline_payment';
+        $nzOffPending = $nzOffline && $order->offline_payments && $order->offline_payments->status == 'pending';
+        $nzSelfDelivery = ($order->restaurant->sub_self_delivery ?? 0) == 1; // 视图层门槛字段(非 commission.self_delivery_system, 那是控制器二层鉴权)
+        $nzOdv = (bool) Helpers::get_business_data('order_delivery_verification');
+        $nzTerminalish = in_array($nzOs, ['delivered', 'canceled', 'refunded', 'failed', 'refund_requested', 'refund_request_canceled'], true);
+
+        $nzPrimary = ['visible' => false, 'kind' => null, 'label' => null, 'route' => null, 'method' => null, 'confirm' => null, 'data' => [], 'note' => null];
+        if ($nzTerminalish) {
+            // 终态/纠纷态: 无主操作, 置顶条只读(reject/退款/取消裁决等独立卡原位仍在)。refund_request_canceled 为非终态(订单恢复)由后续态自然接管。
+        } elseif ($nzOs == 'pending') {
+            if ($nzOffPending) {
+                // A 离线待核验 → 确认收款(三合一: 收款+接单+开始备餐)。失败(制裁命中/暂挂)仍 pending, 主操作仍此键可重试。
+                $nzPrimary = ['visible' => true, 'kind' => 'form', 'label' => '确认收款（我已收到顾客付款）',
+                    'route' => route('vendor.order.confirm-offline-payment', ['id' => $order['id']]), 'method' => 'PUT',
+                    'confirm' => '请确认：您已在自己的账户收到本单顾客的付款？确认后将通知顾客并可开始出餐。', 'data' => [], 'note' => null];
+            } else {
+                // B 非离线 pending → 接单(沿用线上文案『确认收款·接单』, 走 status->confirmed)
+                $nzPrimary = ['visible' => true, 'kind' => 'link', 'label' => '确认收款·接单',
+                    'route' => route('vendor.order.status', ['id' => $order['id'], 'order_status' => 'confirmed']), 'method' => null,
+                    'confirm' => null, 'data' => ['message' => translate('Change status to confirmed ?')], 'note' => null];
+            }
+        } elseif (in_array($nzOs, ['confirmed', 'accepted'], true)) {
+            // C 开始备餐(accepted 与 confirmed 等价同分支)
+            $nzPrimary = ['visible' => true, 'kind' => 'link', 'label' => translate('messages.Proceed_for_cooking'),
+                'route' => route('vendor.order.status', ['id' => $order['id'], 'order_status' => 'processing']), 'method' => null,
+                'confirm' => null, 'data' => ['message' => translate('Change status to cooking ?'), 'verification' => 'false', 'processing-time' => $max_processing_time], 'note' => null];
+        } elseif ($nzOs == 'processing') {
+            if (in_array($nzType, ['take_away', 'dine_in'], true)) {
+                // E 出餐完成待取 → handover
+                $nzPrimary = ['visible' => true, 'kind' => 'link', 'label' => translate('messages.make_ready_for_handover'),
+                    'route' => route('vendor.order.status', ['id' => $order['id'], 'order_status' => 'handover']), 'method' => null,
+                    'confirm' => null, 'data' => ['message' => translate('Change status to ready for handover ?')], 'note' => null];
+            } elseif ($nzType == 'delivery') {
+                // D 配送单 → 标记为配送中(mark-dispatched, 无前置最快; set-yandex 为可选增强留原位)
+                $nzPrimary = ['visible' => true, 'kind' => 'form', 'label' => '标记为配送中',
+                    'route' => route('vendor.order.mark-dispatched', ['id' => $order['id']]), 'method' => 'PUT',
+                    'confirm' => null, 'data' => [], 'note' => null];
+            }
+        } elseif ($nzOs == 'handover') {
+            if (in_array($nzType, ['dine_in', 'take_away'], true) || $nzSelfDelivery) {
+                // F 已送达/完成(门槛=餐厅级 sub_self_delivery; 非自配配送单不进此支)
+                $nzPrimary = ['visible' => true, 'kind' => 'link', 'label' => ($nzType == 'dine_in' ? translate('messages.Make_Completed') : translate('messages.make_delivered')),
+                    'route' => route('vendor.order.status', ['id' => $order['id'], 'order_status' => 'delivered']), 'method' => null,
+                    'confirm' => null, 'data' => ['message' => translate('Change status to delivered (payment status will be paid if not) ?'), 'verification' => ($nzOdv ? 'true' : 'false')], 'note' => null];
+            } elseif ($nzType == 'delivery') {
+                // D' 配送单 handover → 标记为配送中(mark-dispatched 在 handover 也渲染)
+                $nzPrimary = ['visible' => true, 'kind' => 'form', 'label' => '标记为配送中',
+                    'route' => route('vendor.order.mark-dispatched', ['id' => $order['id']]), 'method' => 'PUT',
+                    'confirm' => null, 'data' => [], 'note' => null];
+            }
+        } elseif ($nzOs == 'picked_up') {
+            // G 配送中: 无手动主操作(status 路由不收 picked_up; picked_up→delivered 由 set-yandex/超时 sweep)。约24h自动完成(开关 nezha_auto_finalize_handover_status·L2)。
+            $nzPrimary['note'] = '配送中 · 顾客可追踪，送达后约 24 小时内自动完成';
+        }
+    @endphp
+
     <div class="content container-fluid item-box-page">
 
         <div class="page-header d-print-none">
@@ -58,6 +120,23 @@
             </h1>
         </div>
 
+
+        {{-- 哪吒 M-04: 置顶状态条 + 唯一主操作(打样阶段: 仅 pending·离线待核验态渲染)。镜像现有 confirm-offline-payment 路由; 凭证/链上核验区与「未收到/打回」「拒单」原位保留, 此处只复读 CTA 不搬走原件。 --}}
+        @if ($nzOffPending && $nzPrimary['visible'] && $nzPrimary['kind'] == 'form')
+            <div class="nz-order-statusbar" style="position:sticky;top:0;z-index:1020;background:#fff;border:1px solid #FFE2A8;border-radius:12px;box-shadow:0 2px 10px rgba(23,25,29,.06);padding:10px 14px;margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
+                <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 160px;">
+                    <span style="font-weight:800;color:#17191D;white-space:nowrap;">订单 #{{ $order['id'] }}</span>
+                    <span class="badge badge-soft-info" style="white-space:nowrap;">{{ translate('messages.pending') }}</span>
+                    <span style="color:#8a6d3b;font-weight:700;white-space:nowrap;">应收 {{ Helpers::format_currency($order->order_amount) }}</span>
+                </div>
+                <form action="{{ $nzPrimary['route'] }}" method="post" style="margin:0;flex:0 0 auto;"
+                    onsubmit="return confirm('{{ $nzPrimary['confirm'] }}');">
+                    @csrf
+                    @method($nzPrimary['method'])
+                    <button type="submit" class="btn btn-success btn-sm" style="border-radius:8px;font-weight:700;white-space:nowrap;">{{ $nzPrimary['label'] }}</button>
+                </form>
+            </div>
+        @endif
 
         <div class="row g-1" id="printableArea">
             <div class="col-lg-8 order-print-area-left">
@@ -352,15 +431,9 @@
                                             <p class="mb-2" style="color:#8a6d3b;font-size:13px;line-height:1.6;">
                                                 {{ translate('messages.For_offline_payments_please_verify_if_the_payments_are_safely_received_to_your_account_Customer_id_not_liable_if_you_confirm_and_deliver_the_orders_without_checking_payments_transactions') }}
                                             </p>
-                                            <div class="d-flex flex-wrap" style="gap:8px;">
-                                                <form action="{{ route('vendor.order.confirm-offline-payment', ['id' => $order['id']]) }}" method="post"
-                                                    onsubmit="return confirm('请确认：您已在自己的账户收到本单顾客的付款？确认后将通知顾客并可开始出餐。');">
-                                                    @csrf
-                                                    @method('PUT')
-                                                    <button type="submit" class="btn btn-success btn-sm" style="border-radius:8px;">
-                                                        确认收款（我已收到顾客付款）
-                                                    </button>
-                                                </form>
+                                            <div class="d-flex flex-wrap align-items-center" style="gap:8px;">
+                                                {{-- 哪吒 M-04: 「确认收款」主操作已镜像至页面顶部状态条, 此处去重(避免上下两个确认按钮); 凭证/链上核验信息与「未收到/打回」原位保留。 --}}
+                                                <span style="font-size:12px;color:#8a6d3b;">确认收款按钮已移至页面顶部 ↑</span>
                                                 <button type="button" class="btn btn-outline-danger btn-sm" style="border-radius:8px;"
                                                     data-toggle="modal" data-target="#nzDenyOffline-{{ $order['id'] }}">
                                                     未收到 / 打回
