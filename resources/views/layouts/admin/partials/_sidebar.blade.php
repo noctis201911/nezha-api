@@ -1053,7 +1053,8 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                         </li>
                     @endif
 
-                    @if (Helpers::module_permission_check('customer_wallet'))
+                    {{-- 哪吒B方案隐藏「顾客钱包」(加款/返现): 平台不持币·不给顾客钱包充值(L1-1 平台不碰钱),StackFood残留菜单。恢复把 false 改回即可;路由 admin.customer.wallet.* 未动 --}}
+                    @if (false && Helpers::module_permission_check('customer_wallet'))
                         <li
                             class="navbar-vertical-aside-has-menu {{ !Request::is('admin/customer/wallet/report*') && Request::is('admin/customer/wallet*') ? 'active' : '' }}">
 
@@ -1131,7 +1132,8 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                     <!-- End Custommer -->
 
                     <!-- DeliveryMan -->
-                    @if (Helpers::module_permission_check('deliveryman'))
+                    {{-- 哪吒B方案隐藏「骑手管理」全块(管理/列表/评价): 平台无自营骑手,配送由商家手动叫Yandex(见 yandex-delivery-bridge)。StackFood残留菜单。恢复把 false 改回即可;路由未动 --}}
+                    @if (false && Helpers::module_permission_check('deliveryman'))
                         <li class="nav-item">
                             <small class="nav-subtitle"
                                 title="{{ translate('messages.deliveryman_section') }}">{{ translate('messages.deliveryman_management') }}</small>
@@ -1264,7 +1266,8 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
 
 
 
-                    @if (Helpers::module_permission_check('disbursement'))
+                    {{-- 哪吒B方案隐藏「分账/打款管理」全块(商家结算/骑手结算/分账报表): 平台不向商家/骑手打款(L1-1/L1-5,打款腿已拔),Disbursement恒空。StackFood残留菜单。恢复把 false 改回即可;路由未动 --}}
+                    @if (false && Helpers::module_permission_check('disbursement'))
                         <li class="nav-item">
                             <small class="nav-subtitle"
                                 title="{{ translate('messages.business_section') }}">{{ translate('messages.disbursement_management') }}</small>
@@ -1460,6 +1463,8 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                                             class="text-truncate text-capitalize">{{ translate('messages.Customer_Overview_Report') }}</span>
                                     </a>
                                 </li>
+                                {{-- 哪吒B方案隐藏「顾客钱包报表」: 平台不持顾客钱包(L1-1)。恢复删掉本 @if(false)/@endif 包裹即可;路由未动 --}}
+                                @if (false)
                                 <li
                                     class="nav-item {{ Request::is('admin/customer/wallet/report*') ? 'active' : '' }}">
                                     <a class="nav-link " href="{{ route('admin.customer.wallet.report') }}"
@@ -1469,6 +1474,7 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                                             class="text-truncate text-capitalize">{{ translate('messages.Customer_Wallet_Report') }}</span>
                                     </a>
                                 </li>
+                                @endif
                             </ul>
                         </li>
 
@@ -1507,6 +1513,8 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                             </a>
                         </li>
 
+                        {{-- 哪吒B方案隐藏「骑手收入报表」: 无自营骑手(配送走Yandex)。恢复删掉本 @if(false)/@endif 包裹即可;路由未动 --}}
+                        @if (false)
                         <li class="navbar-vertical-aside-has-menu @yield('deliveryman_earning_report') {{ Request::is('admin/report/deliveryman-earning-report*') ? 'active' : '' }}">
                             <a class="nav-link " href="{{ route('admin.report.deliveryman-earning-report') }}"
                                 title="{{ translate('Deliveryman_Earning_Report') }}">
@@ -1515,6 +1523,7 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                                     class="text-truncate text-capitalize">{{ translate('Deliveryman_Earning_Report') }}</span>
                             </a>
                         </li>
+                        @endif
                     @endif
 
 
@@ -1532,7 +1541,8 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                         <!-- account -->
                     @endif
 
-                    @if (Helpers::module_permission_check('account'))
+                    {{-- 哪吒B方案隐藏「收取现金」(account-transaction): 平台不经手现金/不做现金归集(L1-1 平台不碰钱)。StackFood残留菜单。恢复把 false 改回即可;路由 admin.account-transaction.index 未动 --}}
+                    @if (false && Helpers::module_permission_check('account'))
                         <li
                             class="navbar-vertical-aside-has-menu {{ Request::is('admin/account-transaction*') ? 'active' : '' }}">
                             <a class="js-navbar-vertical-aside-menu-link nav-link"
