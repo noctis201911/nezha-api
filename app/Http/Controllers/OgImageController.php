@@ -16,7 +16,9 @@ class OgImageController extends Controller
 {
     // 中文字体(服务器自带 WenQuanYi Zen Hei) + 海报缓存版本(改版式时 +1 即可整体失效重建)
     const CJK_FONT = '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc';
-    const POSTER_VER = '1';
+    const POSTER_VER = '3';
+    // 德拉姆符号 ֏(U+058F) 在 wqy 中文字体里无字形(显示成方框), 价格行改用含该符号的 FreeSans
+    const PRICE_FONT = '/usr/share/fonts/truetype/freefont/FreeSans.ttf';
 
     /**
      * 分享缩略图 (og:image) 统一输出 JPG。
@@ -101,7 +103,16 @@ class OgImageController extends Controller
                 return $this->brandFallback();
             }
             $url = 'https://nezha.am/product/' . $id;
-            return $this->buildPoster($disk, $srcPath, $food->name, '扫码进店 · 在哪吒外卖点这道菜', $url, 'pf' . $id);
+            // 售价(扣折扣后)用于海报价格行, 失败不影响出图
+            $priceText = null;
+            try {
+                $disc = Helpers::product_discount_calculate($food, $food->price, $food->restaurant);
+                $final = $food->price - (is_numeric($disc) ? $disc : 0);
+                $priceText = Helpers::format_currency($final);
+            } catch (\Throwable $e) {
+                $priceText = null;
+            }
+            return $this->buildPoster($disk, $srcPath, $food->name, '扫码进店 · 在哪吒外卖点这道菜', $url, 'pf' . $id, $priceText);
         } catch (\Throwable $e) {
             return $this->brandFallback();
         }
@@ -146,17 +157,17 @@ class OgImageController extends Controller
      * 合成海报(纯 GD): 顶部店招图(裁切铺满) + 下方白底店名/副标题 + 二维码 + 提示 + 品牌脚注。
      * 配色保持中性(白底/深灰字/黑二维码), 不擅自用预设品牌色; 颜色由店招图本身提供。
      */
-    private function buildPoster($disk, $srcPath, $title, $subtitle, $url, $keyPrefix)
+    private function buildPoster($disk, $srcPath, $title, $subtitle, $url, $keyPrefix, $priceText = null)
     {
         $mtime = Storage::disk($disk)->lastModified($srcPath);
-        $cacheRel = 'og-cache/poster-' . $keyPrefix . '-' . substr(md5($srcPath . $mtime . $url . self::POSTER_VER), 0, 16) . '.jpg';
+        $cacheRel = 'og-cache/poster-' . $keyPrefix . '-' . substr(md5($srcPath . $mtime . $url . ($priceText ?? '') . self::POSTER_VER), 0, 16) . '.jpg';
         if (Storage::disk($disk)->exists($cacheRel)) {
             return response(Storage::disk($disk)->get($cacheRel), 200, [
                 'Content-Type' => 'image/jpeg', 'Cache-Control' => 'public, max-age=86400',
             ]);
         }
 
-        $W = 800; $photoH = 600; $H = 1040; $pad = 48;
+        $W = 800; $photoH = 600; $H = 1080; $pad = 48;
         $font = self::CJK_FONT;
 
         $poster = imagecreatetruecolor($W, $H);
@@ -178,35 +189,37 @@ class OgImageController extends Controller
             imagedestroy($photo);
         }
 
-        // 店名(最多两行, 超出省略)
-        $lines = $this->wrapText($font, 34, $title, $W - 2 * $pad, 2);
-        $ty = $photoH + 62;
-        foreach ($lines as $ln) {
+        // 文字块(店名 -> 价格(若有) -> 副标题), 从图片下方依次往下排
+        $ty = $photoH + 58;
+        foreach ($this->wrapText($font, 34, $title, $W - 2 * $pad, 2) as $ln) {
             imagettftext($poster, 34, 0, $pad, $ty, $dark, $font, $ln);
-            $ty += 50;
+            $ty += 48;
         }
-        // 副标题
+        if ($priceText) {
+            imagettftext($poster, 34, 0, $pad, $ty + 10, $dark, self::PRICE_FONT, $priceText);
+            $ty += 52;
+        }
         imagettftext($poster, 20, 0, $pad, $ty + 6, $gray, $font, $subtitle);
 
         // 分隔线
-        $divY = $photoH + 196;
+        $divY = 820;
         imagefilledrectangle($poster, $pad, $divY, $W - $pad, $divY + 1, $line);
 
         // 二维码(自绘 GD, 不依赖 imagick)
-        $qrPx = 188; $qx = $pad; $qy = $divY + 26;
+        $qrPx = 180; $qx = $pad; $qy = $divY + 24;
         $this->drawQr($poster, $url, $qx, $qy, $qrPx, $black, $white);
 
         // 二维码右侧提示
         $cx = $qx + $qrPx + 34;
-        imagettftext($poster, 26, 0, $cx, $qy + 70, $dark, $font, '长按图片');
-        imagettftext($poster, 26, 0, $cx, $qy + 112, $dark, $font, '识别二维码进店');
-        imagettftext($poster, 20, 0, $cx, $qy + 156, $gray, $font, '点餐 / 看菜单 / 下单');
+        imagettftext($poster, 26, 0, $cx, $qy + 64, $dark, $font, '长按图片');
+        imagettftext($poster, 26, 0, $cx, $qy + 106, $dark, $font, '识别二维码进店');
+        imagettftext($poster, 20, 0, $cx, $qy + 148, $gray, $font, '点餐 / 看菜单 / 下单');
 
         // 品牌脚注
         $foot = '哪吒外卖   nezha.am';
         $bb = imagettfbbox(22, 0, $font, $foot);
         $fw = $bb[2] - $bb[0];
-        imagettftext($poster, 22, 0, (int) (($W - $fw) / 2), $H - 34, $gray, $font, $foot);
+        imagettftext($poster, 22, 0, (int) (($W - $fw) / 2), $H - 32, $gray, $font, $foot);
 
         ob_start();
         imagejpeg($poster, null, 88);
