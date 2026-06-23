@@ -40,6 +40,7 @@ Route::post('/subscribeToTopic', [FirebaseController::class, 'subscribeToTopic']
 
 // 分享缩略图(og:image)统一出 JPG, 解决微信等对 webp 不显缩略图 (OgImageController)
 Route::get('og-image/restaurant/{id}', [\App\Http\Controllers\OgImageController::class, 'restaurant'])->name('og-image.restaurant')->where('id', '[0-9]+');
+Route::get('og-image/food/{id}', [\App\Http\Controllers\OgImageController::class, 'food'])->name('og-image.food')->where('id', '[0-9]+');
 
 
 Route::view('subscription/payment/view' , 'Subscription_payment_view')->name('subscription_payment_view');
