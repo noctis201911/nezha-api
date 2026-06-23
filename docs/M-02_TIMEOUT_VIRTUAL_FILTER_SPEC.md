@@ -1,7 +1,12 @@
 # M-02 timeout virtual filter — implementation spec
 
-> **状态：FUTURE / NOT IMPLEMENTED（尚未实现）。** 本文件只是实现级规格，描述「应该怎么做」，
-> 对应代码尚未落地。实现窗口照此做，做完后回来把本行状态改为「已实现 + commit hash」。
+> **状态：已实现（IMPLEMENTED）@ commit `58c1356`（2026-06-23，MERCHANT-M02-TIMEOUT-IMPLEMENT 窗口）。** 本文件为实现级规格。
+> 落地与规格的一处有据偏离：`alertOrderIds()` 在参考实现基础上**额外镜像了 list 公共收尾的 `->HasSubscriptionToday()` 作用域**
+> （连同 `Notpos()` + `restaurant_id`），以保证「卡计数 == list('timeout') 列表条数」在订阅单等边界也严格相等——
+> 这是兑现 §0/§7.1「数字同源」主目标、闭合 §8 同类作用域漂移坑（与 NotDigitalOrder 同款），仍为纯只读、状态机零改动。
+> 验证：构造 confirmed/processing/offline+凭证 三桶超时单 + 三类排除项（无凭证/info/配送），
+> `alertOrderIds == list(timeout) == dashboard card = 3` 同源；真实 FPM 路由 `/list/timeout` HTTP 200、标题「超时单」、空态「暂无数据」、
+> Playwright 桌面+移动端 console=0 / 无横向溢出。`git diff` 证 `NezhaOrderTimeout` 仅 +1 方法、现有方法零改动。
 >
 > 🔴🔴 **硬约束红线：本特性只新增「列表过滤 / 查询入口」，绝不修改 `NezhaOrderTimeout` 状态机
 > （`phase()` / `describe()` / `clockStart()` / settings 阈值 / `OrderTimeoutSweep`）。**
