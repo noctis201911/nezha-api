@@ -98,3 +98,5 @@
 - [x] Claude(窗口M-04/M-05·商家订单详情顶部状态条+唯一主操作) 正在改 resources/views/vendor-views/order/order-view.blade.php —— Step A 抽 $nzPrimary 决策块(零视觉变化) + Step B 仅 pending·离线待核验一态打样置顶条(镜像确认收款·原位去重·保留打回/拒单);后续态待真机验证后再铺开。不碰路由/控制器/状态机;与M-01(dashboard)无重叠。(2026-06-23)
 
   ↳ ✅ Step A($nzPrimary 全态决策块·零视觉) + Step B(仅 pending·离线态置顶状态条) 已上线: commit dcea3ad / deploy release 20260623-040109-dcea3ad(健康门 config/zone/login=200, COD硬门🟢)。真浏览器验收(route-fulfill live-code HTML @真origin, Chromium desktop1440+mobile390/iOS-UA): 置顶条×1·确认按钮文案×1不重复·去重提示在·「未收到/打回」「无法接单/拒单」独立可见·凭证/链上核验区(应收/USDT/txid)原位·console=0·overflowPx=0·mobile sticky 滚动后 pinnedTop。9 笔测试单已清(残留0)。⚠️未做: 真点确认收款按钮走POST(避免改单/需真会话)·iOS真机·其余态B/C/D/D-prime/E/F/G(待你拍板铺开)。会话注入坑: 伪造vendor会话cookie经php-fpm解不开(CLI能), 改用 setUser内部渲染HTML+Playwright route-fulfill@真origin 验真浏览器。(2026-06-23)
+
+- [x] Claude(DEPLOY-SCRIPTS-VERSIONING窗口) ✅已完成: api-deploy/nzdeploy-api.sh 纳入版本控制(方案A)。新增 deploy/nzdeploy-api.sh(就地cp字节一致)+运行路径改软链指向repo正本+时间戳.bak。不改部署逻辑/不碰shared/releases/current/previous/.env/PM2/COD策略。仅add deploy/nzdeploy-api.sh+本行（2026-06-23）
