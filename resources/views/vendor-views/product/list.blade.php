@@ -178,7 +178,39 @@
                                 <!-- Static Symbol -->
 
                                 <!-- Static Symbol -->
-                                    {{app\CentralLogics\Helpers::format_currency($food['price'])}}
+                                    <a href="#nzPrice{{ $food['id'] }}" data-toggle="modal" title="点击快捷改价" style="color:inherit;text-decoration:none;border-bottom:1px dashed #bbb;cursor:pointer;white-space:nowrap;">{{app\CentralLogics\Helpers::format_currency($food['price'])}} <i class="tio-edit" style="font-size:11px;opacity:.55;"></i></a>
+                                    <div class="modal fade" id="nzPrice{{ $food['id'] }}" tabindex="-1" role="dialog" aria-hidden="true">
+                                        <div class="modal-dialog modal-dialog-centered" role="document">
+                                            <div class="modal-content text-left">
+                                                <form action="{{ route('vendor.food.updatePrice') }}" method="POST">
+                                                    @csrf
+                                                    <div class="modal-header"><h5 class="modal-title">快捷改价 · {{ \Illuminate\Support\Str::limit($food->name, 16) }}</h5><button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button></div>
+                                                    <div class="modal-body">
+                                                        <input type="hidden" name="food_id" value="{{ $food['id'] }}">
+                                                        <div class="form-group text-left">
+                                                            <label class="input-label">单价 <span class="text-danger">*</span></label>
+                                                            <input type="number" name="price" value="{{ $food['price'] }}" step="0.01" min="0" required class="form-control">
+                                                        </div>
+                                                        <div class="row g-2">
+                                                            <div class="col-6 text-left">
+                                                                <label class="input-label">折扣类型</label>
+                                                                <select name="discount_type" class="form-control">
+                                                                    <option value="percent" {{ $food->discount_type=='percent'?'selected':'' }}>百分比 (%)</option>
+                                                                    <option value="amount" {{ $food->discount_type=='amount'?'selected':'' }}>固定金额</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-6 text-left">
+                                                                <label class="input-label">折扣</label>
+                                                                <input type="number" name="discount" value="{{ $food['discount'] }}" step="0.01" min="0" class="form-control">
+                                                            </div>
+                                                        </div>
+                                                        <div style="font-size:12px;color:#888;margin-top:8px;line-height:1.6;">只改单价和折扣，立即生效；规格/库存/图片/描述等仍在「编辑」里改。</div>
+                                                    </div>
+                                                    <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">取消</button><button type="submit" class="btn btn--primary btn-sm">保存</button></div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </td>
 

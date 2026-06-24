@@ -174,6 +174,7 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
             Route::get('get-categories', [FoodController::class, 'get_categories'])->name('get-categories');
             Route::get('out-of-stock-list', [FoodController::class, 'stockOutList'])->name('stockOutList');
             Route::post('update-stock', [FoodController::class, 'updateStock'])->name('updateStock');
+            Route::post('update-price', [FoodController::class, 'updatePrice'])->name('updatePrice');
             Route::post('/add-to-session', [FoodController::class, 'addToSession'])->name('addToSession');
             Route::get('export', [FoodController::class, 'export'])->name('export');
 

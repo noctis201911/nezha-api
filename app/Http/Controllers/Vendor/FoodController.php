@@ -1133,6 +1133,40 @@ class FoodController extends Controller
         return back();
     }
 
+    public function updatePrice(Request $request)
+    {
+        $request->validate([
+            'food_id' => 'required',
+            'price' => 'required|numeric|min:0',
+            'discount' => 'nullable|numeric|min:0',
+            'discount_type' => 'nullable|in:percent,amount',
+        ], [
+            'price.required' => '请填写单价',
+            'price.numeric' => '单价需为数字',
+            'price.min' => '单价不能为负',
+        ]);
+        // 对象级鉴权: Food 全局 RestaurantScope 已限本店, findOrFail 外店 id -> 404, 不越权改他店价。
+        $product = Food::findOrFail($request->food_id);
+        $price = (float) $request->price;
+        $discount = (float) ($request->discount ?? 0);
+        if ($request->discount_type === 'percent' && $discount > 100) {
+            Toastr::error('百分比折扣不能超过 100%');
+            return back();
+        }
+        if (($request->discount_type ?? $product->discount_type) === 'amount' && $discount >= $price) {
+            Toastr::error('固定折扣不能大于等于单价');
+            return back();
+        }
+        $product->price = $price;
+        $product->discount = $discount;
+        if ($request->discount_type) {
+            $product->discount_type = $request->discount_type;
+        }
+        $product->save();
+        Toastr::success('价格已更新');
+        return back();
+    }
+
     public function addToSession(Request $request)
     {
         Session::put($request->value, true);
