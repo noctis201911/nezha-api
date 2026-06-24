@@ -46,6 +46,13 @@
                         <input type="text" name="telegram_chat_id" class="form-control"
                                value="{{ $restaurant->telegram_chat_id }}" placeholder="例如 123456789（纯数字，群组可带负号）">
                     </div>
+                    <div class="col-sm-12">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="nezha_alert_exempt" id="nezha_alert_exempt" value="1" {{ $restaurant->nezha_alert_exempt ? 'checked' : '' }}>
+                            <label class="form-check-label" for="nezha_alert_exempt">本店走「常开后台设备」接单，豁免 Telegram 必绑（上线时不强制要求 Telegram）</label>
+                        </div>
+                        <small class="text-muted">不勾：没绑 Telegram 的店<b>无法上线</b>（防漏单）。仅当该店确有一台常开后台的电脑/平板接单时才勾。</small>
+                    </div>
                     <div class="col-sm-12 col-md-5">
                         <button type="submit" class="btn btn-primary">{{ translate('messages.save') }}</button>
                         <button type="button" class="btn btn-outline-secondary" id="tg-recent-btn">查看最近联系机器人的会话</button>

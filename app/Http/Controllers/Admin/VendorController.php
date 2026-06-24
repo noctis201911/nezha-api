@@ -1088,6 +1088,11 @@ class VendorController extends Controller
 
     public function status(Restaurant $restaurant, Request $request)
     {
+        // 🔴 上店硬闸: 激活(0→1)前必须已绑 Telegram 接单提醒, 否则商家会静默漏单; 走常开后台设备的店可在「设置」勾选豁免。仅拦激活, 不拦下线。
+        if (!$restaurant->status && empty($restaurant->telegram_chat_id) && empty($restaurant->nezha_alert_exempt)) {
+            Toastr::error('该店未绑定 Telegram 接单提醒，不能上线（否则会漏单）。请到「设置」标签绑定 Telegram，或勾选「走常开后台设备·豁免必绑」后再上线。');
+            return back();
+        }
         $restaurant->status = !$restaurant->status;
         $restaurant?->save();
         $vendor = $restaurant?->vendor;
@@ -1248,6 +1253,7 @@ class VendorController extends Controller
             'telegram_chat_id.regex' => 'Telegram chat id 应为纯数字(群组可带负号)',
         ]);
         $restaurant->telegram_chat_id = $request->filled('telegram_chat_id') ? trim($request->input('telegram_chat_id')) : null;
+        $restaurant->nezha_alert_exempt = $request->boolean('nezha_alert_exempt') ? 1 : 0;
         $restaurant->save();
         Toastr::success('Telegram 接单提醒设置已更新');
 
