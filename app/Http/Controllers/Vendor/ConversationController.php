@@ -239,6 +239,12 @@ class ConversationController extends Controller
             $receiver = UserInfo::where('admin_id', $user->id)->first();
         } else if($user_type == 'user'){
             $user = User::find($user_id);
+            // 哪吒[骚扰防护 2026-06-25]: 商家只能联系「本店下过单」或「已建立会话(顾客主动联系)」的顾客,
+            // 防直连 API 向任意 user_id 冷启动骚扰。正常 UI 流程(列表里的会话/下过单顾客)恒满足故不受影响。
+            $nzRcv = UserInfo::where('user_id', $user_id)->first();
+            $nzHasOrder = \App\Models\Order::where('user_id', $user_id)->where('restaurant_id', Helpers::get_restaurant_id())->exists();
+            $nzHasConv = ($sender && $nzRcv) ? Conversation::WhereConversation($sender->id, $nzRcv->id)->exists() : false;
+            if (!$nzHasOrder && !$nzHasConv) { abort(403); }
             $fcm_token=$user->cm_firebase_token;
             $receiver = UserInfo::where('user_id', $user->id)->first();
             if(!$receiver){
