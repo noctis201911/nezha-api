@@ -757,7 +757,7 @@ class OrderController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             info($e->getMessage());
-            return response()->json([$e->getMessage()], 403);
+            return response()->json([translate('下单失败，请稍后重试')], 403); // 哪吒[N-I-01]: 不回吐原始异常(原泄露SQLSTATE/表名), 真因已 info() 记日志
         }
 
         return response()->json([

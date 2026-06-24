@@ -52,8 +52,8 @@ class CustomerController extends Controller
             'address_type' => 'required',
             'contact_person_number' => 'required',
             'address' => 'required',
-            'longitude' => 'required',
-            'latitude' => 'required',
+            'longitude' => 'required|numeric',
+            'latitude' => 'required|numeric',
         ]);
 
         if ($validator->fails()) {
@@ -95,8 +95,8 @@ class CustomerController extends Controller
             'address_type' => 'required',
             'contact_person_number' => 'required',
             'address' => 'required',
-            'longitude' => 'required',
-            'latitude' => 'required',
+            'longitude' => 'required|numeric',
+            'latitude' => 'required|numeric',
         ]);
 
         if ($validator->fails()) {
