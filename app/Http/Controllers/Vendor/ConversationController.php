@@ -101,6 +101,12 @@ class ConversationController extends Controller
     public function view($conversation_id,$user_id)
     {
         $conversation = Conversation::find($conversation_id);
+        // 哪吒[IDOR修复 2026-06-25]: 校验会话归属当前商家——否则商家可枚举 conversation_id 读他人私聊
+        // (顾客↔平台客服 / 别家商家↔顾客)并把对方消息篡改为已读。归属=本商家 UserInfo id 出现在 sender_id 或 receiver_id。
+        $me = UserInfo::where('vendor_id', Helpers::get_vendor_data()->id)->first();
+        if (!$conversation || !$me || ($conversation->sender_id != $me->id && $conversation->receiver_id != $me->id)) {
+            abort(404);
+        }
         $lastmessage = $conversation->last_message;
         if($lastmessage && $lastmessage->sender_id == $user_id ) {
             $conversation->unread_message_count = 0;
