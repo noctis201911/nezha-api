@@ -2137,6 +2137,19 @@ class OrderController extends Controller
         return $balance <= $threshold;
     }
 
+    // 哪吒: 店铺当前是否"休息中"(顾客端显休息中 + 后端拦下单 的统一判断)。
+    // = 商家手动打烊(nezha_temp_closed, 独立于保证金模式开关, 任何时候生效) 或 保证金低于阈值(仅 deposit 模式开时)。
+    public static function nezha_store_paused($restaurant){
+        if (!$restaurant) {
+            return false;
+        }
+        $tempClosed = is_array($restaurant) ? ($restaurant['nezha_temp_closed'] ?? 0) : ($restaurant->nezha_temp_closed ?? 0);
+        if ($tempClosed) {
+            return true;
+        }
+        return self::nezha_store_paused($restaurant);
+    }
+
     public static function order_validation_check($request){
         $schedule_at = $request->schedule_at? Carbon::parse($request->schedule_at):now();
 
@@ -2149,7 +2162,7 @@ class OrderController extends Controller
 
         // [哪吒 B方案/组4 预存佣金扣佣] 开关(nezha_deposit_mode_status)开启时, 预存佣金低于阈值的餐馆停止接收新单。
         // 开关关闭(一阶段免佣免押)时 $nezha_deposit_low 恒为 false, 不影响接单。
-        $nezha_deposit_low = self::nezha_deposit_below_threshold($restaurant);
+        $nezha_deposit_low = self::nezha_store_paused($restaurant);
         $nezha_order_suspended = \App\CentralLogics\NezhaRefundOverdue::is_suspended($restaurant); // 哪吒: 退款逾期被运营暂停接单(非资金)
 
         $response = match (true) {
@@ -2361,7 +2374,7 @@ class OrderController extends Controller
         $restaurant = Restaurant::with(['discount', 'restaurant_sub','restaurant_config'])->selectRaw('*, IF(((select count(*) from `restaurant_schedule` where `restaurants`.`id` = `restaurant_schedule`.`restaurant_id` and `restaurant_schedule`.`day` = '.$schedule_at->format('w').' and `restaurant_schedule`.`opening_time` < "'.$schedule_at->format('H:i:s').'" and `restaurant_schedule`.`closing_time` >"'.$schedule_at->format('H:i:s').'") > 0), true, false) as open')->where('id', $request->restaurant_id)->first();
 
         // [哪吒 B方案/组4 预存佣金扣佣] 结算预检同样拦预存佣金不足的餐馆(开关关闭时恒 false)。
-        $nezha_deposit_low = self::nezha_deposit_below_threshold($restaurant);
+        $nezha_deposit_low = self::nezha_store_paused($restaurant);
         $nezha_order_suspended = \App\CentralLogics\NezhaRefundOverdue::is_suspended($restaurant); // 哪吒: 退款逾期被运营暂停接单(非资金)
 
         $response = match (true) {

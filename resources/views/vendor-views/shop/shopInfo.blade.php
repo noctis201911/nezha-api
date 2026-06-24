@@ -9,7 +9,7 @@
                     <div class="">
                         <h3 class="mb-1">{{ translate('messages.Restaurant_Availability') }}</h3>
                         <p class="fs-12 mb-0">
-                            {{ translate('messages.Turning off the status will deactivate your restaurant and will show temporary off in the customer app & websites') }}
+                            关闭后顾客端会显示「商家休息中」、暂时无法下单；但店铺仍然可见、不会从列表消失。随时可重新开业。
                         </p>
                     </div>
                 </div>
@@ -18,7 +18,7 @@
                         <span class="text-dark">{{ translate('messages.Active_Status') }}</span>
 
                         <label class="toggle-switch toggle-switch-sm">
-                            <input type="checkbox" id="" class="status toggle-switch-input restaurant-open-status" {{ $shop->active ? 'checked' : '' }}>
+                            <input type="checkbox" id="" class="status toggle-switch-input restaurant-open-status" {{ !$shop->nezha_temp_closed ? 'checked' : '' }}>
                             <span class="toggle-switch-label text">
                                 <span class="toggle-switch-indicator"></span>
                             </span>
@@ -355,8 +355,8 @@
 
         $(document).on('click', '.restaurant-open-status', function (event) {
             Swal.fire({
-                title: '{{ !$shop->active ? translate('messages.Want_to_make_your_restaurant_available_for_all') :  translate('messages.Want_to_close_your_restaurant_temporarily')}} ?',
-                text: '{{!$shop->active ? translate('messages.If_yes_this_restaurant_will_be_available_for_customers_in_app_and_web') : translate('messages.If_yes_this_restaurant_will_be_unavailable_for_customers_in_apps_and_web') }}',
+                title: '{{ $shop->nezha_temp_closed ? '确认重新开业？' : '确认暂停营业（打烊）？' }}',
+                text: '{{ $shop->nezha_temp_closed ? '开业后顾客可以正常下单。' : '顾客端会显示「商家休息中」、暂时无法下单；店铺仍然可见、不会从列表消失。随时可重新开业。' }}',
                 type: 'warning',
                 showCancelButton: true,
                 cancelButtonColor: 'default',

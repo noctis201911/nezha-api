@@ -380,9 +380,13 @@ class BusinessSettingsController extends Controller
     public function active_status(Request $request)
     {
         $restaurant = Helpers::get_restaurant_data();
-        $restaurant->active = $restaurant->active?0:1;
+        // 哪吒: 手动打烊改用 nezha_temp_closed(店铺保持 active=1 顾客端可见、显"休息中"+拦下单), 不再 active=0 致店铺从顾客端消失。
+        $restaurant->nezha_temp_closed = $restaurant->nezha_temp_closed ? 0 : 1;
+        if ($restaurant->nezha_temp_closed) {
+            $restaurant->active = 1; // 防御: 打烊时确保店铺仍可见(休息中), 不消失
+        }
         $restaurant->save();
-        return response()->json(['message' => !$restaurant->active?translate('messages.restaurant_temporarily_closed'):translate('messages.restaurant_opened')], 200);
+        return response()->json(['message' => $restaurant->nezha_temp_closed?translate('messages.restaurant_temporarily_closed'):translate('messages.restaurant_opened')], 200);
     }
 
     public function add_schedule(Request $request)
