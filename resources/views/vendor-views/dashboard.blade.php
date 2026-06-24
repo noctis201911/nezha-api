@@ -138,7 +138,7 @@
                             </span>
                             <span class="h5 m-0 fz--11 d-flex align-items-center mb-2 mb-md-0">
                                 <span class="legend-indicator bg-0661CB"></span>
-                                {{translate('messages.total_earning')}} : {{\App\CentralLogics\Helpers::format_currency(array_sum($earning))}}
+                                销售净额 : {{\App\CentralLogics\Helpers::format_currency(array_sum($earning))}}
                             </span>
                         </div>
                     </div>
