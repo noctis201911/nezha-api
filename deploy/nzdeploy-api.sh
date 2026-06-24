@@ -30,14 +30,22 @@ rm -f "$REL/.env"; ln -s "$SHARED/.env" "$REL/.env"
 ln -sfn "$REL/storage/app/public" "$REL/public/storage"
 
 CUR=$(readlink "$DEPLOY/current" 2>/dev/null)
-if [ -n "$CUR" ] && [ -f "$CUR/composer.lock" ] && cmp -s "$REL/composer.lock" "$CUR/composer.lock"; then
-    cp -al "$CUR/vendor" "$REL/vendor"; VMODE="vendor-hardlink-reuse"
+if [ -n "$CUR" ] && [ -f "$CUR/composer.lock" ] && [ -d "$CUR/vendor" ] && cmp -s "$REL/composer.lock" "$CUR/composer.lock" && cp -al "$CUR/vendor" "$REL/vendor"; then
+    VMODE="vendor-hardlink-reuse"
 else
+    # 哪吒[防 vendor 级联 2026-06-24]: 上个 release 无 vendor/ 或硬链失败时不留空 vendor, 回退 composer install。
+    rm -rf "$REL/vendor"
     VMODE="composer-install"
 fi
 chown -R www:www "$REL"
 [ "$VMODE" = "composer-install" ] && (cd "$REL" && sudo -u www -H composer install --no-dev --optimize-autoloader >>"$LOG" 2>&1)
 echo "[deploy] $VMODE"
+
+# 哪吒[vendor 断言 2026-06-24]: 无论哪种模式 autoload 必须就位, 否则整个 release 不可用→worker 回收即全站500。fail-fast 不切 current, 线上仍跑旧 release。
+if [ ! -f "$REL/vendor/autoload.php" ]; then
+    echo "[deploy] FATAL: $REL/vendor/autoload.php 缺失 (VMODE=$VMODE) -- 终止部署, 不切换 current, 线上仍跑旧 release"
+    exit 1
+fi
 
 (cd "$REL" && sudo -u www -H php artisan package:discover --ansi >>"$LOG" 2>&1)
 (cd "$REL" && sudo -u www -H php artisan migrate --force >>"$LOG" 2>&1)
