@@ -1362,6 +1362,228 @@ class Helpers
         return $response->json('access_token');
     }
 
+    /**
+     * ============================================================================
+     * 哪吒商家版 App —— 新订单「漏接报警」发送链路 (2026-06-24)
+     * 设计要点 (经 /debate 对抗核验定锤):
+     *  - 独立、无条件: 不挂 gated 的 sentRestaurantNotification(那里 offline_payment+pending 会漏 = H1 根因)。
+     *  - 纯 data 高优: 刻意不带 notification 块, 否则 Android 系统托管成普通通知、被杀/锁屏唤不醒原生层。
+     *  - 防阻塞: 显式 timeout + access_token 缓存, 绝不把下单/通知主路径吊在 Google 跨境往返上。
+     *  - 总开关 nezha_alert_push_status 默认 0 (未翻开 = 零真实影响)。
+     *  - outbox + sweep 兜底: 一单一行幂等, 内联只是 best-effort, 真正保底靠每分钟 sweep 重试。
+     * 与资金/退款/合规无关 (L1 无涉): App 只提醒、不碰钱。
+     * ============================================================================
+     */
+
+    /** 报警总入口: 在 send_order_notification 内 + place_order commit 后调用。按 order_id 幂等、受开关控制、绝不冒泡。 */
+    public static function dispatchVendorOrderAlarm($order)
+    {
+        try {
+            if (!$order || !isset($order->id)) {
+                return;
+            }
+            // 总开关 (默认关): 未显式置 1 一律不发, 上线前零真实影响
+            if ((int) self::get_business_settings('nezha_alert_push_status') !== 1) {
+                return;
+            }
+            // 只对「需商家处理的新单」报警: pending(已下单待处理) / confirmed(收款已确认待接单);
+            // 其余状态(备餐/已出餐/已送达/取消…)不报警, 避免骚扰。
+            if (!in_array($order->order_status ?? '', ['pending', 'confirmed'], true)) {
+                return;
+            }
+
+            $restaurantId = $order->restaurant_id ?? ($order->restaurant?->id);
+            $vendorId = $order->restaurant?->vendor_id ?? ($order->restaurant?->vendor?->id);
+            if (!$vendorId) {
+                return;
+            }
+
+            // 幂等: 一单一行。已 sent 直接跳过(不重复报警); 不存在则写 pending。
+            $row = \Illuminate\Support\Facades\DB::table('vendor_alert_outbox')->where('order_id', $order->id)->first();
+            if ($row && $row->status === 'sent') {
+                return;
+            }
+            if (!$row) {
+                \Illuminate\Support\Facades\DB::table('vendor_alert_outbox')->insertOrIgnore([
+                    'order_id' => $order->id,
+                    'restaurant_id' => $restaurantId,
+                    'status' => 'pending',
+                    'attempts' => 0,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            // 内联快速通道 (best-effort, 秒级)。失败由 outbox + sweep 兜底。
+            self::deliverVendorAlarmForOrder($order, $vendorId);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::info('nezha dispatchVendorOrderAlarm failed: ' . $e->getMessage());
+        }
+    }
+
+    /** 实际扇出: 给该 vendor(店主+店员)全部活跃设备发报警, 更新 outbox, 清死 token。也供 sweep 重试调用。 */
+    public static function deliverVendorAlarmForOrder($order, $vendorId = null)
+    {
+        try {
+            $vendorId = $vendorId ?: ($order->restaurant?->vendor_id);
+            if (!$vendorId) {
+                return false;
+            }
+
+            $tokens = \Illuminate\Support\Facades\DB::table('vendor_device_tokens')
+                ->where('is_active', 1)
+                ->where('vendor_id', $vendorId)
+                ->pluck('fcm_token')
+                ->unique()
+                ->values();
+
+            $data = [
+                'title' => '新订单',
+                'description' => '有新订单待接单，请尽快处理',
+                'order_id' => (string) $order->id,
+                'type' => 'new_order',
+            ];
+
+            $anySuccess = false;
+            foreach ($tokens as $tok) {
+                $r = self::sendVendorAlarmPush($tok, $data);
+                if ($r === true) {
+                    $anySuccess = true;
+                } elseif ($r === 404 || $r === 410) {
+                    // 死 token(UNREGISTERED): 停用, 防旧机串店报警 + 减少无效扇出
+                    \Illuminate\Support\Facades\DB::table('vendor_device_tokens')
+                        ->where('fcm_token', $tok)
+                        ->update(['is_active' => 0, 'updated_at' => now()]);
+                }
+            }
+
+            $update = [
+                'updated_at' => now(),
+                'attempts' => \Illuminate\Support\Facades\DB::raw('attempts + 1'),
+            ];
+            if ($tokens->isEmpty()) {
+                // 商家尚未装/登录 App: 标 failed, 让 sweep 在重试窗口内继续尝试(设备上线即送达)
+                $update['status'] = 'failed';
+                $update['last_error'] = 'no_active_device';
+            } elseif ($anySuccess) {
+                $update['status'] = 'sent';
+                $update['sent_at'] = now();
+                $update['last_error'] = null;
+            } else {
+                $update['status'] = 'failed';
+                $update['last_error'] = 'all_devices_failed';
+            }
+            \Illuminate\Support\Facades\DB::table('vendor_alert_outbox')->where('order_id', $order->id)->update($update);
+            return $anySuccess;
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::info('nezha deliverVendorAlarmForOrder failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 给单台商家设备发「报警」高优先级纯 data 推送。
+     * 返回: true=成功 / int(HTTP状态码, 如 404/410 死token) / false=异常或配置缺失。
+     * 刻意不带 notification 块(否则被系统托管、唤不醒原生层); android.priority=high; 显式超时。
+     */
+    public static function sendVendorAlarmPush($fcm_token, array $data)
+    {
+        if (!$fcm_token) {
+            return false;
+        }
+        try {
+            $config = self::get_business_settings('push_notification_service_file_content');
+            $key = (array) $config;
+            if (!data_get($key, 'project_id')) {
+                return false;
+            }
+            $accessToken = self::getFcmAccessTokenCached($key);
+            if (!$accessToken) {
+                return false;
+            }
+
+            $payload = [
+                'message' => [
+                    'token' => (string) $fcm_token,
+                    // 纯 data: 不放 notification 块 → App 原生层全权处理 → 锁屏/被杀也能弹全屏 + 循环报警音
+                    'data' => [
+                        'nezha_alarm' => '1',
+                        'title' => (string) ($data['title'] ?? '新订单'),
+                        'body' => (string) ($data['description'] ?? '有新订单待接单'),
+                        'order_id' => (string) ($data['order_id'] ?? ''),
+                        'type' => (string) ($data['type'] ?? 'new_order'),
+                        'channel_id' => 'nezha_alarm',
+                        'click_action' => 'OPEN_ORDER_LIST',
+                    ],
+                    'android' => [
+                        'priority' => 'high',
+                        'ttl' => '120s',
+                    ],
+                ],
+            ];
+
+            $url = 'https://fcm.googleapis.com/v1/projects/' . $key['project_id'] . '/messages:send';
+            $resp = \Illuminate\Support\Facades\Http::withHeaders([
+                'Authorization' => 'Bearer ' . $accessToken,
+                'Content-Type' => 'application/json',
+            ])->connectTimeout(2)->timeout(3)->post($url, $payload);
+
+            if ($resp->successful()) {
+                return true;
+            }
+            \Illuminate\Support\Facades\Log::info('nezha alarm push http ' . $resp->status() . ': ' . $resp->body());
+            return $resp->status(); // 调用方据 404/410 清死 token
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::info('nezha alarm push failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /** FCM v1 access_token 缓存版(~55min): 现有 getAccessToken 每发一条都重新换 token(一次 Google 往返), 多设备扇出会放大成 N 次。 */
+    public static function getFcmAccessTokenCached(array $key)
+    {
+        if (!isset($key['client_email'], $key['private_key'])) {
+            return null;
+        }
+        $cacheKey = 'nezha_fcm_access_token_' . md5($key['client_email']);
+        try {
+            return \Illuminate\Support\Facades\Cache::remember($cacheKey, now()->addMinutes(55), function () use ($key) {
+                return self::mintFcmAccessTokenWithTimeout($key);
+            });
+        } catch (\Throwable $e) {
+            return self::mintFcmAccessTokenWithTimeout($key);
+        }
+    }
+
+    /** 复刻 getAccessToken(已在生产验证的 JWT 流程), 仅给 Http::post 加显式超时, 防 Google OAuth 端点卡死拖住主路径。 */
+    public static function mintFcmAccessTokenWithTimeout(array $key)
+    {
+        try {
+            $jwtToken = [
+                'iss' => $key['client_email'],
+                'scope' => 'https://www.googleapis.com/auth/firebase.messaging',
+                'aud' => 'https://oauth2.googleapis.com/token',
+                'exp' => time() + 3600,
+                'iat' => time(),
+            ];
+            $jwtHeader = base64_encode(json_encode(['alg' => 'RS256', 'typ' => 'JWT']));
+            $jwtPayload = base64_encode(json_encode($jwtToken));
+            $unsignedJwt = $jwtHeader . '.' . $jwtPayload;
+            openssl_sign($unsignedJwt, $signature, $key['private_key'], OPENSSL_ALGO_SHA256);
+            $jwt = $unsignedJwt . '.' . base64_encode($signature);
+
+            $response = \Illuminate\Support\Facades\Http::asForm()->connectTimeout(2)->timeout(3)->post('https://oauth2.googleapis.com/token', [
+                'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                'assertion' => $jwt,
+            ]);
+            return $response->json('access_token');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::info('nezha fcm token mint failed: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+
     public static function send_push_notif_to_device($fcm_token, $data, $web_push_link = null)
     {
         if (isset($data['conversation_id'])) {
