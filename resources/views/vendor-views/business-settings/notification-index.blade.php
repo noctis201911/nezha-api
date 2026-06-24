@@ -55,6 +55,20 @@
                                     $titleFromKey = function ($g) {
                                         return ucwords(str_replace('_', ' ', $g));
                                     };
+                                    // 哪吒 B方案: 隐藏停用功能的通知类目(订阅/提现/活动), 仅留 账户/订单/广告(广告计费启用中)
+                                    $grouped = $grouped->except(['subscription', 'withdraw', 'campaign']);
+                                    // 哪吒: 保留类目的组头 + 逐项中文标签(原 translate($item->title) 缺译回退英文)
+                                    $nzGroupZh = ['account' => '账户', 'order' => '订单', 'advertisement' => '广告', 'other' => '其他'];
+                                    $nzKeyZh = [
+                                        'restaurant_account_block' => ['账户被封禁', '当你的店铺账户被平台封禁时通知你'],
+                                        'restaurant_account_unblock' => ['账户已解封', '当你的店铺账户被解封、恢复经营时通知你'],
+                                        'restaurant_order_notification' => ['新订单通知', '有新订单时第一时间通知你'],
+                                        'restaurant_advertisement_create_by_admin' => ['平台为你创建广告', '平台为你的店铺创建广告时通知你'],
+                                        'restaurant_advertisement_approval' => ['广告审核通过', '你提交的广告审核通过、开始投放时通知你'],
+                                        'restaurant_advertisement_deny' => ['广告审核未通过', '你提交的广告被驳回时通知你'],
+                                        'restaurant_advertisement_resume' => ['广告恢复投放', '广告恢复投放时通知你'],
+                                        'restaurant_advertisement_pause' => ['广告暂停投放', '广告暂停投放时通知你'],
+                                    ];
                                     $sl = 0;
                                 @endphp
 
@@ -63,7 +77,7 @@
                                         <span class="btn-circle text-primary bg-primary" style="--size: 18px; --bs-bg-opacity: 0.1;">
                                             <i class="tio-down-ui fs-12"></i>
                                         </span>
-                                        <h5 class="fs-16 text-capitalize">{{ $titleFromKey($groupKey) }}</h5>
+                                        <h5 class="fs-16 text-capitalize">{{ $nzGroupZh[$groupKey] ?? $titleFromKey($groupKey) }}</h5>
                                     </div>
 
                                     <div class="table-custom-wrap open">
@@ -76,8 +90,8 @@
                                                 <div class="d-flex sl-topics">
                                                     <span class="text-dark">{{ $sl }}</span>
                                                     <div class="table-cont">
-                                                        <h5 class="mb-1">{{ translate($item->title) }}</h5>
-                                                        <p class="fs-12 mb-0">{{ translate($item->sub_title) }}</p>
+                                                        <h5 class="mb-1">{{ $nzKeyZh[$item->key][0] ?? translate($item->title) }}</h5>
+                                                        <p class="fs-12 mb-0">{{ $nzKeyZh[$item->key][1] ?? translate($item->sub_title) }}</p>
                                                     </div>
                                                 </div>
                                                 <div class="w-120 text-center">
