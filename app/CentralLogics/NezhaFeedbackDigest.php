@@ -29,9 +29,15 @@ class NezhaFeedbackDigest
         $counts = [];
         $samples = [];   // 喂给模型的脱敏样本(分段)
 
+        // 🔴 时区: 本服务器 created_at 按 Asia/Yerevan 墙钟数字存储(date_default_timezone_get=Asia/Yerevan),
+        // 但直接绑定 Carbon 对象会被序列化成 UTC ISO(带Z)→ MySQL 去Z后比较, 窗口偏移 -4h。
+        // 故一律绑定"埃里温墙钟格式字符串", 与存储口径一致, 保证日报窗口正好是"埃里温昨天整日"。
+        $sinceS = $since->format('Y-m-d H:i:s');
+        $untilS = $until->format('Y-m-d H:i:s');
+
         // —— 1) 评价 / 差评 ——
         if (Schema::hasTable('reviews')) {
-            $reviewsQ = DB::table('reviews')->where('created_at', '>=', $since)->where('created_at', '<', $until);
+            $reviewsQ = DB::table('reviews')->where('created_at', '>=', $sinceS)->where('created_at', '<', $untilS);
             $counts['reviews_total'] = (int) (clone $reviewsQ)->count();
             $counts['reviews_bad'] = (int) (clone $reviewsQ)->whereBetween('rating', [1, 3])->count();
             $avg = (clone $reviewsQ)->where('rating', '>', 0)->avg('rating');
@@ -47,7 +53,7 @@ class NezhaFeedbackDigest
 
         // —— 2) 退款原因 ——
         if (Schema::hasTable('nezha_refund_records')) {
-            $refQ = DB::table('nezha_refund_records')->where('created_at', '>=', $since)->where('created_at', '<', $until);
+            $refQ = DB::table('nezha_refund_records')->where('created_at', '>=', $sinceS)->where('created_at', '<', $untilS);
             $counts['refunds_total'] = (int) (clone $refQ)->count();
             $byCat = (clone $refQ)->selectRaw('reason_category, count(*) c')->groupBy('reason_category')->pluck('c', 'reason_category')->toArray();
             $counts['refunds_by_category'] = $byCat;
@@ -61,7 +67,7 @@ class NezhaFeedbackDigest
 
         // —— 3) 客服: 分类计数 / 工单 / 好差评 / 高频问题 ——
         if (Schema::hasTable('nezha_cs_logs')) {
-            $cats = DB::table('nezha_cs_logs')->where('created_at', '>=', $since)->where('created_at', '<', $until)
+            $cats = DB::table('nezha_cs_logs')->where('created_at', '>=', $sinceS)->where('created_at', '<', $untilS)
                 ->selectRaw('category, count(*) c')->groupBy('category')->pluck('c', 'category')->toArray();
             $counts['cs_by_category'] = $cats;
         }
@@ -69,15 +75,20 @@ class NezhaFeedbackDigest
             $counts['cs_open_tickets'] = (int) DB::table('nezha_cs_tickets')->where('status', 'open')->count();
         }
         if (Schema::hasTable('nezha_cs_feedback')) {
-            $counts['cs_fb_pos'] = (int) DB::table('nezha_cs_feedback')->where('sentiment', 'positive')->where('created_at', '>=', $since)->where('created_at', '<', $until)->count();
-            $counts['cs_fb_neg'] = (int) DB::table('nezha_cs_feedback')->where('sentiment', 'negative')->where('created_at', '>=', $since)->where('created_at', '<', $until)->count();
+            $counts['cs_fb_pos'] = (int) DB::table('nezha_cs_feedback')->where('sentiment', 'positive')->where('created_at', '>=', $sinceS)->where('created_at', '<', $untilS)->count();
+            $counts['cs_fb_neg'] = (int) DB::table('nezha_cs_feedback')->where('sentiment', 'negative')->where('created_at', '>=', $sinceS)->where('created_at', '<', $untilS)->count();
         }
-        // 顾客发给客服(admin)的消息 → 归纳高频问题
+        // 顾客发给客服(admin)的消息 → 归纳高频问题。
+        // 🔴 必须排除 admin/AI 侧回复(它们以 admin 的 UserInfo 身份写入同一会话), 否则会把客服话术当成顾客诉求污染归纳。
         if (Schema::hasTable('conversations') && Schema::hasTable('messages')) {
             $adminConvIds = DB::table('conversations')->where('receiver_type', 'admin')->pluck('id')->toArray();
             if ($adminConvIds) {
+                $adminSenderIds = Schema::hasTable('user_infos')
+                    ? DB::table('user_infos')->whereNotNull('admin_id')->pluck('id')->toArray()
+                    : [];
                 $msgs = DB::table('messages')->whereIn('conversation_id', $adminConvIds)
-                    ->where('created_at', '>=', $since)->where('created_at', '<', $until)
+                    ->when($adminSenderIds, fn ($q) => $q->whereNotIn('sender_id', $adminSenderIds))
+                    ->where('created_at', '>=', $sinceS)->where('created_at', '<', $untilS)
                     ->whereNotNull('message')->where('message', '!=', '')
                     ->orderByDesc('id')->limit(60)->pluck('message')->toArray();
                 $msgs = self::clean($msgs);
@@ -89,19 +100,25 @@ class NezhaFeedbackDigest
 
         // —— 4) (方案C预留) 搜索无结果 / 加购未下单 ——
         if (Schema::hasTable('nezha_search_misses')) {
-            $miss = DB::table('nezha_search_misses')->where('last_seen_at', '>=', $since)->where('last_seen_at', '<', $until)
+            $miss = DB::table('nezha_search_misses')->where('last_seen_at', '>=', $sinceS)->where('last_seen_at', '<', $untilS)
                 ->orderByDesc('hit_count')->limit(20)->pluck('hit_count', 'keyword')->toArray();
             if ($miss) {
-                $counts['search_miss_top'] = $miss;
+                // 纵深防御: 读取端对关键词再脱敏一次(写入端口径可能更窄), 既进 counts(写库) 又进 samples(喂AI) 前都已抹PII。
+                $clean = [];
+                foreach ($miss as $kw => $n) {
+                    $k = self::redactPii(mb_substr((string) $kw, 0, 120));
+                    $clean[$k] = ($clean[$k] ?? 0) + (int) $n; // 脱敏后同键合并计数
+                }
+                $counts['search_miss_top'] = $clean;
                 $lines = [];
-                foreach ($miss as $kw => $n) { $lines[] = $kw . ': ' . $n; }
+                foreach ($clean as $kw => $n) { $lines[] = $kw . ': ' . $n; }
                 $samples[] = "热门「搜了没结果」的词(词:次数):\n- " . implode("\n- ", $lines);
             }
         }
         if (Schema::hasTable('nezha_cart_events')) {
             // 登录用户加购未下单(游客无法下单, 排除以免虚高)
             $counts['cart_abandoned'] = (int) DB::table('nezha_cart_events')
-                ->where('created_at', '>=', $since)->where('created_at', '<', $until)
+                ->where('created_at', '>=', $sinceS)->where('created_at', '<', $untilS)
                 ->where('is_guest', 0)->where('converted', 0)->count();
         }
 
@@ -154,13 +171,10 @@ class NezhaFeedbackDigest
         return array_values($out);
     }
 
+    /** 复用 NezhaUsageLog::redactPii 单一口径(邮箱/钱包/电话/卡号, 含带空格变体), 防两处正则漂移。 */
     private static function redactPii(string $s): string
     {
-        $s = preg_replace('/[\w.+-]+@[\w-]+\.[\w.-]+/u', '[邮箱]', $s);
-        $s = preg_replace('/\bT[1-9A-HJ-NP-Za-km-z]{33}\b/', '[钱包地址]', $s);
-        $s = preg_replace('/\b0x[a-fA-F0-9]{40}\b/', '[钱包地址]', $s);
-        $s = preg_replace('/\+?\d[\d().\-]{6,}\d/u', '[电话]', $s);
-        return $s;
+        return NezhaUsageLog::redactPii($s);
     }
 
     /** @return array{0:string,1:?string,2:int,3:?string} [summary, model, tokens, error] */
