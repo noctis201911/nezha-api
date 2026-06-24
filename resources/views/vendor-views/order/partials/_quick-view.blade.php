@@ -64,7 +64,7 @@
 
                         <h5 class="lh-1 mb-xl-2 mb-1">{{ translate('messages.description') }}</h5>
                         <span class="d-block text-dark text-break">
-                            <span class="product-description text-dark">{!! $product->description !!}</span>
+                            <span class="product-description text-dark">{{ strip_tags($product->description ?? '') }}</span>
                             <a href="#" class="text-base see-more"
                                 style="display:none; margin-left:6px;">{{ translate('messages.see_more') }}</a>
                         </span>

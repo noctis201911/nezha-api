@@ -62,7 +62,7 @@
 
 
                         <span class="product-description text-dark text-break line-limit-4">
-                            {!! $product['description'] !!}
+                            {{ strip_tags($product['description'] ?? '') }}
                         </span>
 
 

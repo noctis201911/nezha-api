@@ -60,7 +60,7 @@
             <div class="col-12">
                 <h2>{{ translate('messages.description') }}</h2>
                 <span class="product-description text-dark text-break line-limit-4">
-                    {!! $product['description'] !!}
+                    {{ strip_tags($product['description'] ?? '') }}
                 </span>
                 <form id="add-to-cart-form" class="mb-0">
                     @csrf

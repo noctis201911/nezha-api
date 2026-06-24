@@ -279,7 +279,7 @@ $reviewsInfo = $product->rating()->first();
                             <tr>
                                 <td class="px-4">
                                     <div>
-                                        {!!$product['description'] !!}
+                                        {{ strip_tags($product['description'] ?? '') }}
                                     </div>
                                 </td>
                                 <td class="px-4">

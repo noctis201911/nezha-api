@@ -82,7 +82,9 @@ class ReviewController extends Controller
             'reply' => 'required|max:255',
         ]);
 
-        $review = Review::findOrFail($id);
+        $review = Review::whereHas('food', function($query){
+            $query->where('restaurant_id', Helpers::get_restaurant_id());
+        })->findOrFail($id);
         $review->reply = $request->reply;
         $review->reply_at = $review->reply_at ?? Carbon::now();
         $review->restaurant_id = Helpers::get_restaurant_id();

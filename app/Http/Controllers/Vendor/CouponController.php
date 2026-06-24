@@ -103,6 +103,9 @@ class CouponController extends Controller
     }
     public function view(Coupon $coupon)
     {
+        if($coupon->restaurant_id != \App\CentralLogics\Helpers::get_restaurant_id()){
+            abort(404);
+        }
         return response()->json([
             'view' => view('vendor-views.coupon.partials._details', compact('coupon'))->render()
         ]);
@@ -125,7 +128,11 @@ class CouponController extends Controller
             }
         $customer_id  = $request->customer_ids ?? ['all'];
 
-        $coupon = Coupon::find($id);
+        $coupon = Coupon::where('created_by','vendor')->where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->find($id);
+        if(!$coupon){
+            Toastr::error(translate('messages.coupon_not_found'));
+            return back();
+        }
         $coupon->title = $request->title[array_search('default', $request->lang)];
         $coupon->code = $request->code;
         $coupon->limit = $request->coupon_type=='first_order'?1:$request->limit;

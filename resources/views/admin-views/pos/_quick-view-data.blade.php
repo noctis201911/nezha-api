@@ -71,7 +71,7 @@
                 <div class="mb-20">
                     <h5 class="lh-1 mb-xl-2 mb-1">{{ translate('messages.description') }}</h5>
                       <span class="product-description  text-dark text-break  line-limit-4">
-                            {!! $product['description'] !!}
+                            {{ strip_tags($product['description'] ?? '') }}
                         </span>
 
                     </div>
