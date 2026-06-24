@@ -118,6 +118,8 @@ return Application::configure(basePath: dirname(__DIR__))
         //   每分钟扫描, 据阈值执行幂等动作(提醒商家/自动取消未付款单/已付款单待退款留痕+通知商家退款/备餐超时升级客服)。
         //   总开关 business_settings.nezha_timeout_status(默认1开)。
         $schedule->command('nezha:order-timeout-sweep')->everyMinute()->withoutOverlapping();
+        // 哪吒商家版App: 新单报警兜底网(内联只是best-effort, 真正保底靠这里每分钟重试)
+        $schedule->command('nezha:vendor-alarm-sweep')->everyMinute()->withoutOverlapping();
 
         // 哪吒广告计费 T3: 到投放起始日对「已通过+未扣费」广告从商家保证金扣全额(单价×天数)。
         //   L2 资金, 流水类型 advertisement_fee; 总开关 nezha_ad_billing_status(默认0关, 关时命令直接返回零扣费)。
