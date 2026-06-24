@@ -146,7 +146,7 @@
             } elseif ($nzOs == 'processing') {
                 $nzLiftBadge = '备餐中 · 待出餐'; $nzLiftBadgeClass = 'badge-soft-warning';
             } elseif ($nzOs == 'pending') {
-                $nzLiftBadge = '待接单 · 待确认收款'; $nzLiftBadgeClass = 'badge-soft-warning';
+                $nzLiftBadge = '待接单'; $nzLiftBadgeClass = 'badge-soft-warning';
             } elseif ($nzOs == 'handover') {
                 $nzLiftBadge = ($nzType == 'dine_in' ? '已出餐 · 待上菜' : ($nzType == 'take_away' ? '已出餐 · 待取餐' : '已出餐 · 待送达'));
                 $nzLiftBadgeClass = 'badge-soft-warning';
