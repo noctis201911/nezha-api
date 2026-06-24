@@ -1211,6 +1211,146 @@ class OrderController extends Controller
         return response()->json(['message' => '已替您提醒商家尽快退款，请稍候'], 200);
     }
 
+    /**
+     * 哪吒[退款专项 块3a]: 顾客「确认收到退款」。
+     * 仅本人单 + 该单最新退款留痕 status=merchant_refunded(商家已标记退款) + 未确认过 → 置 customer_confirmed=true。
+     * 不新增终态/不改 status(merchant_refunded 仍是商家侧终态), 顾客确认只是叠加「已签收」软事实。
+     * 通知商家 + 平台超管「顾客已确认收到退款, 此单闭环」。L1-1: 仅状态标记+通知, 不碰钱。
+     */
+    public function confirm_refund(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'order_id' => 'required',
+            'guest_id' => $request->user ? 'nullable' : 'required',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
+        }
+        $user_id = $request->user ? $request->user->id : $request['guest_id'];
+        $order = Order::with('restaurant')->where(['id' => $request['order_id'], 'user_id' => $user_id])
+            ->when(!isset($request->user), function ($q) { $q->where('is_guest', 1); })
+            ->when(isset($request->user), function ($q) { $q->where('is_guest', 0); })
+            ->Notpos()->first();
+        if (!$order) {
+            return response()->json(['errors' => [['code' => 'order', 'message' => translate('messages.not_found')]]], 404);
+        }
+        $rec = \App\Models\NezhaRefundRecord::where('order_id', $order->id)->orderByDesc('id')->first();
+        if (!$rec || $rec->status !== 'merchant_refunded') {
+            return response()->json(['errors' => [['code' => 'order', 'message' => '该订单当前不可确认收款']]], 403);
+        }
+        if ($rec->customer_confirmed) {
+            return response()->json(['message' => '您已确认收到退款，感谢反馈。'], 200);
+        }
+        $rec->customer_confirmed = true;
+        $rec->customer_confirmed_at = now();
+        $rec->save();
+
+        try {
+            $vendorId = $order->restaurant?->vendor_id;
+            if ($vendorId) {
+                $data = Helpers::makeDataForPushNotification(title: '顾客已确认收到退款', message: '订单 #' . $order->id . ' 的顾客已确认收到您的原路退款，此单退款闭环。感谢您的配合。', orderId: $order->id, type: 'order_status', orderStatus: 'refunded');
+                Helpers::insertDataOnNotificationTable($data, 'vendor', $vendorId);
+                $vendorToken = $order->restaurant?->vendor?->firebase_token;
+                if ($vendorToken) { Helpers::send_push_notif_to_device($vendorToken, $data); }
+            }
+        } catch (\Throwable $e) { info('confirm_refund vendor notify failed: ' . $e->getMessage()); }
+        try {
+            Helpers::sendTelegramToRestaurant($order->restaurant, "✅ 顾客已确认收到退款\n订单 #" . $order->id . "\n此单退款闭环，感谢配合。");
+        } catch (\Throwable $e) {}
+        try {
+            Helpers::sendTelegramToAdmin("✅ 退款闭环\n订单 #" . $order->id . " 顾客已确认收到商家原路退款。");
+        } catch (\Throwable $e) {}
+
+        return response()->json(['message' => '已确认收到退款，感谢反馈！'], 200);
+    }
+
+    /**
+     * 哪吒[退款专项 块3b]: 顾客「没收到退款」争议。
+     * 仅本人单 + 该单最新退款留痕 status=merchant_refunded(商家已声称退款) → 起争议留痕(NezhaDeliveryAppeal, reason_code=refund_not_received)
+     *   + 主动通知商家(站内信+Telegram「请核对原路退款」) + 通知平台超管介入(Telegram+邮件)。
+     * 🔴 不改退款 status、不撤商家「已退款」标记、不自动重新停接单 —— 防顾客一面之词诬告真退款的商家; 由运营人工裁决。
+     * L1-1: 仅留痕+通知, 不碰钱。防刷: 同单 6h 一次。
+     */
+    public function dispute_refund(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'order_id' => 'required',
+            'guest_id' => $request->user ? 'nullable' : 'required',
+            'detail'   => 'nullable|string|max:1000',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
+        }
+        $user_id = $request->user ? $request->user->id : $request['guest_id'];
+        $order = Order::with('restaurant')->where(['id' => $request['order_id'], 'user_id' => $user_id])
+            ->when(!isset($request->user), function ($q) { $q->where('is_guest', 1); })
+            ->when(isset($request->user), function ($q) { $q->where('is_guest', 0); })
+            ->Notpos()->first();
+        if (!$order) {
+            return response()->json(['errors' => [['code' => 'order', 'message' => translate('messages.not_found')]]], 404);
+        }
+        $rec = \App\Models\NezhaRefundRecord::where('order_id', $order->id)->orderByDesc('id')->first();
+        if (!$rec || $rec->status !== 'merchant_refunded') {
+            return response()->json(['errors' => [['code' => 'order', 'message' => '该订单当前不可发起未收到退款反馈']]], 403);
+        }
+        $key = 'nezha_refund_dispute_' . $order->id;
+        if (\Illuminate\Support\Facades\Cache::has($key)) {
+            return response()->json(['message' => '我们已收到您的反馈并在跟进，请耐心等待客服联系。'], 200);
+        }
+        $existing = \App\Models\NezhaDeliveryAppeal::where('order_id', $order->id)
+            ->where('reason_code', 'refund_not_received')
+            ->whereIn('status', ['open', 'merchant_contacted'])->orderByDesc('id')->first();
+        if (!$existing) {
+            $resolve_hours = (int) (DB::table('business_settings')->where('key', 'nezha_appeal_resolve_hours')->value('value') ?? 72);
+            \App\Models\NezhaDeliveryAppeal::create([
+                'order_id'    => $order->id,
+                'user_id'     => $request->user ? $request->user->id : null,
+                'reason_code' => 'refund_not_received',
+                'detail'      => $request->detail,
+                'evidence'    => [
+                    'refund_record_id'     => $rec->id,
+                    'refund_amount'        => $rec->refund_amount,
+                    'payment_channel'      => $rec->payment_channel,
+                    'merchant_refunded_at' => (string) $rec->merchant_refunded_at,
+                    'submitted_via'        => 'customer_app',
+                ],
+                'status'      => 'open',
+                'sla_due_at'  => now()->addHours($resolve_hours),
+            ]);
+        }
+        \Illuminate\Support\Facades\Cache::put($key, now()->toDateTimeString(), now()->addHours(6));
+
+        try {
+            $vendorId = $order->restaurant?->vendor_id;
+            if ($vendorId) {
+                $data = Helpers::makeDataForPushNotification(title: '顾客反映未收到退款', message: '订单 #' . $order->id . ' 的顾客反映还没收到您的退款，请核对是否已按原路退款成功（如已退请保留凭证），平台正在协助核实。', orderId: $order->id, type: 'order_status', orderStatus: 'refunded');
+                Helpers::insertDataOnNotificationTable($data, 'vendor', $vendorId);
+                $vendorToken = $order->restaurant?->vendor?->firebase_token;
+                if ($vendorToken) { Helpers::send_push_notif_to_device($vendorToken, $data); }
+            }
+        } catch (\Throwable $e) { info('dispute_refund vendor notify failed: ' . $e->getMessage()); }
+        try {
+            Helpers::sendTelegramToRestaurant($order->restaurant, "⚠️ 顾客反映未收到退款\n订单 #" . $order->id . "\n请核对是否已按原路退款成功（如已退请保留凭证）。平台正在协助核实，请勿忽略。");
+        } catch (\Throwable $e) {}
+        try {
+            Helpers::sendTelegramToAdmin("⚠️ 退款争议: 顾客反映未收到\n订单 #" . $order->id . "\n商家：" . ($order->restaurant?->name ?? '-') . "\n应退：" . \App\CentralLogics\Helpers::format_currency($rec->refund_amount) . "\n请介入核实(商家退款凭证 vs 顾客收款)，平台不代退、由人工裁决。");
+        } catch (\Throwable $e) {}
+        try {
+            if (config('mail.status')) {
+                $admin = \App\Models\Admin::where('role_id', 1)->first();
+                $adminEmail = $admin ? $admin->getRawOriginal('email') : null;
+                if ($adminEmail) {
+                    $body = "顾客反映未收到退款, 需平台介入核实。\n\n订单号: #" . $order->id . "\n商家: " . ($order->restaurant?->name ?? '-') . "\n应退金额: " . \App\CentralLogics\Helpers::format_currency($rec->refund_amount) . "\n商家标记退款时间: " . $rec->merchant_refunded_at . "\n顾客补充: " . ($request->detail ?: '-') . "\n\n请凭双方凭证人工核实。平台不经手此款、不自动撤销商家退款标记、不自动停接单——如核实商家确未退, 由运营在后台手动处置。";
+                    \Illuminate\Support\Facades\Mail::raw($body, function ($m) use ($adminEmail, $order) {
+                        $m->to($adminEmail)->subject('【哪吒退款争议】订单 #' . $order->id . ' 顾客反映未收到退款');
+                    });
+                }
+            }
+        } catch (\Throwable $e) { info('dispute_refund admin mail failed: ' . $e->getMessage()); }
+
+        return response()->json(['message' => '我们已介入核实并通知商家核对，客服会尽快跟进。请保留您的收款账户信息，钱款以原路渠道到账为准。'], 200);
+    }
+
     public function confirm_delivery(Request $request)
     {
         $validator = Validator::make($request->all(), [

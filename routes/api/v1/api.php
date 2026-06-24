@@ -490,6 +490,8 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
             Route::post('delivery-appeal', [OrderController::class, 'submit_delivery_appeal']); // 哪吒B方案: 「没有收到餐/配送异常」专用申诉留痕(req 4), 不自动退款
             Route::post('refund-request', [OrderController::class, 'refund_request']);
             Route::post('nudge-refund', [OrderController::class, 'nudge_refund']); // 哪吒B方案: 待退款单顾客「催一下」→平台替顾客提醒商家(站内信+Telegram), 不碰钱
+            Route::post('confirm-refund', [OrderController::class, 'confirm_refund']); // 哪吒B方案 块3a: 顾客「确认收到退款」→置customer_confirmed+通知商家/平台闭环, 不碰钱
+            Route::post('dispute-refund', [OrderController::class, 'dispute_refund']); // 哪吒B方案 块3b: 顾客「没收到退款」→起争议留痕+三方告警, 不撤商家标记/不自动罚, 人工裁决, 不碰钱
             Route::get('refund-reasons', [OrderController::class, 'refund_reasons']);
             Route::get('track', [OrderController::class, 'track_order']);
             Route::put('payment-method', [OrderController::class, 'update_payment_method']);
