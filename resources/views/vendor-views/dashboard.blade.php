@@ -132,13 +132,9 @@
                         </h4>
                         <div class="d-flex flex-wrap my-2 my-md-0 justify-content-center align-items-center">
                             @php($amount=array_sum($earning))
-                            <span class="h5 m-0 mr-3 fz--11 d-flex align-items-center mb-2 mb-md-0">
-                                <span class="legend-indicator bg-7ECAFF"></span>
-                                {{translate('messages.commission_given')}} : {{\App\CentralLogics\Helpers::format_currency(array_sum($commission))}}
-                            </span>
                             <span class="h5 m-0 fz--11 d-flex align-items-center mb-2 mb-md-0">
                                 <span class="legend-indicator bg-0661CB"></span>
-                                销售净额 : {{\App\CentralLogics\Helpers::format_currency(array_sum($earning))}}
+                                本年营业额(已收款) : {{\App\CentralLogics\Helpers::format_currency(array_sum($earning))}}
                             </span>
                         </div>
                     </div>
@@ -157,13 +153,8 @@
                                         "labels": ["{{ translate('messages.Jan') }}","{{ translate('messages.Feb') }}","{{ translate('messages.Mar') }}","{{ translate('messages.April') }}","{{ translate('messages.May') }}","{{ translate('messages.Jun') }}","{{ translate('messages.Jul') }}","{{ translate('messages.Aug') }}","{{ translate('messages.Sep') }}","{{ translate('messages.Oct') }}","{{ translate('messages.Nov') }}","{{ translate('messages.Dec') }}"],
                                         "datasets": [{
                                         "data": [{{$earning[1]}},{{$earning[2]}},{{$earning[3]}},{{$earning[4]}},{{$earning[5]}},{{$earning[6]}},{{$earning[7]}},{{$earning[8]}},{{$earning[9]}},{{$earning[10]}},{{$earning[11]}},{{$earning[12]}}],
-                                        "backgroundColor": "#7ECAFF",
-                                        "hoverBackgroundColor": "#7ECAFF",
-                                        "borderColor": "#7ECAFF"
-                                    },
-                                    {
-                                        "data": [{{$commission[1]}},{{$commission[2]}},{{$commission[3]}},{{$commission[4]}},{{$commission[5]}},{{$commission[6]}},{{$commission[7]}},{{$commission[8]}},{{$commission[9]}},{{$commission[10]}},{{$commission[11]}},{{$commission[12]}}],
                                         "backgroundColor": "#0661CB",
+                                        "hoverBackgroundColor": "#0661CB",
                                         "borderColor": "#0661CB"
                                     }]
                                     },

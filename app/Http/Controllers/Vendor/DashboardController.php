@@ -27,27 +27,27 @@ class DashboardController extends Controller
         session()->put('dash_params', $params);
 
         $data = self::dashboard_order_stats_data();
+        // 哪吒 QA[看板年度图表改造]: B方案商家直收全额, 平台不按单抽佣(佣金走保证金扣)。
+        // 原图表读 OrderTransaction.restaurant_amount/admin_commission = StackFood 扣佣净额模型, 在 B方案下误导
+        // (且 demo 直插单无 OT 行致严重低估)。改为按月聚合真实「已收款营业额」, 与今日经营卡 today_collected 同源
+        // (Order.payment_status=paid + 排除终态负向单)。$commission/$delivery_earning 保留空数组(视图已不再使用)。
         $earning = [];
         $commission = [];
-        $delivery_earning= [];
-        $from = Carbon::now()->startOfYear()->format('Y-m-d');
-        $to = Carbon::now()->endOfYear()->format('Y-m-d');
-        $restaurant_earnings = OrderTransaction::NotRefunded()->where(['vendor_id' => Helpers::get_vendor_id()])->select(
-            DB::raw('IFNULL(sum(restaurant_amount),0) as earning'),
-            DB::raw('IFNULL(sum(admin_commission + admin_expense),0) as commission'),
-            DB::raw('IFNULL(sum(delivery_charge),0) as delivery_earning'),
-            DB::raw('YEAR(created_at) year, MONTH(created_at) month'),
-        )->whereBetween('created_at', [$from, $to])->groupby('year', 'month')->get()->toArray();
-        // dd($restaurant_earnings);
+        $delivery_earning = [];
+        $from = Carbon::now()->startOfYear()->format('Y-m-d 00:00:00');
+        $to = Carbon::now()->endOfYear()->format('Y-m-d 23:59:59');
+        $monthly_sales = Order::where('restaurant_id', Helpers::get_restaurant_id())
+            ->where('payment_status', 'paid')
+            ->whereNotIn('order_status', ['canceled', 'failed', 'refunded'])
+            ->Notpos()
+            ->whereBetween('created_at', [$from, $to])
+            ->select(DB::raw('IFNULL(sum(order_amount),0) as sales'), DB::raw('MONTH(created_at) month'))
+            ->groupBy('month')->get()->toArray();
         for ($inc = 1; $inc <= 12; $inc++) {
             $earning[$inc] = 0;
-            $commission[$inc] = 0;
-            $delivery_earning[$inc] = 0;
-            foreach ($restaurant_earnings as $match) {
+            foreach ($monthly_sales as $match) {
                 if ($match['month'] == $inc) {
-                    $earning[$inc] = $match['earning'];
-                    $commission[$inc] = $match['commission'];
-                    $delivery_earning[$inc] = $match['delivery_earning'];
+                    $earning[$inc] = $match['sales'];
                 }
             }
         }
