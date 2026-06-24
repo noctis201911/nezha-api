@@ -104,6 +104,8 @@ class OrderController extends Controller
             'refund_amount' => $nezha_rr->refund_amount,
             'channel'       => $nezha_rr->payment_channel,
             'refunded'      => $nezha_rr->status === 'merchant_refunded',
+            'customer_confirmed' => (bool) $nezha_rr->customer_confirmed,
+            'confirmed_at'       => $nezha_rr->customer_confirmed_at ? (string) $nezha_rr->customer_confirmed_at : null,
         ] : null;
         // 哪吒: 顾客「接单后申请取消」状态(申请→商家裁决)。前端据此显示申请入口/申请中/被拒卡。
         $nz_cancel_stage_ok = in_array($order->order_status, ['confirmed', 'processing'], true);
