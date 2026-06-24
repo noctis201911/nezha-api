@@ -16,7 +16,7 @@ class OgImageController extends Controller
 {
     // 中文字体(服务器自带 WenQuanYi Zen Hei) + 海报缓存版本(改版式时 +1 即可整体失效重建)
     const CJK_FONT = '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc';
-    const POSTER_VER = '3';
+    const POSTER_VER = '4';
     // 德拉姆符号 ֏(U+058F) 在 wqy 中文字体里无字形(显示成方框), 价格行改用含该符号的 FreeSans
     const PRICE_FONT = '/usr/share/fonts/truetype/freefont/FreeSans.ttf';
 
@@ -182,10 +182,11 @@ class OgImageController extends Controller
         $photo = @imagecreatefromstring(Storage::disk($disk)->get($srcPath));
         if ($photo) {
             $sw = imagesx($photo); $sh = imagesy($photo);
+            // cover 裁切: 从源图取中心一块, 精确填满 W x photoH, 绝不溢出到下方文字区
             $scale = max($W / $sw, $photoH / $sh);
-            $nw = (int) ceil($sw * $scale); $nh = (int) ceil($sh * $scale);
-            $dx = (int) (($W - $nw) / 2); $dy = (int) (($photoH - $nh) / 2);
-            imagecopyresampled($poster, $photo, $dx, $dy, 0, 0, $nw, $nh, $sw, $sh);
+            $srcW = (int) round($W / $scale); $srcH = (int) round($photoH / $scale);
+            $srcX = (int) (($sw - $srcW) / 2); $srcY = (int) (($sh - $srcH) / 2);
+            imagecopyresampled($poster, $photo, 0, 0, $srcX, $srcY, $W, $photoH, $srcW, $srcH);
             imagedestroy($photo);
         }
 
@@ -222,7 +223,7 @@ class OgImageController extends Controller
         imagettftext($poster, 22, 0, (int) (($W - $fw) / 2), $H - 32, $gray, $font, $foot);
 
         ob_start();
-        imagejpeg($poster, null, 88);
+        imagejpeg($poster, null, 80);
         $bytes = ob_get_clean();
         imagedestroy($poster);
 
