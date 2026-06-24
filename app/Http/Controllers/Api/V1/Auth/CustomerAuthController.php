@@ -685,10 +685,21 @@ class CustomerAuthController extends Controller
                 if ($request['medium'] == 'google') {
                     if($request->access_token  == 1){
                         $res = $client->request('GET',  'https://www.googleapis.com/oauth2/v3/userinfo?access_token=' . $token);
+                        $data = json_decode($res->getBody()->getContents(), true);
+                        // access_token 不含 aud, 另查 tokeninfo 拿受众
+                        $audRes = $client->request('GET', 'https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=' . $token);
+                        $audData = json_decode($audRes->getBody()->getContents(), true);
+                        $token_aud = $audData['aud'] ?? $audData['azp'] ?? null;
                     } else{
                         $res = $client->request('GET', 'https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=' . $token);
+                        $data = json_decode($res->getBody()->getContents(), true);
+                        $token_aud = $data['aud'] ?? null;
                     }
-                    $data = json_decode($res->getBody()->getContents(), true);
+                    // 🔴 必须校验 aud == 我们的 client_id: 防别站签发的 Google token 冒用本接口换号(对齐 google_redirect_login)
+                    $expected_aud = '786035188808-o9imoj11p6kvhf2ujgd9uunqub1s3d2l.apps.googleusercontent.com';
+                    if ($token_aud !== $expected_aud) {
+                        return response()->json(['error' => translate('messages.email_does_not_match')], 403);
+                    }
                 } elseif ($request['medium'] == 'facebook') {
                     $res = $client->request('GET', 'https://graph.facebook.com/' . $unique_id . '?access_token=' . $token . '&&fields=name,email');
                     $data = json_decode($res->getBody()->getContents(), true);
