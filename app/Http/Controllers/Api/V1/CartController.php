@@ -122,6 +122,7 @@ class CartController extends Controller
         $cart->save();
 
         $item->carts()->save($cart);
+        \App\CentralLogics\NezhaUsageLog::cartAdd($cart->item_id, $cart->restaurant_id, $user_id, $is_guest); // 方案C 埋点(失败不影响)
 
         $carts = Cart::where('user_id', $user_id)->where('is_guest',$is_guest)->get()
         ->map(function ($data) {

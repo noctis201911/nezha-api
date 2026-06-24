@@ -99,8 +99,10 @@ class NezhaFeedbackDigest
             }
         }
         if (Schema::hasTable('nezha_cart_events')) {
+            // 登录用户加购未下单(游客无法下单, 排除以免虚高)
             $counts['cart_abandoned'] = (int) DB::table('nezha_cart_events')
-                ->where('created_at', '>=', $since)->where('created_at', '<', $until)->where('converted', 0)->count();
+                ->where('created_at', '>=', $since)->where('created_at', '<', $until)
+                ->where('is_guest', 0)->where('converted', 0)->count();
         }
 
         // —— 5) 调 AI 生成摘要(降级安全) ——
