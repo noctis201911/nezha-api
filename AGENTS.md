@@ -103,9 +103,11 @@
 
   ↳ ✅ 真链路补验(2026-06-23): 真商家会话(vendor6·CookieValuePrefix伪造·php-fpm GET200)+Playwright真点「确认收款」→ dialog接受→POST经真实路由/控制器→订单 1999009035(take_away·RMB离线) BEFORE pending/unpaid/offline=pending → AFTER order_status=processing·payment_status=paid·offline=verified·confirmed&processing时间戳·processing_time=30; 页面无500·console=0·confirm期无错误日志。测试单已删(残留0)。附:首试误用method_id=2(=usdt)触发制裁inconclusive→hold→未推进(=fail-closed正常+证明控制器路径真执行);改method_id=1(rmb)走通成功路径。会话伪造上次坑=漏CookieValuePrefix(已补,见[[nezha-merchant-panel-ui-verify]])。
 
-- [ ] Claude(窗口M04-STATE-EXPANSION) 正在改 resources/views/vendor-views/order/order-view.blade.php —— M-04/M-05 第二阶段 batch1: 把 confirmed/accepted(开始备餐) 与 processing 自取/堂食(出餐完成待取) 两组状态的主操作上移到顶部状态条 + 原位去重(镜像现有 order-status-change-alert 同路由/同data-*/同JS确认弹窗)。复用 dcea3ad 的 $nzPrimary 决策块。不碰路由/控制器/状态机/退款/取消/Yandex/M-02 timeout。(2026-06-23)
+- [x] Claude(窗口M04-STATE-EXPANSION) 已完成 batch1+batch2, 改 resources/views/vendor-views/order/order-view.blade.php —— M-04/M-05 第二阶段 batch1: 把 confirmed/accepted(开始备餐) 与 processing 自取/堂食(出餐完成待取) 两组状态的主操作上移到顶部状态条 + 原位去重(镜像现有 order-status-change-alert 同路由/同data-*/同JS确认弹窗)。复用 dcea3ad 的 $nzPrimary 决策块。不碰路由/控制器/状态机/退款/取消/Yandex/M-02 timeout。(2026-06-23)
 
   ↳ ✅ batch1 已上线: commit 2b60264 / deploy release 20260623-052045-2b60264(健康门 config/zone/login=200·COD硬门🟢)。confirmed/accepted「开始备餐」+ processing自取堂食「准备移交」主操作上移顶部sticky条+原位去重为提示。验证(工作树内部派发+Playwright真浏览器+已部署current三层):两态均200·唯一主操作锚点(顶部1原位0)·data-url目标processing/handover正确·负向按钮保留(拒单/更新出餐时间)·mobile375 sticky-pin·overflow0·console0·终态delivered零顶部条;测试单建后即删残留0。⚠️待铺(下一批,待用户拍板): D processing配送单(标记配送中)·D' handover配送单(mark-dispatched)·F handover自配/自取堂食(已送达/完成)·B 非离线pending接单·picked_up只读·终态只读。$nzPrimary决策块已含全态映射,仅缺顶部渲染+原位去重。(2026-06-23)
+
+  ↳ ✅ batch2 已上线(2026-06-24): 上移门收为 kind=='link' —— 全状态真值表核验 link 态={B 确认收款·接单/C 开始备餐/E 出餐完成待取/F 已送达·完成}, 故纳入 B(非离线pending接单)+F(handover自配/自取堂食已送达完成); D·D'(标记配送中=form)+A(form)+G(无)+终态 天然排除(=用户要的砍 D/D')。原位 B/F 按钮去重为提示(F 条件改复用 $nzSelfDelivery 与上移门同源, 防去重提示与顶部条解耦)。验证:blade编译+php-l过 / 全状态真值表(B,C,E,F 为全部 link 态) / 真控制器渲染(vendor6 事务内翻 B(pending+take_away)、F(handover+take_away)→顶部条徽章「待接单·待确认收款」「已出餐·待取餐」+主操作+原位「已移至顶部」提示 均现, order-status-change-alert 真锚点=1, 终态 delivered 零顶部条, 事务回滚 canvas 单零残留)。⚠️未跑:真机 sticky钉顶/console0(sticky CSS 未改, 沿用 batch1 已验)·ODV开启态 F 的 OTP 弹窗(JS端, data-verification 真值表已证 ODV开=true/关=false)。
 -
 [x]
 Claude(窗口MERCHANT-M02-TIMEOUT-IMPLEMENT)

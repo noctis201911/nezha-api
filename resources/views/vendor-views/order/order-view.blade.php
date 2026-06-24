@@ -138,13 +138,21 @@
             </div>
         @endif
 
-        {{-- 哪吒 M-04 状态铺开 batch1(2026-06-23): confirmed/accepted「开始备餐」+ processing 自取/堂食「出餐完成待取」主操作上移置顶状态条。镜像原位 order-status-change-alert(同路由/同 data-*/同 JS 确认弹窗); 原位按钮已去重为提示。不碰路由/控制器/状态机。 --}}
+        {{-- 哪吒 M-04 状态铺开 batch2(2026-06-24): 上移门收为 kind=='link' —— 经全状态真值表核验, link 态恰为 {B 确认收款·接单 / C 开始备餐 / E 出餐完成待取 / F 已送达·完成}; batch1 的 C/E + 本批 B/F = 全部 link 态, D/D'(标记配送中=form)·A(form)·G(无)·终态天然排除, 故无需状态白名单。镜像原位 order-status-change-alert(同路由/同 data-*/同 JS 确认弹窗); 原位按钮已去重为提示。不碰路由/控制器/状态机。 --}}
         @php
-            $nzLiftLink = $nzPrimary['visible'] && $nzPrimary['kind'] == 'link'
-                && (in_array($nzOs, ['confirmed', 'accepted'], true)
-                    || ($nzOs == 'processing' && in_array($nzType, ['take_away', 'dine_in'], true)));
-            $nzLiftBadge = in_array($nzOs, ['confirmed', 'accepted'], true) ? '已接单 · 待备餐' : '备餐中 · 待出餐';
-            $nzLiftBadgeClass = in_array($nzOs, ['confirmed', 'accepted'], true) ? 'badge-soft-info' : 'badge-soft-warning';
+            $nzLiftLink = $nzPrimary['visible'] && $nzPrimary['kind'] == 'link';
+            if (in_array($nzOs, ['confirmed', 'accepted'], true)) {
+                $nzLiftBadge = '已接单 · 待备餐'; $nzLiftBadgeClass = 'badge-soft-info';
+            } elseif ($nzOs == 'processing') {
+                $nzLiftBadge = '备餐中 · 待出餐'; $nzLiftBadgeClass = 'badge-soft-warning';
+            } elseif ($nzOs == 'pending') {
+                $nzLiftBadge = '待接单 · 待确认收款'; $nzLiftBadgeClass = 'badge-soft-warning';
+            } elseif ($nzOs == 'handover') {
+                $nzLiftBadge = ($nzType == 'dine_in' ? '已出餐 · 待上菜' : ($nzType == 'take_away' ? '已出餐 · 待取餐' : '已出餐 · 待送达'));
+                $nzLiftBadgeClass = 'badge-soft-warning';
+            } else {
+                $nzLiftBadge = ''; $nzLiftBadgeClass = 'badge-soft-secondary';
+            }
         @endphp
         @if ($nzLiftLink)
             <div class="nz-order-statusbar" style="position:sticky;top:0;z-index:1020;background:#fff;border:1px solid #FFE2A8;border-radius:12px;box-shadow:0 2px 10px rgba(23,25,29,.06);padding:10px 14px;margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
@@ -1037,12 +1045,8 @@
                                     @endif
                                     {{-- 哪吒效率: 离线支付待确认单只走右侧「确认收款」完整表单(核验+自动进备餐+通知顾客); 通用「改为已确认」按钮会绕过核验留半状态, 故离线待付时隐藏防误点 --}}
                                     @if (!($order->payment_method == 'offline_payment' && optional($order->offline_payments)->status == 'pending'))
-                                    <a class="btn btn-sm btn--primary order-status-change-alert"
-                                        data-url="{{ route('vendor.order.status', ['id' => $order['id'], 'order_status' => 'confirmed']) }}"
-                                        data-message="{{ translate('Change status to confirmed ?') }}"
-                                        href="javascript:">
-                                        确认收款·接单
-                                    </a>
+                                    {{-- 哪吒 M-04 batch2: 主操作「确认收款·接单」已上移至顶部状态条, 原位去重 --}}
+                                    <span class="text-muted" style="font-size:12px;">▲ 主操作「确认收款·接单」已移至顶部</span>
                                     @endif
                                 @elseif ($order['order_status'] == 'confirmed' || $order['order_status'] == 'accepted')
                                     {{-- 哪吒 M-04: 主操作「开始备餐」已上移至顶部状态条, 原位去重 --}}
@@ -1052,12 +1056,9 @@
                                     <span class="text-muted" style="font-size:12px;">▲ 主操作「{{ translate('messages.make_ready_for_handover') }}」已移至顶部</span>
                                 @elseif (
                                     $order['order_status'] == 'handover' &&
-                                        (in_array($order['order_type'], ['dine_in', 'take_away']) || $restaurant->sub_self_delivery == 1))
-                                    <a class="btn btn-sm btn--primary order-status-change-alert"
-                                        data-url="{{ route('vendor.order.status', ['id' => $order['id'], 'order_status' => 'delivered']) }}"
-                                        data-message="{{ translate('Change status to delivered (payment status will be paid if not) ?') }}"
-                                        data-verification="{{ $order_delivery_verification ? 'true' : 'false' }}"
-                                        href="javascript:">{{ $order?->order_type == 'dine_in' ? translate('messages.Make_Completed') : translate('messages.make_delivered') }}</a>
+                                        (in_array($order['order_type'], ['dine_in', 'take_away']) || $nzSelfDelivery))
+                                    {{-- 哪吒 M-04 batch2: 主操作「已送达/完成」已上移至顶部状态条, 原位去重(条件复用 $nzSelfDelivery, 与顶部上移门同源) --}}
+                                    <span class="text-muted" style="font-size:12px;">▲ 主操作「{{ $order?->order_type == 'dine_in' ? translate('messages.Make_Completed') : translate('messages.make_delivered') }}」已移至顶部</span>
                                 @endif
                             </div>
 
