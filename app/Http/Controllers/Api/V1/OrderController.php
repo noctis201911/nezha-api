@@ -2204,7 +2204,7 @@ class OrderController extends Controller
                 'message' => 'digital_payment_for_the_order_not_available_at_this_time',
                 'status' => 403
             ],
-            $request->is_guest && ($settings['guest_checkout_status'] ?? 0)  == 0 => [
+            !$request->user && ($settings['guest_checkout_status'] ?? 0)  == 0 => [
                 'code' => 'is_guest',
                 'message' => 'Guest_order_is_not_active',
                 'status' => 403
