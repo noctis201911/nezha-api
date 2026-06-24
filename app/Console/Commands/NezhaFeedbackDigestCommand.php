@@ -52,6 +52,8 @@ class NezhaFeedbackDigestCommand extends Command
         }
 
         // 写库(只存 AI 产出的摘要 + 确定性统计, 不存原始评价/聊天)
+        // 同一 digest_date 幂等: 重跑(或手动+定时同日)只保留最新一条, 不重复堆叠。
+        DB::table('nezha_feedback_digests')->where('digest_date', $digestDate)->delete();
         $id = DB::table('nezha_feedback_digests')->insertGetId([
             'digest_date' => $digestDate,
             'window_days' => $days,
@@ -73,10 +75,18 @@ class NezhaFeedbackDigestCommand extends Command
             . ' | 客服好/差评 ' . ($c['cs_fb_pos'] ?? 0) . '/' . ($c['cs_fb_neg'] ?? 0)
             . ' | 待跟进工单 ' . ($c['cs_open_tickets'] ?? 0) . "\n\n"
             . $r['summary'] . "\n\n(后台「AI客服」页可看历史日报)";
-        Helpers::sendTelegramToAdmin($tg);
 
-        Log::info("NEZHA_FEEDBACK_DIGEST: 已生成 #{$id} date={$digestDate} degraded=" . ($r['degraded'] ? '1' : '0'));
-        $this->info("已写入 nezha_feedback_digests #{$id} 并发送 Telegram。");
+        // 仅在配置了超管 Telegram chat_id 时才声称"已推送"; 否则如实说只入库。
+        $hasChat = (bool) Helpers::get_business_settings('nezha_risk_admin_chat_id', false);
+        if ($hasChat) {
+            Helpers::sendTelegramToAdmin($tg);
+            $pushNote = '并已推送超管 Telegram';
+        } else {
+            $pushNote = '（未配置 nezha_risk_admin_chat_id, 本次只入库未推送 Telegram, 后台仍可查看）';
+        }
+
+        Log::info("NEZHA_FEEDBACK_DIGEST: 已生成 #{$id} date={$digestDate} degraded=" . ($r['degraded'] ? '1' : '0') . ' tg=' . ($hasChat ? '1' : '0'));
+        $this->info("已写入 nezha_feedback_digests #{$id} {$pushNote}。");
         return self::SUCCESS;
     }
 }

@@ -48,12 +48,12 @@
                             <small class="text-muted">{{ translate('默认 deepseek-chat。非必要不用改。') }}</small>
                         </div>
                         <div class="col-sm-6 form-group mb-3">
-                            <label class="input-label">{{ translate('反馈日报开关') }}</label>
+                            <label class="input-label">反馈日报开关</label>
                             <select name="nezha_feedback_digest_status" class="form-control">
-                                <option value="0" {{ ($digestStatus ?? 0) != 1 ? 'selected' : '' }}>{{ translate('关闭(不生成每日反馈日报)') }}</option>
-                                <option value="1" {{ ($digestStatus ?? 0) == 1 ? 'selected' : '' }}>{{ translate('开启(每天06:00总结昨日反馈,发超管Telegram)') }}</option>
+                                <option value="0" {{ ($digestStatus ?? 0) != 1 ? 'selected' : '' }}>关闭（不生成每日反馈日报）</option>
+                                <option value="1" {{ ($digestStatus ?? 0) == 1 ? 'selected' : '' }}>开启（每天中午12点总结昨日反馈，发超管Telegram）</option>
                             </select>
-                            <small class="text-muted">{{ translate('每天把昨日评价/退款/客服反馈用AI总结成摘要+改进点,发到超管Telegram,并在下方留历史。AI走客服同一管线(已脱敏);关时不生成。') }}</small>
+                            <small class="text-muted">每天把昨日评价/退款/客服反馈用 AI 总结成摘要+改进点，发到超管 Telegram，并在下方留历史。AI 走客服同一管线（已脱敏）；关时不生成。</small>
                         </div>
                         <div class="col-sm-12 form-group mb-3 d-flex align-items-end">
                             <button type="submit" class="btn btn-primary">{{ translate('保存设置') }}</button>
@@ -84,27 +84,27 @@
         {{-- 反馈日报历史(方案A)：每天自动生成的「昨日反馈摘要 + 改进点」 --}}
         <div class="card mb-3">
             <div class="card-header">
-                <h5 class="card-header-title"><i class="tio-receipt-outlined"></i> {{ translate('反馈日报历史') }}</h5>
+                <h5 class="card-header-title"><i class="tio-receipt-outlined"></i> 反馈日报历史</h5>
             </div>
             <div class="card-body">
-                <small class="text-muted d-block mb-3">{{ translate('系统每天 06:00 自动把昨日顾客反馈(评价/退款/客服)用 AI 总结成摘要+改进点(数字来自真实统计,文字由 AI 归纳,已脱敏)。开关在上方「反馈日报开关」。下面是最近 14 天。') }}</small>
+                <small class="text-muted d-block mb-3">系统每天中午 12 点（埃里温时间）自动把昨日顾客反馈（评价/退款/客服）用 AI 总结成摘要+改进点（数字来自真实统计，文字由 AI 归纳，已脱敏）。开关在上方「反馈日报开关」。下面是最近 14 天。</small>
                 @forelse ($digests as $d)
                     @php $cc = json_decode($d->counts ?? '{}', true) ?: []; @endphp
                     <div class="border rounded p-3 mb-3">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <strong>{{ $d->digest_date }}</strong>
                             <span class="text-muted" style="font-size:12px;">
-                                {{ translate('评价') }} {{ $cc['reviews_total'] ?? 0 }}（{{ translate('差评') }} {{ $cc['reviews_bad'] ?? 0 }}）
-                                · {{ translate('退款') }} {{ $cc['refunds_total'] ?? 0 }}
-                                · {{ translate('客服好/差') }} {{ $cc['cs_fb_pos'] ?? 0 }}/{{ $cc['cs_fb_neg'] ?? 0 }}
-                                · {{ translate('工单') }} {{ $cc['cs_open_tickets'] ?? 0 }}
-                                @if ($d->degraded)<span class="badge badge-soft-warning ml-1">{{ translate('仅统计') }}</span>@endif
+                                评价 {{ $cc['reviews_total'] ?? 0 }}（差评 {{ $cc['reviews_bad'] ?? 0 }}）
+                                · 退款 {{ $cc['refunds_total'] ?? 0 }}
+                                · 客服好/差 {{ $cc['cs_fb_pos'] ?? 0 }}/{{ $cc['cs_fb_neg'] ?? 0 }}
+                                · 工单 {{ $cc['cs_open_tickets'] ?? 0 }}
+                                @if ($d->degraded)<span class="badge badge-soft-warning ml-1">仅统计</span>@endif
                             </span>
                         </div>
                         <div style="white-space: pre-wrap; font-size: 13px;">{{ $d->summary }}</div>
                     </div>
                 @empty
-                    <p class="text-center text-muted py-4 mb-0">{{ translate('暂无日报。开启「反馈日报开关」后，每天 06:00 自动生成；也可让技术先手动跑一次预览。') }}</p>
+                    <p class="text-center text-muted py-4 mb-0">暂无日报。开启「反馈日报开关」后，每天中午 12 点自动生成；也可让技术先手动跑一次预览。</p>
                 @endforelse
             </div>
         </div>
