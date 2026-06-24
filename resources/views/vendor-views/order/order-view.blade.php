@@ -122,15 +122,15 @@
 
 
         {{-- 哪吒 M-04: 置顶状态条 + 唯一主操作(打样阶段: 仅 pending·离线待核验态渲染)。镜像现有 confirm-offline-payment 路由; 凭证/链上核验区与「未收到/打回」「拒单」原位保留, 此处只复读 CTA 不搬走原件。 --}}
-        @if ($nzOffPending && $nzPrimary['visible'] && $nzPrimary['kind'] == 'form')
+        @if ($nzPrimary['visible'] && $nzPrimary['kind'] == 'form')
             <div class="nz-order-statusbar" style="position:sticky;top:0;z-index:1020;background:#fff;border:1px solid #FFE2A8;border-radius:12px;box-shadow:0 2px 10px rgba(23,25,29,.06);padding:10px 14px;margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
                 <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 160px;">
                     <span style="font-weight:800;color:#17191D;white-space:nowrap;">订单 #{{ $order['id'] }}</span>
-                    <span class="badge badge-soft-info" style="white-space:nowrap;">{{ translate('messages.pending') }}</span>
-                    <span style="color:#8a6d3b;font-weight:700;white-space:nowrap;">应收 {{ Helpers::format_currency($order->order_amount) }}</span>
+                    <span class="badge {{ $nzOffPending ? 'badge-soft-info' : 'badge-soft-warning' }}" style="white-space:nowrap;">{{ $nzOffPending ? translate('messages.pending') : ($nzOs == 'processing' ? '备餐中 · 待出餐' : '已出餐 · 待送达') }}</span>
+                    @if ($nzOffPending)<span style="color:#8a6d3b;font-weight:700;white-space:nowrap;">应收 {{ Helpers::format_currency($order->order_amount) }}</span>@endif
                 </div>
                 <form action="{{ $nzPrimary['route'] }}" method="post" style="margin:0;flex:0 0 auto;"
-                    onsubmit="return confirm('{{ $nzPrimary['confirm'] }}');">
+                    @if ($nzPrimary['confirm']) onsubmit="return confirm('{{ $nzPrimary['confirm'] }}');" @endif>
                     @csrf
                     @method($nzPrimary['method'])
                     <button type="submit" class="btn btn-success btn-sm" style="border-radius:8px;font-weight:700;white-space:nowrap;">{{ $nzPrimary['label'] }}</button>
@@ -1153,14 +1153,9 @@
                                 @php($yText = $yAddr['address'] ?? '')
                                 @if (in_array($order->order_status, ['processing', 'handover']))
                                     <div class="mt-3 mb-1 p-2" style="background:#EEF6FF;border:1px solid #CFE3FF;border-radius:10px;font-size:12px;color:#1A1A1A;line-height:1.7;">
-                                        <span style="font-weight:700;">🛵 什么时候叫 Yandex？</span> 餐快做好时，用下方「顾客配送位置」把坐标粘到 Yandex Go 叫车；叫到车后点下面「已叫车，标记为配送中」（贴上追踪链接，顾客还能看骑手实时位置）。
+                                        <span style="font-weight:700;">🛵 什么时候叫 Yandex？</span> 餐快做好时，用下方「顾客配送位置」把坐标粘到 Yandex Go 叫车；叫到车后点页面顶部的「标记配送中」按钮（再贴上追踪链接，顾客还能看骑手实时位置）。
                                     </div>
-                                    <form action="{{ route('vendor.order.mark-dispatched', ['id' => $order['id']]) }}" method="post" class="mt-3 mb-1">
-                                        @csrf
-                                        @method('put')
-                                        <button type="submit" class="btn btn--primary w-100" style="font-weight:700;border-radius:10px;">✅ 已叫车，标记为「配送中」</button>
-                                        <div style="font-size:12px;color:#6B7280;margin-top:4px;line-height:1.6;">点一下，顾客立刻看到“配送中”。下面贴 Yandex 链接是可选项——贴了顾客能实时看骑手位置。</div>
-                                    </form>
+                                    <div class="mt-3 mb-1 p-2 text-center" style="background:#F6FAFF;border:1px dashed #BBD3F0;border-radius:10px;font-size:12px;color:#3A5A80;line-height:1.7;">👆 备好餐、叫到 Yandex 后，点<b>页面顶部</b>的「标记配送中」按钮即可，顾客立刻看到配送中。下面贴 Yandex 链接是可选项——贴了顾客能实时看骑手位置。</div>
                                 @endif
                                 @if ($order->order_status == 'picked_up')
                                     <div class="mt-3 mb-1 p-2" style="background:#E9F8EF;border:1px solid #BBE8CC;border-radius:10px;font-size:12px;color:#0F5132;line-height:1.7;">
