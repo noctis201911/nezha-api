@@ -1251,18 +1251,26 @@ class OrderLogic
                 'operator_id'         => $confirmer_id,
             ]);
 
-            // 推送商家: 去自己账户按原路退还原付款人。失败不阻断。
+            // 哪吒[退款提醒补渠道]: 通知商家去原路退款。站内信(消息中心)+Telegram(商家主渠道)无条件投递,
+            // FCM 仅在有 token 时(网页端商家通常无 token)。三者各自 try/catch, 失败不阻断主流程。L1-1: 仅通知不碰钱。
             try {
+                $channelText = (($route['channel'] ?? '') === 'usdt') ? 'USDT 退回原地址' : '支付宝原路退回';
+                $title = '有一笔直付单需要您退款';
+                $msg   = '订单 #' . $order->id . ' 已被平台取消/退款，请您按原路退还顾客付款（' . $channelText . '），退款后在「订单→待退款」标记已退款。';
+                $data = Helpers::makeDataForPushNotification(title: $title, message: $msg, orderId: $order->id, type: 'order_status', orderStatus: 'refunded');
+                $vendorId = $order->restaurant?->vendor_id;
+                if ($vendorId) {
+                    Helpers::insertDataOnNotificationTable($data, 'vendor', $vendorId);
+                }
+                try {
+                    Helpers::sendTelegramToRestaurant($order->restaurant, "🔔 有一笔待退款\n订单 #" . $order->id . "\n该单已被平台取消/退款，请您按原路退还顾客付款（" . $channelText . "），退款后在商家后台「订单 → 待退款」点「标记已退款」。");
+                } catch (\Throwable $e2) {}
                 $vendorToken = $order->restaurant?->vendor?->firebase_token;
                 if ($vendorToken) {
-                    $channelText = (($route['channel'] ?? '') === 'usdt') ? 'USDT 退回原地址' : '支付宝原路退回';
-                    $title = '有一笔直付单需要您退款';
-                    $msg   = '订单 #' . $order->id . ' 已被平台取消/退款，请您按原路退还顾客付款（' . $channelText . '），退款后在「订单→待退款」标记已退款。';
-                    $data = Helpers::makeDataForPushNotification(title: $title, message: $msg, orderId: $order->id, type: 'order_status', orderStatus: 'refunded');
                     Helpers::send_push_notif_to_device($vendorToken, $data);
                 }
             } catch (\Throwable $e) {
-                info('record_direct_pay_refund_pending push failed: ' . $e->getMessage());
+                info('record_direct_pay_refund_pending vendor notify failed: ' . $e->getMessage());
             }
 
             // 哪吒[退款专项2026-06-22 信任闭环]: 顾客/商家/系统侧触发的退款 → 邮件提醒超管(平台方)来看,

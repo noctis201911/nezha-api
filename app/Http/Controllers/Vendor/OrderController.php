@@ -388,6 +388,29 @@ class OrderController extends Controller
             info('mark_refunded notify customer failed: ' . $e->getMessage());
         }
 
+        // 哪吒[退款完成回平台]: 商家标记已退款后, 主动给平台超管发提醒(Telegram + 邮件), 让平台知道此单已闭环、可抽查。
+        // 现状只在「待退款生成」时给 admin 发邮件, 完成侧是静默的; 补这条对称。L1-1: 仅通知不碰钱。
+        try {
+            $chanText = $record->payment_channel === 'usdt' ? 'USDT 退回原地址' : ($record->payment_channel === 'rmb' ? '支付宝原路退回' : '原支付方式');
+            $amt = \App\CentralLogics\Helpers::format_currency($record->refund_amount);
+            $restName = $order->restaurant?->name ?? '-';
+            try {
+                \App\CentralLogics\Helpers::sendTelegramToAdmin("✅ 商家已标记退款\n订单 #" . $order->id . "\n商家：" . $restName . "\n应退：" . $amt . "（" . $chanText . "）\n请抽查商家是否真按原路退还顾客。");
+            } catch (\Throwable $e3) {}
+            if (config('mail.status')) {
+                $admin = \App\Models\Admin::where('role_id', 1)->first();
+                $adminEmail = $admin ? $admin->getRawOriginal('email') : null;
+                if ($adminEmail) {
+                    $body = "商家已标记一笔直付订单为已退款。\n\n订单号: #" . $order->id . "\n商家: " . $restName . "\n应退金额: " . $amt . "\n原路渠道: " . $chanText . "\n商家备注: " . ($record->merchant_refund_note ?: '-') . "\n\n平台不经手此款, 退款由商家按原路退回顾客。建议抽查核对。";
+                    \Illuminate\Support\Facades\Mail::raw($body, function ($m) use ($adminEmail, $order) {
+                        $m->to($adminEmail)->subject('【哪吒退款完成】订单 #' . $order->id . ' 商家已标记退款');
+                    });
+                }
+            }
+        } catch (\Throwable $e) {
+            info('mark_refunded notify admin failed: ' . $e->getMessage());
+        }
+
         Toastr::success(translate('已标记为已退款，感谢您的原路退还。'));
         return back();
     }

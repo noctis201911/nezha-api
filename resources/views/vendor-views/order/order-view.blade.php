@@ -514,11 +514,43 @@
                                 @php($nzRefundRec = \App\Models\NezhaRefundRecord::where('order_id', $order->id)->where('status', 'pending_merchant_refund')->latest('id')->first())
                                 @if ($nzRefundRec)
                                     @php($nzAddr = $order->delivery_address ? json_decode($order->delivery_address, true) : [])
+                                    @php($nzSuspendHours = \App\CentralLogics\NezhaRefundOverdue::thresholdHours('nezha_refund_overdue_suspend_hours', 'nezha_refund_overdue_suspend_days', 72))
+                                    @php($nzOverdueOn = (int) (\App\Models\BusinessSetting::where('key', 'nezha_refund_overdue_status')->value('value') ?? 0))
+                                    @php($nzDeadlineTs = $nzRefundRec->created_at ? \Illuminate\Support\Carbon::parse($nzRefundRec->created_at)->addHours($nzSuspendHours)->timestamp : null)
                                     <div class="mt-3 p-3" style="background:#FFF7E6;border:1px solid #FFE0A3;border-radius:12px;">
                                         <h6 class="mb-2" style="color:#C4193E;font-weight:700;">待您退款（平台已取消/退款本单）</h6>
                                         <p class="mb-2" style="font-size:13px;color:#8a6d3b;line-height:1.7;">
                                             请在您自己的收款账户里，按<strong>原路</strong>退还顾客的付款。平台不经手资金、仅记录。退款完成后点下方「标记已退款」。
                                         </p>
+                                        @if ($nzDeadlineTs)
+                                            <div class="nz-refund-countdown" data-deadline="{{ $nzDeadlineTs }}" data-overdue-on="{{ $nzOverdueOn }}" style="margin:8px 0;padding:8px 10px;border-radius:8px;font-size:13px;font-weight:600;background:#fff;border:1px dashed #FFB02E;color:#8a6d3b;">
+                                                <span class="nz-rc-text">退款时限计算中…</span>
+                                            </div>
+                                            <script>
+                                            (function(){
+                                                function nzFmt(s){ if(s<0)s=0; var h=Math.floor(s/3600), m=Math.floor((s%3600)/60), x=s%60; return h+'小时'+(m<10?'0':'')+m+'分'+(x<10?'0':'')+x+'秒'; }
+                                                function nzTick(){
+                                                    var now=Math.floor(Date.now()/1000);
+                                                    document.querySelectorAll('.nz-refund-countdown').forEach(function(el){
+                                                        var dl=parseInt(el.getAttribute('data-deadline'),10);
+                                                        var on=el.getAttribute('data-overdue-on')==='1';
+                                                        var rem=dl-now;
+                                                        var t=el.querySelector('.nz-rc-text');
+                                                        if(!t){ return; }
+                                                        if(!on){
+                                                            el.style.borderColor='#FFB02E'; el.style.background='#fff'; el.style.color='#8a6d3b';
+                                                            t.textContent = rem>0 ? ('建议在 '+nzFmt(rem)+' 内按原路退还顾客（越快顾客越安心）') : '请尽快按原路退还顾客（越快顾客越安心）';
+                                                            return;
+                                                        }
+                                                        if(rem>6*3600){ el.style.borderColor='#FFB02E'; el.style.background='#fff'; el.style.color='#8a6d3b'; t.textContent='请在 '+nzFmt(rem)+' 内原路退款，逾期将自动暂停接单'; }
+                                                        else if(rem>0){ el.style.borderColor='#C4193E'; el.style.background='#FDECEF'; el.style.color='#C4193E'; t.textContent='⚠️ 仅剩 '+nzFmt(rem)+'，逾期将自动暂停接单，请立即原路退款'; }
+                                                        else { el.style.borderColor='#C4193E'; el.style.background='#FDECEF'; el.style.color='#C4193E'; t.textContent='⚠️ 已逾期，即将自动暂停接单，请立即退款并标记'; }
+                                                    });
+                                                }
+                                                nzTick(); setInterval(nzTick,1000);
+                                            })();
+                                            </script>
+                                        @endif
                                         <div style="font-size:13px;color:#333;line-height:1.9;">
                                             <div>应退金额：<strong>{{ Helpers::format_currency($nzRefundRec->refund_amount) }}</strong></div>
                                             <div>原付款渠道：<strong>@if ($nzRefundRec->payment_channel === 'usdt') USDT（{{ $nzRefundRec->chain ?? '链上' }}）@elseif ($nzRefundRec->payment_channel === 'rmb') 支付宝（人民币）@else 见付款凭证 @endif</strong></div>
