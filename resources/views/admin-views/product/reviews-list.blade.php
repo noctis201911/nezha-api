@@ -166,7 +166,7 @@
                                         </td>
                                         <td>
                                             <p class="text-wrap text-center" data-toggle="tooltip" data-placement="top"
-                                               data-original-title="{{ $review?->reply }}">{!! $review->reply?Str::limit($review->reply, 50, '...'): translate('messages.Not_replied_Yet') !!}</p>
+                                               data-original-title="{{ $review?->reply }}">{{ $review->reply?Str::limit(strip_tags($review->reply), 50, '...'): translate('messages.Not_replied_Yet') }}</p>
                                         </td>
                                         <td>
                                             @if($review->status==3)
