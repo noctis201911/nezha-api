@@ -2147,7 +2147,7 @@ class OrderController extends Controller
         if ($tempClosed) {
             return true;
         }
-        return self::nezha_store_paused($restaurant);
+        return self::nezha_deposit_below_threshold($restaurant);
     }
 
     public static function order_validation_check($request){
