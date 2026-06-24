@@ -2007,6 +2007,7 @@ class Helpers
     {
 
         try {
+            self::dispatchVendorOrderAlarm($order); // 哪吒商家版App: 新单报警(无条件,独立于gated的sentRestaurantNotification,覆盖H1漏单)
             self::sentUserNotification($order);
             self::sentAdminPanelNotification($order);
             self::sentDeliveryManNotification($order);

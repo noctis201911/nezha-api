@@ -746,6 +746,9 @@ class OrderController extends Controller
             DB::commit();
             //PlaceOrderMail
 
+            // 哪吒商家版App: 新单落库后立即报警(独立于gated通知,覆盖顾客离线单H1漏单)。严格fire-and-forget: 自带try/catch绝不冒泡到外层catch(否则会把已成功订单误返403)。
+            try { \App\CentralLogics\Helpers::dispatchVendorOrderAlarm($order); } catch (\Throwable $nezhaAlarmE) { \Illuminate\Support\Facades\Log::info('nezha place_order alarm hook: ' . $nezhaAlarmE->getMessage()); }
+
             return response()->json([
                 'message' => translate('messages.order_placed_successfully'),
                 'order_id' => $order->id,
