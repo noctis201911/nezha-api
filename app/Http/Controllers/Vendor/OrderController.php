@@ -510,6 +510,35 @@ class OrderController extends Controller
         return back();
     }
 
+    /**
+     * 哪吒 B方案 — 商家「标记已送达」配送单(A: 让最先知道送达的商家也能收尾)。
+     * Yandex 外部配送无回调; 商家叫的车、Yandex Go 司机送达会先通知商家。
+     * 仅本店、配送单、picked_up/handover 可标; 复用幂等 settle_delivered(恰好结算一次); 无 OTP(配送无面对面核销)。
+     */
+    public function mark_delivered(Request $request, $id)
+    {
+        $order = Order::where(['id' => $id, 'restaurant_id' => Helpers::get_restaurant_id()])->first();
+        if (!$order) {
+            Toastr::warning('订单不存在或无权操作');
+            return back();
+        }
+        if ($order->order_type !== 'delivery') {
+            Toastr::warning('仅配送订单用此入口标记已送达');
+            return back();
+        }
+        if ($order->delivered) {
+            Toastr::info('本单已是「已送达」');
+            return back();
+        }
+        if (!in_array($order->order_status, ['picked_up', 'handover'], true)) {
+            Toastr::warning('请在「配送中 / 已出餐」状态、确认 Yandex 已送达后再标记');
+            return back();
+        }
+        \App\CentralLogics\OrderLogic::settle_delivered($order, 'vendor', auth('vendor')->id() ?? auth('vendor_employee')->id());
+        Toastr::success('已标记为「已送达」，本单完成。');
+        return back();
+    }
+
     public function status(Request $request)
     {
         $request->validate([

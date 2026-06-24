@@ -199,7 +199,7 @@
                                         'slightly_delay' => ['class' => 'badge-soft-secondary', 'label' => 'messages.Slightly_Delay'],
                                     ];
 
-                                    $type = $deliveryTypes[$order->delivery_type] ?? $deliveryTypes['standard'];
+                                    $type = $order->delivery_type ? ($deliveryTypes[$order->delivery_type] ?? $deliveryTypes['standard']) : null;
                                 @endphp
 
                                 <td class="text-capitalize text-center" data-label="{{translate('messages.delivery_type')}}">
@@ -279,6 +279,18 @@
                                     @elseif($order['order_status']=='delivered')
                                         <span class="badge badge-soft-success mb-1">
                                             {{$order?->order_type == 'dine_in' ? translate('messages.Completed') : translate('messages.delivered')}}
+                                        </span>
+                                    @elseif($order['order_status']=='handover')
+                                        <span class="badge badge-soft-warning mb-1">
+                                            {{translate('messages.handover')}}
+                                        </span>
+                                    @elseif($order['order_status']=='accepted')
+                                        <span class="badge badge-soft-info mb-1">
+                                            {{translate('messages.accepted')}}
+                                        </span>
+                                    @elseif($order['order_status']=='refund_request_canceled')
+                                        <span class="badge badge-soft-info mb-1">
+                                            退款申请已撤销
                                         </span>
                                     @else
                                         <span class="badge badge-soft-danger mb-1">

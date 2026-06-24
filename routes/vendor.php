@@ -257,6 +257,7 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
             Route::put('set-yandex-delivery/{id}', [OrderController::class, 'set_yandex_delivery'])->name('set-yandex-delivery');
             // 哪吒 B方案: 商家一拍标记配送中(不需链接, 与贴链接解耦)
             Route::put('mark-dispatched/{id}', [OrderController::class, 'mark_dispatched'])->name('mark-dispatched');
+            Route::put('mark-delivered/{id}', [OrderController::class, 'mark_delivered'])->name('mark-delivered');
             // 哪吒效率(2026-06-21): 商家在「备餐中」更新本单预计出餐时间(单笔级, 不改店铺默认)
             Route::put('update-processing-time/{id}', [OrderController::class, 'update_processing_time'])->name('update-processing-time');
             // 哪吒 B方案: 商家自营「确认收款 / 拒收」离线支付

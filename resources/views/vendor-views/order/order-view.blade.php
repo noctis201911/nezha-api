@@ -90,7 +90,7 @@
             }
         } elseif ($nzOs == 'picked_up') {
             // G 配送中: 无手动主操作(status 路由不收 picked_up; picked_up→delivered 由 set-yandex/超时 sweep)。约24h自动完成(开关 nezha_auto_finalize_handover_status·L2)。
-            $nzPrimary['note'] = '配送中 · 顾客可追踪，送达后约 24 小时内自动完成';
+            $nzPrimary['note'] = '配送中 · 顾客可追踪。送达后请点下方「标记已送达」，或顾客确认 / 约数小时自动完成';
         }
     @endphp
 
@@ -336,6 +336,18 @@
                                         <span class="badge badge-soft-success ml-2 ml-sm-3">
                                             {{ $order?->order_type == 'dine_in' ? translate('messages.Completed') : translate('messages.delivered') }}
                                         </span>
+                                    @elseif($order['order_status'] == 'handover')
+                                        <span class="badge badge-soft-warning ml-2 ml-sm-3">
+                                            {{ translate('messages.handover') }}
+                                        </span>
+                                    @elseif($order['order_status'] == 'accepted')
+                                        <span class="badge badge-soft-info ml-2 ml-sm-3">
+                                            {{ translate('messages.accepted') }}
+                                        </span>
+                                    @elseif($order['order_status'] == 'refund_request_canceled')
+                                        <span class="badge badge-soft-info ml-2 ml-sm-3">
+                                            退款申请已撤销 · 继续履约
+                                        </span>
                                     @else
                                         <span class="badge badge-soft-danger ml-2 ml-sm-3">
                                             {{ translate(str_replace('_', ' ', $order['order_status'])) }}
@@ -350,7 +362,7 @@
                                         'slightly_delay' => ['class' => 'badge-soft-secondary', 'label' => 'messages.Slightly_Delay'],
                                     ];
 
-                                    $type = $deliveryTypes[$order->delivery_type] ?? $deliveryTypes['standard'];
+                                    $type = $order->delivery_type ? ($deliveryTypes[$order->delivery_type] ?? $deliveryTypes['standard']) : null;
                                 @endphp
                                     @if($type)
 
@@ -404,7 +416,7 @@
                                                     <span class="title-color">{{ translate($key) }} :</span>
                                                     @php($nzProof = \App\CentralLogics\Helpers::offline_payment_proof_url($item))
                                                     @if($nzProof)
-                                                        <a href="{{ $nzProof }}" target="_blank" rel="noopener"><img src="{{ $nzProof }}" alt="{{ translate('payment proof') }}" style="max-width:140px;max-height:140px;border-radius:8px;border:1px solid #e6e6e6;object-fit:cover;"></a>
+                                                        <a href="{{ $nzProof }}" target="_blank" rel="noopener" onclick="return nzShowProof('{{ $nzProof }}');"><img src="{{ $nzProof }}" alt="{{ translate('payment proof') }}" style="max-width:140px;max-height:140px;border-radius:8px;border:1px solid #e6e6e6;object-fit:cover;cursor:zoom-in;"></a>
                                                     @else
                                                     @if(preg_match('/^(0x)?[0-9a-fA-F]{64}$/', trim($item)))
                                                         @php($nzTxUrl = $nzAc['chain']['explorer_url'] ?? ('https://tronscan.org/#/transaction/'.preg_replace('/^0x/i','',trim($item))))
@@ -626,7 +638,7 @@
                                                         <div class="media-body">
                                                             <div>
                                                                 <strong class="line--limit-1">
-                                                                    {{ $detail->food == null ? 'Not Found' : $detail->food['name'] }}</strong>
+                                                                    {{ $detail->food == null ? translate('messages.item_removed') : $detail->food['name'] }}</strong>
                                                                 @if (isset($detail['variation']) ? (json_decode($detail['variation'], true) ?? []) : [])
                                                                     @foreach ((json_decode($detail['variation'], true) ?? []) as $variation)
                                                                         @if (isset($variation['name']) && isset($variation['values']))
@@ -726,7 +738,7 @@
                                                         <div class="media-body">
                                                             <div>
                                                                 <strong class="line--limit-1">
-                                                                    {{ $detail->campaign == null ? 'Not Found' : $detail->campaign['name'] }}</strong>
+                                                                    {{ $detail->campaign == null ? translate('messages.item_removed') : $detail->campaign['name'] }}</strong>
                                                                 @if (count((json_decode($detail['variation'], true) ?? [])) > 0)
                                                                     @foreach ((json_decode($detail['variation'], true) ?? []) as $variation)
                                                                         @if (isset($variation['name']) && isset($variation['values']))
@@ -1116,6 +1128,16 @@
                                         @method('put')
                                         <button type="submit" class="btn btn--primary w-100" style="font-weight:700;border-radius:10px;">✅ 已叫车，标记为「配送中」</button>
                                         <div style="font-size:12px;color:#6B7280;margin-top:4px;line-height:1.6;">点一下，顾客立刻看到“配送中”。下面贴 Yandex 链接是可选项——贴了顾客能实时看骑手位置。</div>
+                                    </form>
+                                @endif
+                                @if ($order->order_status == 'picked_up')
+                                    <div class="mt-3 mb-1 p-2" style="background:#E9F8EF;border:1px solid #BBE8CC;border-radius:10px;font-size:12px;color:#0F5132;line-height:1.7;">
+                                        <span style="font-weight:700;">✅ 已确认 Yandex 送达？</span> 顾客收到餐后，点下面「已送达」即可完成本单；顾客也能自己在 App 点「确认收货」。约 {{ (int)(\App\CentralLogics\Helpers::get_business_data('nezha_auto_finalize_handover_hours') ?: 3) }} 小时无人确认将自动完成。
+                                    </div>
+                                    <form action="{{ route('vendor.order.mark-delivered', ['id' => $order['id']]) }}" method="post" class="mt-2 mb-1" onsubmit="return confirm('确认本单已送达顾客？确认后订单完成、不可撤销。');">
+                                        @csrf
+                                        @method('put')
+                                        <button type="submit" class="btn btn-success w-100" style="font-weight:700;border-radius:10px;">✅ 标记为「已送达」</button>
                                     </form>
                                 @endif
                                 @if ($order->delivery_link_reminded_at && !$order->yandex_tracking_url)
@@ -1745,7 +1767,14 @@
 
     <!-- End Content -->
     <!-- Modal -->
-    <div class="modal fade order-proof-modal" tabindex="-1" role="dialog" aria-labelledby="mySmallModalLabel"
+    <div class="modal fade" id="nzProofLightbox" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg" role="document"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">付款凭证</h5><button type="button" class="close" data-dismiss="modal">&times;</button></div>
+        <div class="modal-body text-center" style="background:#1c1c1c;"><img id="nzProofLightboxImg" src="" alt="付款凭证" style="max-width:100%;max-height:80vh;object-fit:contain;"></div>
+    </div></div>
+</div>
+<script>function nzShowProof(u){try{document.getElementById("nzProofLightboxImg").src=u;if(window.jQuery){jQuery("#nzProofLightbox").modal("show");return false;}}catch(e){}return true;}</script>
+                <div class="modal fade order-proof-modal" tabindex="-1" role="dialog" aria-labelledby="mySmallModalLabel"
         aria-hidden="true">
         <div class="modal-dialog" role="document">
             <div class="modal-content">
@@ -2774,6 +2803,7 @@
             if (verification) {
                 Swal.fire({
                     title: '{{ translate('Enter order verification code') }}',
+                    text: '请向顾客索取其 App「我的订单」里显示的取餐码',
                     input: 'text',
                     inputAttributes: {
                         autocapitalize: 'off'
