@@ -961,6 +961,18 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                             </a>
                         </li>
                     @endif
+                    @if (Helpers::module_permission_check('nezha_cs'))
+                        <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/vendor-feedback*') ? 'active' : '' }}">
+                            <a class="js-navbar-vertical-aside-menu-link nav-link"
+                                href="{{ route('admin.vendor-feedback.index') }}"
+                                title="{{ translate('商家反馈') }}">
+                                <i class="tio-comment-text-outlined nav-icon"></i>
+                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
+                                    {{ translate('商家反馈') }}
+                                </span>
+                            </a>
+                        </li>
+                    @endif
                     @if (Helpers::module_permission_check('contact_message'))
                         <li
                             class="navbar-vertical-aside-has-menu {{ Request::is('admin/contact/*') ? 'active' : '' }}">

@@ -527,6 +527,16 @@
                         </li>
                     @endif
 
+                    <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/feedback*')?'active':''}}">
+                        <a class="js-navbar-vertical-aside-menu-link nav-link"
+                           href="{{route('vendor.feedback.index')}}" title="{{translate('问题反馈')}}">
+                            <i class="tio-help-outlined nav-icon"></i>
+                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
+                            {{translate('问题反馈')}}
+                        </span>
+                        </a>
+                    </li>
+
                     <!-- End Help & Support -->
 
                     <!-- Ads Management -->

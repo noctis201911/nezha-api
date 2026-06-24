@@ -355,6 +355,11 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
             Route::get('view/{conversation_id}/{user_id}', [ConversationController::class, 'view'])->name('view');
         });
 
+        Route::group(['prefix' => 'feedback', 'as' => 'feedback.'], function () {
+            Route::get('/', [\App\Http\Controllers\Vendor\FeedbackController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\Vendor\FeedbackController::class, 'store'])->name('store');
+        });
+
         Route::group(['prefix' => 'subscription' , 'as' => 'subscriptionackage.'], function () {
             Route::get('/subscriber-detail',  [SubscriptionController::class, 'subscriberDetail'])->name('subscriberDetail')->middleware('module:business_plan');
             Route::get('/invoice/{id}',  [SubscriptionController::class, 'invoice'])->name('invoice');
