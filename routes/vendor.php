@@ -318,6 +318,8 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
             Route::get('restaurant-setup', [BusinessSettingsController::class, 'restaurant_index'])->name('restaurant-setup')->middleware('module:restaurant_config');
             Route::get('notification-setup', [BusinessSettingsController::class, 'notification_index'])->name('notification-setup')->middleware('module:notification_setup');
             Route::get('notification-status-change/{key}/{type}', [BusinessSettingsController::class, 'notification_status_change'])->name('notification_status_change')->middleware('module:notification_setup');;
+            Route::post('nezha-notify', [BusinessSettingsController::class, 'nezhaNotifySave'])->name('nezha-notify');
+            Route::get('nezha-telegram-detect', [BusinessSettingsController::class, 'nezhaTelegramDetect'])->name('nezha-telegram-detect');
             Route::post('add-schedule', [BusinessSettingsController::class, 'add_schedule'])->name('add-schedule');
             Route::get('remove-schedule/{restaurant_schedule}', [BusinessSettingsController::class, 'remove_schedule'])->name('remove-schedule');
             Route::get('update-active-status', [BusinessSettingsController::class, 'active_status'])->name('update-active-status');

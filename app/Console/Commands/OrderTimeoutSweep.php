@@ -255,7 +255,7 @@ class OrderTimeoutSweep extends Command
                 return;
             }
             $sensitive = $type === 'cancel_refund';
-            if (!$sensitive && (int) ($restaurant->timeout_notify_email ?? 1) === 0) {
+            if (!$sensitive && (int) ($restaurant->timeout_notify_telegram ?? 1) === 0) {
                 return;
             }
             $id = $order->id;
@@ -277,7 +277,7 @@ class OrderTimeoutSweep extends Command
 
     private function mailMerchant(Order $order, string $type, int $minutes, bool $paid): void
     {
-        $email = $order->restaurant?->email ?? $order->restaurant?->vendor?->email;
+        $email = $order->restaurant?->nezha_notify_email ?: ($order->restaurant?->email ?? $order->restaurant?->vendor?->email);
         $name  = $order->restaurant?->name ?? '商家';
         if (!$email) {
             Log::warning('NEZHA_TIMEOUT 商家无邮箱, 跳过邮件 order#' . $order->id);

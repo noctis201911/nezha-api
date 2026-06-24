@@ -2184,6 +2184,9 @@ class Helpers
             if (!$token || !is_string($token) || !$chatId) {
                 return;
             }
+            if ((int) ($order->restaurant->timeout_notify_telegram ?? 1) === 0) {
+                return;
+            }
             if (!\Illuminate\Support\Facades\Cache::add('tg_alert_' . $order->id, 1, now()->addDay())) {
                 return;
             }

@@ -57,7 +57,97 @@ class BusinessSettingsController extends Controller
 
         $business_name = BusinessSetting::where('key', 'business_name')->first()?->value;
 
-        return view('vendor-views.business-settings.notification-index', compact('business_name', 'data'));
+        // 哪吒: 接单/超时提醒通道设置 — 当前店 + Telegram 一次性绑定验证码
+        $restaurant = Restaurant::find(Helpers::get_restaurant_id());
+        $botUser = '@Nz_order_bot';
+        $tgCode = null;
+        if ($restaurant) {
+            $codeKey = 'nezha_tg_bind_code_' . $restaurant->id;
+            $tgCode = \Illuminate\Support\Facades\Cache::get($codeKey);
+            if (!$tgCode) {
+                $tgCode = 'NZ' . $restaurant->id . '-' . strtoupper(\Illuminate\Support\Str::random(5));
+                \Illuminate\Support\Facades\Cache::put($codeKey, $tgCode, now()->addMinutes(30));
+            }
+        }
+
+        return view('vendor-views.business-settings.notification-index', compact('business_name', 'data', 'restaurant', 'botUser', 'tgCode'));
+    }
+
+    // 哪吒: 商家保存「接单/超时提醒通道」偏好(Telegram/邮箱开关 + 自填通知邮箱)
+    public function nezhaNotifySave(Request $request)
+    {
+        $restaurant = Restaurant::findOrFail(Helpers::get_restaurant_id());
+        $validator = Validator::make($request->all(), [
+            'nezha_notify_email' => 'nullable|email|max:191',
+        ], [
+            'nezha_notify_email.email' => '请填写正确的邮箱地址',
+        ]);
+        if ($validator->fails()) {
+            Toastr::error($validator->errors()->first());
+            return back();
+        }
+        $tg = $request->boolean('timeout_notify_telegram') ? 1 : 0;
+        $mail = $request->boolean('timeout_notify_email') ? 1 : 0;
+
+        // 防漏单地板: 两个推送通道都关 -> 必须显式确认「靠常开后台设备接单」
+        if ($tg === 0 && $mail === 0 && !$request->boolean('ack_all_off')) {
+            Toastr::error('两个提醒都关闭前，请先确认你的店铺靠常开电脑后台接单');
+            return back();
+        }
+
+        $restaurant->timeout_notify_telegram = $tg;
+        $restaurant->timeout_notify_email = $mail;
+        $restaurant->nezha_notify_email = $request->filled('nezha_notify_email') ? trim($request->input('nezha_notify_email')) : null;
+        if ($request->boolean('tg_unbind')) {
+            $restaurant->telegram_chat_id = null;
+        }
+        // 全关=常开设备, 置豁免(满足上线硬闸); 任一通道开则回到非豁免由通道兜底
+        $restaurant->nezha_alert_exempt = ($tg === 0 && $mail === 0) ? 1 : 0;
+        $restaurant->save();
+
+        Toastr::success('提醒通道设置已更新');
+        return back();
+    }
+
+    // 哪吒: 商家自助绑定 Telegram — 按一次性验证码在 getUpdates 里精确匹配本店会话(只认本店的码, 不暴露别家会话)
+    public function nezhaTelegramDetect(Request $request)
+    {
+        $restaurant = Restaurant::find(Helpers::get_restaurant_id());
+        if (!$restaurant) {
+            return response()->json(['ok' => false, 'msg' => '店铺不存在']);
+        }
+        $code = \Illuminate\Support\Facades\Cache::get('nezha_tg_bind_code_' . $restaurant->id);
+        if (!$code) {
+            return response()->json(['ok' => false, 'msg' => '验证码已过期，请刷新页面后重试']);
+        }
+        $token = Helpers::get_business_settings('telegram_bot_token', false);
+        if (!$token || !is_string($token)) {
+            return response()->json(['ok' => false, 'msg' => '平台暂未配置 Telegram 机器人']);
+        }
+        $foundChat = null;
+        try {
+            $ctx = stream_context_create(['http' => ['timeout' => 5]]);
+            $raw = @file_get_contents('https://api.telegram.org/bot' . $token . '/getUpdates', false, $ctx);
+            $upd = json_decode($raw, true);
+            foreach (($upd['result'] ?? []) as $it) {
+                $msg = $it['message'] ?? ($it['channel_post'] ?? null);
+                $text = trim((string) ($msg['text'] ?? ''));
+                if ($text !== '' && strcasecmp($text, $code) === 0 && isset($msg['chat']['id'])) {
+                    $foundChat = (string) $msg['chat']['id'];
+                }
+            }
+        } catch (\Throwable $e) {
+        }
+        if (!$foundChat) {
+            return response()->json(['ok' => false, 'msg' => '还没检测到。请先在 Telegram 里把验证码发给机器人，再点一次检测。']);
+        }
+        $restaurant->telegram_chat_id = $foundChat;
+        $restaurant->timeout_notify_telegram = 1;
+        $restaurant->nezha_alert_exempt = 0;
+        $restaurant->save();
+        \Illuminate\Support\Facades\Cache::forget('nezha_tg_bind_code_' . $restaurant->id);
+
+        return response()->json(['ok' => true, 'chat_id' => $foundChat, 'msg' => 'Telegram 已连接成功']);
     }
 
     public function notification_status_change($key, $type){
