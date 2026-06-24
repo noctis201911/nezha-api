@@ -45,6 +45,9 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
         Route::get('/', [DashboardController::class, 'dashboard'])->name('dashboard');
         Route::get('/get-restaurant-data', [DashboardController::class, 'restaurant_data'])->name('get-restaurant-data');
         Route::post('/store-token', [DashboardController::class, 'updateDeviceToken'])->name('store.token');
+        // 哪吒商家版App: FCM报警token注册/注销(多设备表), 由App WebView登录后调用
+        Route::post('/nezha-alarm-token/register', [\App\Http\Controllers\Vendor\NezhaAlarmTokenController::class, 'register'])->name('nezha-alarm-token.register');
+        Route::post('/nezha-alarm-token/deregister', [\App\Http\Controllers\Vendor\NezhaAlarmTokenController::class, 'deregister'])->name('nezha-alarm-token.deregister');
         Route::get('/reviews', [ReviewController::class, 'index'])->name('reviews')->middleware(['module:reviews' ,'subscription:reviews']);
         Route::post('/store-reply/{id}', [ReviewController::class, 'update_reply'])->name('review-reply')->middleware(['module:reviews' ,'subscription:reviews']);
 
