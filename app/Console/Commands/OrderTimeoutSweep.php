@@ -221,6 +221,7 @@ class OrderTimeoutSweep extends Command
             } catch (\Throwable $e) {
                 Log::warning('NEZHA_TIMEOUT mailMerchant cancel order#' . $order->id . ': ' . $e->getMessage());
             }
+            $this->telegramMerchant($order, 'cancel_refund', $this->waited($order));
         }
     }
 
@@ -230,12 +231,48 @@ class OrderTimeoutSweep extends Command
         $this->mailMerchant($order, 'remind', $age, $paid);
         // 升级客服: 通知平台客服邮箱(best-effort)
         $this->escalateToSupport($order, "订单 #{$order->id} 待接单已超 {$age} 分钟，商家未处理。");
+        $this->telegramMerchant($order, 'remind', $age);
     }
 
     private function escalatePrep(Order $order, int $overBy): void
     {
         $this->mailMerchant($order, 'prep_overtime', $overBy, true);
         $this->escalateToSupport($order, "订单 #{$order->id} 备餐超时约 {$overBy} 分钟(或无预计出餐时间)，已升级。");
+        $this->telegramMerchant($order, 'prep_overtime', $overBy);
+    }
+
+    /**
+     * 哪吒: 实时提醒商家本人(Telegram)。复用 Helpers::sendTelegramToRestaurant(每家在线店硬闸已绑);
+     * best-effort: 任何失败只记日志不抛, 不阻断超时 sweep 主流程, 不影响邮件那条腿。
+     * 软提醒沿用商家「仅系统(面板)」开关(timeout_notify_email=0)可关; 但敏感的 cancel_refund 恒发
+     * (与邮件一致, L1 退款义务必须送达商家)。纯通知, 不碰钱。
+     */
+    private function telegramMerchant(Order $order, string $type, int $minutes): void
+    {
+        try {
+            $restaurant = $order->restaurant;
+            if (!$restaurant || !($restaurant->telegram_chat_id ?? null)) {
+                return;
+            }
+            $sensitive = $type === 'cancel_refund';
+            if (!$sensitive && (int) ($restaurant->timeout_notify_email ?? 1) === 0) {
+                return;
+            }
+            $id = $order->id;
+            switch ($type) {
+                case 'cancel_refund':
+                    $text = "⚠️ 哪吒通知｜订单 #{$id} 因超时已被系统自动取消。顾客此前直付给你的款项，请按原路尽快退回（平台不经手此款）。";
+                    break;
+                case 'prep_overtime':
+                    $text = "🍳 哪吒提醒｜订单 #{$id} 备餐已超时约 {$minutes} 分钟，请尽快出餐，避免顾客久等。";
+                    break;
+                default: // remind
+                    $text = "🔔 哪吒提醒｜订单 #{$id} 已等待约 {$minutes} 分钟仍未处理，请尽快登录商家后台接单/核对。";
+            }
+            Helpers::sendTelegramToRestaurant($restaurant, $text);
+        } catch (\Throwable $e) {
+            Log::info('NEZHA_TIMEOUT telegramMerchant order#' . $order->id . ': ' . $e->getMessage());
+        }
     }
 
     private function mailMerchant(Order $order, string $type, int $minutes, bool $paid): void
