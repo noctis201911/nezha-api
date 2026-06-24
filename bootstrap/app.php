@@ -128,6 +128,10 @@ return Application::configure(basePath: dirname(__DIR__))
         //   (记风控 refund_overdue / 催办商家 / 告警运营; 停接单由运营后台手动)。
         //   总开关 nezha_refund_overdue_status(默认0关), 关时命令直接返回。每天 09:30 跑一次。
         $schedule->command('nezha:refund-overdue-sweep')->hourly()->withoutOverlapping();
+
+        // 哪吒 反馈日报(方案A): 每天 06:00 把昨日顾客反馈(评价/退款/客服)聚合 → AI 摘要 → 存库 + 发超管 Telegram。
+        //   总开关 nezha_feedback_digest_status(默认0关), 关时命令直接返回; AI 复用 nezha_cs_ai_*, 未开则降级仅统计。
+        $schedule->command('nezha:feedback-digest')->dailyAt('06:00')->withoutOverlapping();
     })
 
     ->create();

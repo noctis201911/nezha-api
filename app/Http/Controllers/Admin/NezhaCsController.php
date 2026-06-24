@@ -41,7 +41,13 @@ class NezhaCsController extends Controller
         $fbPos = (int) DB::table('nezha_cs_feedback')->where('sentiment', 'positive')->count();
         $fbNeg = (int) DB::table('nezha_cs_feedback')->where('sentiment', 'negative')->count();
 
-        return view('admin-views.nezha-cs.index', compact('status', 'relay', 'faq', 'model', 'hasKey', 'tickets', 'feedback', 'fbPos', 'fbNeg'));
+        // 反馈日报(方案A): 总开关 + 最近 14 份历史日报。表可能尚未迁移, 防御性判断。
+        $digestStatus = (int) $get('nezha_feedback_digest_status', '0');
+        $digests = \Illuminate\Support\Facades\Schema::hasTable('nezha_feedback_digests')
+            ? DB::table('nezha_feedback_digests')->orderByDesc('digest_date')->orderByDesc('id')->limit(14)->get()
+            : collect();
+
+        return view('admin-views.nezha-cs.index', compact('status', 'relay', 'faq', 'model', 'hasKey', 'tickets', 'feedback', 'fbPos', 'fbNeg', 'digestStatus', 'digests'));
     }
 
     /** 运营数据助手：超管在后台问小哪客服运营情况。 */
@@ -60,6 +66,7 @@ class NezhaCsController extends Controller
             'nezha_cs_merchant_relay_status' => 'required|in:0,1',
             'nezha_cs_faq' => 'nullable|string|max:6000',
             'nezha_cs_ai_model' => 'nullable|string|max:64',
+            'nezha_feedback_digest_status' => 'nullable|in:0,1',
         ]);
 
         foreach ([
@@ -67,6 +74,7 @@ class NezhaCsController extends Controller
             'nezha_cs_merchant_relay_status' => (string) ((int) $request->nezha_cs_merchant_relay_status),
             'nezha_cs_faq' => (string) ($request->nezha_cs_faq ?? ''),
             'nezha_cs_ai_model' => (string) ($request->nezha_cs_ai_model ?: 'deepseek-chat'),
+            'nezha_feedback_digest_status' => (string) ((int) ($request->nezha_feedback_digest_status ?? 0)),
         ] as $k => $v) {
             BusinessSetting::updateOrCreate(['key' => $k], ['value' => $v]);
         }
