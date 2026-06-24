@@ -1120,7 +1120,7 @@
 
                         function nzPlay(id){ try { var a = document.getElementById(id); if (a) { a.currentTime = 0; var p = a.play(); if (p && p.catch) { p.catch(function(){}); } } } catch(e){} }
                         // 正开着该会话(conversation 参数=新消息所属会话)时不重复响铃/弹窗，仅静默刷新
-                        function nzViewing(convId){ if (!convId) return false; var oc = (typeof getUrlParameter === 'function') ? getUrlParameter('conversation') : null; return !!(oc && String(oc) === String(convId)); }
+                        function nzViewing(convId){ if (!convId) return false; if (typeof document !== 'undefined' && document.hidden) return false; var oc = (typeof getUrlParameter === 'function') ? getUrlParameter('conversation') : null; return !!(oc && String(oc) === String(convId)); }
                         function nzRefreshLists(){
                             if (!document.getElementById('conversation-list')) { return; }
                             var ctab = (typeof getUrlParameter === 'function' && getUrlParameter('tab') && getUrlParameter('tab') !== 'undefined') ? getUrlParameter('tab') : 'customer';
