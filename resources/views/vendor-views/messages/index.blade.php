@@ -72,6 +72,12 @@
                 success: function(data) {
                     window.history.pushState('', 'New Page Title', new_url);
                     $('#view-conversation').html(data.view);
+                    // 哪吒[手机端 2026-06-25]: 桌面端列表与线程左右并排, 手机端线程堆在列表下方(屏外)——
+                    // 点会话后看似「没反应」。窄屏自动滚到线程顶部, 消除「点了找不到」死胡同。
+                    if (window.innerWidth < 992) {
+                        var nzVc = document.getElementById('view-conversation');
+                        if (nzVc && nzVc.scrollIntoView) { nzVc.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+                    }
                     converationList();
                 }
             });
