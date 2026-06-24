@@ -130,7 +130,7 @@
 
 @push('script_2')
     <script src="{{ dynamicAsset('assets/admin') }}/js/tags-input.min.js"></script>
-    <script src="{{ dynamicAsset('assets/admin') }}/js/view-pages/product-index.js"></script>
+    <script src="{{ dynamicAsset('assets/admin') }}/js/view-pages/vendor/product-index.js"></script>
 
     <script>
         "use strict";
