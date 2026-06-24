@@ -84,6 +84,14 @@ for SD in nezha.am api.nezha.am; do
 done
 
 # 无异常 → 静默退出
+# 8. 制裁名单(OFAC SDN)同步新鲜度: status!=ok 或 >30h 未成功 -> 筛查在用陈旧名单(对称于第6类备份告警, 补合规告警不对称缺口)
+SANC=$(cd /www/wwwroot/api-deploy/current 2>/dev/null && php artisan tinker --execute='$j=json_decode(DB::table("business_settings")->where("key","nezha_sanction_last_sync")->value("value"),true); if(!$j){echo "NEVER";} elseif(($j["status"]??"")!=="ok"){echo "BADSTATUS:".($j["status"]??"unknown");} else{$a=(time()-strtotime($j["at"]??"2000-01-01"))/3600; if($a>30){echo "STALE:".round($a);}}' 2>/dev/null | tail -1 | tr -d "[:space:]")
+case "$SANC" in
+  NEVER) add "制裁名单(OFAC SDN)从未成功同步 — 筛查可能在用空/陈旧名单(违 L1 制裁拦截)" "sanction" ;;
+  BADSTATUS:*) add "制裁名单最近一次同步失败(status=${SANC#BADSTATUS:}) — 筛查在用陈旧名单, 新增制裁地址可能漏拦" "sanction" ;;
+  STALE:*) add "制裁名单已 ${SANC#STALE:}h 未成功同步(>30h) — OFAC SDN 更新停滞, 筛查在用陈旧名单" "sanction" ;;
+esac
+
 [ -z "$ALERTS" ] && exit 0
 
 # 冷却: 按"告警类别集合"做指纹, 同一组问题1小时内只发一封; 出现新类别立即另发
