@@ -113,6 +113,7 @@
                                                 <label class="form-check-label ml-0  text-dark" for="chat">{{translate('messages.chat')}}</label>
                                             </div>
                                         </div>
+                                        @if(false) {{-- 哪吒停用·StackFood残留,对齐侧栏@if(false);恢复:删本@if(false)行与下方@endif --}}
                                         <div class="check-item mb-2 p-0">
                                             <div class="form-group form-check form--check">
                                                 <input type="checkbox" name="modules[]" value="pos" class="form-check-input"
@@ -120,6 +121,7 @@
                                                 <label class="form-check-label ml-0  text-dark" for="pos">{{translate('messages.pos_system')}}</label>
                                             </div>
                                         </div>
+                                        @endif
                                     </div>
                                 </div>
                             </div>
@@ -150,6 +152,7 @@
                                                 <label class="form-check-label ml-0 text-dark" for="ads_list">{{translate('messages.Ads List')}}</label>
                                             </div>
                                         </div>
+                                        @if(false) {{-- 哪吒停用·StackFood残留,对齐侧栏@if(false);恢复:删本@if(false)行与下方@endif --}}
                                         <div class="check-item mb-2 p-0">
                                             <div class="form-group form-check form--check">
                                                 <input type="checkbox" name="modules[]" value="campaign" class="form-check-input"
@@ -157,6 +160,7 @@
                                                 <label class="form-check-label ml-0  text-dark" for="campaign">{{translate('messages.campaign')}}</label>
                                             </div>
                                         </div>
+                                        @endif
                                         <div class="check-item mb-2 p-0">
                                             <div class="form-group form-check form--check">
                                                 <input type="checkbox" name="modules[]" value="coupon" class="form-check-input"
@@ -231,6 +235,7 @@
                                                 <label class="form-check-label ml-0  text-dark" for="regular_order">{{translate('messages.Regular Orders')}}</label>
                                             </div>
                                         </div>
+                                        @if(false) {{-- 哪吒停用·StackFood残留,对齐侧栏@if(false);恢复:删本@if(false)行与下方@endif --}}
                                         <div class="check-item mb-2 p-0">
                                             <div class="form-group form-check form--check">
                                                 <input type="checkbox" name="modules[]" value="subscription_order" class="form-check-input"
@@ -238,9 +243,11 @@
                                                 <label class="form-check-label ml-0  text-dark" for="subscription_order">{{translate('messages.Subscription Orders')}}</label>
                                             </div>
                                         </div>
+                                        @endif
                                     </div>
                                 </div>
                             </div>
+                            @if(false) {{-- 哪吒停用·StackFood残留:钱包管理组(my_wallet/wallet_method)B方案不用,整组隐藏防留空组;对齐侧栏@if(false);恢复:删本@if(false)行与本组结尾@endif --}}
                             <div class="col-md-6 col-lg-4">
                                 <div class="bg-white rounded">
                                     <div class="d-flex align-items-center justify-content-between gap-1 flex-wrap p-3 border-bottom">
@@ -271,6 +278,7 @@
                                     </div>
                                 </div>
                             </div>
+                            @endif
                             <div class="col-md-6 col-lg-4">
                                 <div class="bg-white rounded">
                                     <div class="d-flex align-items-center justify-content-between gap-1 flex-wrap p-3 border-bottom">
@@ -314,6 +322,7 @@
                                         </div>
                                     </div>
                                     <div class="check--items-inner custom-em d-flex flex-wrap p-sm-3 p-2">
+                                        @if(false) {{-- 哪吒停用·StackFood残留,对齐侧栏@if(false);恢复:删本@if(false)行与下方@endif --}}
                                         <div class="check-item mb-2 p-0">
                                             <div class="form-group form-check form--check">
                                                 <input type="checkbox" name="modules[]" value="expense_report" class="form-check-input"
@@ -321,6 +330,8 @@
                                                 <label class="form-check-label ml-0  text-dark" for="expense_report">{{translate('messages.Expense Report')}}</label>
                                             </div>
                                         </div>
+                                        @endif
+                                        @if(false) {{-- 哪吒停用·StackFood残留,对齐侧栏@if(false);恢复:删本@if(false)行与下方@endif --}}
                                         <div class="check-item mb-2 p-0">
                                             <div class="form-group form-check form--check">
                                                 <input type="checkbox" name="modules[]" value="transaction" class="form-check-input"
@@ -328,6 +339,8 @@
                                                 <label class="form-check-label ml-0  text-dark" for="transaction">{{translate('messages.transaction')}}</label>
                                             </div>
                                         </div>
+                                        @endif
+                                        @if(false) {{-- 哪吒停用·StackFood残留,对齐侧栏@if(false);恢复:删本@if(false)行与下方@endif --}}
                                         <div class="check-item mb-2 p-0">
                                             <div class="form-group form-check form--check">
                                                 <input type="checkbox" name="modules[]" value="disbursement" class="form-check-input"
@@ -335,6 +348,7 @@
                                                 <label class="form-check-label ml-0  text-dark" for="disbursement">{{translate('messages.disbursement')}}</label>
                                             </div>
                                         </div>
+                                        @endif
                                         <div class="check-item mb-2 p-0">
                                             <div class="form-group form-check form--check">
                                                 <input type="checkbox" name="modules[]" value="order_report" class="form-check-input"
@@ -349,6 +363,7 @@
                                                 <label class="form-check-label ml-0  text-dark" for="food_report">{{translate('messages.Food Report')}}</label>
                                             </div>
                                         </div>
+                                        @if(false) {{-- 哪吒停用·StackFood残留,对齐侧栏@if(false);恢复:删本@if(false)行与下方@endif --}}
                                         <div class="check-item mb-2 p-0">
                                             <div class="form-group form-check form--check">
                                                 <input type="checkbox" name="modules[]" value="tax_report" class="form-check-input"
@@ -356,6 +371,7 @@
                                                 <label class="form-check-label ml-0  text-dark" for="tax_report">{{translate('messages.Tax Report')}}</label>
                                             </div>
                                         </div>
+                                        @endif
                                     </div>
                                 </div>
                             </div>
@@ -386,6 +402,7 @@
                                                 <label class="form-check-label ml-0  text-dark" for="restaurant_config">{{translate('messages.Restaurant Config')}}</label>
                                             </div>
                                         </div>
+                                        @if(false) {{-- 哪吒停用·StackFood残留,对齐侧栏@if(false);恢复:删本@if(false)行与下方@endif --}}
                                         <div class="check-item mb-2 p-0">
                                             <div class="form-group form-check form--check">
                                                 <input type="checkbox" name="modules[]" value="business_plan" class="form-check-input"
@@ -393,6 +410,7 @@
                                                 <label class="form-check-label ml-0  text-dark" for="business_plan">{{translate('messages.Business Plan')}}</label>
                                             </div>
                                         </div>
+                                        @endif
                                         <div class="check-item mb-2 p-0">
                                             <div class="form-group form-check form--check">
                                                 <input type="checkbox" name="modules[]" value="my_qr_code" class="form-check-input"
