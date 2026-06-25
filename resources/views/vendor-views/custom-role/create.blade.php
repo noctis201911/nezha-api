@@ -113,6 +113,13 @@
                                                 <label class="form-check-label ml-0  text-dark" for="chat">{{translate('messages.chat')}}</label>
                                             </div>
                                         </div>
+                                        <div class="check-item mb-2 p-0">
+                                            <div class="form-group form-check form--check">
+                                                <input type="checkbox" name="modules[]" value="nezha_deposit" class="form-check-input"
+                                                       id="nezha_deposit">
+                                                <label class="form-check-label ml-0  text-dark" for="nezha_deposit">{{translate('预存佣金')}}</label>
+                                            </div>
+                                        </div>
                                         @if(false) {{-- 哪吒停用·StackFood残留,对齐侧栏@if(false);恢复:删本@if(false)行与下方@endif --}}
                                         <div class="check-item mb-2 p-0">
                                             <div class="form-group form-check form--check">

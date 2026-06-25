@@ -211,7 +211,7 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
         });
 
         // 哪吒 B方案 组4: 商家预存佣金余额 + 低额邮件告警自助设置
-        Route::group(['prefix' => 'nezha-deposit', 'as' => 'nezha-deposit.'], function () {
+        Route::group(['prefix' => 'nezha-deposit', 'as' => 'nezha-deposit.', 'middleware' => ['module:nezha_deposit']], function () {
             Route::get('/', [NezhaDepositController::class, 'index'])->name('index');
             Route::post('update-alert', [NezhaDepositController::class, 'update_alert'])->name('update-alert');
         });
