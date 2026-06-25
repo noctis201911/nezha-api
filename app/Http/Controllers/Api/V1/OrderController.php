@@ -1179,6 +1179,62 @@ class OrderController extends Controller
      * 待退款单上点「催一下」→ 平台替顾客提醒商家(站内信进商家消息中心 + Telegram)尽快原路退款。
      * L1-1: 平台不碰钱, 仅转达提醒。对象级鉴权: 只能催【本人】且【确处于待退款】的单。防刷: 6 小时一次。
      */
+    /**
+     * 哪吒[2026-06-25]: 顾客「催商家更新出餐进度」。
+     * 备餐阶段(confirmed/accepted/processing)顾客一键催 -> 平台提醒商家尽快出餐/推进状态。
+     * L3 纯通知, 平台不碰钱。对象级鉴权: 只能催本人且处于备餐阶段的单。防刷: 10 分钟一次。
+     */
+    public function nudge_merchant(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'order_id' => 'required',
+            'guest_id' => $request->user ? 'nullable' : 'required',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
+        }
+        $user_id = $request->user ? $request->user->id : $request['guest_id'];
+        $order = Order::where(['id' => $request['order_id'], 'user_id' => $user_id])
+            ->when(!isset($request->user), function ($q) { $q->where('is_guest', 1); })
+            ->when(isset($request->user), function ($q) { $q->where('is_guest', 0); })
+            ->Notpos()->first();
+        if (!$order) {
+            return response()->json(['errors' => [['code' => 'order', 'message' => translate('messages.not_found')]]], 404);
+        }
+        if (!in_array($order->order_status, ['confirmed', 'accepted', 'processing'])) {
+            return response()->json(['errors' => [['code' => 'order', 'message' => '当前订单状态无需催商家更新']]], 403);
+        }
+        // 防刷: 10 分钟内只替顾客转达一次。
+        $key = 'nezha_merchant_nudge_' . $order->id;
+        if (\Illuminate\Support\Facades\Cache::has($key)) {
+            return response()->json(['message' => '已提醒商家，请耐心等待出餐进度更新'], 200);
+        }
+        \Illuminate\Support\Facades\Cache::put($key, now()->toDateTimeString(), now()->addMinutes(10));
+        // 给商家: 后台站内信 + push + Telegram。失败不阻断。
+        try {
+            $vendorId = $order->restaurant?->vendor_id;
+            if ($vendorId) {
+                $data = Helpers::makeDataForPushNotification(
+                    title: '顾客在催出餐',
+                    message: '订单 #' . $order->id . ' 的顾客在催出餐进度，请尽快备餐/出餐，并在商家后台推进订单状态。',
+                    orderId: $order->id, type: 'order_status', orderStatus: $order->order_status
+                );
+                Helpers::insertDataOnNotificationTable($data, 'vendor', $vendorId);
+                $vendorToken = $order->restaurant?->vendor?->firebase_token;
+                if ($vendorToken) {
+                    Helpers::send_push_notif_to_device($vendorToken, $data);
+                }
+            }
+        } catch (\Throwable $e) {
+            info('nudge_merchant vendor notify failed: ' . $e->getMessage());
+        }
+        try {
+            Helpers::sendTelegramToRestaurant($order->restaurant,
+                "🔔 顾客在催出餐\n订单 #{$order->id}\n顾客希望尽快出餐，请尽快备餐并在商家后台推进订单状态（接单→备餐→出餐）。");
+        } catch (\Throwable $e) {}
+        return response()->json(['message' => '已替您提醒商家尽快出餐，请稍候'], 200);
+    }
+
     public function nudge_refund(Request $request)
     {
         $validator = Validator::make($request->all(), [
