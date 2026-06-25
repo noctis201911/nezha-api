@@ -663,6 +663,23 @@ class OrderController extends Controller
 
             $order->save();
 
+            // 哪吒[券包 Slice3·任务④]: 下单成功用券 → firstOrCreate 领取记录 + 回填 used_at(纯信息字段, 不碰金额/状态机/退款)。
+            //   覆盖"没领直接结算用券"路径, 使券进「我的券包」并标记已用; 在事务内随订单一致提交/回滚。失败仅记日志, 绝不阻断下单。
+            if ($coupon && $order->is_guest == 0 && $order->user_id) {
+                try {
+                    $nezha_claim = \App\Models\CouponClaim::firstOrCreate(
+                        ['user_id' => $order->user_id, 'coupon_id' => $coupon->id],
+                        ['claimed_at' => now()]
+                    );
+                    if (!$nezha_claim->used_at) {
+                        $nezha_claim->used_at = now();
+                        $nezha_claim->save();
+                    }
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('nezha coupon_claim backfill failed: ' . $e->getMessage());
+                }
+            }
+
             OrderLogic::create_subscription_log(id:$order->id);
             // End Order Subscription.
 

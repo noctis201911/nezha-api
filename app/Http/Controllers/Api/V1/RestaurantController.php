@@ -290,7 +290,8 @@ class RestaurantController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
-        $restaurant_id=$request->restaurant_id;
+        // 哪吒[券包 Slice3]: restaurant_id 来自 query 是字符串, data 列存整数 → JSON_CONTAINS 类型敏感("6"≠6)致 admin restaurant_wise 券在餐厅页永不显示。强制转 int 修复。
+        $restaurant_id=(int) $request->restaurant_id;
         $customer_id=$request->customer_id ?? null;
 
         $coupons = Coupon::Where(function ($q) use ($restaurant_id,$customer_id) {
