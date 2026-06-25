@@ -272,8 +272,8 @@ class OrderLogic
                     // 平台应收佣金已在上方 adminWallet->total_commission_earning + order_transaction.admin_commission 记下。
                     // [组4 预存佣金扣佣] 开关(nezha_deposit_mode_status)开启时, 从商家预存佣金扣除本单"向商家收的佣金"。
                     // 注: 服务费(向客户收)不在此扣; 佣金率沿用现成 admin_commission/餐馆 comission(后台可调)。
-                    $nezha_deposit_mode = BusinessSetting::where('key','nezha_deposit_mode_status')->first()?->value;
-                    if($nezha_deposit_mode == 1 && $comission_amount > 0){
+                    // [哪吒 单店抽佣] 仅当该店启用抽佣(总开关+单店开关皆开)时扣佣; 单一真相源 OrderController::nezha_commission_active。
+                    if(\App\Http\Controllers\Api\V1\OrderController::nezha_commission_active($order->restaurant) && $comission_amount > 0){
                         // F-3 防并发 lost-update: 事务内 lockForUpdate 读最新余额, 串行化同商家并发扣减; 由函数末尾 $vendorWallet->save() 落库。
                         $freshBalance = (float) (RestaurantWallet::where('vendor_id', $order->restaurant->vendor->id)->lockForUpdate()->value('deposit_balance') ?? 0);
                         $vendorWallet->deposit_balance = $freshBalance - $comission_amount;

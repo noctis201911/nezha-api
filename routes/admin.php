@@ -342,6 +342,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
                 Route::get('list', [VendorController::class, 'list'])->name('list');
                 Route::post('search', [VendorController::class, 'search'])->name('search');
                 Route::get('status/{restaurant}/{status}', [VendorController::class, 'status'])->name('status');
+                Route::get('toggle-commission/{restaurant}/{status}', [VendorController::class, 'toggleCommission'])->name('toggle-commission');
                 Route::get('toggle-settings-status/{restaurant}/{status}/{menu}', [VendorController::class, 'restaurant_status'])->name('toggle-settings');
                 Route::post('status-filter', [VendorController::class, 'status_filter'])->name('status-filter');
                 //Import and export

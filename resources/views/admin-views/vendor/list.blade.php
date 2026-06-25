@@ -262,6 +262,7 @@
                                 <th class="w-130px">{{translate('messages.zone')}}</th>
                                 <th class="w-130px">{{translate('messages.cuisine')}}</th>
                                 <th class="w-100px">{{translate('messages.status')}}</th>
+                                <th class="w-100px text-center">抽佣</th>
                                 <th class="text-center w-60px">{{translate('messages.action')}}</th>
                             </tr>
                             </thead>

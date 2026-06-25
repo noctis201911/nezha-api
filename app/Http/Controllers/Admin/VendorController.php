@@ -774,7 +774,7 @@ class VendorController extends Controller
             return view('admin-views.vendor.view.settings', compact('restaurant'));
         } elseif ($tab == 'payment_info') {
             // 哪吒外卖 B方案: 收款信息(商家本人收款码/USDT地址) + 预存佣金概览/充值/流水
-            $depositMode = BusinessSetting::where('key', 'nezha_deposit_mode_status')->first()?->value;
+            $depositMode = \App\Http\Controllers\Api\V1\OrderController::nezha_commission_active($restaurant) ? 1 : 0;
             $depositThreshold = BusinessSetting::where('key', 'nezha_min_deposit_threshold')->first()?->value ?? 0;
             $depositBalance = $restaurant?->wallet?->deposit_balance ?? 0;
             $depositLogs = \App\Models\RestaurantDepositTransaction::where('restaurant_id', $restaurant->id)
@@ -1149,6 +1149,21 @@ class VendorController extends Controller
         $data = ['review' => round($review, 1), 'rating' => round($rating, 1)];
 
         return response()->json($data);
+    }
+
+    /**
+     * [哪吒 单店抽佣] 超管在商家列表逐店开/关抽佣。开启后仅当抽佣总开关也开启时才会实际扣佣并受下线阈值约束。
+     */
+    public function toggleCommission(Restaurant $restaurant, Request $request)
+    {
+        $restaurant->nezha_commission_enabled = (int) $request->route('status') ? 1 : 0;
+        $restaurant->save();
+        if ($restaurant->nezha_commission_enabled) {
+            Toastr::success('已对「'.$restaurant->name.'」开启抽佣。注意:仅当抽佣总开关也开启时,才会从该店保证金实际扣佣并受下线阈值约束。');
+        } else {
+            Toastr::info('已对「'.$restaurant->name.'」关闭抽佣,该店不扣佣、不会因保证金不足被下线。');
+        }
+        return back();
     }
 
     public function status(Restaurant $restaurant, Request $request)

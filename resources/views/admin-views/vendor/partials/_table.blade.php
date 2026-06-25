@@ -63,6 +63,16 @@
                 <span class="badge badge-soft-danger">{{translate('messages.not_approved')}}</span>
             @endif
         </td>
+        <td class="text-center">
+            @if(isset($dm->vendor->status) && $dm->vendor->status)
+                <label class="toggle-switch toggle-switch-sm" for="commissionCheckbox{{$dm->id}}">
+                    <input type="checkbox" data-url="{{route('admin.restaurant.toggle-commission',[$dm->id,$dm->nezha_commission_enabled?0:1])}}" data-message="确定更改该店抽佣开关吗？开启后，在抽佣总开关也开启时将从该店保证金扣佣。" class="toggle-switch-input status_change_alert" id="commissionCheckbox{{$dm->id}}" {{$dm->nezha_commission_enabled?'checked':''}}>
+                    <span class="toggle-switch-label"><span class="toggle-switch-indicator"></span></span>
+                </label>
+            @else
+                <span class="text-muted">—</span>
+            @endif
+        </td>
         <td>
             <div class="btn--container justify-content-center">
                 <a class="btn btn-sm btn--primary btn-outline-primary action-btn"

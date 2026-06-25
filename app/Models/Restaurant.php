@@ -24,6 +24,7 @@ class Restaurant extends Model
     protected $casts = [
         'minimum_order' => 'float',
         'comission' => 'float',
+        'nezha_commission_enabled' => 'boolean',
         'tax' => 'float',
         'delivery_charge' => 'float',
         'schedule_order'=>'boolean',

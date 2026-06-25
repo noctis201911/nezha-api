@@ -2141,12 +2141,24 @@ class OrderController extends Controller
      * [哪吒 B方案/组4 预存佣金扣佣] 判断某餐馆是否因预存佣金低于阈值而应停止接单。
      * 仅在开关 nezha_deposit_mode_status=1 时生效; 关闭(一阶段免佣免押)或餐馆不存在时返回 false。
      */
-    public static function nezha_deposit_below_threshold($restaurant){
+    /**
+     * [哪吒 B方案] 某餐馆当前是否启用抽佣(保证金扣佣)。单一真相源, 所有扣佣/下线/展示闸必走此处。
+     * = 抽佣总开关 nezha_deposit_mode_status=1 且 该店 nezha_commission_enabled=1。
+     * 任一为关 → 不扣佣、不受保证金阈值下线约束(留在线上), 防"免佣却被下线"死结。
+     */
+    public static function nezha_commission_active($restaurant){
         if (!$restaurant) {
             return false;
         }
         $mode = BusinessSetting::where('key','nezha_deposit_mode_status')->first()?->value;
         if ($mode != 1) {
+            return false;
+        }
+        $enabled = is_array($restaurant) ? ($restaurant['nezha_commission_enabled'] ?? 0) : ($restaurant->nezha_commission_enabled ?? 0);
+        return (bool) ((int) $enabled);
+    }
+    public static function nezha_deposit_below_threshold($restaurant){
+        if (!self::nezha_commission_active($restaurant)) {
             return false;
         }
         $threshold = (float) (BusinessSetting::where('key','nezha_min_deposit_threshold')->first()?->value ?? 0);

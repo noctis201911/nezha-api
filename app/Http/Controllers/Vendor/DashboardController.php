@@ -226,7 +226,7 @@ class DashboardController extends Controller
         $threshold = (float) (\App\Models\BusinessSetting::where('key', 'nezha_min_deposit_threshold')->first()?->value ?? 0);
         $hasHistory = \App\Models\RestaurantDepositTransaction::where('vendor_id', $vendorId)->exists();
 
-        if ($mode != 1 || ! $hasHistory) {
+        if (! \App\Http\Controllers\Api\V1\OrderController::nezha_commission_active($restaurant) || ! $hasHistory) {
             // 未启用佣金预存扣佣 / 无扣佣历史 → 无从评估健康, 诚实显"样本不足", 不伪造"充足"。
             $deposit_tier = 'sample';
         } elseif ($balance <= $threshold) {
