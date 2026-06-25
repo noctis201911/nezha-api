@@ -167,3 +167,11 @@
 - 存量审计（只读）：历史 cancel_unpaid 事件全部命中已删测试单，**真实生产受害单=0**（无需存量补退款留痕）。
 - 验证：php -l 4文件全过；新增 tests/Feature/NezhaProofDetectionTest.php 7用例/24断言全过（DatabaseTransactions+内存对象，零写库）；工作树 dry-run 实测同一 USDT 哈希单由旧 cancel_unpaid 改为 `cancel_paid_refund`(26min 有凭证超时自动取消+退款留痕)。
 - 不触二清：平台仍全程不碰钱、退款仍由商家原路退；本改动只把『已付识别』补全，资金流向不变。经 /debate 多实例对抗核验后实施。
+
+### 2026-06-25 超时自动取消：制裁命中单不生成「待商家退款」指示（L1-6 张力·防御性收紧）
+- 🔴 张力：超时 sweep `cancelOrder(paid=true)` 旧逻辑对【有凭证】离线单无条件 `record_direct_pay_refund_pending` 生成「待商家退款」，**不复跑制裁筛查**。一笔付款来源命中 OFAC SDN 的 USDT 离线单若 20min 无人处理被超时取消，系统会生成退款指示＝促成商家把钱原路退回受制裁地址，与 L1-6（制裁命中即拒/不与受制裁主体交易）抵触。命中路径：商家从未确认（从未筛查）+ 商家确认后筛查 denied（凭证图仍在，sweep 仍当「有凭证已付」）。
+- 修复（防御性收紧）：`OrderTimeoutSweep::cancelOrder` paid 分支生成退款留痕前复跑 `NezhaSanctionScreen::screen_order`；**仅 action=reject（确凿命中制裁）** 时不生成退款指示，改为只取消 + `record_reject` 留痕 + `escalateToSupport` 升级人工裁决退款方向（勿原路退回受制裁地址）。pass/inconclusive/筛查异常一律照常生成退款留痕（不误伤正常单，与原行为一致）。受 `nezha_sanction_screen_status`(默认1开) 门控。
+- 退款方向最终裁决（原路退回受制裁地址 vs 冻结待核）属 L1 判断，留用户/律师；本改动只阻止系统【自动】促成向受制裁主体退款，不替代人工裁决。
+- 验证：php -l 过；e2e（事务建删测试单）— RMB(screen=pass)→退款留痕照常生成、USDT-inconclusive→退款留痕照常生成（均不误伤）、screen_address 注入测试制裁地址→命中产出 reject 信号。reject→跳过退款+escalate 为干净条件已代码审；完整链上 reject e2e 需真实受制裁 USDT 单（H4 固有潜伏性、当前近零真单流）。
+- 残留 edge：USDT-inconclusive（来源无法链上核验）仍生成退款留痕——按 L1-6「命中即拒」仅拦 reject，inconclusive 不属命中；如需更严可后续评估对 inconclusive 也 escalate。
+- 经测试后提交 + nzdeploy-api 上线（2026-06-25）。

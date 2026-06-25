@@ -194,10 +194,31 @@ class OrderTimeoutSweep extends Command
         Helpers::increment_order_count($order->restaurant);
 
         if ($paid && $order->payment_method === 'offline_payment') {
+            // 哪吒 H4(L1-6): 生成「待商家退款」前复跑制裁筛查 —— 命中制裁名单的单【不生成退款指示】
+            // (否则等于促成商家把钱原路退回受制裁地址, 与 L1-6「制裁命中即拒/不与受制裁主体交易」抵触),
+            // 改为只取消 + 留痕 + 升级人工裁决退款方向。仅 reject(确凿命中)拦; pass/inconclusive/筛查异常
+            // 一律照常生成退款留痕(不误伤正常单, 与原行为一致)。
+            $nezhaSanctionReject = false;
+            if (\App\CentralLogics\NezhaSanctionScreen::enabled()) {
+                try {
+                    $nezhaScreen = \App\CentralLogics\NezhaSanctionScreen::screen_order($order);
+                    if (($nezhaScreen['action'] ?? 'pass') === 'reject') {
+                        $nezhaSanctionReject = true;
+                        try { \App\CentralLogics\NezhaSanctionScreen::record_reject($fresh, $nezhaScreen); } catch (\Throwable $e) {}
+                        Log::warning('NEZHA_H4 sanctioned order auto-canceled WITHOUT refund instruction (escalated). order#' . $fresh->id);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('NEZHA_H4 sanction re-screen failed order#' . $fresh->id . ': ' . $e->getMessage());
+                }
+            }
             \App\Models\OfflinePayments::where('order_id', $order->id)
                 ->whereIn('status', ['pending', 'verified', 'denied'])
                 ->update(['status' => 'canceled']);
-            OrderLogic::record_direct_pay_refund_pending($fresh, 'system', $order->user_id, $reason, true);
+            if ($nezhaSanctionReject) {
+                $this->escalateToSupport($fresh, "订单 #{$fresh->id} 超时自动取消：付款来源命中制裁名单(L1-6)，已【不生成退款指示】。请人工裁决退款方向，勿直接原路退回受制裁地址。");
+            } else {
+                OrderLogic::record_direct_pay_refund_pending($fresh, 'system', $order->user_id, $reason, true);
+            }
         } elseif ($order->payment_method === 'offline_payment') {
             \App\Models\OfflinePayments::where('order_id', $order->id)
                 ->where('status', 'pending')
