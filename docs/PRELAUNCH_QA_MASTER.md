@@ -52,7 +52,7 @@ node nz.js run "bash /www/wwwroot/api.nezha.am/nzcheck-cod.sh"
 | 10 | 三方(顾客↔商家↔平台)×四类路径(正向/逆向/异常/合规)×两登录态 | `CROSSCHECK_QA_PLAYBOOK` | 🔴核心 | 🟢正向只读浏览/登录态·🟡逆向异常资金(下单/仿真)·👤limbo脏单 | 正向✅/逆向🔶⬜/登录态⬜ |
 | ↳ | **轴 I 跨界面数字一致性/不变量**(横幅==徽标==列表;裸DB计数代码味道) | 同上 §2轴I | gate | 🟢grep+只读对账·👤limbo脏单真人盯 | ⬜(横幅幽灵数已暴露; SystemController:20 孪生待修) |
 | **C 上线就绪（非测试·易漏）** ||||||
-| 11 | **演示数据清除**(两个回退脚本 `_demo_rollback.php`+`_demo_locallife_service_rollback.php`) | [[nezha-demo-seed-data]] | 🔴硬门 | 🟡(破坏性,必须拍板) | ⬜**没跑=真顾客看到假店/假帖** |
+| 11 | **演示数据清除**(一键编排 `bash nzdemo-rollback.sh GO` —— 顺序跑全部 8 个回退脚本: `_demo_addons` / `_demo_announcement` / `_demo_review_names` / `rollback_socialproof` / `_demo_locallife_service` / `_demo_locallife_v2` / `_ll_merchants` / `_demo_rollback`, 每步查退出码+成功标记, 末尾 `_nzdemo_residual_assert.php` 断言残留=0。🔴不带 GO=仅预览不执行) | [[nezha-demo-seed-data]] | 🔴硬门 | 🟡(破坏性,必须拍板·GO 显式确认) | ⬜**没跑=真顾客看到假店/假帖/假订单** |
 | 12 | 真实商家就绪(店12 营业时间/收款码/USDT地址/上架) | 现店12 无营业时间→下不了单 | 🔴硬门 | 🟡/👤(商家或你设置) | ⬜ |
 | 13 | **开关上线态逐个确认**(deposit_mode/guest_checkout/refund_control/sanction/risk/wallet_add_refund 目标值+CHANGELOG留痕) | INVARIANTS L2 | 🔴硬门 | 🟢现值只读核·🟡翻动需拍板 | ⬜逐个核 |
 | 14 | 通知送达真机(FCM/邮件/Telegram·iOS推送坑) | [[nezha-order-notifications]] | gate | 🟢站内信入库只读验·👤真机收推送 | 部分✅ |
