@@ -38,7 +38,7 @@ class CouponController extends Controller
             'title' => 'required|max:191',
             'start_date' => 'required',
             'expire_date' => 'required',
-            'discount' => 'required',
+            'discount' => 'required|numeric|min:0',
             'coupon_type' => 'required|in:free_delivery,default',
             'min_purchase' => 'nullable|min:1'
         ]);
@@ -51,7 +51,7 @@ class CouponController extends Controller
         $coupon = new Coupon();
         $coupon->title = $request->title[array_search('default', $request->lang)];
         $coupon->code = $request->code;
-        $coupon->limit = $request->coupon_type=='first_order'?1:$request->limit;
+        $coupon->limit = $request->limit; // 哪吒[清死代码 2026-06-25]: 原 first_order 三元已废(校验只允许 free_delivery/default)
         $coupon->coupon_type = $request->coupon_type;
         $coupon->start_date = $request->start_date;
         $coupon->expire_date = $request->expire_date;
@@ -121,7 +121,7 @@ class CouponController extends Controller
             'title' => 'required|max:191',
             'start_date' => 'required',
             'expire_date' => 'required',
-            'discount' => 'required',
+            'discount' => 'required|numeric|min:0',
             'coupon_type' => 'required|in:free_delivery,default',
             'min_purchase' => 'nullable|min:1'
         ]);
@@ -138,7 +138,7 @@ class CouponController extends Controller
         }
         $coupon->title = $request->title[array_search('default', $request->lang)];
         $coupon->code = $request->code;
-        $coupon->limit = $request->coupon_type=='first_order'?1:$request->limit;
+        $coupon->limit = $request->limit; // 哪吒[清死代码 2026-06-25]: 原 first_order 三元已废(校验只允许 free_delivery/default)
         $coupon->coupon_type = $request->coupon_type;
         $coupon->start_date = $request->start_date;
         $coupon->expire_date = $request->expire_date;
