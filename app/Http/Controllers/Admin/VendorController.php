@@ -598,6 +598,15 @@ class VendorController extends Controller
             return back();
         }
 
+        // 哪吒[收款码变更安全提醒]: 改动前快照收款字段旧值(含收款码图片), 保存后比对真正变了哪些。
+        $nz_pay_before = [
+            'rmb_qr_image'       => $restaurant->rmb_qr_image,
+            'payee_name'         => $restaurant->payee_name,
+            'usdt_address'       => $restaurant->usdt_address,
+            'usdt_bep20_address' => $restaurant->usdt_bep20_address,
+            'usdt_network'       => $restaurant->usdt_network,
+        ];
+
         if ($request->has('rmb_qr_image')) {
             $restaurant->rmb_qr_image = Helpers::update(
                 dir: 'restaurant/payment_qr/',
@@ -611,6 +620,62 @@ class VendorController extends Controller
         $restaurant->usdt_bep20_address = $request->usdt_bep20_address;
         if ($request->has('usdt_network')) { $restaurant->usdt_network = $request->usdt_network; }
         $restaurant->save();
+
+        // 哪吒[收款码变更安全提醒]: 收款信息=钱往哪走, 任何改动都可能是被冒用/误录。比对实际变了哪些字段,
+        // 变了就向商家「所有已留联系方式」恒发安全提醒(站内信+Telegram+邮箱+商家App推送), 不受接单提醒开关约束
+        // (仿退款恒发), 好让商家能发现非本人的篡改。L1-1: 仅通知不碰钱; 每个通道各自 try/catch, 失败不阻断保存。
+        try {
+            $nz_label_map = [
+                'rmb_qr_image'       => '人民币收款码',
+                'payee_name'         => '收款人姓名',
+                'usdt_address'       => 'USDT 收款地址(TRC20)',
+                'usdt_bep20_address' => 'USDT 收款地址(BEP20)',
+                'usdt_network'       => 'USDT 网络',
+            ];
+            $nz_changed = [];
+            foreach ($nz_label_map as $nz_f => $nz_label) {
+                if ((string) ($nz_pay_before[$nz_f] ?? '') !== (string) ($restaurant->$nz_f ?? '')) {
+                    $nz_changed[] = $nz_label;
+                }
+            }
+            if (!empty($nz_changed)) {
+                $nz_time        = \Illuminate\Support\Carbon::now('Asia/Yerevan')->format('Y-m-d H:i');
+                $nz_changed_str = implode('、', $nz_changed);
+                $nz_shop        = $restaurant->name ?: ('店铺#' . $restaurant->id);
+                $nz_title = '⚠️ 收款信息已变更，请核对';
+                $nz_body  = "您好，您店铺【{$nz_shop}】的收款信息于 {$nz_time}（埃里温时间）经平台后台更新，变更项：{$nz_changed_str}。请登录商家后台「收款信息」核对是否正确。如非本人申请的修改，请立即联系平台客服。";
+                $nz_data  = Helpers::makeDataForPushNotification(title: $nz_title, message: $nz_body, type: 'nezha_payment_info_changed');
+
+                // ① 站内信(消息中心, 持久未读红点, 商家进消息中心即清) — 恒发
+                $nz_vendor_id = $restaurant->vendor_id;
+                if ($nz_vendor_id) {
+                    try { Helpers::insertDataOnNotificationTable($nz_data, 'vendor', $nz_vendor_id); } catch (\Throwable $e) {}
+                }
+                // ② Telegram(已绑则发; 函数内部自查 chat_id 与异常)
+                try {
+                    Helpers::sendTelegramToRestaurant(
+                        $restaurant,
+                        "⚠️ 哪吒 · 收款信息变更提醒\n店铺：{$nz_shop}\n时间：{$nz_time}（埃里温）\n变更项：{$nz_changed_str}\n请登录商家后台「收款信息」核对。如非本人申请，请立即联系平台客服。"
+                    );
+                } catch (\Throwable $e) {}
+                // ③ 邮箱(优先自填通知邮箱, 回退店铺/商家邮箱)
+                $nz_email = $restaurant->nezha_notify_email ?: ($restaurant->email ?: $restaurant->vendor?->email);
+                if ($nz_email) {
+                    try {
+                        Mail::raw($nz_body, function ($m) use ($nz_email, $nz_shop) {
+                            $m->to($nz_email)->subject('哪吒 · 收款信息变更提醒（' . $nz_shop . '）');
+                        });
+                    } catch (\Throwable $e) {}
+                }
+                // ④ 商家端 App 推送(有 token 才发)
+                try {
+                    $nz_token = $restaurant->vendor?->firebase_token;
+                    if ($nz_token) { Helpers::send_push_notif_to_device($nz_token, $nz_data); }
+                } catch (\Throwable $e) {}
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('nezha payment-info change alert failed restaurant#' . $restaurant->id . ': ' . $e->getMessage());
+        }
 
         Toastr::success(translate('messages.收款信息已保存'));
         return back();
