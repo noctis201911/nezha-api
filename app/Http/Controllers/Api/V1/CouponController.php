@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Models\Coupon;
+use App\Models\CouponClaim;
 use App\Models\Restaurant;
 use Illuminate\Http\Request;
 use App\CentralLogics\Helpers;
@@ -198,5 +199,91 @@ class CouponController extends Controller
                 }
             }
             return response()->json($data, 200);
+    }
+
+    // 哪吒[券包 2026-06-25 Slice2]: 领取券到券包。领取不设门槛(领了进券包, 没领符合条件结算也能用),
+    // 仅拦"过期/无资格/不符店", 不拦"已用满"(已用满仍可留在券包)。唯一索引 user+coupon + firstOrCreate = 防重复领。
+    public function claim(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'coupon_id' => 'required_without:code',
+            'code'      => 'required_without:coupon_id',
+        ]);
+        if ($validator->errors()->count() > 0) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
+        }
+
+        $user_id = $request->user()->id;
+
+        $coupon = Coupon::active()
+            ->when($request->coupon_id, function ($q) use ($request) {
+                $q->where('id', $request->coupon_id);
+            })
+            ->when(!$request->coupon_id && $request->code, function ($q) use ($request) {
+                $q->where('code', $request->code);
+            })
+            ->first();
+
+        if (!$coupon) {
+            return response()->json(['errors' => [['code' => 'coupon', 'message' => translate('messages.not_found')]]], 404);
+        }
+
+        // 复用全系统一致的有效性判定(order_amount=null 不卡最低消费)
+        $status = CouponLogic::is_valide($coupon, $user_id, $coupon->restaurant_id, $coupon->restaurant_id, null);
+        if (in_array($status, [404, 407, 408])) {
+            $message = $status == 407
+                ? translate('messages.coupon_expire')
+                : translate('messages.You_are_not_eligible_for_this_coupon');
+            return response()->json(['errors' => [['code' => 'coupon', 'message' => $message]]], $status == 407 ? 407 : 403);
+        }
+
+        try {
+            $claim = CouponClaim::firstOrCreate(
+                ['user_id' => $user_id, 'coupon_id' => $coupon->id],
+                ['claimed_at' => now()]
+            );
+            $already = !$claim->wasRecentlyCreated;
+        } catch (\Illuminate\Database\QueryException $e) {
+            // 并发狂点撞唯一索引 → 视为已领取
+            $already = true;
+        }
+
+        return response()->json([
+            'success'         => true,
+            'already_claimed' => $already,
+            'coupon'          => $coupon,
+        ], 200);
+    }
+
+    // 哪吒[券包 2026-06-25 Slice2]: 我的券包。返回已领取的券, 附 redeem_status(available/used_up/expired/unavailable)。
+    public function myCoupons(Request $request)
+    {
+        $user_id = $request->user()->id;
+
+        $claims = CouponClaim::with(['coupon.restaurant:id,name'])
+            ->where('user_id', $user_id)
+            ->orderByDesc('claimed_at')
+            ->get();
+
+        $available = [];
+        $unavailable = [];
+
+        foreach ($claims as $claim) {
+            $coupon = $claim->coupon;
+            if (!$coupon) {
+                continue;
+            }
+            $status = CouponLogic::is_valide($coupon, $user_id, $coupon->restaurant_id, $coupon->restaurant_id, null);
+            $coupon->redeem_status = $status == 200 ? 'available' : ($status == 406 ? 'used_up' : ($status == 407 ? 'expired' : 'unavailable'));
+            $coupon->claimed_at = $claim->claimed_at;
+
+            if ($status == 200) {
+                $available[] = $coupon;
+            } else {
+                $unavailable[] = $coupon;
+            }
+        }
+
+        return response()->json(['available' => $available, 'unavailable' => $unavailable], 200);
     }
 }

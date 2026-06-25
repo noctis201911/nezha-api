@@ -528,6 +528,8 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     Route::get('coupon/list', [UserCouponController::class, 'list']);
     Route::group(['prefix' => 'coupon', 'middleware' => 'auth:api'], function () {
         Route::get('apply', [UserCouponController::class, 'apply']);
+        Route::post('claim', [UserCouponController::class, 'claim']);
+        Route::get('my-coupons', [UserCouponController::class, 'myCoupons']);
     });
 
     Route::group(['prefix' => 'cashback', 'middleware' => 'auth:api'], function () {
