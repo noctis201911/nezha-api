@@ -230,7 +230,13 @@ class AdvertisementController extends Controller
             'cancellation_note' => ['required_if:status,denied', new WordValidation],
         ]);
 
-        $advertisement =Advertisement::where('id',$request->id)->with('restaurant')->first();
+        // 哪吒安全修复(IDOR+审核绕过): 加归属作用域 + null守卫; 仅允许 已审核(approved)<->暂停(paused) 互切, 绝不能把 pending/denied 自行改成 approved 绕过平台审核
+        $advertisement =Advertisement::where('restaurant_id',Helpers::get_restaurant_id())->where('id',$request->id)->with('restaurant')->first();
+        if (!$advertisement) { abort(404); }
+        if (!in_array($advertisement->status, ['approved','paused'], true)) {
+            Toastr::error(translate('该广告当前状态不可在此更改'));
+            return back();
+        }
         $advertisement->status = in_array($request->status,['paused','approved']) ? $request->status : $advertisement->status;
         $advertisement->pause_note = $request?->pause_note ?? null;
         $advertisement->cancellation_note = $request?->cancellation_note ?? null;
@@ -255,6 +261,10 @@ class AdvertisementController extends Controller
      */
     public function update(AdvertisementUpdateRequest $request, Advertisement $advertisement)
     {
+        // 哪吒安全修复(IDOR): 广告归属校验, 防越权改/复制他店广告(同 coupon edit / conversation view 根因)
+        if ((int) $advertisement->restaurant_id !== (int) Helpers::get_restaurant_id()) {
+            abort(404);
+        }
         // [哪吒广告计费 T3] 已扣费广告锁死: 不可编辑(防改 end_date 免费延期 / 改内容绕过审核)。未扣费仍可正常编辑; 已扣费如需变更请新建广告。
         if ((int) $advertisement->is_paid === 1) {
             return response()->json(['errors' => [['message' => translate('广告已开始投放并扣费, 不可修改; 如需变更请新建广告')]]], 200);
@@ -375,6 +385,10 @@ class AdvertisementController extends Controller
 
     public function copyAdd(Request $request, Advertisement $advertisement)
     {
+        // 哪吒安全修复(IDOR): 广告归属校验, 防越权改/复制他店广告(同 coupon edit / conversation view 根因)
+        if ((int) $advertisement->restaurant_id !== (int) Helpers::get_restaurant_id()) {
+            abort(404);
+        }
 
         $language = getWebConfig('language');
         $defaultLang = str_replace('_', '-', app()->getLocale());
@@ -400,6 +414,10 @@ class AdvertisementController extends Controller
 
     public function copyAddPost(Advertisement $advertisement , AdvertisementUpdateRequest $request)
     {
+        // 哪吒安全修复(IDOR): 广告归属校验, 防越权改/复制他店广告(同 coupon edit / conversation view 根因)
+        if ((int) $advertisement->restaurant_id !== (int) Helpers::get_restaurant_id()) {
+            abort(404);
+        }
 
         if (auth('vendor_employee')->check()) {
             $loable_type = 'App\Models\VendorEmployee';
