@@ -73,6 +73,15 @@ class OrderController extends Controller
             // 哪吒B方案: 完成/送达元数据 + 收据(必须在 restaurant 被格式化为数组、offline_payments 被 unset 之前, 关系仍为模型时计算)
             $order['nezha_completion'] = OrderLogic::completion_meta($order);
             $order['nezha_receipt'] = OrderLogic::receipt_meta($order);
+            // 哪吒[追踪页展开商品]: 顾客自己订单的商品行(名称/数量/行价), 与订单详情页同源, L3只读不新增暴露
+            $order['nezha_items'] = ($order->details ?? collect())->map(function ($it) {
+                $fd = json_decode($it->food_details, true);
+                return [
+                    'name'     => $fd['name'] ?? '商品',
+                    'quantity' => (int) $it->quantity,
+                    'amount'   => (float) $it->price * (int) $it->quantity,
+                ];
+            })->values();
             $order['restaurant'] = $order['restaurant'] ? Helpers::restaurant_data_formatting($order['restaurant']): $order['restaurant'];
             $order['delivery_address'] = $order['delivery_address']?json_decode($order['delivery_address'],true):$order['delivery_address'];
             $order['delivery_man'] = $order['delivery_man']?Helpers::deliverymen_data_formatting([$order['delivery_man']]):$order['delivery_man'];
