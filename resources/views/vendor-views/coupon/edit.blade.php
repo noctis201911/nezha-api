@@ -5,6 +5,7 @@
 
 @section('content')
 @php($restaurant_data = \App\CentralLogics\Helpers::get_restaurant_data())
+@php($cur = \App\CentralLogics\Helpers::currency_symbol())
 
     <div class="content container-fluid">
         <!-- Page Header -->
@@ -79,91 +80,79 @@
                             </div>
                             @endif
                         </div>
+
+                        {{-- 哪吒[券重做 2026-06-25]: 券类型=满减券/折扣券, 驱动 discount_type; coupon_type 固定 default --}}
+                        <input type="hidden" name="coupon_type" value="default">
                         <div class="col-sm-6 col-lg-3">
                             <div class="form-group">
-                                <label class="input-label" for="exampleFormControlInput1">{{translate('messages.coupon_type')}}</label>
-                                <select id="coupon_type" name="coupon_type" class="form-control coupon_type_change">
-                                    @if (($restaurant_data->restaurant_model == 'commission' && $restaurant_data->self_delivery_system == 1) ||($restaurant_data->restaurant_model == 'subscription' &&
-                                        isset($restaurant_data->restaurant_sub) && $restaurant_data->restaurant_sub->self_delivery == 1))
-                                    <option value="free_delivery" {{$coupon['coupon_type']=='free_delivery'?'selected':''}}>{{translate('messages.free_delivery')}}</option>
-                                    @endif
-                                    <option value="default" {{$coupon['coupon_type']=='default'?'selected':''}}>{{translate('messages.default')}}</option>
+                                <label class="input-label">券类型 <span class="text-danger">*</span></label>
+                                <select id="discount_type" name="discount_type" class="form-control coupon-template-change">
+                                    <option value="amount" {{$coupon['discount_type']=='amount'?'selected':''}}>满减券（满 X 减 Y 元）</option>
+                                    <option value="percent" {{$coupon['discount_type']=='percent'?'selected':''}}>折扣券（满 X 打折 · 可封顶）</option>
                                 </select>
                             </div>
                         </div>
+
+                        <div class="col-sm-6 col-lg-3" id="min_purchase_div">
+                            <div class="form-group">
+                                <label class="input-label" for="min_purchase">满 · 最低消费（{{ $cur }}）
+                                    <span class="input-label-secondary" data-toggle="tooltip" title="" data-original-title="{{ translate('填 0 = 无门槛, 任意金额可用') }}">
+                                        <i class="tio-info text-gray1 fs-16"></i>
+                                    </span>
+                                </label>
+                                <input required id="min_purchase" type="number" name="min_purchase" step="0.01" value="{{$coupon['min_purchase']}}" min="0" max="999999999999.99" class="form-control" placeholder="例：3000">
+                            </div>
+                        </div>
+
+                        <div class="col-sm-6 col-lg-3" id="discount_div">
+                            <div class="form-group">
+                                <label class="input-label" for="discount" id="discount_label">减（{{ $cur }}） <span class="text-danger">*</span></label>
+                                <input type="number" id="discount" min="1" max="999999999999.99" step="0.01" value="{{$coupon['discount']}}" name="discount" class="form-control" required>
+                            </div>
+                        </div>
+
+                        <div class="col-sm-6 col-lg-3" id="max_discount_div" style="display:none;">
+                            <div class="form-group">
+                                <label class="input-label" for="max_discount">最高可减（{{ $cur }}）
+                                    <span class="input-label-secondary" data-toggle="tooltip" title="" data-original-title="{{ translate('折扣券封顶: 留空或 0 = 不封顶') }}">
+                                        <i class="tio-info text-gray1 fs-16"></i>
+                                    </span>
+                                </label>
+                                <input type="number" min="0" max="999999999999.99" step="0.01" value="{{$coupon['max_discount']}}" name="max_discount" id="max_discount" class="form-control">
+                            </div>
+                        </div>
+
                         <div class="col-lg-3 col-sm-6">
                             <div class="form-group">
                                 <div class="d-flex justify-content-between">
-                                    <label class="input-label" for="exampleFormControlInput1">{{translate('messages.code')}} <span class="text-danger">*</span></label>
+                                    <label class="input-label" for="coupon_code">{{translate('messages.code')}} <span class="text-danger">*</span></label>
                                     <label class="input-label generate-code" id="generate_code"><i class="tio-hand-draw"></i>{{translate('messages.Generate Code')}}</label>
                                 </div>
                                 <input id="coupon_code" type="text" name="code" class="form-control" value="{{$coupon['code']}}"
                                        placeholder="{{\Illuminate\Support\Str::random(8)}}" required maxlength="100">
                             </div>
                         </div>
+
                         <div class="col-sm-6 col-lg-3">
                             <div class="form-group">
-                                <label class="input-label" for="limit">{{translate('messages.limit_for_same_user')}}
+                                <label class="input-label" for="coupon_limit">每人限领次数
                                     <span class="text-danger">*</span>
                                 </label>
-                                <input required type="number" name="limit" id="coupon_limit" value="{{$coupon['limit']}}" class="form-control" max="100"
-                                        placeholder="{{ translate('messages.Ex :') }} 10">
+                                <input required type="number" name="limit" id="coupon_limit" value="{{$coupon['limit']}}" class="form-control" min="1" max="100"
+                                        placeholder="例：1">
                             </div>
                         </div>
+
                         <div class="col-sm-6 col-lg-3">
                             <div class="form-group">
-                                <label class="input-label" for="">{{translate('messages.start_date')}} <span class="text-danger">*</span></label>
+                                <label class="input-label">{{translate('messages.start_date')}} <span class="text-danger">*</span></label>
                                 <input type="date" name="start_date" class="form-control" id="date_from" placeholder="{{translate('messages.select_date')}}" value="{{date('Y-m-d',strtotime($coupon['start_date']))}}">
                             </div>
                         </div>
                         <div class="col-sm-6 col-lg-3">
                             <div class="form-group">
-                                <label class="input-label" for="date_to">{{translate('messages.expire_date')}} <span class="text-danger">*</span></label>
-                                <input type="date" name="expire_date" class="form-control" placeholder="{{translate('messages.select_date')}}" id="date_to" value="{{date('Y-m-d',strtotime($coupon['expire_date']))}}"
-                                        data-hs-flatpickr-options='{
-                                        "dateFormat": "Y-m-d"
-                                    }'>
-                            </div>
-                        </div>
-                        <div class="col-sm-6 col-lg-3" id="discount_type_div">
-                            <div class="form-group">
-                                <label class="input-label" for="discount_type">{{translate('messages.discount_type')}}</label>
-                                <select name="discount_type" id="discount_type" class="form-control" {{$coupon['coupon_type']=='free_delivery'?'disabled':''}}>
-                                    <option value="amount" {{$coupon['discount_type']=='amount'?'selected':''}}>
-                                        {{ translate('messages.amount').' ('.\App\CentralLogics\Helpers::currency_symbol().')'  }}
-                                    </option>
-                                    <option value="percent" {{$coupon['discount_type']=='percent'?'selected':''}}>
-                                        {{ translate('messages.percent').' (%)' }}
-                                    </option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-sm-6 col-lg-3" id="discount_div">
-                            <div class="form-group">
-                                <label class="input-label" for="discount">{{translate('messages.discount')}} <span class="text-danger">*</span> </label>
-                                <input type="number" id="discount" min="1" max="999999999999.99" step="0.01" value="{{$coupon['discount']}}"
-                                        name="discount" class="form-control" required {{$coupon['coupon_type']=='free_delivery'?'readonly':''}}>
-                            </div>
-                        </div>
-                        <div class="col-sm-6 col-lg-3" id="max_discount_div">
-                            <div class="form-group">
-                                <label class="input-label" for="max_discount">{{translate('messages.max_discount')}}
-                                    <span class="input-label-secondary" title="" data-toggle="tooltip" data-original-title="{{ translate('If left empty the field, no maximum limit will be applied.') }}">
-                                        <i class="tio-info text-gray1 fs-16"></i>
-                                    </span>
-                                </label>
-                                <input type="number" min="0" max="999999999999.99" step="0.01"
-                                        value="{{$coupon['max_discount']}}" name="max_discount" id="max_discount" class="form-control" {{$coupon['coupon_type']=='free_delivery' || $coupon['discount_type']=='amount' ?'readonly':''}}>
-                            </div>
-                        </div>
-                        <div class="col-sm-6 col-lg-3" id="min_purchase_div">
-                            <div class="form-group">
-                                <label class="input-label" for="exampleFormControlInput1">{{translate('messages.min_purchase')}}
-                                    <span class="text-danger">*</span>
-                                </label>
-                                <input required id="min_purchase" type="number" name="min_purchase" step="0.01" value="{{$coupon['min_purchase']}}"
-                                        min="1" max="999999999999.99" class="form-control"
-                                        placeholder="100">
+                                <label class="input-label">{{translate('messages.expire_date')}} <span class="text-danger">*</span></label>
+                                <input type="date" name="expire_date" class="form-control" placeholder="{{translate('messages.select_date')}}" id="date_to" value="{{date('Y-m-d',strtotime($coupon['expire_date']))}}">
                             </div>
                         </div>
                     </div>
@@ -188,6 +177,26 @@
         $("#date_to").on("change", function () {
             $('#date_from').attr('max',$(this).val());
         });
+
+        // 哪吒[券重做 2026-06-25]: 券类型模板切换——满减券(amount)/折扣券(percent)
+        function nezhaApplyCouponTemplate(type){
+            if(type === 'percent'){
+                $('#discount_label').html('折扣（%） <span class="text-danger">*</span>');
+                $('#discount').attr('min',1).attr('max',100);
+                $('#max_discount_div').show();
+                $('#max_discount').removeAttr('readonly');
+            } else {
+                $('#discount_label').html('减（{{ $cur }}） <span class="text-danger">*</span>');
+                $('#discount').attr('min',1).attr('max',999999999999.99);
+                $('#max_discount_div').hide();
+                $('#max_discount').val('');
+            }
+        }
+
+        $(document).on('change', '.coupon-template-change', function () {
+            nezhaApplyCouponTemplate($(this).val());
+        });
+
         $(document).on('ready', function () {
             $('#date_from').attr('max','{{date("Y-m-d",strtotime($coupon["expire_date"]))}}');
             $('#date_to').attr('min','{{date("Y-m-d",strtotime($coupon["start_date"]))}}');
@@ -199,96 +208,13 @@
             });
         });
 
-
-        $(document).on('change', '.coupon_type_change', function () {
-            let coupon_type = $(this).val();
-            if(coupon_type=='first_order')
-            {
-                $('#coupon_limit').val(1);
-                $('#coupon_limit').attr("readonly","true");
-                $('#customer_wise').hide();
-            }
-            else{
-                $('#coupon_limit').val('');
-                $('#coupon_limit').removeAttr("readonly");
-                $('#customer_wise').show();
-            }
-
-            if(coupon_type=='free_delivery')
-            {
-                $('#discount_type').attr("disabled","true");
-                $('#discount_type_div').hide();
-                $('#discount_type').val("").trigger( "change" );
-
-                $('#discount_div').hide();
-                $('#discount').val(0);
-                $('#discount').attr("readonly","true");
-
-                $('#max_discount_div').hide();
-                $('#max_discount').val("").trigger("change");
-                $('#max_discount').attr("readonly","true");
-
-                $('#min_purchase_div').hide();
-                $('#min_purchase').val("").trigger("change");
-                $('#min_purchase').attr("readonly","true");
-
-            }
-            else{
-
-                $('#max_discount').removeAttr("readonly");
-                $('#max_discount').val("").trigger("change");
-                $('#max_discount_div').show();
-
-                $('#discount_type').removeAttr("disabled");
-                $('#discount_type').val("amount").trigger( "change" );
-                $('#discount_type_div').show();
-
-                $('#discount_div').show();
-                $('#discount').removeAttr("readonly");
-                $('#discount').val(0);
-
-                $('#discount_type').attr("required","true");
-
-                $('#min_purchase_div').show();
-                $('#min_purchase').removeAttr("readonly");
-                $('#min_purchase').val(0);
-            }
-        });
-
-        $(document).on('change', '#discount_type', function () {
-            let discount_type = $(this).val();
-            if(discount_type == 'amount')
-            {
-                $('#max_discount').attr("readonly","true").val(0);
-            }
-            else{
-                $('#max_discount').removeAttr("readonly").attr("required","true");
-            }
-        });
-
         $(document).ready(function() {
+            // 按当前券类型初始化字段显隐/标签
+            nezhaApplyCouponTemplate($('#discount_type').val());
+
             $('#generate_code').click(function() {
                 generateUniqueCode();
             });
-
-            let coupon_type = $('#coupon_type').val();
-            if(coupon_type=='free_delivery'){
-                $('#discount_type_div').hide();
-                $('#discount_div').hide();
-                $('#max_discount_div').hide();
-                $('#min_purchase_div').hide();
-            }
-            if(coupon_type=='first_order'){
-                $('#customer_wise').hide();
-            }
-
-            let discount_type = $('#discount_type').val();
-            if(discount_type=='amount'){
-                $('#max_discount').attr("readonly","true");
-            }
-            if(discount_type=='percent'){
-                $('#max_discount').attr("required","true");
-            }
 
             function generateUniqueCode() {
                 let code = generateRandomCode();

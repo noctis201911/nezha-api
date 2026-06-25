@@ -39,7 +39,7 @@ class CouponController extends Controller
             'start_date' => 'required',
             'expire_date' => 'required',
             'discount' => 'required|numeric|min:0',
-            'coupon_type' => 'required|in:free_delivery,default',
+            'coupon_type' => 'required|in:default',
             'min_purchase' => 'nullable|min:1'
         ]);
         $customer_id  = $request->customer_ids ?? ['all'];
@@ -122,7 +122,7 @@ class CouponController extends Controller
             'start_date' => 'required',
             'expire_date' => 'required',
             'discount' => 'required|numeric|min:0',
-            'coupon_type' => 'required|in:free_delivery,default',
+            'coupon_type' => 'required|in:default',
             'min_purchase' => 'nullable|min:1'
         ]);
         if($request->title[array_search('default', $request->lang)] == '' ){
