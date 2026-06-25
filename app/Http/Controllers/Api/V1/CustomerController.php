@@ -381,6 +381,14 @@ class CustomerController extends Controller
         return response()->json([], 200);
     }
 
+    public function logout(Request $request)
+    {
+        // 顾客主动登出: 吊销当前 Passport access token, 防被盗 token 在 1 年寿命内被继续冒用
+        $request?->user()?->token()?->revoke();
+        return response()->json([], 200);
+    }
+
+
     public function remove_account(Request $request)
     {
         $user = $request->user();

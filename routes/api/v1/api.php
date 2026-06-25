@@ -424,6 +424,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         Route::get('suggested-foods', [CustomerController::class, 'get_suggested_food']);
         // Remove account
         Route::delete('remove-account', [CustomerController::class, 'remove_account']);
+        Route::post('logout', [CustomerController::class, 'logout']);
 
         Route::group(['prefix' => 'loyalty-point'], function () {
             Route::post('point-transfer', [LoyaltyPointController::class, 'point_transfer']);
