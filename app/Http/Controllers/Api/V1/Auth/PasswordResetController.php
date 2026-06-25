@@ -285,17 +285,61 @@ class PasswordResetController extends Controller
             return response()->json(['message' => translate('Password changed successfully.')], 200);
         }
 
-        if ($resetData) {
+        // Nezha security (#1): enforce reset-code TTL + per-account lockout on the SUBMIT endpoint.
+        // Before: this endpoint had neither. The 6-digit code never expired and verifyToken's
+        // lockout could be skipped, so a distributed attacker could brute-force the code with
+        // unlimited time. We add a 10-minute TTL and mirror verifyToken's hit-count lockout here.
+        $maxOtpHit = 5;
+        $maxOtpHitTime = 60;   // seconds: window for counting failed attempts
+        $tempBlockTime = 600;  // seconds: lockout duration once tripped
+        $tokenTtl = 600;       // seconds: reset code validity window (10 minutes)
+        $now = now();
+
+        $pwRow = DB::table('password_resets')->where($identifierType, $identifierValue)->first();
+
+        // Active lockout -> reject early.
+        if ($pwRow && $pwRow->is_temp_blocked) {
+            $blockedFor = $now->diffInSeconds(Carbon::parse($pwRow->temp_block_time));
+            if ($blockedFor <= $tempBlockTime) {
+                $wait = $tempBlockTime - $blockedFor;
+                return response()->json(['errors' => [
+                    ['code' => 'otp_block_time', 'message' => translate('messages.please_try_again_after_') . CarbonInterval::seconds($wait)->cascade()->forHumans()]
+                ]], 405);
+            }
+            // Lockout window elapsed -> reset the counters.
+            DB::table('password_resets')->where($identifierType, $identifierValue)->update([
+                'otp_hit_count' => 0, 'is_temp_blocked' => 0, 'temp_block_time' => null,
+            ]);
+            $pwRow->otp_hit_count = 0;
+        }
+
+        $tokenFresh = $resetData && Carbon::parse($resetData->created_at)->diffInSeconds($now) <= $tokenTtl;
+
+        if ($tokenFresh) {
             $user->password = bcrypt($request->password);
             $user->save();
 
             DB::table('password_resets')
-                ->where('token', $request->reset_token)
                 ->where($identifierType, $identifierValue)
                 ->delete();
 
             return response()->json(['message' => translate('Password changed successfully.')], 200);
         }
+
+        // Wrong or expired code -> count the failed attempt and lock out after $maxOtpHit tries.
+        if ($pwRow && ($pwRow->otp_hit_count + 1) >= $maxOtpHit
+            && Carbon::parse($pwRow->created_at)->diffInSeconds($now) < $maxOtpHitTime) {
+            DB::table('password_resets')->where($identifierType, $identifierValue)->update([
+                'is_temp_blocked' => 1, 'temp_block_time' => $now,
+            ]);
+            return response()->json(['errors' => [
+                ['code' => 'otp_temp_blocked', 'message' => translate('messages.Too_many_attemps')]
+            ]], 405);
+        }
+
+        DB::table('password_resets')->where($identifierType, $identifierValue)->update([
+            'otp_hit_count' => DB::raw('otp_hit_count + 1'),
+        ]);
 
         return response()->json(['errors' => [
             ['code' => 'invalid', 'message' => translate('messages.invalid_otp')]
