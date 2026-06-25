@@ -18,7 +18,10 @@ class CouponController extends Controller
     {
         Helpers::getZoneIds($request);
 
-        $customer_id = Auth::user()?->id;
+        // 哪吒[券包 Slice3 修]: list 是公共路由(无 auth 中间件), 默认 guard 下 Auth::user()=null 把登录用户当 guest →
+        //   first_order 券(NEZHA-NEW)永远算可用 → 结算自动选券会探测它经 applyCoupon 返 406 留 console 噪音。
+        //   显式用 api(passport) guard 读 Bearer token, 让登录用户的 first_order/限领资格被正确判定(游客无 token 仍 null, 行为不变)。
+        $customer_id = Auth::guard('api')->user()?->id;
         $zone_id = json_decode($request->header('zoneId'), true);
 
         $available = [];
