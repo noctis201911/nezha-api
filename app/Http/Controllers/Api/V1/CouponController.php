@@ -70,7 +70,13 @@ class CouponController extends Controller
             }
 
             if ($visible) {
-                $status = CouponLogic::is_valide($coupon, $customer_id, $coupon->restaurant_id, $request->order_restaurant_id, $request->order_amount);
+                // 哪吒[券包 Slice3 修]: restaurant_wise 券 restaurant_id FK 为 null → is_valide 第一道餐厅匹配判 404 误入 unavailable(致结算自动选券与券列表漏掉店铺专属券)。按券型取正确 restaurant_id。
+                $nezha_rid = $coupon->restaurant_id;
+                if ($coupon->coupon_type == 'restaurant_wise') {
+                    $nezha_d = json_decode($coupon->data, true);
+                    $nezha_rid = (is_array($nezha_d) && count($nezha_d)) ? $nezha_d[0] : null;
+                }
+                $status = CouponLogic::is_valide($coupon, $customer_id, $nezha_rid, $request->order_restaurant_id, $request->order_amount);
                 if ($status === 200) {
                     $available[] = $coupon;
                 } else {
