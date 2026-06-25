@@ -98,7 +98,10 @@ class CouponController extends Controller
 
     public function edit($id)
     {
-        $coupon = Coupon::withoutGlobalScope('translate')->where(['id' => $id])->where('created_by', 'vendor' )->first();
+        // 哪吒[IDOR修复 2026-06-25]: 加 restaurant_id 作用域——否则商家可凭 id 加载别家商家券的编辑表单
+        // (泄露券码/折扣/限领/客户定向配置)。同控制器其余方法均已按 restaurant_id 作用域, 唯 edit 漏。
+        $coupon = Coupon::withoutGlobalScope('translate')->where(['id' => $id])->where('created_by', 'vendor' )->where('restaurant_id', Helpers::get_restaurant_id())->first();
+        if(!$coupon){ abort(404); }
         return view('vendor-views.coupon.edit', compact('coupon'));
     }
     public function view(Coupon $coupon)
