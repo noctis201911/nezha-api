@@ -980,6 +980,12 @@ class CustomerAuthController extends Controller
         $user = User::where('email', $data['email'])->first();
         $is_exist_user = null;
 
+        // Nezha security (#2): remember if this email already belonged to a PRE-EXISTING account
+        // whose email was never verified. Such a password may have been set by someone who
+        // pre-registered this email without owning it. Used below to invalidate it on social merge.
+        $preexistId = $user?->id;
+        $preexistUnverified = $user && (int) $user->is_email_verified === 0;
+
         if($user && $request_data['verified'] == 'default' && $user->is_email_verified == 0){
             $is_exist_user = $this->exist_user($user);
             $temporaryToken = null;
@@ -1056,6 +1062,15 @@ class CustomerAuthController extends Controller
             $user->login_medium = $request_data['medium'];
             $user->is_email_verified = 1;
             $user->save();
+
+            // Nezha security (#2): account pre-hijacking defense. If we just merged a verified social
+            // login into a pre-existing, never-verified account, invalidate any password it carried -
+            // a pre-registrant could have set it without owning this email. The real owner logs in via
+            // the social provider, or uses "forgot password" (email is now verified) to set a new one.
+            if ($preexistUnverified && $user->id === $preexistId && !empty($user->password)) {
+                $user->password = bcrypt(Str::random(40));
+                $user->save();
+            }
 
             // Nezha: backfill name for social users missing f_name (covers half-created rows from earlier attempts)
             if(!$user->f_name){
