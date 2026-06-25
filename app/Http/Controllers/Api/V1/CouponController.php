@@ -273,7 +273,13 @@ class CouponController extends Controller
             if (!$coupon) {
                 continue;
             }
-            $status = CouponLogic::is_valide($coupon, $user_id, $coupon->restaurant_id, $coupon->restaurant_id, null);
+            // 哪吒[券包 Slice3 修]: restaurant_wise 券的 restaurant_id FK 为 null(餐厅在 data 里); 传 null 致 is_valide 餐厅匹配判 404 误显"暂不可用"。按券型取正确 restaurant_id。
+            $nezha_rid = $coupon->restaurant_id;
+            if ($coupon->coupon_type == 'restaurant_wise') {
+                $nezha_d = json_decode($coupon->data, true);
+                $nezha_rid = (is_array($nezha_d) && count($nezha_d)) ? $nezha_d[0] : null;
+            }
+            $status = CouponLogic::is_valide($coupon, $user_id, $nezha_rid, $nezha_rid, null);
             $coupon->redeem_status = $status == 200 ? 'available' : ($status == 406 ? 'used_up' : ($status == 407 ? 'expired' : 'unavailable'));
             $coupon->claimed_at = $claim->claimed_at;
 
