@@ -148,9 +148,11 @@ class EmployeeController extends Controller
         return redirect()->route('vendor.employee.list');
     }
 
-    public function distroy($id)
+    public function destroy($id)
     {
         $role = VendorEmployee::where('restaurant_id', Helpers::get_restaurant_id())->where(['id' => $id])->first();
+        // 哪吒[修复 2026-06-25]: 方法名 distroy→destroy(原与路由 'destroy' 不符→点删除必 500); 加 null 守卫防坏id 500。
+        if (!$role) { Toastr::error(translate('messages.not_found')); return back(); }
         if (auth('vendor_employee')->id() == $role['id']){
             Toastr::error(translate('messages.You_can_not_edit_your_own_info'));
             return redirect()->route('vendor.employee.list');

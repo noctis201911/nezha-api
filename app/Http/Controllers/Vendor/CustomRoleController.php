@@ -152,9 +152,11 @@ class CustomRoleController extends Controller
         return redirect()->route('vendor.custom-role.create');
     }
 
-    public function distroy($id)
+    public function destroy($id)
     {
         $role = EmployeeRole::where('restaurant_id',Helpers::get_restaurant_id())->where(['id' => $id])->first();
+        // 哪吒[修复 2026-06-25]: 方法名 distroy→destroy(原与路由 'destroy' 不符→点删除必 500); 加 null 守卫。
+        if (!$role) { Toastr::error(translate('messages.not_found')); return back(); }
         $role?->translations()?->delete();
         $role->delete();
 
