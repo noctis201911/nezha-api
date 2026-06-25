@@ -526,6 +526,12 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::post('overdue/settings', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'overdueSettings'])->name('overdue.settings');
         });
 
+        // 哪吒 安全审计日志(SEC-3) 只读查看页 —— module:audit 不在任何自定义角色 modules, 仅超管(role_id=1)可见
+        Route::group(['prefix' => 'nezha-audit', 'as' => 'nezha-audit.', 'middleware' => ['module:audit']], function () {
+            Route::get('logs', [\App\Http\Controllers\Admin\AdminAuditLogController::class, 'index'])->name('logs');
+        });
+
+
         // 哪吒 AI 在线客服「小哪」后台
         Route::group(['prefix' => 'vendor-feedback', 'as' => 'vendor-feedback.', 'middleware' => ['module:nezha_cs']], function () {
             Route::get('/', [\App\Http\Controllers\Admin\VendorFeedbackController::class, 'index'])->name('index');
