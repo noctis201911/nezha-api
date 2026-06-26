@@ -181,13 +181,14 @@
                                     <a class="nav-link " href="{{route('vendor.order.list',['confirmed'])}}" title="{{translate('messages.confirmed')}}">
                                         <span class="tio-circle nav-indicator-icon"></span>
                                         <span class="text-truncate sidebar--badge-container">
-                                            {{translate('messages.confirmed')}}
+                                            已接单
                                                 <span class="badge badge-soft-success badge-pill ml-1">
-                                                {{\App\Models\Order::whereIn('order_status',['confirmed',])->NotDigitalOrder()->Notpos()->whereNotNull('confirmed')->where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->HasSubscriptionToday()->OrderScheduledIn(30)->count()}}
+                                                {{\App\Models\Order::whereIn('order_status',['confirmed','accepted'])->NotDigitalOrder()->Notpos()->whereNotNull('confirmed')->where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->HasSubscriptionToday()->OrderScheduledIn(30)->count()}}
                                             </span>
                                         </span>
                                     </a>
                                 </li>
+                                @if(false){{-- 哪吒:已接单合并到confirmed,不再单独显示 --}}
                                 <li class="nav-item {{Request::is('restaurant-panel/order/list/accepted')?'active':''}} @yield('accepted')">
                                     <a class="nav-link " href="{{route('vendor.order.list',['accepted'])}}"  title="{{translate('accepted')}}">
                                         <span class="tio-circle nav-indicator-icon"></span>
@@ -199,6 +200,7 @@
                                         </span>
                                     </a>
                                 </li>
+                                @endif
 
                                 <li class="nav-item {{Request::is('restaurant-panel/order/list/cooking')?'active':''}} @yield('processing')">
                                     <a class="nav-link" href="{{route('vendor.order.list',['cooking'])}}" title="{{translate('messages.cooking')}}">
@@ -257,6 +259,14 @@
                                     </a>
                                 </li>
                                 @endif
+                                {{-- 哪吒: 低频状态折叠 --}}
+                                <li class="nav-item">
+                                    <a class="nav-link" href="javascript:" onclick="var el=document.getElementById('nzSidebarMore');el.style.display=el.style.display==='none'?'block':'none';" title="更多">
+                                        <span class="tio-circle nav-indicator-icon"></span>
+                                        <span class="text-truncate">更多 ▾</span>
+                                    </a>
+                                </li>
+                                <div id="nzSidebarMore" style="display:{{ Request::is('restaurant-panel/order/list/refunded') || Request::is('restaurant-panel/order/list/refund_requested') || Request::is('restaurant-panel/order/list/scheduled') || Request::is('restaurant-panel/order/list/payment_failed') || Request::is('restaurant-panel/order/list/canceled') ? 'block' : 'none' }};">
                                 <li class="nav-item {{Request::is('restaurant-panel/order/list/refunded')?'active':''}} @yield('refunded')">
                                     <a class="nav-link " href="{{route('vendor.order.list',['refunded'])}}"  title="{{translate('Refunded')}}">
                                         <span class="tio-circle nav-indicator-icon"></span>
@@ -326,6 +336,7 @@
                                         </span>
                                     </a>
                                 </li>
+                                </div>
 
 
 

@@ -47,7 +47,7 @@ class OrderController extends Controller
                 return $query->SearchingForDeliveryman();
             })
             ->when($status == 'confirmed', function ($query) {
-                return $query->whereIn('order_status', ['confirmed'])->whereNotNull('confirmed');
+                return $query->whereIn('order_status', ['confirmed', 'accepted'])->whereNotNull('confirmed');
             })
             ->when($status == 'pending', function ($query) use ($data) {
                 if (config('order_confirmation_model') == 'restaurant' || $data) {
