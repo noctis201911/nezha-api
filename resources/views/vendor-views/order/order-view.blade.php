@@ -1214,9 +1214,9 @@
                                 @php($yText = $yAddr['address'] ?? '')
                                 @if (in_array($order->order_status, ['processing', 'handover']))
                                     <div class="mt-3 mb-1 p-2" style="background:#EEF6FF;border:1px solid #CFE3FF;border-radius:10px;font-size:12px;color:#1A1A1A;line-height:1.7;">
-                                        <span style="font-weight:700;">🛵 什么时候叫 Yandex？</span> 餐快做好时，用下方「顾客配送位置」把坐标粘到 Yandex Go 叫车；叫到车后回到<b>页面顶部</b>，贴上追踪链接点「出餐·标记配送中」一步搞定。
+                                        <span style="font-weight:700;">🛵 什么时候叫 Yandex？</span> 餐快做好时，滑到下方点「一键叫 Yandex Go 配送」按钮直接叫车（自动填好路线）；叫到车后回到<b>页面顶部</b>，贴上追踪链接点「出餐·标记配送中」一步搞定。
                                     </div>
-                                    <div class="mt-3 mb-1 p-2 text-center" style="background:#F6FAFF;border:1px dashed #BBD3F0;border-radius:10px;font-size:12px;color:#3A5A80;line-height:1.7;">👆 备好餐、叫到 Yandex 后，回到<b>页面顶部</b>——可以直接贴 Yandex 追踪链接再点「出餐·标记配送中」，一步完成出餐+配送；不贴链接直接点也行，顾客只是看不到骑手位置。</div>
+                                    <div class="mt-3 mb-1 p-2 text-center" style="background:#F6FAFF;border:1px dashed #BBD3F0;border-radius:10px;font-size:12px;color:#3A5A80;line-height:1.7;">👆 备好餐后，下方点「一键叫 Yandex Go」叫车 → 叫到车后回到<b>页面顶部</b>贴追踪链接 → 点「出餐·标记配送中」，一步完成；不贴链接直接点也行。</div>
                                 @endif
                                 @if ($order->order_status == 'picked_up')
                                     <div class="mt-3 mb-1 p-2" style="background:#E9F8EF;border:1px solid #BBE8CC;border-radius:10px;font-size:12px;color:#0F5132;line-height:1.7;">
@@ -1233,8 +1233,16 @@
                                 @endif
                                 {{-- 哪吒 B方案: 顾客配送定位助手 — 复制地址/坐标粘进 Yandex Go, 或一键在 Yandex 地图确认位置 --}}
                                 <div class="mt-3 p-3" style="background:#F0F7FF;border:1px solid #CFE3FF;border-radius:12px;">
-                                    <div style="font-weight:700;margin-bottom:6px;color:#1A1A1A;">顾客配送位置（叫 Yandex 用）</div>
-                                    <div style="font-size:12px;color:#6B7280;margin-bottom:8px;line-height:1.6;">复制下面的“坐标”粘到 Yandex Go 目的地框，认准带 Yerevan / 亚美尼亚 的那条（一般在最顶）——⚠️ 列表里可能混入坐标顺序写反、落到俄罗斯/土耳其的诱饵，别选错。也可点下方“在 Yandex 看顾客位置 / 路线”先核对。配送定位以图钉为准。</div>
+                                    <div style="font-weight:700;margin-bottom:6px;color:#1A1A1A;">叫 Yandex 配送</div>
+                                    <div style="font-size:12px;color:#6B7280;margin-bottom:8px;line-height:1.6;"><b>手动叫车备用：</b>复制下面的坐标粘到 Yandex Go 目的地框。</div>
+                                    @if ($yLat && $yLng && $order->restaurant && $order->restaurant->latitude && $order->restaurant->longitude)
+                                        <a href="https://3.redirect.appmetrica.yandex.com/route?start-lat={{ $order->restaurant->latitude }}&start-lon={{ $order->restaurant->longitude }}&end-lat={{ $yLat }}&end-lon={{ $yLng }}&tariffClass=express&ref=nezha&appmetrica_tracking_id=1178268795219780156&lang=hy"
+                                            target="_blank" rel="noopener noreferrer"
+                                            class="btn btn-success w-100 mb-2" style="font-weight:700;border-radius:10px;font-size:15px;padding:10px;">
+                                            🛵 一键叫 Yandex Go 配送
+                                        </a>
+                                        <div style="font-size:11px;color:#6B7280;margin-bottom:10px;text-align:center;line-height:1.5;">点击后 Yandex Go 会自动填好餐厅→顾客路线，确认即叫车。没装 App 会跳到应用商店。叫到车后记得回来贴追踪链接。</div>
+                                    @endif
                                     @if ($yText)
                                         <div class="d-flex align-items-center gap-2 mb-2">
                                             <input type="text" readonly value="{{ $yText }}" class="form-control form-control-sm" style="border-radius:8px;">
