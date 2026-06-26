@@ -185,7 +185,7 @@
                                 @if($order->details && $order->details->count() > 0)
                                     <div class="text-muted mt-1" style="font-size:11px;max-width:180px;white-space:normal;line-height:1.4">
                                         @foreach($order->details->take(3) as $__d)
-                                            @php($__fd = is_string($__d->food_details) ? json_decode($__d->food_details, true) : $__d->food_details)
+                                            <?php $__fd = is_string($__d->food_details) ? json_decode($__d->food_details, true) : $__d->food_details; ?>
                                             {{ $__fd['name'] ?? '—' }}@if($__d->quantity > 1)<span class="text-body">×{{ $__d->quantity }}</span>@endif{{ !$loop->last ? '、' : '' }}
                                         @endforeach
                                         @if($order->details->count() > 3)
