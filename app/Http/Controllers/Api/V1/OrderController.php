@@ -806,7 +806,7 @@ class OrderController extends Controller
         }
         $user_id = $request->user ? $request->user->id : $request['guest_id'];
 
-        $paginator = Order::with(['restaurant', 'delivery_man.rating', 'details:id,order_id,item_campaign_id'])->withCount('details')->where(['user_id' => $user_id])->
+        $paginator = Order::with(['restaurant', 'delivery_man.rating', 'details:id,order_id,food_details,item_campaign_id'])->withCount('details')->where(['user_id' => $user_id])->
         whereIn('order_status', ['delivered','canceled','refund_requested','refund_request_canceled','refunded','failed'])->Notpos()
             ->whereNull('subscription_id')
             ->when(!isset($request->user) , function($query){
@@ -825,7 +825,17 @@ class OrderController extends Controller
             $data['is_reviewed'] =   $data['details_count'] >  Review::whereOrderId($data->id)->count() ? False :True ;
             $data['is_dm_reviewed'] = $data['delivery_man'] ? DMReview::whereOrderId($data->id)->exists()  : True ;
             $data['item_campaign_id'] = $data['details'] ? $data['details'][0]['item_campaign_id'] : True ;
-            unset($data['details']);
+            $data['details'] = collect($data['details'])->take(3)->map(function($d) {
+                $food = is_string($d['food_details'] ?? null) ? json_decode($d['food_details'], true) : ($d['food_details'] ?? []);
+                return [
+                    'id' => $d['id'],
+                    'food_details' => [
+                        'name' => $food['name'] ?? '',
+                        'image_full_url' => $food['image_full_url'] ?? '',
+                        'image' => $food['image'] ?? '',
+                    ],
+                ];
+            })->values()->all();
             return $data;
         }, $paginator->items());
         $data = [
