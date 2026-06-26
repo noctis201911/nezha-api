@@ -91,8 +91,13 @@
                     'combined_yandex' => true, 'yandex_route' => route('vendor.order.set-yandex-delivery', ['id' => $order['id']])];
             }
         } elseif ($nzOs == 'picked_up') {
-            // G 配送中: 无手动主操作(status 路由不收 picked_up; picked_up→delivered 由 set-yandex/超时 sweep)。约24h自动完成(开关 nezha_auto_finalize_handover_status·L2)。
-            $nzPrimary['note'] = '配送中 · 顾客可追踪。送达后请点下方「标记已送达」，或顾客确认 / 约数小时自动完成';
+            // G 配送中: 信息条(含预估完成+上提「已送达」按钮, 商家不用滚到底部找)
+            $nzAutoHours = (int)(\App\CentralLogics\Helpers::get_business_data('nezha_auto_finalize_handover_hours') ?: 3);
+            $nzPrimary = ['visible' => true, 'kind' => 'info',
+                'label' => '标记为「已送达」', 'route' => route('vendor.order.mark-delivered', ['id' => $order['id']]),
+                'method' => 'PUT', 'confirm' => '确认本单已送达顾客？确认后订单完成、不可撤销。',
+                'data' => [], 'note' => '配送中 · ' . ($order->yandex_tracking_url ? '顾客可追踪骑手位置' : '顾客已看到配送状态') . '。约 ' . $nzAutoHours . ' 小时无确认将自动完成',
+                'combined_yandex' => false];
         }
     @endphp
 
@@ -166,6 +171,23 @@
                         <button type="submit" class="btn btn-success btn-sm" style="border-radius:8px;font-weight:700;white-space:nowrap;">{{ $nzPrimary['label'] }}</button>
                     </form>
                 @endif
+            </div>
+        @endif
+
+        {{-- 哪吒 M-04: picked_up 信息状态条 + 上提「已送达」按钮(商家不用滚到底部找) --}}
+        @if ($nzPrimary['visible'] && $nzPrimary['kind'] == 'info')
+            <div class="nz-order-statusbar" style="position:sticky;top:0;z-index:1020;background:#fff;border:1px solid #BBE8CC;border-radius:12px;box-shadow:0 2px 10px rgba(23,25,29,.06);padding:10px 14px;margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
+                <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 200px;">
+                    <span style="font-weight:800;color:#17191D;white-space:nowrap;">订单 #{{ $order['id'] }}</span>
+                    <span class="badge badge-soft-success" style="white-space:nowrap;">🛵 配送中</span>
+                    <span style="font-size:12px;color:#6B7280;">{{ $nzPrimary['note'] }}</span>
+                </div>
+                <form action="{{ $nzPrimary['route'] }}" method="post" style="margin:0;flex:0 0 auto;"
+                    onsubmit="return confirm('{{ $nzPrimary['confirm'] }}');">
+                    @csrf
+                    @method($nzPrimary['method'])
+                    <button type="submit" class="btn btn-outline-success btn-sm" style="border-radius:8px;font-weight:700;white-space:nowrap;">✅ {{ $nzPrimary['label'] }}</button>
+                </form>
             </div>
         @endif
 
