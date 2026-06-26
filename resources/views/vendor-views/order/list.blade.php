@@ -179,9 +179,19 @@
                                     <span class="text--warning font-500">({{ translate('POS') }})</span>
                                     @endif
                                 </a>
-                                <br>
                                 @if ($order->edited == 1)
                                 <span class="text-info fs-12 d-block font-500">({{ translate('Edited') }})</span>
+                                @endif
+                                @if($order->details && $order->details->count() > 0)
+                                    <div class="text-muted mt-1" style="font-size:11px;max-width:180px;white-space:normal;line-height:1.4">
+                                        @foreach($order->details->take(3) as $__d)
+                                            @php($__fd = is_string($__d->food_details) ? json_decode($__d->food_details, true) : $__d->food_details)
+                                            {{ $__fd['name'] ?? '—' }}@if($__d->quantity > 1)<span class="text-body">×{{ $__d->quantity }}</span>@endif{{ !$loop->last ? '、' : '' }}
+                                        @endforeach
+                                        @if($order->details->count() > 3)
+                                            <span class="text-body">等{{ $order->details->count() }}样</span>
+                                        @endif
+                                    </div>
                                 @endif
                             </td>
                             <td data-label="{{translate('messages.order_date')}}">
@@ -322,12 +332,48 @@
                                 </div>
                             </td>
                             <td data-label="{{translate('messages.actions')}}">
-                                <div class="btn--container justify-content-center">
-                                    <a class="btn action-btn btn--warning btn-outline-warning" href="{{route('vendor.order.details',['id'=>$order['id']])}}"><i class="tio-visible-outlined"></i></a>
-                                    <a class="btn action-btn btn--primary btn-outline-primary" target="_blank" href="{{route('vendor.order.generate-invoice',[$order['id']])}}"><i class="tio-print"></i></a>
-                                    {{-- <a class="btn btn-sm btn--primary btn-outline-primary download--btn action-btn" href="#">
-                                        <i class="tio-download"></i>
-                                    </a> --}}
+                                @php
+                                    $__os = $order['order_status'];
+                                    $__qa = null;
+                                    if ($__os === 'pending' && $order->payment_method === 'offline_payment'
+                                        && $order->offline_payments && $order->offline_payments->status === 'pending') {
+                                        $__qa = ['route' => route('vendor.order.confirm-offline-payment', $order['id']),
+                                                  'label' => '确认收款', 'cls' => 'btn-success', 'icon' => 'tio-checkmark-circle',
+                                                  'confirm' => '确认：您已在自己的账户收到本单付款？'];
+                                    } elseif (in_array($__os, ['confirmed','accepted'], true)) {
+                                        $__qa = ['route' => route('vendor.order.status-update', $order['id']),
+                                                  'label' => '开始备餐', 'cls' => 'btn-info', 'icon' => 'tio-restaurant',
+                                                  'confirm' => '开始备餐？',
+                                                  'extra' => ['order_status'=>'processing','id'=>$order['id'],
+                                                              'processing_time'=>explode('-',$restaurant->delivery_time ?? '30-60')[0]]];
+                                    } elseif (in_array($__os, ['processing','handover'], true) && ($order['order_type'] ?? '') === 'delivery') {
+                                        $__qa = ['route' => route('vendor.order.mark-dispatched', $order['id']),
+                                                  'label' => '标记配送中', 'cls' => 'btn-warning', 'icon' => 'tio-send',
+                                                  'confirm' => '确认出餐完成、标记为配送中？'];
+                                    } elseif ($__os === 'picked_up' && ($order['order_type'] ?? '') === 'delivery') {
+                                        $__qa = ['route' => route('vendor.order.mark-delivered', $order['id']),
+                                                  'label' => '已送达', 'cls' => 'btn-success', 'icon' => 'tio-done-all',
+                                                  'confirm' => '确认本单已送达顾客？确认后不可撤销。'];
+                                    }
+                                @endphp
+                                <div class="btn--container justify-content-center flex-column" style="gap:6px">
+                                    @if($__qa)
+                                        <form method="POST" action="{{ $__qa['route'] }}" style="margin:0" onsubmit="return confirm('{{ $__qa['confirm'] }}')">
+                                            @csrf @method('PUT')
+                                            @if(!empty($__qa['extra']))
+                                                @foreach($__qa['extra'] as $__k => $__v)
+                                                    <input type="hidden" name="{{ $__k }}" value="{{ $__v }}">
+                                                @endforeach
+                                            @endif
+                                            <button type="submit" class="btn btn-sm {{ $__qa['cls'] }} text-nowrap text-white" style="font-size:12px;padding:4px 10px;min-width:90px">
+                                                <i class="{{ $__qa['icon'] }} mr-1"></i>{{ $__qa['label'] }}
+                                            </button>
+                                        </form>
+                                    @endif
+                                    <div class="d-flex justify-content-center" style="gap:4px">
+                                        <a class="btn action-btn btn--warning btn-outline-warning" href="{{route('vendor.order.details',['id'=>$order['id']])}}"><i class="tio-visible-outlined"></i></a>
+                                        <a class="btn action-btn btn--primary btn-outline-primary" target="_blank" href="{{route('vendor.order.generate-invoice',[$order['id']])}}"><i class="tio-print"></i></a>
+                                    </div>
                                 </div>
                             </td>
                         </tr>

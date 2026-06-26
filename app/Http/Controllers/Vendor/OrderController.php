@@ -42,7 +42,7 @@ class OrderController extends Controller
 
         Order::where(['checked' => 0])->where('restaurant_id', Helpers::get_restaurant_id())->update(['checked' => 1]);
 
-        $orders = Order::with(['customer', 'offline_payments'])
+        $orders = Order::with(['customer', 'offline_payments', 'details'])
             ->when($status == 'searching_for_deliverymen', function ($query) {
                 return $query->SearchingForDeliveryman();
             })
@@ -164,7 +164,7 @@ class OrderController extends Controller
             : ($status == 'refund_pending' ? '待退款'
             : ($status == 'timeout' ? '超时单'
             : translate('messages.' . $status)));
-        return view('vendor-views.order.list', compact('orders', 'status', 'st'));
+        return view('vendor-views.order.list', compact('orders', 'status', 'st', 'restaurant'));
     }
 
     public function search(Request $request)
