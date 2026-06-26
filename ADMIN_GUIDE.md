@@ -103,6 +103,8 @@
 
 > 🆕 **2026-06-26 同日落地：顾客订单详情页（`/info?page=order`）也对齐 v13 视觉。** chip 4 色板 / Card（圆角 16 / 边 EEF0F2 / 无影 / p16）/ 5 步进度条（流绿尾迹 + 18% 绿光晕）/ 合计行（֏ 黑 700 18px）/ 商品缩略图（64×64 + 8 圆角）**与追踪页同源**——顾客在追踪页与详情页看到的 chip 颜色完全一致（同一单在两页都显示同色 chip）。源码：`src/components/order-details/OrderDetails.jsx` STATUS_CHIP 重写按 §3.3 chip 4 色板表分类。`commit 7dde0f4`。
 
+> 🆕 **2026-06-26 三页统一收口：顾客订单列表页（`/info?page=order` 无 orderId，"我的订单"三 tab）也对齐 v13。** 订单卡 chip 从「裸文字」改成「5px 胶囊」（与追踪页/详情页同源），按 statusView.key 直接走 4 色板：已退款→警报红 / 已取消→灰 / 备餐中/配送中/已送达→绿 / 退款处理中→橙 / 订单失败→警报红。三 tab（进行中 / 全部订单 / 退款售后）切换条删 selected boxShadow；OrderCard 容器 boxShadow 删 + 边换 #EEF0F2。**至此顾客侧三页（追踪 / 详情 / 列表）chip 颜色完全统一**——同一单在三页都显示同色 chip，跨页视觉语言无割裂。源码：`src/components/order-history/OrderCard.jsx` 新增 `getStatusChipStyle` 按 statusView.key 分类（不动 `orderStatusView.js` 的共享 STATUS_TONES，防止越界影响消息卡/聊天/推送）。`commit 7a820b0`。
+
 **新增的顾客主动动作（影响后端数据 / 商家提醒）：**
 
 1. **「催促商家」按钮**（备餐态）
