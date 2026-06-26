@@ -3444,3 +3444,144 @@
 })();
 </script>
 @endpush
+@push('script_2')
+<script>
+// 哪吒(2026-06-27): 商家订单详情页 7 类状态变更表单的「不闪刷新 + 按钮 loading + scroll 保留」
+// 仅 L3 呈现层增强: 不动 controller / route / 状态机 / 现有 form HTML。
+// 拦截策略: bubble phase + 检查 defaultPrevented → 原 onsubmit confirm 拦截顺序保留(用户点取消→直接 return)。
+// 提交方式: FormData + fetch POST(Laravel _method 字段自动路由 PUT/DELETE), credentials same-origin 带 cookie + _token。
+// 成功识别: fetch 默认 redirect=follow, 控制器 return back() 经 302 跟随到 200 → 视为成功 → location.reload()。
+// 错误处理: 网络/5xx → catch → toast + loading 复位 + 清 scroll 缓存。controller back-with-errors 走 reload 后 flash toastr 原渠道。
+(function(){
+    var TARGET_ACTION_KEYS = [
+        '/confirm-offline-payment',
+        '/deny-offline-payment',
+        '/mark-dispatched',
+        '/set-yandex-delivery',
+        '/mark-delivered',
+        '/mark-refunded',
+        '/status/'  // vendor.order.status(id, order_status) URL 含 /status/{state}
+    ];
+
+    function isTargetForm(form){
+        if (!form || form.tagName !== 'FORM') return false;
+        var action = (form.action || '').toString();
+        for (var i = 0; i < TARGET_ACTION_KEYS.length; i++){
+            if (action.indexOf(TARGET_ACTION_KEYS[i]) !== -1) return true;
+        }
+        return false;
+    }
+
+    // —— 恢复上次 reload 前的 scroll 位置 ——
+    try {
+        var saved = sessionStorage.getItem('nzOrderViewScrollY');
+        if (saved !== null) {
+            sessionStorage.removeItem('nzOrderViewScrollY');
+            var y = parseInt(saved, 10);
+            if (!isNaN(y) && y > 0) {
+                // 用 rAF 等 DOM/字体/图片初步布局完成, 再恢复
+                requestAnimationFrame(function(){
+                    requestAnimationFrame(function(){
+                        window.scrollTo(0, y);
+                    });
+                });
+            }
+        }
+    } catch(e){}
+
+    // —— spinner keyframes (一次性注入) ——
+    if (!document.getElementById('nzSpinKf')) {
+        var st = document.createElement('style');
+        st.id = 'nzSpinKf';
+        st.textContent = '@keyframes nzSpin{to{transform:rotate(360deg)}}';
+        document.head.appendChild(st);
+    }
+
+    // —— 简易 toast (失败时用; 成功走 reload 后 flash toastr 原渠道) ——
+    function nzToast(msg, isErr){
+        var t = document.createElement('div');
+        t.textContent = msg;
+        t.style.cssText = 'position:fixed;left:50%;top:24px;transform:translateX(-50%);z-index:11000;'
+            + 'padding:10px 18px;border-radius:10px;font-size:14px;font-weight:600;max-width:80vw;'
+            + 'background:' + (isErr ? '#FEE7EA' : '#E8F8EE') + ';'
+            + 'color:' + (isErr ? '#C4193E' : '#1F7A3A') + ';'
+            + 'box-shadow:0 4px 16px rgba(0,0,0,.15);transition:opacity .3s;';
+        document.body.appendChild(t);
+        setTimeout(function(){ t.style.opacity = '0'; }, 2200);
+        setTimeout(function(){ if (t.parentNode) t.parentNode.removeChild(t); }, 2700);
+    }
+
+    // —— 按钮 loading 态: spinner + 文字"处理中…" + disabled ——
+    function setLoading(btn, on){
+        if (!btn) return;
+        if (on) {
+            if (btn.getAttribute('data-nz-orig-html') === null) {
+                btn.setAttribute('data-nz-orig-html', btn.innerHTML);
+            }
+            btn.disabled = true;
+            btn.style.opacity = '0.75';
+            btn.style.cursor = 'wait';
+            btn.innerHTML = '<span aria-hidden="true" style="display:inline-block;width:14px;height:14px;'
+                + 'border:2px solid currentColor;border-right-color:transparent;border-radius:50%;'
+                + 'animation:nzSpin 0.7s linear infinite;vertical-align:-2px;margin-right:6px;"></span>处理中…';
+        } else {
+            var orig = btn.getAttribute('data-nz-orig-html');
+            if (orig !== null) {
+                btn.innerHTML = orig;
+                btn.removeAttribute('data-nz-orig-html');
+            }
+            btn.disabled = false;
+            btn.style.opacity = '';
+            btn.style.cursor = '';
+        }
+    }
+
+    // —— submit 拦截: bubble phase, 让原生 onsubmit confirm 先跑 ——
+    document.addEventListener('submit', function(e){
+        var form = e.target;
+        if (!isTargetForm(form)) return;
+        // 原 onsubmit return false (用户点取消) → defaultPrevented=true → 不动
+        if (e.defaultPrevented) return;
+        e.preventDefault();
+
+        var btn = form.querySelector('button[type="submit"]')
+                || form.querySelector('input[type="submit"]');
+        setLoading(btn, true);
+
+        // 记当前 scroll, reload 后恢复
+        try {
+            var sy = window.scrollY || window.pageYOffset || 0;
+            sessionStorage.setItem('nzOrderViewScrollY', String(sy));
+        } catch(e2){}
+
+        var fd = new FormData(form);
+
+        fetch(form.action, {
+            method: 'POST',
+            body: fd,
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'text/html,application/xhtml+xml,application/xml',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            redirect: 'follow'
+        })
+        .then(function(resp){
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            // 关闭 modal (退款/拒绝离线在 modal 内)
+            try {
+                var modal = form.closest('.modal.show, .modal.in');
+                if (modal && window.jQuery) { window.jQuery(modal).modal('hide'); }
+            } catch(e3){}
+            // 短延迟让 modal 收起动画跑完, 体感更顺
+            setTimeout(function(){ window.location.reload(); }, 60);
+        })
+        .catch(function(err){
+            try { sessionStorage.removeItem('nzOrderViewScrollY'); } catch(e4){}
+            setLoading(btn, false);
+            nzToast('操作失败：' + (err && err.message ? err.message : '网络错误，请重试'), true);
+        });
+    }, false);  // bubble phase
+})();
+</script>
+@endpush
