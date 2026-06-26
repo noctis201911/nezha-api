@@ -607,6 +607,16 @@
         document.addEventListener('keydown', nzUnlockAudio);
         document.addEventListener('touchstart', nzUnlockAudio);
     })();
+    // 哪吒: 订单页在场感知——商家正盯着相关页面时抑制冗余弹窗/声音
+    function nzViewingOrderDetail() {
+        if (document.hidden) return null;
+        var m = location.pathname.match(/\/restaurant-panel\/order\/details\/(\d+)/);
+        return m ? m[1] : null;
+    }
+    function nzOnOrderList() {
+        if (document.hidden) return false;
+        return location.pathname.indexOf('/restaurant-panel/order/list/') !== -1;
+    }
 </script>
 
 <script>
@@ -967,13 +977,16 @@
                 if (total === 0) { toHide(); toDismissed = false; return; }
                 var seen = toLoadSeen();
                 var freshIds = ids.filter(function(id){ return !seen.has(id); });
+                // 在场感知: 商家正看着超时单的详情页时, 不弹浮窗不响铃(已在处理了)
+                var viewingId = nzViewingOrderDetail();
+                var viewingThisOrder = viewingId && ids.indexOf(viewingId) !== -1;
                 if (freshIds.length > 0) {
-                    playAudio();
+                    if (!viewingThisOrder) { playAudio(); }
                     toDismissed = false;
                     freshIds.forEach(function(id){ seen.add(id); });
                     toSaveSeen(seen);
-                    toShow(total);
-                } else if (!toDismissed) {
+                    if (!viewingThisOrder) { toShow(total); }
+                } else if (!toDismissed && !viewingThisOrder) {
                     toShow(total);
                 }
             }
@@ -1004,8 +1017,11 @@
                 if (total === 0) { dvHide(); dvDismissed = false; dvSounded = false; return; }
                 // 哪吒: 声音独立于「已看」去重——只要音频已解锁就把当前还挂着的催单补响一次(解决冷启动时 poll 早于解锁的竞争);
                 // 一个活动告警只响一次, 告警清零(贴链接/无催单)后重置, 下次新催单再响。
-                if (!dvSounded && window.nzAudioUnlocked) { dvPlay(); dvSounded = true; }
-                if (!dvDismissed) { dvShow(total); }
+                // 在场感知: 商家正看着催配送的那单详情页时, 不弹浮窗不响铃(已在贴链接的页面了)
+                var viewingId = nzViewingOrderDetail();
+                var viewingThisOrder = viewingId && ids.indexOf(viewingId) !== -1;
+                if (!dvSounded && window.nzAudioUnlocked && !viewingThisOrder) { dvPlay(); dvSounded = true; }
+                if (!dvDismissed && !viewingThisOrder) { dvShow(total); }
             }
 
             function loadSeen(){
@@ -1021,8 +1037,9 @@
                 } catch(e){}
             }
             function showToast(count, label){
-                // 哪吒#4: 订单详情页不弹「新订单」浮层(商家已在处理某单, 该提示冗余且会遮挡「确认收款」按钮)
+                // 哪吒#4: 订单详情页/列表页不弹「新订单」浮层(商家已在看订单, 该提示冗余且遮挡操作)
                 if (location.pathname.indexOf('/restaurant-panel/order/details/') !== -1) { hideToast(); return; }
+                if (nzOnOrderList()) { hideToast(); return; }
                 if (countEl) { countEl.textContent = count; }
                 if (labelEl && label) { labelEl.textContent = label; }
                 if (toast) { toast.style.display = 'block'; }
