@@ -71,10 +71,11 @@
                     'route' => route('vendor.order.status', ['id' => $order['id'], 'order_status' => 'handover']), 'method' => null,
                     'confirm' => null, 'data' => ['message' => translate('Change status to ready for handover ?')], 'note' => null];
             } elseif ($nzType == 'delivery') {
-                // D 配送单 → 标记为配送中(mark-dispatched, 无前置最快; set-yandex 为可选增强留原位)
-                $nzPrimary = ['visible' => true, 'kind' => 'form', 'label' => '标记为配送中',
+                // D 配送单 → 出餐·标记配送中(合并面板: 可选填 Yandex 链接, 一步完成)
+                $nzPrimary = ['visible' => true, 'kind' => 'form', 'label' => '出餐 · 标记配送中',
                     'route' => route('vendor.order.mark-dispatched', ['id' => $order['id']]), 'method' => 'PUT',
-                    'confirm' => null, 'data' => [], 'note' => null];
+                    'confirm' => null, 'data' => [], 'note' => null,
+                    'combined_yandex' => true, 'yandex_route' => route('vendor.order.set-yandex-delivery', ['id' => $order['id']])];
             }
         } elseif ($nzOs == 'handover') {
             if (in_array($nzType, ['dine_in', 'take_away'], true) || $nzSelfDelivery) {
@@ -83,10 +84,11 @@
                     'route' => route('vendor.order.status', ['id' => $order['id'], 'order_status' => 'delivered']), 'method' => null,
                     'confirm' => null, 'data' => ['message' => translate('Change status to delivered (payment status will be paid if not) ?'), 'verification' => ($nzOdv ? 'true' : 'false')], 'note' => null];
             } elseif ($nzType == 'delivery') {
-                // D' 配送单 handover → 标记为配送中(mark-dispatched 在 handover 也渲染)
-                $nzPrimary = ['visible' => true, 'kind' => 'form', 'label' => '标记为配送中',
+                // D' 配送单 handover → 出餐·标记配送中(合并面板: 可选填 Yandex 链接)
+                $nzPrimary = ['visible' => true, 'kind' => 'form', 'label' => '出餐 · 标记配送中',
                     'route' => route('vendor.order.mark-dispatched', ['id' => $order['id']]), 'method' => 'PUT',
-                    'confirm' => null, 'data' => [], 'note' => null];
+                    'confirm' => null, 'data' => [], 'note' => null,
+                    'combined_yandex' => true, 'yandex_route' => route('vendor.order.set-yandex-delivery', ['id' => $order['id']])];
             }
         } elseif ($nzOs == 'picked_up') {
             // G 配送中: 无手动主操作(status 路由不收 picked_up; picked_up→delivered 由 set-yandex/超时 sweep)。约24h自动完成(开关 nezha_auto_finalize_handover_status·L2)。
@@ -129,12 +131,41 @@
                     <span class="badge {{ $nzOffPending ? 'badge-soft-info' : 'badge-soft-warning' }}" style="white-space:nowrap;">{{ $nzOffPending ? translate('messages.pending') : ($nzOs == 'processing' ? '备餐中 · 待出餐' : '已出餐 · 待送达') }}</span>
                     @if ($nzOffPending)<span style="color:#8a6d3b;font-weight:700;white-space:nowrap;">应收 {{ Helpers::format_currency($order->order_amount) }}</span>@endif
                 </div>
-                <form action="{{ $nzPrimary['route'] }}" method="post" style="margin:0;flex:0 0 auto;"
-                    @if ($nzPrimary['confirm']) onsubmit="return confirm('{{ $nzPrimary['confirm'] }}');" @endif>
-                    @csrf
-                    @method($nzPrimary['method'])
-                    <button type="submit" class="btn btn-success btn-sm" style="border-radius:8px;font-weight:700;white-space:nowrap;">{{ $nzPrimary['label'] }}</button>
-                </form>
+                @if (!empty($nzPrimary['combined_yandex']))
+                    {{-- 合并面板: Yandex 链接(可选) + 一键出餐标记配送中 --}}
+                    <form id="nzCombinedDispatchForm" method="post" style="margin:0;flex:1 1 300px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+                        @csrf
+                        @method('PUT')
+                        <input type="url" name="yandex_tracking_url" id="nzYandexUrlInput"
+                            placeholder="Yandex 追踪链接（可选，贴了顾客能看骑手位置）"
+                            class="form-control form-control-sm" style="border-radius:8px;flex:1 1 200px;min-width:160px;">
+                        <button type="submit" class="btn btn-success btn-sm" style="border-radius:8px;font-weight:700;white-space:nowrap;">{{ $nzPrimary['label'] }}</button>
+                    </form>
+                    <script>
+                    (function(){
+                        var form = document.getElementById('nzCombinedDispatchForm');
+                        var urlInput = document.getElementById('nzYandexUrlInput');
+                        var routeDispatch = @json($nzPrimary['route']);
+                        var routeYandex = @json($nzPrimary['yandex_route']);
+                        form.addEventListener('submit', function(e){
+                            var url = (urlInput.value || '').trim();
+                            if (url) {
+                                form.action = routeYandex;
+                            } else {
+                                urlInput.removeAttribute('name');
+                                form.action = routeDispatch;
+                            }
+                        });
+                    })();
+                    </script>
+                @else
+                    <form action="{{ $nzPrimary['route'] }}" method="post" style="margin:0;flex:0 0 auto;"
+                        @if ($nzPrimary['confirm']) onsubmit="return confirm('{{ $nzPrimary['confirm'] }}');" @endif>
+                        @csrf
+                        @method($nzPrimary['method'])
+                        <button type="submit" class="btn btn-success btn-sm" style="border-radius:8px;font-weight:700;white-space:nowrap;">{{ $nzPrimary['label'] }}</button>
+                    </form>
+                @endif
             </div>
         @endif
 
@@ -1161,9 +1192,9 @@
                                 @php($yText = $yAddr['address'] ?? '')
                                 @if (in_array($order->order_status, ['processing', 'handover']))
                                     <div class="mt-3 mb-1 p-2" style="background:#EEF6FF;border:1px solid #CFE3FF;border-radius:10px;font-size:12px;color:#1A1A1A;line-height:1.7;">
-                                        <span style="font-weight:700;">🛵 什么时候叫 Yandex？</span> 餐快做好时，用下方「顾客配送位置」把坐标粘到 Yandex Go 叫车；叫到车后点页面顶部的「标记配送中」按钮（再贴上追踪链接，顾客还能看骑手实时位置）。
+                                        <span style="font-weight:700;">🛵 什么时候叫 Yandex？</span> 餐快做好时，用下方「顾客配送位置」把坐标粘到 Yandex Go 叫车；叫到车后回到<b>页面顶部</b>，贴上追踪链接点「出餐·标记配送中」一步搞定。
                                     </div>
-                                    <div class="mt-3 mb-1 p-2 text-center" style="background:#F6FAFF;border:1px dashed #BBD3F0;border-radius:10px;font-size:12px;color:#3A5A80;line-height:1.7;">👆 备好餐、叫到 Yandex 后，点<b>页面顶部</b>的「标记配送中」按钮即可，顾客立刻看到配送中。下面贴 Yandex 链接是可选项——贴了顾客能实时看骑手位置。</div>
+                                    <div class="mt-3 mb-1 p-2 text-center" style="background:#F6FAFF;border:1px dashed #BBD3F0;border-radius:10px;font-size:12px;color:#3A5A80;line-height:1.7;">👆 备好餐、叫到 Yandex 后，回到<b>页面顶部</b>——可以直接贴 Yandex 追踪链接再点「出餐·标记配送中」，一步完成出餐+配送；不贴链接直接点也行，顾客只是看不到骑手位置。</div>
                                 @endif
                                 @if ($order->order_status == 'picked_up')
                                     <div class="mt-3 mb-1 p-2" style="background:#E9F8EF;border:1px solid #BBE8CC;border-radius:10px;font-size:12px;color:#0F5132;line-height:1.7;">
