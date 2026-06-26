@@ -819,13 +819,16 @@ class OrderController extends Controller
 
             ->latest()->paginate($request['limit'], ['*'], 'page', $request['offset']);
         $orders = array_map(function ($data) {
-            $data['delivery_address'] = $data['delivery_address']?json_decode($data['delivery_address']):$data['delivery_address'];
-            $data['restaurant'] = $data['restaurant']?Helpers::restaurant_data_formatting($data['restaurant']):$data['restaurant'];
-            $data['delivery_man'] = $data['delivery_man']?Helpers::deliverymen_data_formatting([$data['delivery_man']]):$data['delivery_man'];
-            $data['is_reviewed'] =   $data['details_count'] >  Review::whereOrderId($data->id)->count() ? False :True ;
-            $data['is_dm_reviewed'] = $data['delivery_man'] ? DMReview::whereOrderId($data->id)->exists()  : True ;
-            $data['item_campaign_id'] = $data['details'] ? $data['details'][0]['item_campaign_id'] : True ;
-            $data['details'] = collect($data['details'])->take(3)->map(function($d) {
+            $details_raw = $data->details ? $data->details->toArray() : [];
+            $order_id = $data->id;
+            $arr = $data->toArray();
+            $arr['delivery_address'] = isset($arr['delivery_address']) && is_string($arr['delivery_address']) ? json_decode($arr['delivery_address'], true) : $arr['delivery_address'];
+            $arr['restaurant'] = $data->restaurant ? Helpers::restaurant_data_formatting($data->restaurant) : null;
+            $arr['delivery_man'] = $data->delivery_man ? Helpers::deliverymen_data_formatting([$data->delivery_man]) : null;
+            $arr['is_reviewed'] = $arr['details_count'] > Review::whereOrderId($order_id)->count() ? false : true;
+            $arr['is_dm_reviewed'] = $data->delivery_man ? DMReview::whereOrderId($order_id)->exists() : true;
+            $arr['item_campaign_id'] = !empty($details_raw) ? $details_raw[0]['item_campaign_id'] : true;
+            $arr['order_details'] = collect($details_raw)->take(3)->map(function($d) {
                 $food = is_string($d['food_details'] ?? null) ? json_decode($d['food_details'], true) : ($d['food_details'] ?? []);
                 return [
                     'id' => $d['id'],
@@ -836,7 +839,8 @@ class OrderController extends Controller
                     ],
                 ];
             })->values()->all();
-            return $data;
+            unset($arr['details']);
+            return $arr;
         }, $paginator->items());
         $data = [
             'total_size' => $paginator->total(),
