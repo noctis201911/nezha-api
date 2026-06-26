@@ -85,6 +85,58 @@
 > ⚠️ **真实影响**：自动兜底默认开启、对真实配送单生效。上线时已确认线上无积压，不会误判现有订单（当前自动收尾窗口 3 小时）。如要关闭或改时长，告知开发调 `business_settings` 对应键。
 
 ---
+
+### 3.3 顾客订单追踪页 v13（chip 4 色板 + 新增顾客动作）〔2026-06-26 上线〕
+
+订单追踪页（`/tracking/[id]`）整页升级，影响"顾客在订单进行中能做什么"与"运营端在订单详情看到的视觉分类"。**对 admin 操作流程无影响**，但你需要理解新状态语义与新数据归类，以便处理客诉时不被新分类绕进去。
+
+**chip 4 色板（顾客端视觉）：**
+
+| 色 | 何时出现 | order_status 集合 | 语义 |
+|---|---|---|---|
+| 🟠 橙 | 等顾客/商家/平台动作 | `pending` (clean offline) / `pending` (non-offline) / `refund_requested` | 待动作 |
+| 🟢 绿 | 顺利进行 | `accepted` / `confirmed` / `processing` / `handover` / `picked_up` / `delivered` | 一切正常 |
+| 🔴 警报红 | 异常态 | `pending`+denied / `nezha_timeout` warning/error / `failed` / `refunded` | 需关注 |
+| ⚫ 灰 | 终态中性 | `canceled` / `refund_request_canceled` | 已结束 |
+
+> 注意：`refunded`（已退款）被分类为**警报红异常态**而非绿色。这是产品定调——平台希望顺利单不应走到退款，已退款单视觉上提醒顾客与商家"这单走了非常规路径"。运营端订单详情/列表的 chip 颜色与此一致。
+
+**新增的顾客主动动作（影响后端数据 / 商家提醒）：**
+
+1. **「催促商家」按钮**（备餐态）
+   - 顾客点 → 调 `POST /api/v1/customer/order/nudge-merchant`（已有接口，2026-06-26 起加 **10 分钟 Cache throttle**：`nezha_merchant_nudge_$orderId` 键）。
+   - 后端给商家发：商家后台站内信 + push + Telegram 机器人推送。
+   - 顾客端 10 分钟内重复点 → 仅本地 toast「已催促，平台将跟进」，不再调接口。
+
+2. **「请商家分享配送链接」按钮**（handover/picked_up + delivery + 无 yandex_tracking_url）
+   - 文案此前为「提醒商家更新配送信息」，2026-06-26 改成「请商家分享配送链接」更精准。
+   - 调用现有 `remind-delivery-link` 流程（如已有）或与 nudge 共用通道。
+   - 业务真相核查：handover + 有 yandex_link 业务上**不可达**（商家 `set_yandex_delivery` 同事务推 `picked_up`），所以 Yandex 绿卡只在 `picked_up + 有 link` 显示。
+
+3. **「撤销退款申请」按钮**（`refund_requested` 态新增）〔🆕 新接口〕
+   - 路由：`POST /api/v1/customer/order/cancel-refund-request`
+   - 鉴权：必须本人 + 当前 `order_status='refund_requested'`
+   - 转态：`order_status='refund_request_canceled'` + `refund.refund_status='canceled by customer'` + `refund.admin_note='顾客自主撤销'`（或顾客自填的 reason，max 255）
+   - 通知商家：站内信「订单 #X 顾客自主撤销退款申请」
+   - 🔴 **L1-1 合规**：平台不碰钱、仅状态留痕。撤销=不退款，订单恢复正常履约。
+   - **运营客诉时区分**：同样到 `refund_request_canceled` 终态的单有两种来源——①超管在「订单 → 退款管理 → 驳回」（`Admin/OrderController:order_refund_rejection`）填的 admin_note；②顾客自助撤销填的 admin_note（默认"顾客自主撤销"）。查 `refund.admin_note` 字段即可区分。
+
+4. **「再来一单」按钮**（已送达态）
+   - 跳 `/restaurants/[slug]` 商家菜单页，不创建订单不动数据。
+   - 替代原「评价 / 再来一单」实心红 CTA，改为红描边，**视觉降级避免抢"未收到餐"申诉入口注意力**。
+
+**状态灯动效升级：** `HorizontalStepper` 当前节点出来的那段连线，前 ~30% 实绿渐变到灰（`linear-gradient`），体现"正在推进"。已过节点仍是实绿 ✓ + 实绿连线，未到节点仍是灰圆点 + 灰连线。
+
+**已删除的冗余文案**（多个页面/状态）：
+- 「若超过 5 分钟仍未确认...」
+- 「若 24 小时内无人点击"确认收货"...」(×2 处)
+- 「平台暂未接入 Yandex 叫车与骑手实时轨迹...」
+- 已送达态的「评价/再来一单」改为单独「再来一单」+ 红描边
+
+> 这些文案删除是因为对应"超时机制"由后端 `nezha_timeout` 字段统一下发，前端不再自行文字提示，避免静态文案与动态超时规则不一致。
+
+---
+
 ## 4. 风控中心
 
 > 2026-06-12 上线。**2026-06-16 已正式启用（总开关 = 1）**。阈值为德拉姆(֏)量级，与菜价计价单位一致；美元标注按汇率 368.12 折算（仅参考，阈值存绝对德拉姆值、不随汇率波动）。
