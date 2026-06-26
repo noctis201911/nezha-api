@@ -29,7 +29,7 @@
                 <div class="row align-items-md-center gx-md-5">
                     <div class="col-md-auto mb-3 mb-md-0">
                         <div class="d-flex align-items-center">
-                            <img class="avatar avatar-xxl avatar-4by3 mr-4 onerror-image" src="{{$banner['image_full_url']) }}"
+                            <img class="avatar avatar-xxl avatar-4by3 mr-4 onerror-image" src="{{$banner['image_full_url'] }}"
                                  data-onerror-image="{{dynamicAsset('assets/admin/img/160x160/img2.jpg')}}" alt="{{ translate('Image Description') }}">
                             <div class="d-block">
                             </div>
