@@ -494,9 +494,17 @@
                                                             <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
                                                         </div>
                                                         <div class="modal-body">
-                                                            <p style="font-size:13px;color:#666;">请填写打回原因（将通知顾客，让其重新上传付款凭证或联系客服）：</p>
-                                                            <textarea name="note" required maxlength="255" rows="3" class="form-control" style="border-radius:8px;"
-                                                                placeholder="例如：未在账户查到这笔到账，请核对转账金额/收款码后重新上传凭证"></textarea>
+                                                            <p style="font-size:13px;color:#666;margin-bottom:10px;">选择常见原因，或在下方自由填写。打回后顾客会收到通知，可重新上传凭证或联系您。</p>
+                                                            {{-- 哪吒(2026-06-26): 预填驳回理由 chip, 点击填入下方 textarea; "其他" 清空并 focus 让商家自由输入 --}}
+                                                            <div class="nz-deny-reasons mb-2" data-target="nzDenyOfflineNote-{{ $order['id'] }}" style="display:flex;flex-wrap:wrap;gap:6px;">
+                                                                <button type="button" class="btn btn-sm" style="background:#FFF8F8;border:1px solid #FAD4D6;border-radius:16px;color:#C4193E;font-size:13px;padding:4px 12px;" data-reason="截图金额对不上">截图金额对不上</button>
+                                                                <button type="button" class="btn btn-sm" style="background:#F7F8FA;border:1px solid #E5E7EB;border-radius:16px;color:#4B5563;font-size:13px;padding:4px 12px;" data-reason="截图模糊看不清">截图模糊看不清</button>
+                                                                <button type="button" class="btn btn-sm" style="background:#F7F8FA;border:1px solid #E5E7EB;border-radius:16px;color:#4B5563;font-size:13px;padding:4px 12px;" data-reason="付款方式不对">付款方式不对</button>
+                                                                <button type="button" class="btn btn-sm" style="background:#F7F8FA;border:1px solid #E5E7EB;border-radius:16px;color:#4B5563;font-size:13px;padding:4px 12px;" data-reason="不是支付给本店">不是支付给本店</button>
+                                                                <button type="button" class="btn btn-sm" style="background:#F7F8FA;border:1px solid #E5E7EB;border-radius:16px;color:#4B5563;font-size:13px;padding:4px 12px;" data-reason="__other__">其他（自填）</button>
+                                                            </div>
+                                                            <textarea id="nzDenyOfflineNote-{{ $order['id'] }}" name="note" required maxlength="255" rows="3" class="form-control" style="border-radius:8px;"
+                                                                placeholder="也可以自由输入原因或对预填理由做补充说明，最多 255 字"></textarea>
                                                         </div>
                                                         <div class="modal-footer">
                                                             <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">取消</button>
@@ -3341,4 +3349,30 @@
         }
         initMap();
     </script>
+@endpush
+
+@push('script_2')
+<script>
+// 哪吒(2026-06-26): 商家后台「打回付款」预填理由 chip 行为
+(function(){
+    document.addEventListener('click', function(e){
+        var btn = e.target.closest('.nz-deny-reasons [data-reason]');
+        if(!btn) return;
+        var wrap = btn.closest('.nz-deny-reasons');
+        var tid = wrap && wrap.getAttribute('data-target');
+        var ta = tid && document.getElementById(tid);
+        if(!ta) return;
+        var reason = btn.getAttribute('data-reason');
+        if(reason === '__other__'){
+            ta.value = '';
+            ta.focus();
+        } else {
+            ta.value = reason;
+            ta.focus();
+            // 触发 length 校验/计数(如果有)
+            ta.dispatchEvent(new Event('input', {bubbles:true}));
+        }
+    }, false);
+})();
+</script>
 @endpush
