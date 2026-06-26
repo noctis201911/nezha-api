@@ -1,5 +1,5 @@
 @extends('layouts.vendor.app')
-{{-- 哪吒2026-06-26: 本页订单数据行/操作列禁用 @php() 行内简写(曾触发 Blade 编译畸形致整页500), 一律用 <?php ?> 原生块; 部署侧 nzcheck-blade.php 编译探针兜底 --}}
+{{-- 哪吒2026-06-26: 本页订单行/操作列改用原生 PHP 块输出变量, 勿改回 Blade 行内简写(曾致编译畸形整页500); 部署侧 nzcheck-blade 编译探针兜底 --}}
 
 @section('title',translate('messages.Order List'))
 
