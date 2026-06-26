@@ -1311,6 +1311,72 @@ class OrderController extends Controller
         } catch (\Throwable $e) {}
         return response()->json(['message' => '已替您提醒商家尽快退款，请稍候'], 200);
     }
+    /**
+     * 哪吒(2026-06-26): 顾客自主撤销退款申请
+     * 入口: 追踪页「撤销退款申请」按钮 (refund_requested 态可见, 顾客和商家私下沟通后问题解决无需走退款流程时用)。
+     * 鉴权: 只能撤本人单 + 当前必须是 refund_requested 态(防越权/防重复); guest 走 guest_id 同样校验。
+     * 转态: order_status = 'refund_request_canceled'; refund 表记 refund_status='canceled by customer'。
+     * L1-1: 平台不碰钱; 此动作仅状态留痕 + 通知商家(站内信+push), 顾客侧 toast 即时反馈。
+     */
+    public function cancel_refund_request(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'order_id' => 'required',
+            'guest_id' => $request->user ? 'nullable' : 'required',
+            'reason'   => 'nullable|string|max:255',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
+        }
+        $user_id = $request->user ? $request->user->id : $request['guest_id'];
+        $order = Order::where(['id' => $request['order_id'], 'user_id' => $user_id])
+            ->when(!isset($request->user), function ($q) { $q->where('is_guest', 1); })
+            ->when(isset($request->user),  function ($q) { $q->where('is_guest', 0); })
+            ->Notpos()->first();
+        if (!$order) {
+            return response()->json(['errors' => [['code' => 'order', 'message' => translate('messages.not_found')]]], 404);
+        }
+        if ($order->order_status !== 'refund_requested') {
+            return response()->json(['errors' => [['code' => 'order', 'message' => '当前状态无法撤销退款申请']]], 403);
+        }
+
+        $note = $request->reason ? mb_substr(trim($request->reason), 0, 255) : '顾客自主撤销';
+        \DB::transaction(function () use ($order, $note) {
+            \App\Models\Refund::where('order_id', $order->id)->update([
+                'order_status'  => 'refund_request_canceled',
+                'admin_note'    => $note,
+                'refund_status' => 'canceled by customer',
+                'refund_method' => 'canceled',
+            ]);
+            $order->order_status = 'refund_request_canceled';
+            $order->refund_request_canceled = now();
+            $order->save();
+        });
+
+        // 通知商家: 后台站内信 + push(失败不阻断, 不碰资金链路)
+        try {
+            $vendorId = $order->restaurant?->vendor_id;
+            if ($vendorId) {
+                \App\Models\BusinessNotification::create([
+                    'data' => json_encode([
+                        'order_id' => $order->id,
+                        'title' => '顾客撤销了退款申请',
+                        'description' => "订单 #{$order->id} 顾客自主撤销退款申请，备注：{$note}。订单恢复正常履约。",
+                        'type' => 'refund_request_canceled_by_customer',
+                    ]),
+                    'vendor_id' => $vendorId,
+                    'order_id'  => $order->id,
+                ]);
+            }
+        } catch (\Throwable $e) { info(['cancel_refund_request notify fail', 'err' => $e->getMessage()]); }
+
+        return response()->json([
+            'message' => '已撤销退款申请，订单恢复正常履约。如需再次申请退款，请联系商家或客服。',
+            'order_status' => 'refund_request_canceled',
+        ], 200);
+    }
+
+
 
     /**
      * 哪吒[退款专项 块3a]: 顾客「确认收到退款」。
