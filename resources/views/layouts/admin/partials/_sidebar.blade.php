@@ -1023,6 +1023,18 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                             </span>
                         </a>
                     </li>
+                    @if (Helpers::module_permission_check('restaurant'))
+                    <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/restaurant-report*') ? 'active' : '' }}">
+                        <a class="js-navbar-vertical-aside-menu-link nav-link"
+                            href="{{ route('admin.restaurant-report.list') }}"
+                            title="举报商家">
+                            <i class="tio-flag nav-icon"></i>
+                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
+                                举报商家
+                            </span>
+                        </a>
+                    </li>
+                    @endif
 
                     @endif
 

@@ -359,6 +359,8 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
 
     Route::get('customer/order/cancellation-reasons', [OrderController::class, 'cancellation_reason']);
     Route::get('customer/order/send-notification/{order_id}', [OrderController::class, 'order_notification'])->middleware('apiGuestCheck');
+    // 哪吒[举报商家 2026-06-28]: 顾客举报餐厅(游客可举报, 走 apiGuestCheck)。
+    Route::post('customer/restaurant/{restaurant_id}/report', [\App\Http\Controllers\Api\V1\RestaurantReportController::class, 'store'])->middleware('apiGuestCheck');
 
     Route::group(['prefix' => 'products'], function () {
         Route::get('latest', [ProductController::class, 'get_latest_products']);

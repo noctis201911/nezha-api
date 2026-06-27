@@ -1151,6 +1151,11 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::post('update-status/{id}', [MerchantLeadController::class, 'updateStatus'])->name('update-status');
             Route::delete('delete', [MerchantLeadController::class, 'destroy'])->name('delete');
         });
+        // 哪吒[举报商家 2026-06-28]: 顾客举报餐厅 — 后台列表 + 处置(不进黑洞)
+        Route::group(['prefix' => 'restaurant-report', 'as' => 'restaurant-report.', 'middleware' => ['module:restaurant']], function () {
+            Route::get('list', [\App\Http\Controllers\Admin\RestaurantReportController::class, 'list'])->name('list');
+            Route::post('status/{id}', [\App\Http\Controllers\Admin\RestaurantReportController::class, 'updateStatus'])->name('status');
+        });
         Route::group(['prefix' => 'local-life', 'as' => 'local-life.', 'middleware' => ['module:settings']], function () {
             Route::get('list', [AdminLocalLifeController::class, 'list'])->name('list');
             Route::get('create', [AdminLocalLifeController::class, 'create'])->name('create');
