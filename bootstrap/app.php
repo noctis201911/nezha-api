@@ -101,6 +101,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('nezha:purge-merchant-leads')->dailyAt('03:50')->withoutOverlapping();
         // 哪吒[L1-7相邻 数据最小化]: 终态订单的 Yandex 配送链接超保留期清除(默认30天, 开关 nezha_yandex_link_purge_status)
         $schedule->command('nezha:purge-yandex-links')->dailyAt('03:55')->withoutOverlapping();
+        // 哪吒[L1-7]: 顾客举报商家记录的 description(可能含 PII)超保留期清除(默认180天, nezha_restaurant_report_retention_days 可调)
+        $schedule->command('nezha:purge-restaurant-reports')->dailyAt('03:57')->withoutOverlapping();
 
         // 每天 09:00 检查商家预存佣金, 低于商家自设阈值(或为负)发提醒邮件(商家可在商家后台自助开关/设阈值/设邮箱)。
         $schedule->command('nezha:check-deposit-alerts')->dailyAt('09:00')->withoutOverlapping();
