@@ -176,3 +176,14 @@
 - 验证：php -l 过；e2e（事务建删测试单）— RMB(screen=pass)→退款留痕照常生成、USDT-inconclusive→退款留痕照常生成（均不误伤）、screen_address 注入测试制裁地址→命中产出 reject 信号。reject→跳过退款+escalate 为干净条件已代码审；完整链上 reject e2e 需真实受制裁 USDT 单（H4 固有潜伏性、当前近零真单流）。
 - 残留 edge：USDT-inconclusive（来源无法链上核验）仍生成退款留痕——按 L1-6「命中即拒」仅拦 reject，inconclusive 不属命中；如需更严可后续评估对 inconclusive 也 escalate。
 - 经测试后提交 + nzdeploy-api 上线（2026-06-25）。
+
+### 2026-06-28 新增「顾客举报商家(餐厅)」功能（L1-7 PII 合规 + L1-1 不碰钱）
+- 新增顾客侧举报餐厅入口：`POST /api/v1/customer/restaurant/{restaurant_id}/report`（中间件 apiGuestCheck，登录或游客均可举报，复刻 OrderController nudge 的 user/guest 作用域）。新表 `restaurant_reports`（restaurant_id/vendor_id/user_id/guest_id/reason/description/status）。
+- **L1-7 PII**：`description`（自由文本，可能含 PII）随表静态加密——迁移显式 `ALTER TABLE restaurant_reports ENCRYPTION='Y'`（5.7 新表不继承全库加密），实测 `CREATE_OPTIONS=ENCRYPTION="Y"`。到期清除：`nezha:purge-restaurant-reports`（默认 180 天置空 description，保留举报行/reason/status 供审计，`business_settings.nezha_restaurant_report_retention_days` 可调），Kernel 每日 03:55 调度。
+- **越权防护（IDOR）**：举报人身份（user_id/guest_id）与 vendor_id 一律服务端取定、绝不信 body —— 实测 body 注入 user_id/vendor_id/guest_id=99999 均被忽略（登录单 user_id=token 用户、游客单 user_id=NULL+vendor_id 由 restaurant 派生）。餐厅不存在→404。
+- **防刷四层**：同举报人对同店待处理去重（友好 200）/ 同举报人+同店 10 分钟 Cache 限频 / 每人每日 10 次 / 每 IP 每日 30 次（IP 仅入 Cache 不落库）。
+- **后台可见（不进黑洞）**：`admin/restaurant-report/list`（侧边栏「举报商家」入口）列表+筛选+标记已处理/驳回；进程内真渲染验证全布局非 500、举报数据/操作/侧边栏链接齐全。
+- **L1-1**：全程不含任何资金字段，平台不碰钱；举报仅入后台人工审核队列、不自动惩罚商家（刷量顶多制造审核噪声、不伤商家）。
+- 前端独立抽屉 `ReportRestaurantDrawer.jsx`（理由单选+说明+提交，真机 iPhone12 三态 + 真接口 200 + console0 验过），未接线、由餐厅页/订单页「···」菜单窗口接入。
+- 验证：建表 + ENCRYPTION 实测；live API curl 7 场景（落库/去重/404/422×3/401）+ 登录态 Passport token 各通过；测试数据已清零。提交后端 1eff888 部署 release 20260627-165737-1eff888；前端 6bd55b0（inert 未部署）。
+- 注：现有两个举报端点（local-life 帖 / 评价）为 `auth:api 禁匿名`，本端点按任务要求支持游客（apiGuestCheck）——若改「仅登录」为路由一行中间件切换；已向平台负责人标注此差异待拍板。

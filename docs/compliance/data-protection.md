@@ -13,6 +13,7 @@
 | 登录凭据(密码哈希、第三方登录ID) | 账户安全 | 高 |
 | 商家入驻线索(店名、联系人、电话、微信、地址)`merchant_leads` | MVP 人工入驻联系 | 中 |
 | 本地生活 UGC 帖联系方式(电话/微信等)+ 上传图片 `local_life_posts.contact_info/images` | 信息墙撮合，双方私下联系 | 中 |
+| 顾客举报商家内容 `restaurant_reports.description` | 举报核实、平台治理 | 中 |
 
 ## 2. 已实施的保护
 - 账户密码以哈希存储(非明文)。
@@ -31,6 +32,8 @@
 
 - **(2026-06-20)评价图 UGC 审核 + 保护**: 顾客写评价可上传图片(`reviews.attachment`, 存 public 盘 `review/` 目录)。① **审核门控**——带图评价提交即 `status=3 待审核`(`active` 作用域只取 status=1, 审核通过前不公开), 纯文字评价即时公开; 审核(AI 预审 + 后台人工兜底)通过才公开并计入评分。② **违禁词**——评价正文复用 `locallife_banned_words` 词库, 命中拒收(422)。③ **图片类型**——后端仅接受 png/jpg/jpeg/webp/gif, 源头杜绝非图。④ **举报**——新表 `nezha_review_reports`(`POST /api/v1/restaurants/reviews/{id}/report`, **auth:api 禁匿名**, 理由白名单+其他必填+去重), 显式 `ENCRYPTION='Y'`(detail 可能含 PII)。⑤ **PII 处置**——写评价页**上传前提示**「请勿上传含身份证/人脸/他人隐私的图片」; 审核环节人工剔除含 PII 的图(驳回时自动删除该评价图文件, 评价行保留供审计)。**留存定性(与本地生活帖不同)**: 评价图是**菜品/到店产品内容(社会证明)**, 不属于"联系方式"那类到期必删 PII, 故**永久保留、不进 30 天 purge**(用户 2026-06-20 决定); 含 PII 的图靠"上传前提示 + 审核人工剔除"控制, 而非定时删除。reviews 表本就在全库静态加密内(`ENCRYPTION="Y"`)。
 
+- **(2026-06-28)顾客举报商家(餐厅)PII 保护**:新增顾客举报餐厅入口(`POST /api/v1/customer/restaurant/{id}/report`,中间件 apiGuestCheck,登录或游客均可举报),新表 `restaurant_reports`。① **静态加密(at-rest)**——`description`(举报补充说明,可能含联系方式/姓名等 PII)随表加密,迁移显式 `ALTER TABLE restaurant_reports ENCRYPTION='Y'`(5.7 新表不继承全库加密),实测 `CREATE_OPTIONS=ENCRYPTION="Y"`。② **到期清除**——计划任务 `nezha:purge-restaurant-reports` 默认 180 天置空 `description`(见第 4 节),保留举报行供审计。③ **举报人身份服务端取定**——user_id(登录,取自 Passport token)/guest_id(游客)与 vendor_id 一律不信 body,实测 body 注入伪造值被忽略,防伪造他人身份(IDOR)。④ **防刷**——同举报人对同店待处理去重 + 同举报人+同店 10 分钟限频 + 每人每日 10 次 + 每 IP 每日 30 次(IP 仅入 Cache 不落库)。**L1-1**:全程不含任何支付/押金/代收/下单/担保字段,平台不碰钱;举报仅入后台人工审核队列,不自动惩罚商家。
+
 ## 3. 规划中 (组③ 数据安全加固 — 尚未实施,实施后本节升级为"已实施")
 - **传输**:强制 HSTS;敏感 API 增加短期令牌 + 速率限制。
 - **PII 静态加密(at-rest)**:✅ **已实施(2026-06-14,用户批准)** — 采用 MySQL 表空间加密方案,详见第 2 节。(应用层 `encrypted` cast 因破坏搜索/派单已否决。)
@@ -42,6 +45,7 @@
 - 支付凭证:默认保留 90 天后自动删除(**已实施 2026-06-14**,后台可调天数)。
 - 本地生活 UGC 帖联系方式+图片:默认 30 天到期后自动清除(**已实施 2026-06-15**,`nezha:purge-locallife-pii` 每日 03:40),保留帖子行/状态供审计。
 - 本地生活举报记录(`local_life_reports`,`detail` 偶含 PII):随表静态加密;**到期清理已实施(2026-06-15)**——`detail`(举报"补充说明","其他"理由必填,可能含联系方式)超过保留期(默认 180 天,后台「护栏与文案设置」页 `locallife_report_retention_days` 可调)由计划任务 `nezha:purge-locallife-pii` 每日 03:40 一并置空,**保留举报行/`reason`/`status` 供审计**(`--dry-run` 可预演)。
+- 顾客举报商家记录(`restaurant_reports`,`description` 可能含 PII):随表静态加密(显式 `ENCRYPTION='Y'`);**到期清理已实施(2026-06-28)**——`description`(举报"补充说明","其他"理由必填,可能含联系方式/姓名)超过保留期(默认 180 天,`business_settings.nezha_restaurant_report_retention_days` 可调)由计划任务 `nezha:purge-restaurant-reports` 每日 03:55 置空,**保留举报行/`reason`/`status`/举报人标识 供审计**(`--dry-run` 可预演)。
 - 商家入驻线索(`merchant_leads`,含联系人/电话/微信/地址 PII):随表静态加密;**到期清理已实施(2026-06-15)**——线索**结案后**(`status`=2已完成/3无效)超过保留期(默认 90 天,自结案起算,`business_settings.merchant_leads_retention_days` 可调)由计划任务 `nezha:purge-merchant-leads` 每日 03:50 抹除 contact_name/phone/wechat/address/note,**保留 行/store_name/category/status 供审计**;**进行中线索(0待跟进/1跟进中)绝不触碰**,避免误删尚未跟进的真实潜在商家(`--dry-run` 可预演)。
 - 链上交易记录:合规要求留存 ≥ 5 年(见 `AML-policy.md`)。
 - 商家 KYC 资料(`vendor_kyc_profiles`,含法人姓名/证件号/收款账户/联系方式 PII):随表静态加密(模型 `encrypted` cast + 表 `ENCRYPTION='Y'`);作为 AML/CDD 核验记录须**留存 ≥5 年**(见 `AML-policy.md`),**豁免 PII 自动清除**——三个 purge 任务(payment-proofs/locallife-pii/merchant-leads)均不涉及本表,代码无自动删 KYC 路径(2026-06-22 KYC 后台处置专项核实)。默认不存证件扫描件;`closed_at`(审核拒绝/结案时间)仅为留存锚点,当前无定时清除 actor(≥5年为下限)。
