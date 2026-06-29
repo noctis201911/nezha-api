@@ -71,6 +71,7 @@
             .nz-print-settings.nz-print-open { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; }
             .nz-print-settings.nz-print-open .nz-mobile-print-toggle { flex-basis: 100%; }
             .nz-print-settings.nz-print-open label { min-height: 34px; }
+            .nz-order-table-card #datatable { min-width: 0 !important; }
             #datatable thead { display: none; }
             #datatable, #datatable tbody { display: block; width: 100%; }
             #datatable tr.class-all {
