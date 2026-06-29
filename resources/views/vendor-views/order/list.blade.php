@@ -132,7 +132,7 @@
             #datatable tr.class-all td.nz-detail-action-cell { display: inline-flex !important; width: 50% !important; max-width: 50%; box-sizing: border-box; justify-content: center; padding: 8px 4px 12px; border-bottom: 0; }
             #datatable tr.class-all td.nz-print-action-cell::before,
             #datatable tr.class-all td.nz-detail-action-cell::before { display: none; }
-            #datatable tr.class-all td .action-btn { width: 100%; height: 42px; gap: 6px; font-size: 13px; font-weight: 800; }  /* 加大点击热区 */
+            #datatable tr.class-all td .action-btn { width: 100%; height: 42px; gap: 6px; font-size: 13px; font-weight: 800; justify-content: center !important; }  /* 加大点击热区 */
             .nz-mobile-action-label { display: inline; }
         }
     </style>
