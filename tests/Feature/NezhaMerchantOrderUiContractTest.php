@@ -59,6 +59,7 @@ class NezhaMerchantOrderUiContractTest extends TestCase
         $this->assertStringContainsString('nz-order-mobile-actions', $blade);
         $this->assertStringContainsString('nz-order-primary-line', $blade);
         $this->assertStringContainsString('nz-mobile-status-strip', $blade);
+        $this->assertStringContainsString('nz-mobile-action-label', $blade);
     }
 
     public function testMerchantOrderDetailSupportsGuardedAutoPrintAfterStateChange(): void

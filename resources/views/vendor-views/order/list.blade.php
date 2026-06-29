@@ -42,7 +42,7 @@
         .nz-status-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
         .nz-status-empty-copy { color: #102A4C; font-weight: 900; }
         .nz-status-empty-help { color: #667085; font-size: 13px; margin-top: -4px; }
-        .nz-mobile-print-toggle, .nz-order-mobile-amount { display: none; }
+        .nz-mobile-print-toggle, .nz-order-mobile-amount, .nz-mobile-action-label { display: none; }
         @media (max-width: 767.98px) {
             .content.container-fluid { padding-left: 10px; padding-right: 10px; }
             .page-header { margin-bottom: 6px; }
@@ -114,6 +114,8 @@
             .nz-order-mobile-amount small { display: block; margin-top: 2px; font-size: 12px; font-weight: 900; }
             .nz-order-foods { max-width: none; margin-top: 5px; }
             .nz-order-time strong { display: inline; margin-right: 8px; }
+            .nz-order-time { white-space: nowrap !important; }
+            .nz-order-time strong, .nz-order-time .text-muted { white-space: nowrap !important; }
             .nz-order-time .text-muted { display: inline !important; }
             .nz-order-amount-cell { display: none !important; }
             #datatable tr.class-all td .btn--container { justify-content: flex-end; }
@@ -127,10 +129,11 @@
             #datatable tr.class-all td.nz-order-mobile-actions .nz-step-btn { width: 100%; }
             #datatable tr.class-all td.nz-order-mobile-actions .nz-step-btn { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; }
             #datatable tr.class-all td.nz-print-action-cell,
-            #datatable tr.class-all td.nz-detail-action-cell { display: inline-flex; width: 50%; justify-content: center; padding: 8px 4px 12px; border-bottom: 0; }
+            #datatable tr.class-all td.nz-detail-action-cell { display: inline-flex !important; width: 50% !important; max-width: 50%; box-sizing: border-box; justify-content: center; padding: 8px 4px 12px; border-bottom: 0; }
             #datatable tr.class-all td.nz-print-action-cell::before,
             #datatable tr.class-all td.nz-detail-action-cell::before { display: none; }
-            #datatable tr.class-all td .action-btn { width: 100%; height: 42px; }  /* 加大点击热区 */
+            #datatable tr.class-all td .action-btn { width: 100%; height: 42px; gap: 6px; font-size: 13px; font-weight: 800; }  /* 加大点击热区 */
+            .nz-mobile-action-label { display: inline; }
         }
     </style>
 @endpush
@@ -523,14 +526,14 @@
                                 <a class="btn action-btn btn--primary btn-outline-primary nz-action-icon" target="_blank"
                                     title="打印小票"
                                     href="{{route('vendor.order.generate-invoice',[$order['id']])}}">
-                                    <i class="tio-print"></i>
+                                    <i class="tio-print"></i><span class="nz-mobile-action-label">打印</span>
                                 </a>
                             </td>
                             <td class="text-center nz-detail-action-cell" data-label="订单详情">
                                 <a class="btn action-btn btn--warning btn-outline-warning nz-action-icon"
                                     title="订单详情"
                                     href="{{route('vendor.order.details',['id'=>$order['id']])}}">
-                                    <i class="tio-open-in-new"></i>
+                                    <i class="tio-open-in-new"></i><span class="nz-mobile-action-label">详情</span>
                                 </a>
                             </td>
                         </tr>
