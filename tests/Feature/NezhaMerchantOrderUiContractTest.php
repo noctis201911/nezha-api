@@ -62,6 +62,15 @@ class NezhaMerchantOrderUiContractTest extends TestCase
         $this->assertStringContainsString('nz-mobile-action-label', $blade);
     }
 
+    public function testRestaurantLoginLandsOnResponsiveOrderList(): void
+    {
+        $controller = file_get_contents(app_path('Http/Controllers/LoginController.php'));
+
+        $this->assertStringContainsString("redirect()->route('vendor.order.list", $controller);
+        $this->assertStringContainsString("['all']", $controller);
+        $this->assertStringNotContainsString("return redirect()->route('vendor.dashboard');", $controller);
+    }
+
     public function testMerchantOrderDetailSupportsGuardedAutoPrintAfterStateChange(): void
     {
         $blade = file_get_contents(resource_path('views/vendor-views/order/order-view.blade.php'));

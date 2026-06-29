@@ -296,7 +296,7 @@ class LoginController extends Controller
         return redirect()->route('admin.dashboard');
     }
     if($data == 'vendor' ){
-        return redirect()->route('vendor.dashboard');
+        return redirect()->route('vendor.order.list', ['all']);
     }
 
         RateLimiter::hit($key, $decayMinutes * 60);
