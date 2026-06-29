@@ -44,6 +44,7 @@ class NezhaMerchantOrderUiContractTest extends TestCase
 
         $this->assertStringContainsString('nz-status-tabs', $blade);
         $this->assertStringContainsString('nz-status-empty-copy', $blade);
+        $this->assertStringContainsString('nz-order-status-cell', $blade);
         $this->assertStringContainsString("route('vendor.order.mark-refunded'", $blade);
         $this->assertStringContainsString('查看详情处理退款申请', $blade);
         $this->assertStringContainsString('订单已关闭', $blade);

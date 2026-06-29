@@ -82,6 +82,10 @@
             #datatable tr.class-all td:last-child { border-bottom: 0; }
             #datatable tr.class-all td > * { text-align: right; }
             #datatable tr.class-all td .btn--container { justify-content: flex-end; }
+            #datatable tr.class-all td.nz-order-status-cell { align-items: flex-start; }
+            #datatable tr.class-all td.nz-order-status-cell > * { max-width: 70%; }
+            #datatable tr.class-all td.nz-order-status-cell .badge,
+            #datatable tr.class-all td.nz-order-status-cell .text-capitalze { white-space: nowrap; }
             #datatable tr.class-all td .action-btn { width: 40px; height: 40px; }  /* 加大点击热区 */
         }
     </style>
@@ -314,7 +318,7 @@
                                 </div>
 
                             </td>
-                            <td class="text-capitalize text-center" data-label="{{translate('messages.order_status')}}">
+                            <td class="text-capitalize text-center nz-order-status-cell" data-label="{{translate('messages.order_status')}}">
                                 @if (isset($order->subscription)  && $order->subscription->status != 'canceled' )
                                     @php
                                         $order->order_status = $order->subscription_log ? $order->subscription_log->order_status : $order->order_status;
