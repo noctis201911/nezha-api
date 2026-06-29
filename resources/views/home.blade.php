@@ -280,7 +280,7 @@
                 <!-- 修改后的中文文案 -->
                 <p class="subtitle" id="subtitle">最懂华人的味道。这里不只是外卖，更懂你的需求。</p>
                 <div class="btn-group">
-                    <a href="#" class="btn btn-primary" id="cta-btn">立即点餐</a>
+                    <a href="https://nezha.am/home" class="btn btn-primary" id="cta-btn">立即点餐</a>
                 </div>
             </div>
             <div class="hero-image">
