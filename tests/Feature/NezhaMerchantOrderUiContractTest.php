@@ -66,9 +66,9 @@ class NezhaMerchantOrderUiContractTest extends TestCase
     {
         $controller = file_get_contents(app_path('Http/Controllers/LoginController.php'));
 
+        $this->assertStringContainsString("\$data == 'vendor' && \$request->role == 'vendor'", $controller);
         $this->assertStringContainsString("redirect()->route('vendor.order.list", $controller);
         $this->assertStringContainsString("['all']", $controller);
-        $this->assertStringNotContainsString("return redirect()->route('vendor.dashboard');", $controller);
     }
 
     public function testMerchantOrderDetailSupportsGuardedAutoPrintAfterStateChange(): void
