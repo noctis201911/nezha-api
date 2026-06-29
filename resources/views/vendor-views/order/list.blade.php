@@ -426,14 +426,15 @@
                                                       'confirm' => '请确认：您已在自己的账户按原路退还本单顾客的付款？'];
                                         } elseif ($__os === 'refund_requested') {
                                             $__qa = ['type' => 'link', 'route' => route('vendor.order.details',['id'=>$order['id']]),
-                                                      'label' => '查看详情处理退款申请', 'cls' => 'btn-warning', 'icon' => 'tio-open-in-new'];
+                                                      'label' => '处理退款申请', 'title' => '查看详情处理退款申请',
+                                                      'cls' => 'btn-warning', 'icon' => 'tio-open-in-new'];
                                         } elseif (in_array($__os, ['delivered','canceled','failed','refunded','refund_request_canceled'], true)) {
                                             $__qa = ['type' => 'closed', 'label' => '订单已关闭'];
                                         }
                                     }
                                 @endphp
                                 @if($__qa && (($__qa['type'] ?? 'form') === 'link'))
-                                    <a class="btn btn-sm {{ $__qa['cls'] }} nz-step-btn text-nowrap text-white" href="{{ $__qa['route'] }}">
+                                    <a class="btn btn-sm {{ $__qa['cls'] }} nz-step-btn text-nowrap text-white" href="{{ $__qa['route'] }}" title="{{ $__qa['title'] ?? $__qa['label'] }}">
                                         <i class="{{ $__qa['icon'] }} mr-1"></i>{{ $__qa['label'] }}
                                     </a>
                                 @elseif($__qa && (($__qa['type'] ?? 'form') === 'closed'))
