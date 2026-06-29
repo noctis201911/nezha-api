@@ -9,6 +9,16 @@
     <style>
         .nz-order-table-card { border: 1px solid #E6EAF0; border-radius: 10px; box-shadow: 0 1px 4px rgba(16,24,40,.04); overflow: hidden; }
         .nz-order-table-card .card-header { border-bottom: 1px solid #EDF1F5; background: #fff; }
+        .nz-order-table-card #datatable { table-layout: fixed; min-width: 1180px; }
+        .nz-order-table-card #datatable th:nth-child(1), .nz-order-table-card #datatable td:nth-child(1) { width: 4%; }
+        .nz-order-table-card #datatable th:nth-child(2), .nz-order-table-card #datatable td:nth-child(2) { width: 24%; }
+        .nz-order-table-card #datatable th:nth-child(3), .nz-order-table-card #datatable td:nth-child(3) { width: 13%; }
+        .nz-order-table-card #datatable th:nth-child(4), .nz-order-table-card #datatable td:nth-child(4) { width: 16%; }
+        .nz-order-table-card #datatable th:nth-child(5), .nz-order-table-card #datatable td:nth-child(5) { width: 12%; }
+        .nz-order-table-card #datatable th:nth-child(6), .nz-order-table-card #datatable td:nth-child(6) { width: 12%; }
+        .nz-order-table-card #datatable th:nth-child(7), .nz-order-table-card #datatable td:nth-child(7) { width: 10%; }
+        .nz-order-table-card #datatable th:nth-child(8), .nz-order-table-card #datatable td:nth-child(8) { width: 5%; }
+        .nz-order-table-card #datatable th:nth-child(9), .nz-order-table-card #datatable td:nth-child(9) { width: 4%; }
         .nz-print-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid #EDF1F5; background: #FFF7F8; color: #7c1228; font-size: 13px; }
         .nz-print-settings label { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 700; }
         .nz-print-settings input { accent-color: #C4193E; }
