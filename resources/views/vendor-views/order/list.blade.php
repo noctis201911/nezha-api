@@ -7,6 +7,20 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     {{-- 手机端(<768px)把订单表格重排为卡片, 操作按钮直接露出; PC/平板(>=768px)不命中本媒体查询, 表格原样不变 --}}
     <style>
+        .nz-order-table-card { border: 1px solid #E6EAF0; border-radius: 10px; box-shadow: 0 1px 4px rgba(16,24,40,.04); overflow: hidden; }
+        .nz-order-table-card .card-header { border-bottom: 1px solid #EDF1F5; background: #fff; }
+        .nz-print-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid #EDF1F5; background: #FFF7F8; color: #7c1228; font-size: 13px; }
+        .nz-print-settings label { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 700; }
+        .nz-print-settings input { accent-color: #C4193E; }
+        .nz-print-settings .btn { border-radius: 7px; }
+        .nz-order-id { font-size: 16px; font-weight: 800; color: #102A4C; }
+        .nz-order-foods { font-size: 12px; color: #6B7280; max-width: 220px; white-space: normal; line-height: 1.4; margin-top: 4px; }
+        .nz-order-time strong { display: block; font-size: 14px; color: #102A4C; }
+        .nz-order-money { font-size: 15px; font-weight: 800; color: #102A4C; }
+        .nz-order-status-muted { color: #8A94A6; font-size: 12px; font-weight: 600; }
+        .nz-step-empty { color: #98A2B3; font-size: 12px; font-weight: 700; }
+        .nz-step-btn { border-radius: 7px !important; font-size: 12px !important; padding: 6px 12px !important; min-width: 86px; font-weight: 800 !important; }
+        .nz-action-icon { width: 38px; height: 36px; border-radius: 7px !important; display: inline-flex; align-items: center; justify-content: center; }
         @media (max-width: 767.98px) {
             #datatable thead { display: none; }
             #datatable, #datatable tbody { display: block; width: 100%; }
@@ -90,7 +104,7 @@
         <!-- End Page Header -->
 
         <!-- Card -->
-        <div class="card">
+        <div class="card nz-order-table-card">
             <!-- Header -->
             <div class="card-header py-2">
                 <div class="search--button-wrapper justify-content-end max-sm-flex-100">
@@ -142,6 +156,21 @@
                     </div>
                 </div>
             </div>
+            <div class="nz-print-settings d-print-none" id="nzPrintSettings">
+                <span style="font-weight:800;">打印小票</span>
+                <label>
+                    <input type="checkbox" id="nzPrintReady">
+                    已接入并测试打印机
+                </label>
+                <label>
+                    <input type="checkbox" id="nzAutoPrintReady">
+                    确认收款/接单后自动打单
+                </label>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="nzTestPrintBtn">
+                    <i class="tio-print mr-1"></i>测试打印
+                </button>
+                <span class="text-muted" style="font-weight:600;">未确认接入时不会自动弹打印，避免误触。</span>
+            </div>
             <!-- End Header -->
 
             <!-- Table -->
@@ -158,13 +187,14 @@
                         <th class="w-60px">
                             {{ translate('messages.sl') }}
                         </th>
-                        <th class="w-90px table-column-pl-0">{{translate('messages.Order_ID')}}</th>
+                        <th class="w-180px table-column-pl-0">订单</th>
                         <th class="w-140px">{{translate('messages.order_date')}}</th>
-                        <th class="text-center w-120px">{{ translate('messages.delivery_type') }}</th>
-                        <th class="w-140px">{{translate('messages.customer_information')}}</th>
-                        <th class="w-100px">{{translate('messages.total_amount')}}</th>
-                        <th class="w-100px text-center">{{translate('messages.order_status')}}</th>
-                        <th class="w-100px text-center">{{translate('messages.actions')}}</th>
+                        <th class="w-160px">{{translate('messages.customer_information')}}</th>
+                        <th class="w-110px">{{translate('messages.total_amount')}}</th>
+                        <th class="w-110px text-center">{{translate('messages.order_status')}}</th>
+                        <th class="w-130px text-center">下一步操作</th>
+                        <th class="w-80px text-center">打印小票</th>
+                        <th class="w-80px text-center">订单详情</th>
                     </tr>
                     </thead>
 
@@ -174,8 +204,8 @@
                             <td class="" data-label="{{translate('messages.sl')}}">
                                 {{$key+$orders->firstItem()}}
                             </td>
-                            <td class="table-column-pl-0" data-label="{{translate('messages.Order_ID')}}">
-                                <a href="{{route('vendor.order.details',['id'=>$order['id']])}}" class="text-hover">{{$order['id']}}
+                            <td class="table-column-pl-0" data-label="订单">
+                                <a href="{{route('vendor.order.details',['id'=>$order['id']])}}" class="text-hover nz-order-id">#{{$order['id']}}
                                     @if ($order->is_pos == 1)
                                     <span class="text--warning font-500">({{ translate('POS') }})</span>
                                     @endif
@@ -184,7 +214,7 @@
                                 <span class="text-info fs-12 d-block font-500">({{ translate('Edited') }})</span>
                                 @endif
                                 @if($order->details && $order->details->count() > 0)
-                                    <div class="text-muted mt-1" style="font-size:11px;max-width:180px;white-space:normal;line-height:1.4">
+                                    <div class="nz-order-foods">
                                         @foreach($order->details->take(3) as $__d)
                                             <?php $__fd = is_string($__d->food_details) ? json_decode($__d->food_details, true) : $__d->food_details; ?>
                                             {{ $__fd['name'] ?? '—' }}@if($__d->quantity > 1)<span class="text-body">×{{ $__d->quantity }}</span>@endif{{ !$loop->last ? '、' : '' }}
@@ -195,46 +225,25 @@
                                     </div>
                                 @endif
                             </td>
-                            <td data-label="{{translate('messages.order_date')}}">
-                                <span class="d-block">
-                                    {{ Carbon\Carbon::parse($order['created_at'])->locale(app()->getLocale())->translatedFormat('d M Y') }}
-                                </span>
-                                <span class="d-block text-uppercase">
-                                    {{ Carbon\Carbon::parse($order['created_at'])?->locale(app()->getLocale())?->translatedFormat(config('timeformat') ?? 'h:i A') }}
-                                </span>
+                            <td data-label="{{translate('messages.order_date')}}" class="nz-order-time">
+                                <strong>{{ Carbon\Carbon::parse($order['created_at'])->format('Y-m-d') }}</strong>
+                                <span class="d-block text-muted">{{ Carbon\Carbon::parse($order['created_at'])->format('H:i') }}</span>
                             </td>
-                            @php
-                                    $deliveryTypes = [
-                                        'express' => ['class' => 'badge-soft-warning', 'label' => 'messages.Express'],
-                                        'standard' => ['class' => 'badge-soft-info', 'label' => 'messages.Standard'],
-                                        'slightly_delay' => ['class' => 'badge-soft-secondary', 'label' => 'messages.Slightly_Delay'],
-                                    ];
-
-                                    $type = $order->delivery_type ? ($deliveryTypes[$order->delivery_type] ?? $deliveryTypes['standard']) : null;
-                                @endphp
-
-                                <td class="text-capitalize text-center" data-label="{{translate('messages.delivery_type')}}">
-                                    @if($type)
-                                        <span class="badge {{ $type['class'] }}">
-                                            {{ translate($type['label']) }}
-                                        </span>
-                                    @endif
-                                </td>
                             <td data-label="{{translate('messages.customer_information')}}">
                                 @if($order->is_guest)
                                      <?php
                                         $customer_details = json_decode($order['delivery_address'],true);
                                     ?>
                                     <strong>{{$customer_details['contact_person_name']}}</strong>
-                                    <div>{{$customer_details['contact_person_number']}}</div>
+                                    <div class="text-muted">{{\App\CentralLogics\Helpers::mask_phone($customer_details['contact_person_number'] ?? '')}}</div>
                                 @elseif($order->customer)
                                     <a class="text-body text-capitalize"
                                         href="{{route('vendor.order.details',['id'=>$order['id']])}}">
                                         <span class="d-block font-semibold">
                                                 {{$order->customer['f_name'].' '.$order->customer['l_name']}}
                                         </span>
-                                        <span class="d-block">
-                                                {{$order->customer['phone']}}
+                                        <span class="d-block text-muted">
+                                                {{\App\CentralLogics\Helpers::mask_phone($order->customer['phone'] ?? '')}}
                                         </span>
                                     </a>
                                 @else
@@ -246,7 +255,7 @@
 
 
                                 <div class="text-right mw-85px">
-                                    <div>
+                                    <div class="nz-order-money">
                                         {{\App\CentralLogics\Helpers::format_currency($order['order_amount'])}}
                                     </div>
                                     @if($order->payment_status=='paid')
@@ -332,7 +341,7 @@
                                     @endif
                                 </div>
                             </td>
-                            <td data-label="{{translate('messages.actions')}}">
+                            <td class="text-center" data-label="下一步操作">
                                 @php
                                     $__os = $order['order_status'];
                                     $__qa = null;
@@ -340,7 +349,8 @@
                                         && $order->offline_payments && $order->offline_payments->status === 'pending') {
                                         $__qa = ['route' => route('vendor.order.confirm-offline-payment', $order['id']),
                                                   'label' => '确认收款', 'cls' => 'btn-success', 'icon' => 'tio-checkmark-circle',
-                                                  'confirm' => '确认：您已在自己的账户收到本单付款？'];
+                                                  'confirm' => '确认：您已在自己的账户收到本单付款？',
+                                                  'auto_print' => true];
                                     } elseif (in_array($__os, ['confirmed','accepted'], true)) {
                                         $__qa = ['route' => route('vendor.order.status-update', $order['id']),
                                                   'label' => '开始备餐', 'cls' => 'btn-info', 'icon' => 'tio-restaurant',
@@ -357,25 +367,39 @@
                                                   'confirm' => '确认本单已送达顾客？确认后不可撤销。'];
                                     }
                                 @endphp
-                                <div class="btn--container justify-content-center flex-column" style="gap:6px">
-                                    @if($__qa)
-                                        <form method="POST" action="{{ $__qa['route'] }}" style="margin:0" onsubmit="return confirm('{{ $__qa['confirm'] }}')">
-                                            @csrf @method('PUT')
-                                            @if(!empty($__qa['extra']))
-                                                @foreach($__qa['extra'] as $__k => $__v)
-                                                    <input type="hidden" name="{{ $__k }}" value="{{ $__v }}">
-                                                @endforeach
-                                            @endif
-                                            <button type="submit" class="btn btn-sm {{ $__qa['cls'] }} text-nowrap text-white" style="font-size:12px;padding:4px 10px;min-width:90px">
-                                                <i class="{{ $__qa['icon'] }} mr-1"></i>{{ $__qa['label'] }}
-                                            </button>
-                                        </form>
-                                    @endif
-                                    <div class="d-flex justify-content-center" style="gap:4px">
-                                        <a class="btn action-btn btn--warning btn-outline-warning" href="{{route('vendor.order.details',['id'=>$order['id']])}}"><i class="tio-visible-outlined"></i></a>
-                                        <a class="btn action-btn btn--primary btn-outline-primary" target="_blank" href="{{route('vendor.order.generate-invoice',[$order['id']])}}"><i class="tio-print"></i></a>
-                                    </div>
-                                </div>
+                                @if($__qa)
+                                    <form class="nz-order-step-form" method="POST" action="{{ $__qa['route'] }}" style="margin:0"
+                                        data-nz-invoice-url="{{route('vendor.order.generate-invoice',[$order['id']])}}?nz_auto_print=1"
+                                        data-nz-order-id="{{$order['id']}}"
+                                        data-nz-auto-print-action="{{ !empty($__qa['auto_print']) ? '1' : '0' }}"
+                                        onsubmit="return confirm('{{ $__qa['confirm'] }}')">
+                                        @csrf @method('PUT')
+                                        @if(!empty($__qa['extra']))
+                                            @foreach($__qa['extra'] as $__k => $__v)
+                                                <input type="hidden" name="{{ $__k }}" value="{{ $__v }}">
+                                            @endforeach
+                                        @endif
+                                        <button type="submit" class="btn btn-sm {{ $__qa['cls'] }} nz-step-btn text-nowrap text-white">
+                                            <i class="{{ $__qa['icon'] }} mr-1"></i>{{ $__qa['label'] }}
+                                        </button>
+                                    </form>
+                                @else
+                                    <span class="nz-step-empty">无需操作</span>
+                                @endif
+                            </td>
+                            <td class="text-center" data-label="打印小票">
+                                <a class="btn action-btn btn--primary btn-outline-primary nz-action-icon" target="_blank"
+                                    title="打印小票"
+                                    href="{{route('vendor.order.generate-invoice',[$order['id']])}}">
+                                    <i class="tio-print"></i>
+                                </a>
+                            </td>
+                            <td class="text-center" data-label="订单详情">
+                                <a class="btn action-btn btn--warning btn-outline-warning nz-action-icon"
+                                    title="订单详情"
+                                    href="{{route('vendor.order.details',['id'=>$order['id']])}}">
+                                    <i class="tio-open-in-new"></i>
+                                </a>
                             </td>
                         </tr>
                     @endforeach
@@ -415,6 +439,132 @@
 @push('script_2')
     <script>
         "use strict";
+        (function(){
+            var READY_KEY = 'nzPrintReady';
+            var AUTO_KEY = 'nzAutoPrintReady';
+
+            function $(id){ return document.getElementById(id); }
+
+            function isPrintReady(){
+                return localStorage.getItem(READY_KEY) === '1';
+            }
+
+            function isAutoPrintReady(){
+                return isPrintReady() && localStorage.getItem(AUTO_KEY) === '1';
+            }
+
+            function applyPrintSettings(){
+                var ready = $('nzPrintReady');
+                var auto = $('nzAutoPrintReady');
+                if (!ready || !auto) return;
+                ready.checked = isPrintReady();
+                auto.checked = localStorage.getItem(AUTO_KEY) === '1';
+                auto.disabled = !ready.checked;
+                if (!ready.checked) {
+                    auto.checked = false;
+                    localStorage.setItem(AUTO_KEY, '0');
+                }
+            }
+
+            function openInvoiceForPrint(url){
+                if (!url) return;
+                var w = window.open(url, '_blank', 'noopener');
+                if (!w) {
+                    alert('浏览器拦截了打印窗口，请允许本站弹出窗口后重试。');
+                }
+            }
+
+            window.nzMaybeAutoPrintAfterOrderAction = function(invoiceUrl){
+                if (!isAutoPrintReady() || !invoiceUrl) return;
+                sessionStorage.setItem('nzAutoPrintInvoiceUrl', invoiceUrl);
+            };
+
+            document.addEventListener('DOMContentLoaded', function(){
+                applyPrintSettings();
+
+                var ready = $('nzPrintReady');
+                var auto = $('nzAutoPrintReady');
+                var testBtn = $('nzTestPrintBtn');
+
+                if (ready) {
+                    ready.addEventListener('change', function(){
+                        localStorage.setItem(READY_KEY, ready.checked ? '1' : '0');
+                        applyPrintSettings();
+                    });
+                }
+                if (auto) {
+                    auto.addEventListener('change', function(){
+                        if (auto.checked && !isPrintReady()) {
+                            alert('请先勾选“已接入并测试打印机”。');
+                            auto.checked = false;
+                        }
+                        localStorage.setItem(AUTO_KEY, auto.checked ? '1' : '0');
+                        applyPrintSettings();
+                    });
+                }
+                if (testBtn) {
+                    testBtn.addEventListener('click', function(){
+                        if (!isPrintReady()) {
+                            alert('请先确认本机/云打印机已接入。');
+                            return;
+                        }
+                        var firstPrint = document.querySelector('a[href*="/generate-invoice/"]');
+                        if (!firstPrint) {
+                            alert('当前没有可测试打印的订单。');
+                            return;
+                        }
+                        openInvoiceForPrint(firstPrint.href + (firstPrint.href.indexOf('?') === -1 ? '?nz_auto_print=1&nz_test_print=1' : '&nz_auto_print=1&nz_test_print=1'));
+                    });
+                }
+
+                var pending = sessionStorage.getItem('nzAutoPrintInvoiceUrl');
+                if (pending) {
+                    sessionStorage.removeItem('nzAutoPrintInvoiceUrl');
+                    if (isAutoPrintReady()) {
+                        openInvoiceForPrint(pending);
+                    }
+                }
+            });
+
+            document.addEventListener('submit', function(e){
+                var form = e.target;
+                if (!form || !form.classList || !form.classList.contains('nz-order-step-form')) return;
+                if (e.defaultPrevented) return;
+                e.preventDefault();
+
+                var btn = form.querySelector('button[type="submit"]');
+                var orig = btn ? btn.innerHTML : '';
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '处理中...';
+                }
+
+                var fd = new FormData(form);
+                fetch(form.action, {
+                    method: 'POST',
+                    body: fd,
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'text/html,application/xhtml+xml,application/xml',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    redirect: 'follow'
+                }).then(function(resp){
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    if (form.getAttribute('data-nz-auto-print-action') === '1') {
+                        window.nzMaybeAutoPrintAfterOrderAction(form.getAttribute('data-nz-invoice-url'));
+                    }
+                    setTimeout(function(){ window.location.reload(); }, 60);
+                }).catch(function(err){
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                    }
+                    alert('操作失败：' + (err && err.message ? err.message : '网络错误，请重试'));
+                });
+            }, false);
+        })();
+
         $(document).on('ready', function () {
             // INITIALIZATION OF NAV SCROLLER
             // =======================================================

@@ -142,6 +142,8 @@
                         class="btn btn-success btn-sm" style="border-radius:8px;font-weight:700;white-space:nowrap;flex:0 0 auto;">↓ {{ $nzPrimary['label'] }}</a>
                 @else
                     <form action="{{ $nzPrimary['route'] }}" method="post" style="margin:0;flex:0 0 auto;"
+                        data-nz-auto-print-invoice="{{ route('vendor.order.generate-invoice', [$order['id']]) }}?nz_auto_print=1"
+                        data-nz-auto-print-action="{{ $nzOffPending ? '1' : '0' }}"
                         @if ($nzPrimary['confirm']) onsubmit="return confirm('{{ $nzPrimary['confirm'] }}');" @endif>
                         @csrf
                         @method($nzPrimary['method'])
@@ -3511,6 +3513,30 @@
         setTimeout(function(){ if (t.parentNode) t.parentNode.removeChild(t); }, 2700);
     }
 
+    window.nzMaybeAutoPrintAfterOrderAction = function(invoiceUrl){
+        try {
+            var ready = localStorage.getItem('nzPrintReady') === '1';
+            var auto = localStorage.getItem('nzAutoPrintReady') === '1';
+            if (ready && auto && invoiceUrl) {
+                sessionStorage.setItem('nzAutoPrintInvoiceUrl', invoiceUrl);
+            }
+        } catch(e){}
+    };
+
+    document.addEventListener('DOMContentLoaded', function(){
+        try {
+            var pending = sessionStorage.getItem('nzAutoPrintInvoiceUrl');
+            if (!pending) return;
+            sessionStorage.removeItem('nzAutoPrintInvoiceUrl');
+            if (localStorage.getItem('nzPrintReady') === '1' && localStorage.getItem('nzAutoPrintReady') === '1') {
+                var w = window.open(pending, '_blank', 'noopener');
+                if (!w) {
+                    nzToast('浏览器拦截了打印窗口，请允许本站弹出窗口后重试', true);
+                }
+            }
+        } catch(e){}
+    });
+
     // —— 按钮 loading 态: spinner + 文字"处理中…" + disabled ——
     function setLoading(btn, on){
         if (!btn) return;
@@ -3573,6 +3599,9 @@
                 var modal = form.closest('.modal.show, .modal.in');
                 if (modal && window.jQuery) { window.jQuery(modal).modal('hide'); }
             } catch(e3){}
+            if (form.getAttribute('data-nz-auto-print-action') === '1') {
+                window.nzMaybeAutoPrintAfterOrderAction(form.getAttribute('data-nz-auto-print-invoice'));
+            }
             // 短延迟让 modal 收起动画跑完, 体感更顺
             setTimeout(function(){ window.location.reload(); }, 60);
         })
