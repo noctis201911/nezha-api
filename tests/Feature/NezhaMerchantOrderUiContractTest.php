@@ -19,6 +19,36 @@ class NezhaMerchantOrderUiContractTest extends TestCase
         $this->assertStringNotContainsString("translate('messages.delivery_type')</th>", $blade);
     }
 
+    public function testMerchantOrderSubStatusPagesHaveCompleteOperatorGuidance(): void
+    {
+        $blade = file_get_contents(resource_path('views/vendor-views/order/list.blade.php'));
+
+        $this->assertStringContainsString('$nzStatusMeta', $blade);
+        foreach ([
+            'offline_pending',
+            'refund_pending',
+            'pending',
+            'confirmed',
+            'cooking',
+            'ready_for_delivery',
+            'food_on_the_way',
+            'delivered',
+            'refunded',
+            'refund_requested',
+            'scheduled',
+            'payment_failed',
+            'canceled',
+        ] as $status) {
+            $this->assertStringContainsString("'{$status}'", $blade);
+        }
+
+        $this->assertStringContainsString('nz-status-tabs', $blade);
+        $this->assertStringContainsString('nz-status-empty-copy', $blade);
+        $this->assertStringContainsString("route('vendor.order.mark-refunded'", $blade);
+        $this->assertStringContainsString('查看详情处理退款申请', $blade);
+        $this->assertStringContainsString('订单已关闭', $blade);
+    }
+
     public function testMerchantOrderDetailSupportsGuardedAutoPrintAfterStateChange(): void
     {
         $blade = file_get_contents(resource_path('views/vendor-views/order/order-view.blade.php'));

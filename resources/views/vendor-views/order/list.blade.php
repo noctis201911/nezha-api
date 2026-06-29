@@ -31,7 +31,22 @@
         .nz-step-empty { color: #98A2B3; font-size: 12px; font-weight: 700; }
         .nz-step-btn { border-radius: 7px !important; font-size: 12px !important; padding: 6px 12px !important; min-width: 86px; font-weight: 800 !important; }
         .nz-action-icon { width: 38px; height: 36px; border-radius: 7px !important; display: inline-flex; align-items: center; justify-content: center; }
+        .nz-order-status-hero { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; padding: 14px 16px; margin-bottom: 12px; border: 1px solid #E6EAF0; border-radius: 10px; background: #fff; box-shadow: 0 1px 4px rgba(16,24,40,.04); }
+        .nz-order-status-hero h2 { margin: 0; font-size: 21px; line-height: 1.25; font-weight: 900; color: #102A4C; letter-spacing: 0; }
+        .nz-order-status-hero p { margin: 5px 0 0; color: #667085; font-size: 13px; line-height: 1.45; max-width: 680px; }
+        .nz-status-count { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 24px; padding: 0 9px; margin-left: 7px; border-radius: 999px; background: #EFF6FF; color: #1D4ED8; font-size: 13px; font-weight: 900; }
+        .nz-status-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+        .nz-status-tabs a { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 7px 11px; border: 1px solid #E6EAF0; border-radius: 8px; background: #fff; color: #344054; font-size: 12px; font-weight: 800; }
+        .nz-status-tabs a.active { border-color: #C4193E; background: #FFF1F3; color: #A41435; }
+        .nz-status-tabs i { font-size: 14px; }
+        .nz-status-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+        .nz-status-empty-copy { color: #102A4C; font-weight: 900; }
+        .nz-status-empty-help { color: #667085; font-size: 13px; margin-top: -4px; }
         @media (max-width: 767.98px) {
+            .nz-order-status-hero { display: block; }
+            .nz-status-hero-actions { justify-content: flex-start; margin-top: 10px; }
+            .nz-status-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+            .nz-status-tabs a { flex: 0 0 auto; }
             #datatable thead { display: none; }
             #datatable, #datatable tbody { display: block; width: 100%; }
             #datatable tr.class-all {
@@ -73,39 +88,54 @@
 @endpush
 
 @section('content')
-<?php
-?>
+@php
+    $nzRawStatus = $st ?? 'all';
+    $nzStatusMeta = [
+        'all' => ['label' => '全部订单', 'hint' => '集中查看当前仍需履约或复核的订单，按下一步操作推进。', 'empty' => '当前没有需要处理的订单。', 'icon' => 'tio-shopping-cart'],
+        'offline_pending' => ['label' => '待确认收款', 'hint' => '顾客已提交直付凭证，商家确认自己账户已到账后再出餐。', 'empty' => '暂无待确认收款订单。', 'icon' => 'tio-checkmark-circle'],
+        'refund_pending' => ['label' => '待退款', 'hint' => '平台不经手货款；请商家按原路退还顾客后在此标记已退款。', 'empty' => '暂无待退款订单。', 'icon' => 'tio-receipt-outlined'],
+        'pending' => ['label' => '待处理', 'hint' => '新订单在这里接单；直付待核验订单请优先到待确认收款处理。', 'empty' => '暂无待处理订单。', 'icon' => 'tio-timer'],
+        'confirmed' => ['label' => '已接单', 'hint' => '已确认的订单请尽快开始备餐，避免超时影响体验。', 'empty' => '暂无已接单订单。', 'icon' => 'tio-checkmark-circle-outlined'],
+        'cooking' => ['label' => '备餐中', 'hint' => '备餐完成后标记配送中，顾客侧会同步看到进度。', 'empty' => '暂无备餐中订单。', 'icon' => 'tio-restaurant'],
+        'ready_for_delivery' => ['label' => '待配送', 'hint' => '已出餐、等待配送流转的订单会显示在这里。', 'empty' => '暂无待配送订单。', 'icon' => 'tio-directions'],
+        'food_on_the_way' => ['label' => '配送中', 'hint' => '配送中的订单送达后请及时完成，减少顾客等待不确定性。', 'empty' => '暂无配送中订单。', 'icon' => 'tio-send'],
+        'delivered' => ['label' => '已送达', 'hint' => '已完成订单用于核对履约结果，可查看详情或补打小票。', 'empty' => '暂无已送达订单。', 'icon' => 'tio-done-all'],
+        'refunded' => ['label' => '已退款', 'hint' => '已关闭的退款订单仅供核对记录。', 'empty' => '暂无已退款订单。', 'icon' => 'tio-receipt-outlined'],
+        'refund_requested' => ['label' => '退款申请中', 'hint' => '顾客发起退款申请的订单，请进入详情核对原因和凭证后处理。', 'empty' => '暂无退款申请中的订单。', 'icon' => 'tio-help-outlined'],
+        'scheduled' => ['label' => '已预订', 'hint' => '预约订单按预约时间履约，接近出餐时再推进状态。', 'empty' => '暂无预约订单。', 'icon' => 'tio-calendar-month'],
+        'payment_failed' => ['label' => '支付失败', 'hint' => '支付失败订单已关闭，通常无需商家继续履约。', 'empty' => '暂无支付失败订单。', 'icon' => 'tio-warning-outlined'],
+        'canceled' => ['label' => '已取消', 'hint' => '已取消订单用于核对取消原因和退款留痕。', 'empty' => '暂无已取消订单。', 'icon' => 'tio-clear-circle-outlined'],
+    ];
+    $nzStatusTabs = ['all','offline_pending','refund_pending','pending','confirmed','cooking','ready_for_delivery','food_on_the_way','delivered','refunded','refund_requested','scheduled','payment_failed','canceled'];
+    $nzCurrentMeta = $nzStatusMeta[$nzRawStatus] ?? ['label' => str_replace('_', ' ', $nzRawStatus), 'hint' => '查看该状态下的订单。', 'empty' => '暂无该状态订单。', 'icon' => 'tio-shopping-cart'];
+@endphp
     <div class="content container-fluid">
         <!-- Page Header -->
         <div class="page-header pt-0 pb-2">
-            <div class="d-flex flex-wrap justify-content-between">
-                <h2 class="page-header-title align-items-center text-capitalize py-2 mr-2">
-                    <div class="card-header-icon d-inline-flex mr-2 img">
-                        @if(str_replace('_',' ',$status) == 'All')
-                            <img class="mw-24px" src="{{dynamicAsset('assets/admin/img/resturant-panel/page-title/order.png')}}" alt="public">
-                        @elseif(str_replace('_',' ',$status) == 'Pending')
-                            <img class="mw-24px" src="{{dynamicAsset('assets/admin/img/resturant-panel/page-title/pending.png')}}" alt="public">
-                        @elseif(str_replace('_',' ',$status) == 'Confirmed')
-                            <img class="mw-24px" src="{{dynamicAsset('assets/admin/img/resturant-panel/page-title/confirm.png')}}" alt="public">
-                        @elseif(str_replace('_',' ',$status) == 'Cooking')
-                            <img class="mw-24px" src="{{dynamicAsset('assets/admin/img/resturant-panel/page-title/cooking.png')}}" alt="public">
-                        @elseif(str_replace('_',' ',$status) == 'Ready for delivery')
-                            <img class="mw-24px" src="{{dynamicAsset('assets/admin/img/resturant-panel/page-title/ready.png')}}" alt="public">
-                        @elseif(str_replace('_',' ',$status) == 'Food on the way')
-                            <img class="mw-24px" src="{{dynamicAsset('assets/admin/img/resturant-panel/page-title/ready.png')}}" alt="public">
-                        @elseif(str_replace('_',' ',$status) == 'Delivered')
-                            <img class="mw-24px" src="{{dynamicAsset('assets/admin/img/resturant-panel/page-title/ready.png')}}" alt="public">
-                        @elseif(str_replace('_',' ',$status) == 'Refunded')
-                            <img class="mw-24px" src="{{dynamicAsset('assets/admin/img/resturant-panel/page-title/order.png')}}" alt="public">
-                        @elseif(str_replace('_',' ',$status) == 'Scheduled')
-                            <img class="mw-24px" src="{{dynamicAsset('assets/admin/img/resturant-panel/page-title/order.png')}}" alt="public">
-                        @endif
-                    </div>
-                    <span>
-                        @php $__sl=['All'=>'全部','Pending'=>'待处理','Confirmed'=>'已确认','Cooking'=>'备餐中','Ready_for_delivery'=>'待取餐','Food_on_the_way'=>'配送中','Delivered'=>'已送达','Refunded'=>'已退款','Scheduled'=>'预约中']; @endphp
-                        {{$__sl[$status] ?? str_replace('_',' ',$status)}} {{translate('messages.orders')}} <span class="badge badge-soft-dark ml-2">{{$orders->total()}}</span>
-                    </span>
-                </h2>
+            <div class="nz-order-status-hero">
+                <div>
+                    <h2>
+                        <i class="{{ $nzCurrentMeta['icon'] }} mr-1"></i>{{ $nzCurrentMeta['label'] }}
+                        <span class="nz-status-count">{{$orders->total()}}</span>
+                    </h2>
+                    <p>{{ $nzCurrentMeta['hint'] }}</p>
+                </div>
+                <div class="nz-status-hero-actions">
+                    <a class="btn btn-sm btn-white" href="{{route('vendor.order.list',['all'])}}">
+                        <i class="tio-refresh mr-1"></i>全部
+                    </a>
+                    <a class="btn btn-sm btn--primary" href="{{route('vendor.order.list',['offline_pending'])}}">
+                        <i class="tio-checkmark-circle mr-1"></i>收款
+                    </a>
+                </div>
+            </div>
+            <div class="nz-status-tabs d-print-none">
+                @foreach($nzStatusTabs as $__statusKey)
+                    <a href="{{route('vendor.order.list',[$__statusKey])}}" class="{{ $nzRawStatus === $__statusKey ? 'active' : '' }}">
+                        <i class="{{ $nzStatusMeta[$__statusKey]['icon'] ?? 'tio-circle' }}"></i>
+                        <span>{{ $nzStatusMeta[$__statusKey]['label'] ?? $__statusKey }}</span>
+                    </a>
+                @endforeach
             </div>
         </div>
         <!-- End Page Header -->
@@ -361,6 +391,12 @@
                                                   'label' => '确认收款', 'cls' => 'btn-success', 'icon' => 'tio-checkmark-circle',
                                                   'confirm' => '确认：您已在自己的账户收到本单付款？',
                                                   'auto_print' => true];
+                                    } elseif ($__os === 'pending') {
+                                        $__qa = ['route' => route('vendor.order.status-update', $order['id']),
+                                                  'label' => '接单', 'cls' => 'btn-success', 'icon' => 'tio-checkmark-circle',
+                                                  'confirm' => '确认接单？',
+                                                  'auto_print' => true,
+                                                  'extra' => ['order_status'=>'confirmed','id'=>$order['id']]];
                                     } elseif (in_array($__os, ['confirmed','accepted'], true)) {
                                         $__qa = ['route' => route('vendor.order.status-update', $order['id']),
                                                   'label' => '开始备餐', 'cls' => 'btn-info', 'icon' => 'tio-restaurant',
@@ -375,9 +411,30 @@
                                         $__qa = ['route' => route('vendor.order.mark-delivered', $order['id']),
                                                   'label' => '已送达', 'cls' => 'btn-success', 'icon' => 'tio-done-all',
                                                   'confirm' => '确认本单已送达顾客？确认后不可撤销。'];
+                                    } else {
+                                        $__refundPending = \App\Models\NezhaRefundRecord::where('order_id', $order['id'])
+                                            ->where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())
+                                            ->where('status', 'pending_merchant_refund')
+                                            ->exists();
+                                        if ($__refundPending) {
+                                            $__qa = ['route' => route('vendor.order.mark-refunded', ['id' => $order['id']]),
+                                                      'label' => '标记已退款', 'cls' => 'btn-warning', 'icon' => 'tio-receipt-outlined',
+                                                      'confirm' => '请确认：您已在自己的账户按原路退还本单顾客的付款？'];
+                                        } elseif ($__os === 'refund_requested') {
+                                            $__qa = ['type' => 'link', 'route' => route('vendor.order.details',['id'=>$order['id']]),
+                                                      'label' => '查看详情处理退款申请', 'cls' => 'btn-warning', 'icon' => 'tio-open-in-new'];
+                                        } elseif (in_array($__os, ['delivered','canceled','failed','refunded','refund_request_canceled'], true)) {
+                                            $__qa = ['type' => 'closed', 'label' => '订单已关闭'];
+                                        }
                                     }
                                 @endphp
-                                @if($__qa)
+                                @if($__qa && (($__qa['type'] ?? 'form') === 'link'))
+                                    <a class="btn btn-sm {{ $__qa['cls'] }} nz-step-btn text-nowrap text-white" href="{{ $__qa['route'] }}">
+                                        <i class="{{ $__qa['icon'] }} mr-1"></i>{{ $__qa['label'] }}
+                                    </a>
+                                @elseif($__qa && (($__qa['type'] ?? 'form') === 'closed'))
+                                    <span class="nz-step-empty">{{ $__qa['label'] }}</span>
+                                @elseif($__qa)
                                     <form class="nz-order-step-form" method="POST" action="{{ $__qa['route'] }}" style="margin:0"
                                         data-nz-invoice-url="{{route('vendor.order.generate-invoice',[$order['id']])}}?nz_auto_print=1"
                                         data-nz-order-id="{{$order['id']}}"
@@ -419,9 +476,8 @@
             @if(count($orders) === 0)
             <div class="empty--data">
                 <img src="{{dynamicAsset('assets/admin/img/empty.png')}}" alt="public">
-                <h5>
-                    {{translate('no_data_found')}}
-                </h5>
+                <h5 class="nz-status-empty-copy">{{ $nzCurrentMeta['empty'] }}</h5>
+                <div class="nz-status-empty-help">可切换上方状态，或用订单号搜索历史订单。</div>
             </div>
             @endif
             <!-- End Table -->
