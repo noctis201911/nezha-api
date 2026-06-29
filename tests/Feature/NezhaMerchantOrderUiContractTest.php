@@ -50,6 +50,17 @@ class NezhaMerchantOrderUiContractTest extends TestCase
         $this->assertStringContainsString('订单已关闭', $blade);
     }
 
+    public function testMerchantOrderMobileLayoutIsBuiltForFastOperation(): void
+    {
+        $blade = file_get_contents(resource_path('views/vendor-views/order/list.blade.php'));
+
+        $this->assertStringContainsString('nz-mobile-toolbar', $blade);
+        $this->assertStringContainsString('nz-mobile-print-toggle', $blade);
+        $this->assertStringContainsString('nz-order-mobile-actions', $blade);
+        $this->assertStringContainsString('nz-order-primary-line', $blade);
+        $this->assertStringContainsString('nz-mobile-status-strip', $blade);
+    }
+
     public function testMerchantOrderDetailSupportsGuardedAutoPrintAfterStateChange(): void
     {
         $blade = file_get_contents(resource_path('views/vendor-views/order/order-view.blade.php'));

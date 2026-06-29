@@ -42,51 +42,95 @@
         .nz-status-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
         .nz-status-empty-copy { color: #102A4C; font-weight: 900; }
         .nz-status-empty-help { color: #667085; font-size: 13px; margin-top: -4px; }
+        .nz-mobile-print-toggle, .nz-order-mobile-amount { display: none; }
         @media (max-width: 767.98px) {
-            .nz-order-status-hero { display: block; }
-            .nz-status-hero-actions { justify-content: flex-start; margin-top: 10px; }
-            .nz-status-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
-            .nz-status-tabs a { flex: 0 0 auto; }
+            .content.container-fluid { padding-left: 10px; padding-right: 10px; }
+            .page-header { margin-bottom: 6px; }
+            .nz-order-status-hero { display: block; padding: 11px 12px; margin-bottom: 8px; border-radius: 9px; }
+            .nz-order-status-hero h2 { font-size: 18px; }
+            .nz-order-status-hero p { font-size: 12px; line-height: 1.35; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+            .nz-status-hero-actions { justify-content: flex-start; margin-top: 9px; }
+            .nz-status-hero-actions .btn { min-height: 34px; padding-left: 12px; padding-right: 12px; }
+            .nz-mobile-status-strip { flex-wrap: nowrap; overflow-x: auto; padding: 0 1px 6px; margin: 0 -1px 8px; scrollbar-width: none; }
+            .nz-mobile-status-strip::-webkit-scrollbar { display: none; }
+            .nz-mobile-status-strip a { flex: 0 0 auto; min-height: 36px; padding: 8px 11px; border-radius: 7px; }
+            .nz-order-table-card { border-radius: 9px; overflow: visible; }
+            .nz-mobile-toolbar { padding: 10px 10px 8px !important; }
+            .nz-mobile-toolbar .search--button-wrapper { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+            .nz-mobile-toolbar form { min-width: 0; }
+            .nz-mobile-toolbar .input--group { width: 100%; }
+            .nz-mobile-toolbar .hs-unfold { margin-right: 0 !important; }
+            .nz-mobile-toolbar .hs-unfold > .btn { min-height: 42px; border-radius: 8px; }
+            .nz-print-settings { display: block; padding: 8px 10px; }
+            .nz-mobile-print-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 38px; padding: 0; border: 0; background: transparent; color: #7c1228; font-weight: 900; text-align: left; }
+            .nz-mobile-print-toggle .nz-mobile-print-state { margin-left: auto; color: #667085; font-size: 12px; font-weight: 800; }
+            .nz-print-settings:not(.nz-print-open) .nz-print-title,
+            .nz-print-settings:not(.nz-print-open) label,
+            .nz-print-settings:not(.nz-print-open) #nzTestPrintBtn,
+            .nz-print-settings:not(.nz-print-open) > .text-muted { display: none; }
+            .nz-print-settings.nz-print-open { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; }
+            .nz-print-settings.nz-print-open .nz-mobile-print-toggle { flex-basis: 100%; }
+            .nz-print-settings.nz-print-open label { min-height: 34px; }
             #datatable thead { display: none; }
             #datatable, #datatable tbody { display: block; width: 100%; }
             #datatable tr.class-all {
                 display: block;
                 background: #fff;
                 border: 1px solid #eef0f3;
-                border-radius: 12px;
+                border-radius: 10px;
                 box-shadow: 0 1px 4px rgba(0,0,0,.04);
-                margin-bottom: 12px;
-                padding: 4px 14px;
+                margin-bottom: 10px;
+                padding: 0 12px;
             }
             #datatable tr.class-all td {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                gap: 12px;
+                gap: 10px;
                 width: 100%;
                 border: 0;
                 border-bottom: 1px solid #f3f4f6;
-                padding: 9px 0;
+                padding: 8px 0;
                 text-align: right;
                 white-space: normal;
+                font-size: 13px;
             }
             #datatable tr.class-all td::before {
                 content: attr(data-label);
                 font-weight: 600;
                 color: #8a94a6;
                 text-align: left;
-                flex: 0 0 auto;
+                flex: 0 0 72px;
                 white-space: nowrap;
             }
             #datatable tr.class-all td:first-child { display: none; }      /* 序号在卡片里无意义, 隐藏 */
             #datatable tr.class-all td:last-child { border-bottom: 0; }
             #datatable tr.class-all td > * { text-align: right; }
+            #datatable tr.class-all td[data-label="订单"] { display: block; padding: 12px 0 10px; }
+            #datatable tr.class-all td[data-label="订单"]::before { display: none; }
+            .nz-order-primary-line { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+            .nz-order-id { font-size: 18px; line-height: 1.15; }
+            .nz-order-mobile-amount { display: block; flex: 0 0 auto; text-align: right; font-size: 15px; font-weight: 900; color: #102A4C; }
+            .nz-order-mobile-amount small { display: block; margin-top: 2px; font-size: 12px; font-weight: 900; }
+            .nz-order-foods { max-width: none; margin-top: 5px; }
+            .nz-order-time strong { display: inline; margin-right: 8px; }
+            .nz-order-time .text-muted { display: inline !important; }
+            .nz-order-amount-cell { display: none !important; }
             #datatable tr.class-all td .btn--container { justify-content: flex-end; }
             #datatable tr.class-all td.nz-order-status-cell { align-items: flex-start; }
             #datatable tr.class-all td.nz-order-status-cell > * { max-width: 70%; }
             #datatable tr.class-all td.nz-order-status-cell .badge,
             #datatable tr.class-all td.nz-order-status-cell .text-capitalze { white-space: nowrap; }
-            #datatable tr.class-all td .action-btn { width: 40px; height: 40px; }  /* 加大点击热区 */
+            #datatable tr.class-all td.nz-order-mobile-actions { display: block; padding: 10px 0 8px; }
+            #datatable tr.class-all td.nz-order-mobile-actions::before { display: block; margin-bottom: 8px; }
+            #datatable tr.class-all td.nz-order-mobile-actions form,
+            #datatable tr.class-all td.nz-order-mobile-actions .nz-step-btn { width: 100%; }
+            #datatable tr.class-all td.nz-order-mobile-actions .nz-step-btn { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; }
+            #datatable tr.class-all td.nz-print-action-cell,
+            #datatable tr.class-all td.nz-detail-action-cell { display: inline-flex; width: 50%; justify-content: center; padding: 8px 4px 12px; border-bottom: 0; }
+            #datatable tr.class-all td.nz-print-action-cell::before,
+            #datatable tr.class-all td.nz-detail-action-cell::before { display: none; }
+            #datatable tr.class-all td .action-btn { width: 100%; height: 42px; }  /* 加大点击热区 */
         }
     </style>
 @endpush
@@ -133,7 +177,7 @@
                     </a>
                 </div>
             </div>
-            <div class="nz-status-tabs d-print-none">
+            <div class="nz-status-tabs nz-mobile-status-strip d-print-none">
                 @foreach($nzStatusTabs as $__statusKey)
                     <a href="{{route('vendor.order.list',[$__statusKey])}}" class="{{ $nzRawStatus === $__statusKey ? 'active' : '' }}">
                         <i class="{{ $nzStatusMeta[$__statusKey]['icon'] ?? 'tio-circle' }}"></i>
@@ -150,7 +194,7 @@
         <!-- Card -->
         <div class="card nz-order-table-card">
             <!-- Header -->
-            <div class="card-header py-2">
+            <div class="card-header py-2 nz-mobile-toolbar">
                 <div class="search--button-wrapper justify-content-end max-sm-flex-100">
                     <form >
                         <!-- Search -->
@@ -201,7 +245,11 @@
                 </div>
             </div>
             <div class="nz-print-settings d-print-none" id="nzPrintSettings">
-                <span style="font-weight:800;">打印小票</span>
+                <button type="button" class="nz-mobile-print-toggle" id="nzMobilePrintToggle">
+                    <span><i class="tio-print mr-1"></i>打印设置</span>
+                    <span class="nz-mobile-print-state" id="nzMobilePrintState">未开启</span>
+                </button>
+                <span class="nz-print-title" style="font-weight:800;">打印小票</span>
                 <label>
                     <input type="checkbox" id="nzPrintReady">
                     已接入并测试打印机
@@ -249,11 +297,23 @@
                                 {{$key+$orders->firstItem()}}
                             </td>
                             <td class="table-column-pl-0" data-label="订单">
-                                <a href="{{route('vendor.order.details',['id'=>$order['id']])}}" class="text-hover nz-order-id">#{{$order['id']}}
-                                    @if ($order->is_pos == 1)
-                                    <span class="text--warning font-500">({{ translate('POS') }})</span>
-                                    @endif
-                                </a>
+                                <div class="nz-order-primary-line">
+                                    <a href="{{route('vendor.order.details',['id'=>$order['id']])}}" class="text-hover nz-order-id">#{{$order['id']}}
+                                        @if ($order->is_pos == 1)
+                                        <span class="text--warning font-500">({{ translate('POS') }})</span>
+                                        @endif
+                                    </a>
+                                    <span class="nz-order-mobile-amount">
+                                        {{\App\CentralLogics\Helpers::format_currency($order['order_amount'])}}
+                                        @if($order->payment_status=='paid')
+                                            <small class="text-success">{{translate('messages.paid')}}</small>
+                                        @elseif($order->payment_status=='partially_paid')
+                                            <small class="text-success">{{translate('messages.partially_paid')}}</small>
+                                        @else
+                                            <small class="text-danger">{{translate('messages.unpaid')}}</small>
+                                        @endif
+                                    </span>
+                                </div>
                                 @if ($order->edited == 1)
                                 <span class="text-info fs-12 d-block font-500">({{ translate('Edited') }})</span>
                                 @endif
@@ -295,7 +355,7 @@
                                         class="badge badge--pending">{{translate('messages.Walk_In_Customer')}}</label>
                                 @endif
                             </td>
-                            <td data-label="{{translate('messages.total_amount')}}">
+                            <td class="nz-order-amount-cell" data-label="{{translate('messages.total_amount')}}">
 
 
                                 <div class="text-right mw-85px">
@@ -385,7 +445,7 @@
                                     @endif
                                 </div>
                             </td>
-                            <td class="text-center" data-label="下一步操作">
+                            <td class="text-center nz-order-mobile-actions" data-label="下一步操作">
                                 @php
                                     $__os = $order['order_status'];
                                     $__qa = null;
@@ -459,14 +519,14 @@
                                     <span class="nz-step-empty">无需操作</span>
                                 @endif
                             </td>
-                            <td class="text-center" data-label="打印小票">
+                            <td class="text-center nz-print-action-cell" data-label="打印小票">
                                 <a class="btn action-btn btn--primary btn-outline-primary nz-action-icon" target="_blank"
                                     title="打印小票"
                                     href="{{route('vendor.order.generate-invoice',[$order['id']])}}">
                                     <i class="tio-print"></i>
                                 </a>
                             </td>
-                            <td class="text-center" data-label="订单详情">
+                            <td class="text-center nz-detail-action-cell" data-label="订单详情">
                                 <a class="btn action-btn btn--warning btn-outline-warning nz-action-icon"
                                     title="订单详情"
                                     href="{{route('vendor.order.details',['id'=>$order['id']])}}">
@@ -527,6 +587,8 @@
             function applyPrintSettings(){
                 var ready = $('nzPrintReady');
                 var auto = $('nzAutoPrintReady');
+                var panel = $('nzPrintSettings');
+                var state = $('nzMobilePrintState');
                 if (!ready || !auto) return;
                 ready.checked = isPrintReady();
                 auto.checked = localStorage.getItem(AUTO_KEY) === '1';
@@ -534,6 +596,12 @@
                 if (!ready.checked) {
                     auto.checked = false;
                     localStorage.setItem(AUTO_KEY, '0');
+                }
+                if (state) {
+                    state.textContent = isAutoPrintReady() ? '自动打单已开' : (isPrintReady() ? '已接打印机' : '未开启');
+                }
+                if (panel && (isPrintReady() || localStorage.getItem(AUTO_KEY) === '1')) {
+                    panel.classList.add('nz-print-open');
                 }
             }
 
@@ -556,6 +624,7 @@
                 var ready = $('nzPrintReady');
                 var auto = $('nzAutoPrintReady');
                 var testBtn = $('nzTestPrintBtn');
+                var mobileToggle = $('nzMobilePrintToggle');
 
                 if (ready) {
                     ready.addEventListener('change', function(){
@@ -585,6 +654,12 @@
                             return;
                         }
                         openInvoiceForPrint(firstPrint.href + (firstPrint.href.indexOf('?') === -1 ? '?nz_auto_print=1&nz_test_print=1' : '&nz_auto_print=1&nz_test_print=1'));
+                    });
+                }
+                if (mobileToggle) {
+                    mobileToggle.addEventListener('click', function(){
+                        var panel = $('nzPrintSettings');
+                        if (panel) panel.classList.toggle('nz-print-open');
                     });
                 }
 
