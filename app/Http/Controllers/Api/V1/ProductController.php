@@ -383,7 +383,9 @@ class ProductController extends Controller
         // 哪吒: 对象级鉴权 — 订单须属当前用户且包含此商品(防越权评价/食品与订单不匹配)
         $nz_order_owned = DB::table('orders')->where('id', $request->order_id)->where('user_id', $request?->user()?->id)->exists();
         $nz_food_in_order = DB::table('order_details')->where('order_id', $request->order_id)->where('food_id', $request->food_id)->exists();
-        if (!$nz_order_owned || !$nz_food_in_order) {
+        // 哪吒[防刷好评 2026-07-01]: 仅"已送达"订单可评价 — 堵"注册→下单→秒评→弃单"刷评链路(自取2026-06-20已停, 终态=delivered; 重启自取需补完成态)
+        $nz_order_delivered = DB::table('orders')->where('id', $request->order_id)->where('order_status', 'delivered')->exists();
+        if (!$nz_order_owned || !$nz_food_in_order || !$nz_order_delivered) {
             return response()->json(['errors' => [['code'=>'order','message'=> translate('messages.not_found')]]], 403);
         }
 
