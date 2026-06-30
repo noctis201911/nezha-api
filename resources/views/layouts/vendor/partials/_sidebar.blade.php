@@ -73,7 +73,6 @@
                         <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{route('vendor.nezha-consolidation.index')}}" title="{{translate('平台集运申报')}}">
                             <i class="tio-cube nav-icon"></i>
                             <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{translate('平台集运申报')}}</span>
-                            <span class="badge badge-soft-primary ml-1">{{translate('新')}}</span>
                         </a>
                     </li>
 
