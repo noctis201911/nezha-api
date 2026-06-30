@@ -2173,6 +2173,37 @@ class Helpers
         }
     }
 
+    // 哪吒 阶段A: 人工客服转接告警 → 超管 Telegram。优先 nezha_cs_handoff_chat_id, 回退风控 admin chat。未配=静默降级。
+    public static function sendTelegramCsHandoff($text)
+    {
+        try {
+            $token = self::get_business_settings('telegram_bot_token', false);
+            $chatId = self::get_business_settings('nezha_cs_handoff_chat_id', false);
+            if (!$chatId) {
+                $chatId = self::get_business_settings('nezha_risk_admin_chat_id', false);
+            }
+            if (!$token || !is_string($token) || !$chatId || !$text) {
+                return;
+            }
+            $ch = curl_init('https://api.telegram.org/bot' . $token . '/sendMessage');
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_CONNECTTIMEOUT => 3,
+                CURLOPT_TIMEOUT => 4,
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => http_build_query([
+                    'chat_id' => $chatId,
+                    'text' => $text,
+                    'disable_web_page_preview' => true,
+                ]),
+            ]);
+            curl_exec($ch);
+            curl_close($ch);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('telegram cs handoff msg failed: ' . $e->getMessage());
+        }
+    }
+
     public static function sendTelegramOrderAlert($order)
     {
         try {

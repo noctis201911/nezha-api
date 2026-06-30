@@ -170,6 +170,32 @@ class NezhaCsClassifier
         return false;
     }
 
+    // 顾客明确要求转人工/真人客服（清晰的转接意图，区别于"你是不是真人"身份问题）。
+    protected static array $humanHandoff = [
+        '转人工', '转人工客服', '转接人工', '接人工', '要人工', '我要人工', '找人工', '人工客服', '人工客服在吗',
+        '真人客服', '要真人', '找真人', '真人接', '人工服务', '人工坐席', '转客服', '换人工', '给我转人工',
+        '有人工吗', '有没有人工', '人工处理', '人工帮', '不要机器人', '我要找人', '叫个人工',
+        'human agent', 'a human', 'real person', 'real agent', 'live agent', 'real human',
+        'talk to a human', 'talk to a person', 'speak to a human', 'speak to a person',
+        'talk to someone', 'speak to someone', 'customer service rep', 'live person', 'real customer service',
+    ];
+
+    public static function isHumanHandoffRequest(?string $text): bool
+    {
+        if (!$text) {
+            return false;
+        }
+        $t = mb_strtolower($text);
+        $tns = preg_replace('/\s+/u', '', $t);
+        foreach (self::$humanHandoff as $kw) {
+            $k = mb_strtolower($kw);
+            if (mb_stripos($t, $k) !== false || ($tns !== null && $tns !== '' && mb_stripos($tns, $k) !== false)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // 粗判是否中文（含 CJK）。用于确定性兜底话术的中/英选择。
     public static function isChinese(?string $text): bool
     {

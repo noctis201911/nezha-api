@@ -44,6 +44,11 @@ class NezhaCsAssistant
             return;
         }
 
+        // 人工接管中（在线转人工后静默 30 分钟，避免 AI 与真人重复回复；无人回则自动恢复，防晾着顾客）。
+        if (\Illuminate\Support\Facades\Cache::get('nezha_cs_human:' . $conversation->id)) {
+            return;
+        }
+
         // 0) 翻译相关——最高优先，招牌功能，不被其它逻辑抢走。
         $zhIn = NezhaCsClassifier::isChinese($text);
         $xlateKey = 'nezha_cs_xlate:' . $conversation->id;
@@ -129,6 +134,12 @@ class NezhaCsAssistant
             return;
         }
 
+        // 0.4) 顾客明确要求转人工 → 在线时段接入真人(静默AI+告警超管)；非时段告知在线时间+可留言。
+        if (NezhaCsClassifier::isHumanHandoffRequest($text)) {
+            self::humanHandoff($conversation, $customerUser, $text);
+            return;
+        }
+
         // 0.5) 顾客联系不上商家 → 升级处理：给商家电话 + 自动催商家邮件 + 留工单 + 通知运营。
         if (NezhaCsClassifier::isCantReachMerchant($text)) {
             self::cantReachMerchant($conversation, $customerUser, $text);
@@ -192,6 +203,109 @@ class NezhaCsAssistant
         // cannot / 答不准 / 空 / 疑似泄密 → 礼貌帮不上（不甩商家、不转达）。
         $safe = (!$reply || NezhaCsClassifier::leaksSecret($reply)) ? '' : $reply;
         self::softReply($conversation, $customerUser, $safe, $text, 'soft', $usage);
+    }
+
+    // ===== 哪吒 阶段A：明确转人工 + 在线时段 + 告警超管 + 留言 =====
+
+    // 人工客服在线时段判断。时段按【中国时间】配置（默认 9–18 点），用 Carbon 直接换算中国时区，避开服务器埃里温时区坑。
+    protected static function humanCsOnline(): bool
+    {
+        [$start, $end] = self::humanHours();
+        if ($start === $end) {
+            return false;
+        }
+        $h = (int) Carbon::now('Asia/Shanghai')->format('G'); // 中国时间当前小时 0-23
+        if ($end > $start) {
+            return $h >= $start && $h < $end;
+        }
+        return $h >= $start || $h < $end; // 跨午夜兜底
+    }
+
+    protected static function humanHours(): array
+    {
+        $start = Helpers::get_business_settings('nezha_cs_human_hours_start');
+        $end = Helpers::get_business_settings('nezha_cs_human_hours_end');
+        $start = ($start === null || $start === '') ? 9 : (int) $start;
+        $end = ($end === null || $end === '') ? 18 : (int) $end;
+        return [$start, $end];
+    }
+
+    protected static function humanHoursLabel(bool $zh): string
+    {
+        [$start, $end] = self::humanHours();
+        $s = str_pad((string) $start, 2, '0', STR_PAD_LEFT) . ':00';
+        $e = str_pad((string) $end, 2, '0', STR_PAD_LEFT) . ':00';
+        return $zh ? "中国时间 {$s}–{$e}" : "{$s}–{$e} (China time, GMT+8)";
+    }
+
+    // 顾客明确要求转人工：在线→静默AI+告警超管接入；非在线→告知时间+留言(AI仍可先帮)。两种都留工单+告警超管。
+    protected static function humanHandoff(Conversation $conversation, $customerUser, string $incomingText): void
+    {
+        $zh = NezhaCsClassifier::isChinese($incomingText);
+        $online = self::humanCsOnline();
+
+        if ($online) {
+            \Illuminate\Support\Facades\Cache::put('nezha_cs_human:' . $conversation->id, 1, 1800);
+        }
+        self::createHandoffTicket($conversation, $customerUser, $online);
+        self::notifyHandoffToAdmin($conversation, $customerUser, $incomingText, $online);
+
+        if ($online) {
+            $msg = $zh
+                ? '好的，正在为您转接人工客服，请稍候哈～客服看到后会尽快在这里回复您。'
+                : "Sure — I'm connecting you to a human agent now. Please hold on, they'll reply right here shortly.";
+        } else {
+            $hours = self::humanHoursLabel($zh);
+            $msg = $zh
+                ? "人工客服在线时间是{$hours}（现在不在线哦）。您可以直接把问题留言在这里，客服上班后会第一时间跟进；需要的话我也可以先帮您看看～"
+                : "Our human agents are online {$hours}. They're offline right now — leave your message here and they'll follow up once they're back. I'm also happy to help you right now if you'd like!";
+        }
+        self::reply($conversation, $customerUser, $msg, 'handoff', null);
+    }
+
+    protected static function createHandoffTicket(Conversation $conversation, $customerUser, bool $online): void
+    {
+        try {
+            $dup = DB::table('nezha_cs_tickets')
+                ->where('conversation_id', $conversation->id)
+                ->where('type', 'human_handoff')
+                ->where('status', 'open')
+                ->where('created_at', '>=', Carbon::now()->subMinutes(30))
+                ->exists();
+            if ($dup) {
+                return;
+            }
+            $order = self::relevantOrder($customerUser);
+            DB::table('nezha_cs_tickets')->insert([
+                'type' => 'human_handoff',
+                'status' => 'open',
+                'user_id' => $customerUser->id ?? null,
+                'order_id' => $order->id ?? null,
+                'vendor_id' => $order ? Restaurant::where('id', $order->restaurant_id)->value('vendor_id') : null,
+                'conversation_id' => $conversation->id,
+                'note' => $online ? '顾客要求转人工（在线时段·待接入）' : '顾客要求转人工（非在线时段·留言待跟进）',
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('nezha cs handoff ticket failed: ' . $e->getMessage());
+        }
+    }
+
+    protected static function notifyHandoffToAdmin(Conversation $conversation, $customerUser, string $incomingText, bool $online): void
+    {
+        try {
+            $order = self::relevantOrder($customerUser);
+            $token = $order->OrderReference->token_number ?? null;
+            $when = $online ? '🟢 在线时段 · 请尽快接入' : '🌙 非在线时段 · 顾客留言待跟进';
+            $excerpt = self::redactPii(mb_substr(trim($incomingText), 0, 80));
+            $text = "👤 哪吒人工客服请求\n{$when}\n会话ID：{$conversation->id}"
+                . ($token ? "\n相关取餐号：{$token}" : '')
+                . "\n顾客说：{$excerpt}\n—— 请登录后台『客服会话』回复顾客";
+            Helpers::sendTelegramCsHandoff($text);
+        } catch (\Throwable $e) {
+            Log::warning('nezha cs handoff notify failed: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -381,7 +495,7 @@ class NezhaCsAssistant
         }
 
         // 真订单问题转商家/联系不上/出错 → 通知运营（复用 admin_message topic；有人在看就能补位）。闲聊/答不准(soft)不打扰。
-        if (in_array($category, ['sensitive', 'to_merchant', 'relay', 'cant_reach', 'feedback_neg', 'error'], true)) {
+        if (in_array($category, ['sensitive', 'to_merchant', 'relay', 'cant_reach', 'feedback_neg', 'error', 'handoff'], true)) {
             try {
                 Helpers::send_push_notif_to_topic([
                     'title' => translate('messages.message'),
