@@ -203,6 +203,17 @@ class ConversationController extends Controller
                     if($fcm_token_web){
                         Helpers::send_push_notif_to_device($fcm_token_web, $data);
                     }
+                    // 阶段D(商家半): 顾客→商家消息也推商家 Telegram(开关 nezha_cs_vendor_tg_relay_status 控, 默认关=inert), 商家可在 TG 直接回复
+                    if ($request->receiver_type == 'vendor' && isset($vendor) && $vendor) {
+                        $nzVConv = $conversation; $nzVMsg = $message; $nzVid = $vendor->id;
+                        dispatch(function () use ($nzVConv, $nzVMsg, $nzVid) {
+                            try {
+                                \App\CentralLogics\NezhaCsAssistant::pushCustomerMsgToVendor($nzVConv, $nzVMsg, $nzVid);
+                            } catch (\Throwable $e) {
+                                \Illuminate\Support\Facades\Log::warning('nezha vendor tg push failed: ' . $e->getMessage());
+                            }
+                        })->afterResponse();
+                    }
                 }
             }
 

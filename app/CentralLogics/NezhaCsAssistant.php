@@ -372,6 +372,32 @@ class NezhaCsAssistant
         }
     }
 
+    // 阶段D(商家半): 顾客→商家会话的消息推到商家 Telegram(若已绑+开关开)，商家可在 TG 直接「回复本条」回顾客。映射 scope=vendor。
+    // 开关 nezha_cs_vendor_tg_relay_status 默认关(未激活=inert)；商家是该消息的收件人故推全文不去标识(与商家面板/⑤披露一致)。
+    public static function pushCustomerMsgToVendor($conversation, $message, $vendorId): void
+    {
+        try {
+            if ((int) Helpers::get_business_settings('nezha_cs_vendor_tg_relay_status') !== 1) {
+                return;
+            }
+            $rest = Restaurant::where('vendor_id', $vendorId)->whereNotNull('telegram_chat_id')->first();
+            if (!$rest || !$rest->telegram_chat_id) {
+                return;
+            }
+            $text = trim((string) ($message->message ?? ''));
+            if ($text === '') {
+                return; // 纯图片/空消息不推文字
+            }
+            $body = "💬 顾客（会话 {$conversation->id}）：" . mb_substr($text, 0, 500) . self::tgReplyHint();
+            $mid = Helpers::sendTelegramRaw($rest->telegram_chat_id, $body);
+            if ($mid) {
+                self::mapTgToConversation($rest->telegram_chat_id, $mid, $conversation->id, 'vendor');
+            }
+        } catch (\Throwable $e) {
+            Log::warning('nezha cs pushCustomerMsgToVendor failed: ' . $e->getMessage());
+        }
+    }
+
     // 点2: 近 8 条对话(脱敏+截断)随告警发给超管 Telegram, 让超管接手前先看到顾客之前在平台发了什么。
     protected static function recentHistoryForTelegram(Conversation $conversation, $customerUser): string
     {
@@ -633,19 +659,22 @@ class NezhaCsAssistant
             if (!$conv) {
                 return false;
             }
-            // 找顾客侧 UserInfo（带 user_id 的那一方）
-            $custInfo = null;
+            // 找顾客侧 + 商家侧 UserInfo（顾客=带 user_id 那方; 商家=带 vendor_id 那方）
+            $custInfo = null; $vendorInfo = null;
             foreach ([$conv->sender_id, $conv->receiver_id] as $pid) {
                 $ui = UserInfo::find($pid);
-                if ($ui && $ui->user_id) { $custInfo = $ui; break; }
+                if (!$ui) { continue; }
+                if ($ui->user_id && !$custInfo) { $custInfo = $ui; }
+                if ($ui->vendor_id && !$vendorInfo) { $vendorInfo = $ui; }
             }
-            $adminSender = self::adminSenderInfo();
-            if (!$adminSender) {
+            // 回写身份: scope=vendor → 以商家身份(顾客↔商家会话, 与商家面板回复一致); 否则平台客服「小哪」
+            $sender = ($scope === 'vendor') ? $vendorInfo : self::adminSenderInfo();
+            if (!$sender) {
                 return false;
             }
             $message = new Message();
             $message->conversation_id = $conv->id;
-            $message->sender_id = $adminSender->id;
+            $message->sender_id = $sender->id;
             $message->message = $text;
             $message->save();
 
@@ -654,15 +683,18 @@ class NezhaCsAssistant
             $conv->last_message_time = Carbon::now()->toDateTimeString();
             $conv->save();
 
-            // 人工正在 Telegram 里接手 → 延长静默, AI 别插话。
-            \Illuminate\Support\Facades\Cache::put('nezha_cs_human:' . $conv->id, 1, 1800);
+            // 人工正在 Telegram 里接手 → 延长静默, AI 别插话(仅平台客服会话有 AI; 商家会话无需)。
+            if ($scope !== 'vendor') {
+                \Illuminate\Support\Facades\Cache::put('nezha_cs_human:' . $conv->id, 1, 1800);
+            }
 
             // 推送顾客（FCM）。
             try {
                 $cuId = $custInfo->user_id ?? null;
                 $cu = $cuId ? \App\Models\User::find($cuId) : null;
                 $token = $cu->cm_firebase_token ?? null;
-                if ($token) {
+                $wantsPush = ($scope === 'vendor') ? ($cu && Helpers::customerWantsPush($cu, 'chat')) : true;
+                if ($token && $wantsPush) {
                     Helpers::send_push_notif_to_device($token, [
                         'title' => translate('messages.message'),
                         'description' => translate('messages.message_description'),
@@ -671,7 +703,7 @@ class NezhaCsAssistant
                         'message' => json_encode($message),
                         'type' => 'message',
                         'conversation_id' => $conv->id,
-                        'sender_type' => 'admin',
+                        'sender_type' => ($scope === 'vendor') ? 'vendor' : 'admin',
                     ]);
                 }
             } catch (\Throwable $e) {
