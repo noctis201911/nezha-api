@@ -41,17 +41,15 @@
 <div class="content container-fluid">
     <div class="page-header">
         <h2 class="page-header-title">
-            <span class="page-header-icon"><i class="tio-shipping"></i></span>
+            <span class="page-header-icon"><i class="tio-truck"></i></span>
             <span>{{ translate('平台集运申报') }}</span>
-            <span class="badge badge-soft-primary ml-2">{{ translate('邀请内测') }}</span>
         </h2>
     </div>
 
     {{-- 说明 / 引导 --}}
     <div class="card mb-3">
         <div class="card-body">
-            <h4 class="mb-1">{{ translate('平台集运申报') }}</h4>
-            <p class="text-muted mb-3">{{ translate('拼货出海，把您的进货运费降下来') }}</p>
+            <h5 class="mb-2">{{ translate('拼货出海，把您的进货运费降下来') }}</h5>
             <p class="mb-2">{{ translate('由平台收集各位入驻商家的货运需求，将商家的货运需求拼成整车 / 整柜，用集体货量谈更低价，帮您降运费、省去自己找物流的麻烦。') }}</p>
             <p class="mb-3">{{ translate('该服务面向深度合作商家开放——欢迎您填写下方需求登记表，平台会想办法为您降本、解决进货难题，符合条件后平台将有工作人员与您联系。如有其他需求，也可在后台向平台工作人员反馈，平台将对反馈较多的问题进行改善或寻找相关服务商解决。感谢您的支持。') }}</p>
             <div class="row g-2 mb-3">
@@ -68,9 +66,9 @@
 
     {{-- 需求登记表 --}}
     <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
-            <h5 class="card-title mb-0">{{ translate('需求登记表') }}</h5>
-            <small class="text-muted">
+        <div class="card-header">
+            <h5 class="card-title mb-0 d-inline-block">{{ translate('需求登记表') }}</h5>
+            <small class="text-muted ml-2" style="font-weight:400;">
                 @if($sv)
                     {{ translate('上次提交') }}: {{ \Carbon\Carbon::parse($sv->updated_at)->format('Y-m-d H:i') }} · {{ translate('可随时更新') }}
                 @else

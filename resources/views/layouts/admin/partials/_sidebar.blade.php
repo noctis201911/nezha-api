@@ -1589,7 +1589,7 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                     @endif
                     <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-consolidation*') ? 'active' : '' }}">
                         <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{ route('admin.nezha-consolidation.index') }}" title="{{ translate('平台集运申报') }}">
-                            <i class="tio-shipping nav-icon"></i>
+                            <i class="tio-truck nav-icon"></i>
                             <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('平台集运申报') }}</span>
                         </a>
                     </li>

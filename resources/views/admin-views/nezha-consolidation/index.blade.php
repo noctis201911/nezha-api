@@ -14,7 +14,7 @@
 <div class="content container-fluid">
     <div class="page-header d-flex justify-content-between align-items-center flex-wrap">
         <h2 class="page-header-title mb-0">
-            <span class="page-header-icon"><i class="tio-shipping"></i></span>
+            <span class="page-header-icon"><i class="tio-truck"></i></span>
             <span>{{ translate('平台集运申报') }} · {{ translate('需求汇总') }}</span>
         </h2>
         <a href="{{ route('admin.nezha-consolidation.export') }}" class="btn btn-sm btn-primary"><i class="tio-download-to mr-1"></i>{{ translate('导出 CSV') }}</a>
