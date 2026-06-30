@@ -450,6 +450,7 @@ class ConversationController extends Controller
         if($request->conversation_id){
             $conversation = Conversation::with(['sender','receiver','last_message'])->find($request->conversation_id);
         }else if($request->has('admin_id')){
+            \App\CentralLogics\NezhaCsAssistant::seedWelcome($request->user()); // 阶段C: 首次打开客服播欢迎语
             $conversation = Conversation::with(['sender','receiver','last_message'])->WhereConversation($user->id,0)->first();
             $order=0;
         }else if($request->vendor_id){

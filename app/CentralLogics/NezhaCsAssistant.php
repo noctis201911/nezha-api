@@ -1088,6 +1088,54 @@ SYS;
         return implode("\n\n", $parts);
     }
 
+    // 阶段C: 顾客首次打开客服「小哪」(会话尚无任何消息)→ 播一条欢迎语(AI客服自我介绍+列服务+翻译指引)。
+    // AI 关时不播(避免承诺自动回复却没人理)。已有消息则不重复。渲染走现有消息气泡。
+    public static function seedWelcome($customerUser): void
+    {
+        try {
+            if (!$customerUser || (int) Helpers::get_business_settings('nezha_cs_ai_status') !== 1) {
+                return;
+            }
+            $custInfo = UserInfo::where('user_id', $customerUser->id)->first();
+            if (!$custInfo) {
+                return;
+            }
+            $conv = Conversation::WhereConversation($custInfo->id, 0)->first();
+            if ($conv) {
+                if (Message::where('conversation_id', $conv->id)->exists()) {
+                    return;
+                }
+            } else {
+                $conv = new Conversation();
+                $conv->sender_id = $custInfo->id;
+                $conv->sender_type = 'customer';
+                $conv->receiver_id = 0;
+                $conv->receiver_type = 'admin';
+                $conv->unread_message_count = 0;
+                $conv->last_message_time = Carbon::now()->toDateTimeString();
+                $conv->save();
+                $conv = Conversation::find($conv->id);
+            }
+            $welcome = Helpers::get_business_settings('nezha_cs_welcome');
+            $welcome = ($welcome && trim((string) $welcome) !== '') ? (string) $welcome : self::defaultWelcome();
+            $adminSender = self::adminSenderInfo();
+            if (!$adminSender) {
+                return;
+            }
+            $msg = new Message();
+            $msg->conversation_id = $conv->id;
+            $msg->sender_id = $adminSender->id;
+            $msg->message = $welcome;
+            $msg->save();
+            $conv->unread_message_count = 1;
+            $conv->last_message_id = $msg->id;
+            $conv->last_message_time = Carbon::now()->toDateTimeString();
+            $conv->save();
+        } catch (\Throwable $e) {
+            Log::warning('nezha cs seed welcome failed: ' . $e->getMessage());
+        }
+    }
+
     // 进入客服的欢迎语默认文案(顾客打开小哪时前端展示; 后台可改 nezha_cs_welcome)。
     public static function defaultWelcome(): string
     {
