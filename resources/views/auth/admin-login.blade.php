@@ -487,11 +487,6 @@
                 <strong>{{ $app_name ?? '哪吒外卖' }}管理后台</strong>
             </h1>
             <p class="visual-sub">{{ translate('Manage_your_app_&_website_easily') }}</p>
-            <div class="badge-row">
-                <span>🍜 海量中餐</span>
-                <span>🛵 极速配送</span>
-                <span>🇨🇳 华人专属</span>
-            </div>
         </div>
     </div>
 
@@ -501,10 +496,7 @@
         {{-- 上方横向混天绫线条（bottom 35%-50%）周边粒子 --}}
         {{-- 全部 --dx>0 --dy<0 顺线条方向向右上方飘 --}}
         {{-- ============================================= --}}
-        <div class="particle" style="left: 4%; bottom: 41%; width: 6px; height: 6px; animation-duration: 6s; animation-delay: 0s; --dx: 22px; --dy: -55px; --dx2: 48px; --dy2: -115px;"></div>
-        <div class="particle-gold" style="left: 9%; bottom: 44%; width: 4px; height: 4px; animation-duration: 9s; animation-delay: 1.2s; --dx: 18px; --dy: -48px; --dx2: 38px; --dy2: -96px;"></div>
-        <div class="particle" style="left: 14%; bottom: 38%; width: 5px; height: 5px; animation-duration: 7s; animation-delay: 0.6s; --dx: 24px; --dy: -52px; --dx2: 50px; --dy2: -108px;"></div>
-        <div class="particle-slow" style="left: 19%; bottom: 46%; width: 4px; height: 4px; animation-duration: 11s; animation-delay: 2s; --dx: 16px; --dy: -38px; --dx2: 36px; --dy2: -80px;"></div>
+        {{-- 已删除 left 4/9/14/19% 静态粒子(贡献左上密集感, 后续靠 JS 沿轨迹分布) --}}
         <div class="particle" style="left: 23%; bottom: 39%; width: 7px; height: 7px; animation-duration: 8s; animation-delay: 0.4s; --dx: 26px; --dy: -58px; --dx2: 54px; --dy2: -118px;"></div>
         <div class="particle-gold" style="left: 28%; bottom: 43%; width: 5px; height: 5px; animation-duration: 10s; animation-delay: 1.8s; --dx: 20px; --dy: -50px; --dx2: 42px; --dy2: -100px;"></div>
         <div class="particle" style="left: 33%; bottom: 40%; width: 4px; height: 4px; animation-duration: 6.5s; animation-delay: 3s; --dx: 22px; --dy: -52px; --dx2: 44px; --dy2: -104px;"></div>
@@ -524,8 +516,7 @@
         <div class="particle" style="left: 94%; bottom: 44%; width: 5px; height: 5px; animation-duration: 7.5s; animation-delay: 3.5s; --dx: 22px; --dy: -52px; --dx2: 44px; --dy2: -104px;"></div>
 
         {{-- 上方混天绫细密小粒子（沿轨迹紧贴线条） --}}
-        <div class="particle" style="left: 11%; bottom: 40%; width: 3px; height: 3px; animation-duration: 6s; animation-delay: 0.9s; --dx: 16px; --dy: -42px; --dx2: 32px; --dy2: -84px;"></div>
-        <div class="particle-gold" style="left: 17%; bottom: 42%; width: 3px; height: 3px; animation-duration: 8s; animation-delay: 1.6s; --dx: 18px; --dy: -44px; --dx2: 36px; --dy2: -88px;"></div>
+        {{-- 已删除 left 11/17% 细密小粒子 --}}
         <div class="particle" style="left: 26%; bottom: 41%; width: 3px; height: 3px; animation-duration: 7s; animation-delay: 2.4s; --dx: 14px; --dy: -40px; --dx2: 30px; --dy2: -82px;"></div>
         <div class="particle-gold" style="left: 36%; bottom: 41%; width: 3px; height: 3px; animation-duration: 9s; animation-delay: 0.5s; --dx: 16px; --dy: -42px; --dx2: 32px; --dy2: -86px;"></div>
         <div class="particle" style="left: 44%; bottom: 40%; width: 3px; height: 3px; animation-duration: 6.5s; animation-delay: 3.1s; --dx: 18px; --dy: -46px; --dx2: 36px; --dy2: -92px;"></div>
@@ -733,29 +724,28 @@
             '--dx2:'+(dx*2)+'px;--dy2:-'+(dy*2)+'px;';
         container.appendChild(div);
     }
-    // 上方横向混天绫轨迹 (rotate -13deg + bottom 35%): 经验观测下,
-    // 视窗 left% → 轨迹中心 bottom% ≈ 30 + left*0.55, 右端伸到约 bottom 85%
-    function upperTraj(leftPct){ return 30 + leftPct * 0.55; }
-    // 下方斜向混天绫 (rotate -35deg): 左下到中上, 视窗内只占 left 0-55%
-    function lowerTraj(leftPct){ return -5 + leftPct * 1.4; } // 左下 → 中上
+    // 上方横向混天绫轨迹 - 1920x1080 实采样三点(12,27)(50,54)(80,81)二次拟合
+    function upperTraj(leftPct){ return 20 + leftPct * 0.54 + leftPct * leftPct * 0.0028; }
+    // 下方斜向混天绫 - 1920x1080 实采样线性 (38.5, 78) 与 (24, 50)
+    function lowerTraj(leftPct){ return 3 + leftPct * 1.94; }
 
-    // === 上方混天绫: 180 颗沿对角线, 偏移收紧到 10% (紧贴轨迹, 避免孤立粒子) ===
-    for (var i = 0; i < 180; i++) {
-        var L = rand(3, 97);
+    // === 上方混天绫: 70 颗紧贴轨迹 ±5% (L 范围 18-95 跳极左极右盲区, 左侧不再独享密度) ===
+    for (var i = 0; i < 70; i++) {
+        var L = rand(18, 95);
         var trajY = upperTraj(L);
         var r = Math.random();
-        var offMag = Math.pow(r, 1.7) * 10;  // 0-10%, 强烈集中在小(更贴轨迹)
+        var offMag = Math.pow(r, 1.8) * 5;  // 0-5%, 紧贴轨迹
         var sign = Math.random() < 0.5 ? -1 : 1;
         var bottomPct = trajY + offMag * sign;
         addParticle(L, bottomPct, offMag);
     }
 
-    // === 下方斜向混天绫: 60 颗沿对角线(仅 left 0-55%), 别填右下 ===
-    for (var j = 0; j < 60; j++) {
-        var L2 = rand(2, 55);
+    // === 下方斜向混天绫: 18 颗紧贴轨迹 ±4%, L 范围 8-48 ===
+    for (var j = 0; j < 18; j++) {
+        var L2 = rand(8, 48);
         var trajY2 = lowerTraj(L2);
         var r2 = Math.random();
-        var offMag2 = Math.pow(r2, 1.6) * 9;  // 同样收紧
+        var offMag2 = Math.pow(r2, 1.7) * 4;
         var sign2 = Math.random() < 0.5 ? -1 : 1;
         var bottomPct2 = trajY2 + offMag2 * sign2;
         addParticle(L2, bottomPct2, offMag2);
