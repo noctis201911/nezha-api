@@ -427,6 +427,37 @@ class CustomerAuthController extends Controller
     }
     public function register(Request $request)
     {
+        // 哪吒[防脚本注册 2026-07-01]: 顾客注册 reCAPTCHA v3 校验(复用 web 同一把 key, 后台 recaptcha 开启时生效)。
+        // 软策略防误伤真实用户: token 缺失->放行(靠 throttle:signup 限流兜底, 不锁死装拦截/隐私插件用户);
+        // token 在但 Google 判无效/低分(<0.5)->拒; Google 不可达->fail-open 放行(防 Google 抽风锁死注册)。
+        $nz_recaptcha = \App\CentralLogics\Helpers::get_business_settings('recaptcha');
+        if (isset($nz_recaptcha) && ($nz_recaptcha['status'] ?? 0) == 1) {
+            $nz_token = $request->input('g-recaptcha-response');
+            if (!empty($nz_token)) {
+                try {
+                    $nz_gr = \Illuminate\Support\Facades\Http::asForm()->timeout(8)->post('https://www.google.com/recaptcha/api/siteverify', [
+                        'secret' => $nz_recaptcha['secret_key'] ?? '',
+                        'response' => $nz_token,
+                        'remoteip' => $request->ip(),
+                    ]);
+                    if ($nz_gr->successful()) {
+                        $nz_body = (array) $nz_gr->json();
+                        $nz_score = (float) ($nz_body['score'] ?? 0);
+                        $nz_ok = (($nz_body['success'] ?? false) === true) && ($nz_score >= 0.5);
+                        \Illuminate\Support\Facades\Log::info('nz_signup_recaptcha', ['ok' => $nz_ok, 'score' => $nz_score, 'ip' => $request->ip()]);
+                        if (!$nz_ok) {
+                            return response()->json(['errors' => [['code' => 'recaptcha', 'message' => translate('Verification failed, please try again.')]]], 403);
+                        }
+                    }
+                    // Google 不可达/5xx -> fail-open(放行)
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('nz_signup_recaptcha_error', ['msg' => $e->getMessage()]);
+                }
+            } else {
+                \Illuminate\Support\Facades\Log::info('nz_signup_recaptcha', ['ok' => 'absent_failopen', 'ip' => $request->ip()]);
+            }
+        }
+
         $validator = Validator::make($request->all(), [
             'name' => 'required',
             'email' => 'unique:users',
