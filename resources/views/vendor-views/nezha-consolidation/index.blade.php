@@ -41,7 +41,7 @@
 <div class="content container-fluid">
     <div class="page-header">
         <h2 class="page-header-title">
-            <span class="page-header-icon"><i class="tio-truck"></i></span>
+            <span class="page-header-icon"><i class="tio-cube"></i></span>
             <span>{{ translate('平台集运申报') }}</span>
         </h2>
     </div>
