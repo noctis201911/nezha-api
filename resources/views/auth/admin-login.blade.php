@@ -568,10 +568,7 @@
         <div class="particle-gold" style="left: 46%; bottom: 30%; width: 3px; height: 3px; animation-duration: 8s; animation-delay: 3.8s; --dx: 18px; --dy: -46px; --dx2: 38px; --dy2: -92px;"></div>
         <div class="particle" style="left: 52%; bottom: 32%; width: 3px; height: 3px; animation-duration: 7s; animation-delay: 1.9s; --dx: 20px; --dy: -48px; --dx2: 42px; --dy2: -96px;"></div>
 
-        {{-- 极少散落粒子（视觉填空，避免画面割裂） --}}
-        <div class="particle-gold" style="left: 30%; top: 22%; width: 3px; height: 3px; animation-duration: 13s; animation-delay: 3s; --dx: 16px; --dy: -36px; --dx2: 32px; --dy2: -72px;"></div>
-        <div class="particle" style="left: 50%; top: 18%; width: 3px; height: 3px; animation-duration: 11s; animation-delay: 5s; --dx: 14px; --dy: -32px; --dx2: 28px; --dy2: -65px;"></div>
-        <div class="particle-gold" style="left: 70%; top: 26%; width: 3px; height: 3px; animation-duration: 12s; animation-delay: 1.5s; --dx: 18px; --dy: -38px; --dx2: 36px; --dy2: -76px;"></div>
+        {{-- 散落粒子已删除: 用户反馈左上角孤立粒子, 改全部走 JS 沿轨迹分布 --}}
     </div>
 
     <div class="login-section">
@@ -709,6 +706,8 @@
         // 边界 / 右下死区 (沿用现有规则: left>50% && bottom<20% 不放粒子)
         if (bottomPct < 4 || bottomPct > 96 || leftPct < 2 || leftPct > 98) return;
         if (leftPct > 50 && bottomPct < 22) return;
+        // 左上死区: left<25% 且 bottom>50% (轨迹远处, 用户反馈孤立粒子刺眼)
+        if (leftPct < 25 && bottomPct > 50) return;
         var div = document.createElement('div');
         var nearCore = distFromRibbon < 4;
         var nearMid  = distFromRibbon < 9;
@@ -740,23 +739,23 @@
     // 下方斜向混天绫 (rotate -35deg): 左下到中上, 视窗内只占 left 0-55%
     function lowerTraj(leftPct){ return -5 + leftPct * 1.4; } // 左下 → 中上
 
-    // === 上方混天绫: 90 颗沿对角线, 偏移呈 power(1.6) 分布(向轨迹聚拢) ===
-    for (var i = 0; i < 90; i++) {
+    // === 上方混天绫: 180 颗沿对角线, 偏移收紧到 10% (紧贴轨迹, 避免孤立粒子) ===
+    for (var i = 0; i < 180; i++) {
         var L = rand(3, 97);
         var trajY = upperTraj(L);
         var r = Math.random();
-        var offMag = Math.pow(r, 1.6) * 20;  // 0-20%, 集中在小
+        var offMag = Math.pow(r, 1.7) * 10;  // 0-10%, 强烈集中在小(更贴轨迹)
         var sign = Math.random() < 0.5 ? -1 : 1;
         var bottomPct = trajY + offMag * sign;
         addParticle(L, bottomPct, offMag);
     }
 
-    // === 下方斜向混天绫: 40 颗沿对角线(仅 left 0-55%), 别填右下 ===
-    for (var j = 0; j < 40; j++) {
+    // === 下方斜向混天绫: 60 颗沿对角线(仅 left 0-55%), 别填右下 ===
+    for (var j = 0; j < 60; j++) {
         var L2 = rand(2, 55);
         var trajY2 = lowerTraj(L2);
         var r2 = Math.random();
-        var offMag2 = Math.pow(r2, 1.5) * 16;
+        var offMag2 = Math.pow(r2, 1.6) * 9;  // 同样收紧
         var sign2 = Math.random() < 0.5 ? -1 : 1;
         var bottomPct2 = trajY2 + offMag2 * sign2;
         addParticle(L2, bottomPct2, offMag2);
