@@ -427,8 +427,8 @@
 <body>
 <div class="ui-container">
     <div class="visual-section">
-        <!-- 斜向混天绫 -->
-        <svg class="ribbon-static" viewBox="0 0 1200 400" preserveAspectRatio="none">
+        <!-- 斜向混天绫 — 主带改为闭合带, 右端伸到屏幕外不再收尖 -->
+        <svg class="ribbon-static" viewBox="0 0 1200 400" preserveAspectRatio="none" style="overflow:visible">
             <defs>
                 <linearGradient id="ribbonGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                     <stop offset="0%" stop-color="#ff3b30" stop-opacity="0.8"/>
@@ -444,14 +444,16 @@
                     <path d="M0,50 Q25,30 50,50 T100,50" stroke="#ff3b30" stroke-width="0.5" fill="none" opacity="0.2"/>
                 </pattern>
             </defs>
-            <path d="M0,350 C200,280 400,380 600,250 S900,150 1200,120" fill="url(#ribbonGradient)" stroke="url(#goldGlow)" stroke-width="2" filter="url(#subtlePattern)"/>
-            <path d="M50,330 C250,260 450,360 650,230 S950,130 1200,100" fill="none" stroke="#ff6b4a" stroke-width="1" opacity="0.3"/>
-            <path d="M100,310 C300,240 500,340 700,210 S1000,110 1200,80" fill="none" stroke="#ff9d85" stroke-width="1" opacity="0.2"/>
-            <path d="M150,290 C350,220 550,320 750,190 S1050,90 1200,60" fill="none" stroke="#ff9d85" stroke-width="0.8" opacity="0.15"/>
+            {{-- 主带: 闭合带 (~25 单位带宽, 接近原楔形最厚处), 右端 (1800,-110) 屏幕外 --}}
+            <path d="M-30,380 C200,270 400,380 600,240 S900,130 1800,-110 L1800,-85 C1400,55 900,165 600,265 C400,315 200,305 -30,405 Z" fill="url(#ribbonGradient)" stroke="url(#goldGlow)" stroke-width="2" filter="url(#subtlePattern)"/>
+            {{-- 三条细线尾迹: 端点伸到 x=1800 屏幕外 --}}
+            <path d="M50,330 C250,260 450,360 650,230 S950,130 1800,-140" fill="none" stroke="#ff6b4a" stroke-width="1" opacity="0.3"/>
+            <path d="M100,310 C300,240 500,340 700,210 S1000,110 1800,-170" fill="none" stroke="#ff9d85" stroke-width="1" opacity="0.2"/>
+            <path d="M150,290 C350,220 550,320 750,190 S1050,90 1800,-200" fill="none" stroke="#ff9d85" stroke-width="0.8" opacity="0.15"/>
         </svg>
 
-        <!-- 横向混天绫 -->
-        <svg class="ribbon-horizontal" viewBox="0 0 1200 450" preserveAspectRatio="none">
+        <!-- 横向混天绫 — 闭合带 + 端点伸到屏幕外右上, 不再露出收尖楔形 -->
+        <svg class="ribbon-horizontal" viewBox="0 0 1200 450" preserveAspectRatio="none" style="overflow:visible">
             <defs>
                 <linearGradient id="ribbonGradientH" x1="0%" y1="0%" x2="100%" y2="100%">
                     <stop offset="0%" stop-color="#ff3b30" stop-opacity="0.8"/>
@@ -467,10 +469,12 @@
                     <path d="M0,50 Q25,30 50,50 T100,50" stroke="#ff3b30" stroke-width="0.5" fill="none" opacity="0.2"/>
                 </pattern>
             </defs>
-            <path d="M0,430 C200,320 400,390 600,250 S900,150 1200,120" fill="url(#ribbonGradientH)" stroke="url(#goldGlowH)" stroke-width="2" filter="url(#subtlePatternH)"/>
-            <path d="M40,420 C250,300 450,380 650,230 S950,130 1200,100" fill="none" stroke="#ff6b4a" stroke-width="1" opacity="0.3"/>
-            <path d="M90,410 C300,280 500,360 700,210 S1000,110 1200,80" fill="none" stroke="#ff9d85" stroke-width="1" opacity="0.2"/>
-            <path d="M140,400 C350,260 550,340 750,190 S1050,90 1200,60" fill="none" stroke="#ff9d85" stroke-width="0.8" opacity="0.15"/>
+            {{-- 主带: 闭合带 (~25 单位带宽, 接近原楔形最厚处), 右端 (1800,-80) 屏幕外 --}}
+            <path d="M-30,440 C200,330 400,400 600,260 S900,160 1800,-80 L1800,-55 C1400,55 900,185 600,285 C400,335 200,375 -30,465 Z" fill="url(#ribbonGradientH)" stroke="url(#goldGlowH)" stroke-width="2" filter="url(#subtlePatternH)"/>
+            {{-- 三条细线尾迹: 端点都伸到 x=1800 屏幕外 --}}
+            <path d="M40,420 C250,300 450,380 650,230 S950,130 1800,-130" fill="none" stroke="#ff6b4a" stroke-width="1" opacity="0.3"/>
+            <path d="M90,410 C300,280 500,360 700,210 S1000,110 1800,-160" fill="none" stroke="#ff9d85" stroke-width="1" opacity="0.2"/>
+            <path d="M140,400 C350,260 550,340 750,190 S1050,90 1800,-190" fill="none" stroke="#ff9d85" stroke-width="0.8" opacity="0.15"/>
         </svg>
 
         <div class="visual-content">
@@ -694,6 +698,71 @@
 @endif
 
 <script>
+// 沿混天绫轨迹生成额外光晕粒子: 上方横向混天绫对角线 + 下方斜向混天绫
+// 密度向轨迹中心倾斜(核心带密 / 远处稀), 大小随距离衰减; 右下死区跳过
+(function genRibbonHaloParticles(){
+    var container = document.querySelector('.particles');
+    if (!container) return;
+    function rand(min, max){ return Math.random()*(max-min)+min; }
+    function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+    function addParticle(leftPct, bottomPct, distFromRibbon){
+        // 边界 / 右下死区 (沿用现有规则: left>50% && bottom<20% 不放粒子)
+        if (bottomPct < 4 || bottomPct > 96 || leftPct < 2 || leftPct > 98) return;
+        if (leftPct > 50 && bottomPct < 22) return;
+        var div = document.createElement('div');
+        var nearCore = distFromRibbon < 4;
+        var nearMid  = distFromRibbon < 9;
+        // 核心带: 多金粒 + 大颗粒; 中带: 普通+少量 slow; 外带: 全部小颗粒慢
+        var variant = nearCore
+            ? pick(['particle','particle','particle-gold','particle','particle-gold'])
+            : (nearMid
+                ? pick(['particle','particle-slow','particle','particle-gold'])
+                : pick(['particle','particle-slow','particle']));
+        div.className = variant;
+        var size = nearCore ? Math.floor(rand(3,7))
+                            : (nearMid ? Math.floor(rand(2,5)) : Math.floor(rand(2,3)));
+        var dx = Math.floor(rand(14, 28));
+        var dy = Math.floor(rand(40, 60));
+        var dur = (rand(6, 12)).toFixed(1);
+        var delay = (rand(0, 4)).toFixed(1);
+        div.style.cssText =
+            'left:'+leftPct.toFixed(1)+'%;'+
+            'bottom:'+bottomPct.toFixed(1)+'%;'+
+            'width:'+size+'px;height:'+size+'px;'+
+            'animation-duration:'+dur+'s;animation-delay:'+delay+'s;'+
+            '--dx:'+dx+'px;--dy:-'+dy+'px;'+
+            '--dx2:'+(dx*2)+'px;--dy2:-'+(dy*2)+'px;';
+        container.appendChild(div);
+    }
+    // 上方横向混天绫轨迹 (rotate -13deg + bottom 35%): 经验观测下,
+    // 视窗 left% → 轨迹中心 bottom% ≈ 30 + left*0.55, 右端伸到约 bottom 85%
+    function upperTraj(leftPct){ return 30 + leftPct * 0.55; }
+    // 下方斜向混天绫 (rotate -35deg): 左下到中上, 视窗内只占 left 0-55%
+    function lowerTraj(leftPct){ return -5 + leftPct * 1.4; } // 左下 → 中上
+
+    // === 上方混天绫: 90 颗沿对角线, 偏移呈 power(1.6) 分布(向轨迹聚拢) ===
+    for (var i = 0; i < 90; i++) {
+        var L = rand(3, 97);
+        var trajY = upperTraj(L);
+        var r = Math.random();
+        var offMag = Math.pow(r, 1.6) * 20;  // 0-20%, 集中在小
+        var sign = Math.random() < 0.5 ? -1 : 1;
+        var bottomPct = trajY + offMag * sign;
+        addParticle(L, bottomPct, offMag);
+    }
+
+    // === 下方斜向混天绫: 40 颗沿对角线(仅 left 0-55%), 别填右下 ===
+    for (var j = 0; j < 40; j++) {
+        var L2 = rand(2, 55);
+        var trajY2 = lowerTraj(L2);
+        var r2 = Math.random();
+        var offMag2 = Math.pow(r2, 1.5) * 16;
+        var sign2 = Math.random() < 0.5 ? -1 : 1;
+        var bottomPct2 = trajY2 + offMag2 * sign2;
+        addParticle(L2, bottomPct2, offMag2);
+    }
+})();
+
 (function(){
     // 显示/隐藏密码
     var pwd = document.getElementById('signupSrPassword');
