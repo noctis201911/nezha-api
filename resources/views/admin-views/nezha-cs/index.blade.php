@@ -55,6 +55,26 @@
                             </select>
                             <small class="text-muted">每天把昨日评价/退款/客服反馈用 AI 总结成摘要+改进点，发到超管 Telegram，并在下方留历史。AI 走客服同一管线（已脱敏）；关时不生成。</small>
                         </div>
+                        <div class="col-sm-6 form-group mb-3">
+                            <label class="input-label">{{ translate('人工客服在线时段（中国时间）') }}</label>
+                            <div class="d-flex align-items-center" style="gap:8px;">
+                                <input type="number" name="nezha_cs_human_hours_start" class="form-control" min="0" max="23" value="{{ $humanStart ?? 9 }}" style="max-width:90px;">
+                                <span>—</span>
+                                <input type="number" name="nezha_cs_human_hours_end" class="form-control" min="1" max="24" value="{{ $humanEnd ?? 18 }}" style="max-width:90px;">
+                                <span class="text-muted">{{ translate('点') }}</span>
+                            </div>
+                            <small class="text-muted">{{ translate('顾客「转人工」时：此时段内转接真人并告警超管；时段外告知时间+留言。按中国时间(GMT+8)。') }} 中国 {{ $humanStart ?? 9 }}–{{ $humanEnd ?? 18 }} 点 = 埃里温本地 {{ (($humanStart ?? 9)+20)%24 }}–{{ (($humanEnd ?? 18)+20)%24 }} 点。</small>
+                        </div>
+                        <div class="col-sm-6 form-group mb-3">
+                            <label class="input-label">{{ translate('转人工告警 Telegram chat_id') }}</label>
+                            <input type="text" name="nezha_cs_handoff_chat_id" class="form-control" value="{{ $handoffChat ?? '' }}" placeholder="{{ translate('留空=用现有超管风控告警同一个 chat') }}">
+                            <small class="text-muted">{{ translate('顾客转人工时把提醒推到这个 Telegram。不填就用现有超管告警 chat。获取方式同商家绑定（给机器人发条消息后检测）。') }}</small>
+                        </div>
+                        <div class="col-sm-12 form-group mb-3">
+                            <label class="input-label">{{ translate('进入客服的欢迎语（顾客打开小哪时显示）') }}</label>
+                            <textarea name="nezha_cs_welcome" class="form-control" rows="6">{{ $welcome ?? '' }}</textarea>
+                            <small class="text-muted">{{ translate('顾客点开客服小哪时显示的开场介绍：告诉顾客小哪能帮什么、并提示可「和骑手对话」开启翻译。留空用系统默认。') }}</small>
+                        </div>
                         <div class="col-sm-12 form-group mb-3 d-flex align-items-end">
                             <button type="submit" class="btn btn-primary">{{ translate('保存设置') }}</button>
                         </div>

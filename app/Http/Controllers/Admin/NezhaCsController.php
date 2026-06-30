@@ -28,6 +28,10 @@ class NezhaCsController extends Controller
         $faq = $get('nezha_cs_faq', '') ?: NezhaCsAssistant::defaultFaq();
         $model = $get('nezha_cs_ai_model', 'deepseek-chat');
         $hasKey = (bool) $get('nezha_cs_ai_api_key', '');
+        $humanStart = (int) $get('nezha_cs_human_hours_start', '9');
+        $humanEnd = (int) $get('nezha_cs_human_hours_end', '18');
+        $welcome = $get('nezha_cs_welcome', '') ?: NezhaCsAssistant::defaultWelcome();
+        $handoffChat = (string) $get('nezha_cs_handoff_chat_id', '');
 
         $tickets = DB::table('nezha_cs_tickets')
             ->where('status', 'open')
@@ -47,7 +51,7 @@ class NezhaCsController extends Controller
             ? DB::table('nezha_feedback_digests')->orderByDesc('digest_date')->orderByDesc('id')->limit(14)->get()
             : collect();
 
-        return view('admin-views.nezha-cs.index', compact('status', 'relay', 'faq', 'model', 'hasKey', 'tickets', 'feedback', 'fbPos', 'fbNeg', 'digestStatus', 'digests'));
+        return view('admin-views.nezha-cs.index', compact('status', 'relay', 'faq', 'model', 'hasKey', 'tickets', 'feedback', 'fbPos', 'fbNeg', 'digestStatus', 'digests', 'humanStart', 'humanEnd', 'welcome', 'handoffChat'));
     }
 
     /** 运营数据助手：超管在后台问小哪客服运营情况。 */
@@ -67,6 +71,10 @@ class NezhaCsController extends Controller
             'nezha_cs_faq' => 'nullable|string|max:6000',
             'nezha_cs_ai_model' => 'nullable|string|max:64',
             'nezha_feedback_digest_status' => 'nullable|in:0,1',
+            'nezha_cs_human_hours_start' => 'nullable|integer|min:0|max:23',
+            'nezha_cs_human_hours_end' => 'nullable|integer|min:1|max:24',
+            'nezha_cs_welcome' => 'nullable|string|max:2000',
+            'nezha_cs_handoff_chat_id' => 'nullable|string|max:64',
         ]);
 
         foreach ([
@@ -75,6 +83,10 @@ class NezhaCsController extends Controller
             'nezha_cs_faq' => (string) ($request->nezha_cs_faq ?? ''),
             'nezha_cs_ai_model' => (string) ($request->nezha_cs_ai_model ?: 'deepseek-chat'),
             'nezha_feedback_digest_status' => (string) ((int) ($request->nezha_feedback_digest_status ?? 0)),
+            'nezha_cs_human_hours_start' => (string) ((int) ($request->nezha_cs_human_hours_start ?? 9)),
+            'nezha_cs_human_hours_end' => (string) ((int) ($request->nezha_cs_human_hours_end ?? 18)),
+            'nezha_cs_welcome' => (string) ($request->nezha_cs_welcome ?? ''),
+            'nezha_cs_handoff_chat_id' => (string) ($request->nezha_cs_handoff_chat_id ?? ''),
         ] as $k => $v) {
             BusinessSetting::updateOrCreate(['key' => $k], ['value' => $v]);
         }
