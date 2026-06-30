@@ -79,6 +79,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     Route::get('shipping-policy', [HomeController::class, 'shipping_policy']);
     Route::get('cancellation-policy', [HomeController::class, 'cancellation_policy']);
     Route::post('support/mail-ticket', [SupportMailTicketController::class, 'store'])->middleware('rateLimiter');
+    Route::post('nezha/telegram-webhook', [\App\Http\Controllers\Api\V1\TelegramWebhookController::class, 'handle']); // 阶段D: TG入站(secret在控制器校验)
 
     Route::group(['prefix' => 'auth', 'namespace' => 'Auth', 'middleware' => 'rateLimiter'], function () {
 

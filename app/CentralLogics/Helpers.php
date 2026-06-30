@@ -2173,6 +2173,36 @@ class Helpers
         }
     }
 
+    // 哪吒 阶段D: 给任意 chat 发消息(可作为对某条的回复)。复用 telegram_bot_token。返回 Telegram 的 message_id(失败 null)。
+    public static function sendTelegramRaw($chatId, $text, $replyToMessageId = null)
+    {
+        try {
+            $token = self::get_business_settings('telegram_bot_token', false);
+            if (!$token || !is_string($token) || !$chatId || !$text) {
+                return null;
+            }
+            $payload = ['chat_id' => $chatId, 'text' => $text, 'disable_web_page_preview' => true];
+            if ($replyToMessageId) {
+                $payload['reply_to_message_id'] = $replyToMessageId;
+            }
+            $ch = curl_init('https://api.telegram.org/bot' . $token . '/sendMessage');
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_CONNECTTIMEOUT => 3,
+                CURLOPT_TIMEOUT => 5,
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => http_build_query($payload),
+            ]);
+            $raw = curl_exec($ch);
+            curl_close($ch);
+            $j = json_decode((string) $raw, true);
+            return $j['result']['message_id'] ?? null;
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('telegram raw msg failed: ' . $e->getMessage());
+            return null;
+        }
+    }
+
     // 哪吒 阶段A: 人工客服转接告警 → 超管 Telegram。优先 nezha_cs_handoff_chat_id, 回退风控 admin chat。未配=静默降级。
     public static function sendTelegramCsHandoff($text)
     {

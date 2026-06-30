@@ -534,6 +534,84 @@ class NezhaCsAssistant
         }
     }
 
+    // 阶段D: 超管/商家在 Telegram 里回复 → 以「客服」身份回写进会话 + 推送顾客。供 TelegramWebhookController 调用。
+    public static function postHumanReply($conversationId, string $text, string $scope = 'admin'): bool
+    {
+        try {
+            $text = trim($text);
+            if ($text === '') {
+                return false;
+            }
+            $conv = Conversation::find($conversationId);
+            if (!$conv) {
+                return false;
+            }
+            // 找顾客侧 UserInfo（带 user_id 的那一方）
+            $custInfo = null;
+            foreach ([$conv->sender_id, $conv->receiver_id] as $pid) {
+                $ui = UserInfo::find($pid);
+                if ($ui && $ui->user_id) { $custInfo = $ui; break; }
+            }
+            $adminSender = self::adminSenderInfo();
+            if (!$adminSender) {
+                return false;
+            }
+            $message = new Message();
+            $message->conversation_id = $conv->id;
+            $message->sender_id = $adminSender->id;
+            $message->message = $text;
+            $message->save();
+
+            $conv->unread_message_count = $conv->unread_message_count ? $conv->unread_message_count + 1 : 1;
+            $conv->last_message_id = $message->id;
+            $conv->last_message_time = Carbon::now()->toDateTimeString();
+            $conv->save();
+
+            // 人工正在 Telegram 里接手 → 延长静默, AI 别插话。
+            \Illuminate\Support\Facades\Cache::put('nezha_cs_human:' . $conv->id, 1, 1800);
+
+            // 推送顾客（FCM）。
+            try {
+                $cuId = $custInfo->user_id ?? null;
+                $cu = $cuId ? \App\Models\User::find($cuId) : null;
+                $token = $cu->cm_firebase_token ?? null;
+                if ($token) {
+                    Helpers::send_push_notif_to_device($token, [
+                        'title' => translate('messages.message'),
+                        'description' => translate('messages.message_description'),
+                        'order_id' => '',
+                        'image' => '',
+                        'message' => json_encode($message),
+                        'type' => 'message',
+                        'conversation_id' => $conv->id,
+                        'sender_type' => 'admin',
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('nezha cs postHumanReply push failed: ' . $e->getMessage());
+            }
+
+            // 审计：只记动作，不存正文。
+            try {
+                DB::table('nezha_cs_logs')->insert([
+                    'conversation_id' => $conv->id,
+                    'message_id' => $message->id,
+                    'category' => 'human_reply',
+                    'model' => 'telegram',
+                    'tokens' => 0,
+                    'created_at' => Carbon::now(),
+                    'updated_at' => Carbon::now(),
+                ]);
+            } catch (\Throwable $e) {
+            }
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::warning('nezha cs postHumanReply failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+
     // 平台主管理员作为客服身份（与运营后台回复身份一致，前端渲染为「客服」）。
     protected static function adminSenderInfo(): ?UserInfo
     {
