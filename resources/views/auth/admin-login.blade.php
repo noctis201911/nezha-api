@@ -446,8 +446,8 @@
             </defs>
             {{-- 主带: 闭合带 (~25 单位带宽, 接近原楔形最厚处), 右端 (1800,-110) 屏幕外 --}}
             <path d="M-30,380 C200,270 400,380 600,240 S900,130 1800,-110 L1800,-85 C1400,55 900,165 600,265 C400,315 200,305 -30,405 Z" fill="url(#ribbonGradient)" stroke="url(#goldGlow)" stroke-width="2" filter="url(#subtlePattern)"/>
-            {{-- 三条细线尾迹: 端点伸到 x=1800 屏幕外 --}}
-            <path d="M50,330 C250,260 450,360 650,230 S950,130 1800,-140" fill="none" stroke="#ff6b4a" stroke-width="1" opacity="0.3"/>
+            {{-- 三条细线尾迹: 端点伸到 x=1800 屏幕外; 第一条兼作粒子采样导引线 --}}
+            <path id="guideLower" d="M50,330 C250,260 450,360 650,230 S950,130 1800,-140" fill="none" stroke="#ff6b4a" stroke-width="1" opacity="0.3"/>
             <path d="M100,310 C300,240 500,340 700,210 S1000,110 1800,-170" fill="none" stroke="#ff9d85" stroke-width="1" opacity="0.2"/>
             <path d="M150,290 C350,220 550,320 750,190 S1050,90 1800,-200" fill="none" stroke="#ff9d85" stroke-width="0.8" opacity="0.15"/>
         </svg>
@@ -471,8 +471,8 @@
             </defs>
             {{-- 主带: 闭合带 (~25 单位带宽, 接近原楔形最厚处), 右端 (1800,-80) 屏幕外 --}}
             <path d="M-30,440 C200,330 400,400 600,260 S900,160 1800,-80 L1800,-55 C1400,55 900,185 600,285 C400,335 200,375 -30,465 Z" fill="url(#ribbonGradientH)" stroke="url(#goldGlowH)" stroke-width="2" filter="url(#subtlePatternH)"/>
-            {{-- 三条细线尾迹: 端点都伸到 x=1800 屏幕外 --}}
-            <path d="M40,420 C250,300 450,380 650,230 S950,130 1800,-130" fill="none" stroke="#ff6b4a" stroke-width="1" opacity="0.3"/>
+            {{-- 三条细线尾迹: 端点都伸到 x=1800 屏幕外; 第一条兼作粒子采样导引线 --}}
+            <path id="guideUpper" d="M40,420 C250,300 450,380 650,230 S950,130 1800,-130" fill="none" stroke="#ff6b4a" stroke-width="1" opacity="0.3"/>
             <path d="M90,410 C300,280 500,360 700,210 S1000,110 1800,-160" fill="none" stroke="#ff9d85" stroke-width="1" opacity="0.2"/>
             <path d="M140,400 C350,260 550,340 750,190 S1050,90 1800,-190" fill="none" stroke="#ff9d85" stroke-width="0.8" opacity="0.15"/>
         </svg>
@@ -492,69 +492,8 @@
 
     {{-- 光晕粒子层：仅沿混天绫线条分布，从线条中向右上方流出；右下角区域已清空 --}}
     <div class="particles">
-        {{-- ============================================= --}}
-        {{-- 上方横向混天绫线条（bottom 35%-50%）周边粒子 --}}
-        {{-- 全部 --dx>0 --dy<0 顺线条方向向右上方飘 --}}
-        {{-- ============================================= --}}
-        {{-- 已删除 left 4/9/14/19% 静态粒子(贡献左上密集感, 后续靠 JS 沿轨迹分布) --}}
-        <div class="particle" style="left: 23%; bottom: 39%; width: 7px; height: 7px; animation-duration: 8s; animation-delay: 0.4s; --dx: 26px; --dy: -58px; --dx2: 54px; --dy2: -118px;"></div>
-        <div class="particle-gold" style="left: 28%; bottom: 43%; width: 5px; height: 5px; animation-duration: 10s; animation-delay: 1.8s; --dx: 20px; --dy: -50px; --dx2: 42px; --dy2: -100px;"></div>
-        <div class="particle" style="left: 33%; bottom: 40%; width: 4px; height: 4px; animation-duration: 6.5s; animation-delay: 3s; --dx: 22px; --dy: -52px; --dx2: 44px; --dy2: -104px;"></div>
-        <div class="particle-slow" style="left: 38%; bottom: 45%; width: 6px; height: 6px; animation-duration: 12s; animation-delay: 0.8s; --dx: 18px; --dy: -40px; --dx2: 40px; --dy2: -85px;"></div>
-        <div class="particle" style="left: 42%; bottom: 38%; width: 5px; height: 5px; animation-duration: 7.5s; animation-delay: 2.5s; --dx: 24px; --dy: -54px; --dx2: 48px; --dy2: -110px;"></div>
-        <div class="particle-gold" style="left: 47%; bottom: 42%; width: 4px; height: 4px; animation-duration: 9.5s; animation-delay: 1s; --dx: 18px; --dy: -48px; --dx2: 38px; --dy2: -96px;"></div>
-        <div class="particle" style="left: 52%; bottom: 39%; width: 6px; height: 6px; animation-duration: 8s; animation-delay: 3.5s; --dx: 22px; --dy: -56px; --dx2: 46px; --dy2: -114px;"></div>
-        <div class="particle-slow" style="left: 56%; bottom: 44%; width: 4px; height: 4px; animation-duration: 11s; animation-delay: 0.3s; --dx: 20px; --dy: -42px; --dx2: 42px; --dy2: -88px;"></div>
-        <div class="particle" style="left: 61%; bottom: 40%; width: 5px; height: 5px; animation-duration: 7s; animation-delay: 2.2s; --dx: 22px; --dy: -50px; --dx2: 46px; --dy2: -100px;"></div>
-        <div class="particle-gold" style="left: 65%; bottom: 43%; width: 5px; height: 5px; animation-duration: 10s; animation-delay: 1.5s; --dx: 18px; --dy: -48px; --dx2: 38px; --dy2: -96px;"></div>
-        <div class="particle" style="left: 70%; bottom: 38%; width: 7px; height: 7px; animation-duration: 8.5s; animation-delay: 0.5s; --dx: 26px; --dy: -58px; --dx2: 52px; --dy2: -116px;"></div>
-        <div class="particle-slow" style="left: 74%; bottom: 45%; width: 4px; height: 4px; animation-duration: 12s; animation-delay: 3.2s; --dx: 16px; --dy: -40px; --dx2: 36px; --dy2: -82px;"></div>
-        <div class="particle-gold" style="left: 78%; bottom: 41%; width: 5px; height: 5px; animation-duration: 9s; animation-delay: 1.8s; --dx: 20px; --dy: -50px; --dx2: 40px; --dy2: -100px;"></div>
-        <div class="particle" style="left: 82%; bottom: 39%; width: 4px; height: 4px; animation-duration: 7s; animation-delay: 0.7s; --dx: 22px; --dy: -52px; --dx2: 44px; --dy2: -104px;"></div>
-        <div class="particle" style="left: 86%; bottom: 43%; width: 6px; height: 6px; animation-duration: 8s; animation-delay: 2.8s; --dx: 24px; --dy: -54px; --dx2: 48px; --dy2: -108px;"></div>
-        <div class="particle-gold" style="left: 90%; bottom: 40%; width: 4px; height: 4px; animation-duration: 11s; animation-delay: 0.4s; --dx: 18px; --dy: -48px; --dx2: 38px; --dy2: -96px;"></div>
-        <div class="particle" style="left: 94%; bottom: 44%; width: 5px; height: 5px; animation-duration: 7.5s; animation-delay: 3.5s; --dx: 22px; --dy: -52px; --dx2: 44px; --dy2: -104px;"></div>
-
-        {{-- 上方混天绫细密小粒子（沿轨迹紧贴线条） --}}
-        {{-- 已删除 left 11/17% 细密小粒子 --}}
-        <div class="particle" style="left: 26%; bottom: 41%; width: 3px; height: 3px; animation-duration: 7s; animation-delay: 2.4s; --dx: 14px; --dy: -40px; --dx2: 30px; --dy2: -82px;"></div>
-        <div class="particle-gold" style="left: 36%; bottom: 41%; width: 3px; height: 3px; animation-duration: 9s; animation-delay: 0.5s; --dx: 16px; --dy: -42px; --dx2: 32px; --dy2: -86px;"></div>
-        <div class="particle" style="left: 44%; bottom: 40%; width: 3px; height: 3px; animation-duration: 6.5s; animation-delay: 3.1s; --dx: 18px; --dy: -46px; --dx2: 36px; --dy2: -92px;"></div>
-        <div class="particle-gold" style="left: 54%; bottom: 41%; width: 3px; height: 3px; animation-duration: 8s; animation-delay: 1.3s; --dx: 14px; --dy: -42px; --dx2: 30px; --dy2: -84px;"></div>
-        <div class="particle" style="left: 63%; bottom: 42%; width: 3px; height: 3px; animation-duration: 7.5s; animation-delay: 2.7s; --dx: 16px; --dy: -44px; --dx2: 34px; --dy2: -88px;"></div>
-        <div class="particle-gold" style="left: 72%; bottom: 40%; width: 3px; height: 3px; animation-duration: 9s; animation-delay: 0.7s; --dx: 18px; --dy: -46px; --dx2: 36px; --dy2: -92px;"></div>
-        <div class="particle" style="left: 80%; bottom: 42%; width: 3px; height: 3px; animation-duration: 6.5s; animation-delay: 3.8s; --dx: 16px; --dy: -42px; --dx2: 32px; --dy2: -86px;"></div>
-        <div class="particle-gold" style="left: 88%; bottom: 41%; width: 3px; height: 3px; animation-duration: 8.5s; animation-delay: 1s; --dx: 14px; --dy: -40px; --dx2: 30px; --dy2: -82px;"></div>
-
-        {{-- ============================================= --}}
-        {{-- 下方斜向混天绫线条（左下角 → 右上方对角） --}}
-        {{-- 只在左侧（left 0%-55%）密集，右下角清空 --}}
-        {{-- ============================================= --}}
-        {{-- 删除 left 3/6/9/12% 静态下方粒子(左边贡献者) --}}
-        <div class="particle-slow" style="left: 15%; bottom: 8%; width: 4px; height: 4px; animation-duration: 11s; animation-delay: 1.9s; --dx: 20px; --dy: -42px; --dx2: 42px; --dy2: -88px;"></div>
-        <div class="particle-gold" style="left: 18%; bottom: 14%; width: 5px; height: 5px; animation-duration: 10s; animation-delay: 0.4s; --dx: 24px; --dy: -52px; --dx2: 48px; --dy2: -104px;"></div>
-        <div class="particle" style="left: 21%; bottom: 10%; width: 6px; height: 6px; animation-duration: 7.5s; animation-delay: 3s; --dx: 28px; --dy: -56px; --dx2: 56px; --dy2: -114px;"></div>
-        <div class="particle" style="left: 24%; bottom: 16%; width: 4px; height: 4px; animation-duration: 6.5s; animation-delay: 1.2s; --dx: 24px; --dy: -50px; --dx2: 48px; --dy2: -100px;"></div>
-        <div class="particle-gold" style="left: 27%; bottom: 13%; width: 5px; height: 5px; animation-duration: 9s; animation-delay: 2.3s; --dx: 22px; --dy: -48px; --dx2: 44px; --dy2: -96px;"></div>
-        <div class="particle" style="left: 30%; bottom: 18%; width: 6px; height: 6px; animation-duration: 8s; animation-delay: 0.8s; --dx: 26px; --dy: -54px; --dx2: 52px; --dy2: -108px;"></div>
-        <div class="particle-slow" style="left: 33%; bottom: 15%; width: 4px; height: 4px; animation-duration: 12s; animation-delay: 3.4s; --dx: 18px; --dy: -40px; --dx2: 40px; --dy2: -84px;"></div>
-        <div class="particle" style="left: 36%; bottom: 21%; width: 7px; height: 7px; animation-duration: 7.5s; animation-delay: 1.7s; --dx: 28px; --dy: -56px; --dx2: 56px; --dy2: -114px;"></div>
-        <div class="particle-gold" style="left: 40%; bottom: 18%; width: 5px; height: 5px; animation-duration: 10s; animation-delay: 0.5s; --dx: 22px; --dy: -50px; --dx2: 44px; --dy2: -100px;"></div>
-        <div class="particle" style="left: 43%; bottom: 23%; width: 5px; height: 5px; animation-duration: 7s; animation-delay: 2.6s; --dx: 26px; --dy: -54px; --dx2: 52px; --dy2: -108px;"></div>
-        <div class="particle" style="left: 47%; bottom: 20%; width: 6px; height: 6px; animation-duration: 8s; animation-delay: 1.1s; --dx: 24px; --dy: -52px; --dx2: 48px; --dy2: -104px;"></div>
-        <div class="particle-gold" style="left: 51%; bottom: 25%; width: 4px; height: 4px; animation-duration: 9s; animation-delay: 3.2s; --dx: 20px; --dy: -46px; --dx2: 42px; --dy2: -92px;"></div>
-
-        {{-- 斜向混天绫沿轨迹的细密小粒子 --}}
-        {{-- 删除 left 5/10% 细密小粒子 --}}
-        <div class="particle" style="left: 16%; bottom: 16%; width: 3px; height: 3px; animation-duration: 6.5s; animation-delay: 0.9s; --dx: 24px; --dy: -52px; --dx2: 48px; --dy2: -104px;"></div>
-        <div class="particle-gold" style="left: 22%; bottom: 19%; width: 3px; height: 3px; animation-duration: 8s; animation-delay: 3.6s; --dx: 22px; --dy: -50px; --dx2: 44px; --dy2: -100px;"></div>
-        <div class="particle" style="left: 28%; bottom: 22%; width: 3px; height: 3px; animation-duration: 7.5s; animation-delay: 1.5s; --dx: 26px; --dy: -54px; --dx2: 52px; --dy2: -108px;"></div>
-        <div class="particle-gold" style="left: 34%; bottom: 25%; width: 3px; height: 3px; animation-duration: 9.5s; animation-delay: 2.1s; --dx: 20px; --dy: -48px; --dx2: 40px; --dy2: -96px;"></div>
-        <div class="particle" style="left: 40%; bottom: 28%; width: 3px; height: 3px; animation-duration: 6.5s; animation-delay: 0.6s; --dx: 22px; --dy: -50px; --dx2: 44px; --dy2: -100px;"></div>
-        <div class="particle-gold" style="left: 46%; bottom: 30%; width: 3px; height: 3px; animation-duration: 8s; animation-delay: 3.8s; --dx: 18px; --dy: -46px; --dx2: 38px; --dy2: -92px;"></div>
-        <div class="particle" style="left: 52%; bottom: 32%; width: 3px; height: 3px; animation-duration: 7s; animation-delay: 1.9s; --dx: 20px; --dy: -48px; --dx2: 42px; --dy2: -96px;"></div>
-
-        {{-- 散落粒子已删除: 用户反馈左上角孤立粒子, 改全部走 JS 沿轨迹分布 --}}
+        {{-- 粒子全部由页尾 JS genRibbonHaloParticles() 沿真实 SVG 路径屏幕坐标生成 --}}
+        {{-- (手写静态粒子已删除: 直线公式跟 CSS rotate 后的真实线条对不齐, 会飘到左上角空白处) --}}
     </div>
 
     <div class="login-section">
@@ -683,68 +622,113 @@
 <script>
 // 沿混天绫轨迹生成额外光晕粒子: 上方横向混天绫对角线 + 下方斜向混天绫
 // 密度向轨迹中心倾斜(核心带密 / 远处稀), 大小随距离衰减; 右下死区跳过
+// 治本方案: 不再用手写直线公式(跟 CSS rotate 后的真实线条对不齐),
+// 而是直接采样 SVG 混天绫导引线的【真实渲染屏幕坐标】(getBoundingClientRect, 跨浏览器都含 CSS 变换),
+// 粒子沿线条法向小幅散开 → 一定贴着线条, 永远不会飘到左上角空白处。
 (function genRibbonHaloParticles(){
     var container = document.querySelector('.particles');
     if (!container) return;
     function rand(min, max){ return Math.random()*(max-min)+min; }
     function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
-    function addParticle(leftPct, bottomPct, distFromRibbon){
-        // 边界 / 右下死区 (沿用现有规则: left>50% && bottom<20% 不放粒子)
-        if (bottomPct < 4 || bottomPct > 96 || leftPct < 2 || leftPct > 98) return;
-        if (leftPct > 50 && bottomPct < 22) return;
-        // 左上死区: left<25% 且 bottom>50% (轨迹远处, 用户反馈孤立粒子刺眼)
-        if (leftPct < 25 && bottomPct > 50) return;
+
+    var SVGNS = 'http://www.w3.org/2000/svg';
+    // 采样导引路径在屏幕上的真实像素坐标: 临时放 circle → 读 getBoundingClientRect 中心 → 删
+    function sampleScreen(pathId, n){
+        var path = document.getElementById(pathId);
+        if (!path) return [];
+        var svg = path.ownerSVGElement;
+        var len = path.getTotalLength();
+        var tmp = [];
+        for (var i = 0; i < n; i++){
+            var p = path.getPointAtLength(len * i / (n - 1));
+            var c = document.createElementNS(SVGNS, 'circle');
+            c.setAttribute('cx', p.x); c.setAttribute('cy', p.y);
+            c.setAttribute('r', '0.5'); c.setAttribute('fill', 'none');
+            svg.appendChild(c); tmp.push(c);
+        }
+        var pts = tmp.map(function(c){
+            var r = c.getBoundingClientRect();
+            return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        });
+        tmp.forEach(function(c){ c.remove(); });
+        return pts;
+    }
+
+    var crect = container.getBoundingClientRect();
+    function toLeftPct(x){ return (x - crect.left) / crect.width * 100; }
+    function toBottomPct(y){ return (1 - (y - crect.top) / crect.height) * 100; }
+
+    // 在屏幕点 (sx,sy) 附近沿法向撒粒子; offBias 大=密度更集中在线上
+    function spawnAt(sx, sy, nx, ny, opts){
+        var leftPct = toLeftPct(sx);
+        var bottomPct = toBottomPct(sy);
+        // 边界 + 死区
+        if (bottomPct < 3 || bottomPct > 97 || leftPct < 1 || leftPct > 99) return;
+        if (leftPct > 52 && bottomPct < 18) return;            // 右下死区(卡片下方)
+        // 左上死区: 下方斜向混天绫会爬进左上角(实采样 L21B52/L30B78), 用户要求左上清空 → 砍掉这截
+        if (leftPct < 40 && bottomPct > 50) return;
         var div = document.createElement('div');
-        var nearCore = distFromRibbon < 4;
-        var nearMid  = distFromRibbon < 9;
-        // 核心带: 多金粒 + 大颗粒; 中带: 普通+少量 slow; 外带: 全部小颗粒慢
-        var variant = nearCore
+        var mag = Math.pow(Math.random(), 1.7) * (opts.maxOff || 34); // px, 集中在小→贴线
+        var near = mag < 9, mid = mag < 20;
+        var variant = near
             ? pick(['particle','particle','particle-gold','particle','particle-gold'])
-            : (nearMid
-                ? pick(['particle','particle-slow','particle','particle-gold'])
-                : pick(['particle','particle-slow','particle']));
+            : (mid ? pick(['particle','particle-slow','particle','particle-gold'])
+                   : pick(['particle','particle-slow','particle']));
         div.className = variant;
-        var size = nearCore ? Math.floor(rand(3,7))
-                            : (nearMid ? Math.floor(rand(2,5)) : Math.floor(rand(2,3)));
+        var size = near ? Math.floor(rand(3,7)) : (mid ? Math.floor(rand(2,5)) : Math.floor(rand(2,3)));
         var dx = Math.floor(rand(14, 28));
         var dy = Math.floor(rand(40, 60));
         var dur = (rand(6, 12)).toFixed(1);
-        var delay = (rand(0, 4)).toFixed(1);
+        var delay = (rand(0, 5)).toFixed(1);
         div.style.cssText =
-            'left:'+leftPct.toFixed(1)+'%;'+
-            'bottom:'+bottomPct.toFixed(1)+'%;'+
+            'left:'+leftPct.toFixed(2)+'%;bottom:'+bottomPct.toFixed(2)+'%;'+
             'width:'+size+'px;height:'+size+'px;'+
             'animation-duration:'+dur+'s;animation-delay:'+delay+'s;'+
-            '--dx:'+dx+'px;--dy:-'+dy+'px;'+
-            '--dx2:'+(dx*2)+'px;--dy2:-'+(dy*2)+'px;';
+            '--dx:'+dx+'px;--dy:-'+dy+'px;--dx2:'+(dx*2)+'px;--dy2:-'+(dy*2)+'px;';
         container.appendChild(div);
     }
-    // 上方横向混天绫轨迹 - 1920x1080 实采样三点(12,27)(50,54)(80,81)二次拟合
-    function upperTraj(leftPct){ return 20 + leftPct * 0.54 + leftPct * leftPct * 0.0028; }
-    // 下方斜向混天绫 - 1920x1080 实采样线性 (38.5, 78) 与 (24, 50)
-    function lowerTraj(leftPct){ return 3 + leftPct * 1.94; }
 
-    // === 上方混天绫: 70 颗紧贴轨迹 ±5% (L 范围 32-95, 左 32% 以下不放粒子, 给视觉区让位) ===
-    for (var i = 0; i < 70; i++) {
-        var L = rand(32, 95);
-        var trajY = upperTraj(L);
-        var r = Math.random();
-        var offMag = Math.pow(r, 1.8) * 5;  // 0-5%, 紧贴轨迹
-        var sign = Math.random() < 0.5 ? -1 : 1;
-        var bottomPct = trajY + offMag * sign;
-        addParticle(L, bottomPct, offMag);
+    // 沿一条导引线撒粒子: perSample=每个采样点撒几颗
+    function seedAlong(pathId, samples, perSample, opts){
+        var pts = sampleScreen(pathId, samples);
+        if (!pts.length) return;
+        for (var i = 0; i < pts.length; i++){
+            var prev = pts[Math.max(0, i-1)], next = pts[Math.min(pts.length-1, i+1)];
+            var tx = next.x - prev.x, ty = next.y - prev.y;
+            var tl = Math.hypot(tx, ty) || 1;
+            var nx = -ty / tl, ny = tx / tl;            // 法向单位向量
+            var alongJit = (opts.along || 14);          // 沿线方向抖动(避免成珠链)
+            for (var k = 0; k < perSample; k++){
+                var perpSign = Math.random() < 0.5 ? -1 : 1;
+                var perpMag = Math.pow(Math.random(), 1.7) * (opts.maxOff || 34);
+                var aj = rand(-alongJit, alongJit);
+                var sx = pts[i].x + nx * perpMag * perpSign + (tx/tl) * aj;
+                var sy = pts[i].y + ny * perpMag * perpSign + (ty/tl) * aj;
+                spawnAt(sx, sy, nx, ny, opts);
+            }
+        }
     }
 
-    // === 下方斜向混天绫: 18 颗紧贴轨迹 ±4%, L 范围 8-48 ===
-    for (var j = 0; j < 18; j++) {
-        var L2 = rand(8, 48);
-        var trajY2 = lowerTraj(L2);
-        var r2 = Math.random();
-        var offMag2 = Math.pow(r2, 1.7) * 4;
-        var sign2 = Math.random() < 0.5 ? -1 : 1;
-        var bottomPct2 = trajY2 + offMag2 * sign2;
-        addParticle(L2, bottomPct2, offMag2);
+    function run(){
+        crect = container.getBoundingClientRect();
+        // 上方横向混天绫(从左下斜穿到右上, 是视觉主角): 用户要"周边再加粒子" → 高密度 (44 采样点 × 5 颗)
+        seedAlong('guideUpper', 44, 5, { maxOff: 38, along: 16 });
+        // 下方斜向混天绫: 适度 (28 采样点 × 2 颗); 爬进左上的那截被死区自动砍掉
+        seedAlong('guideLower', 28, 2, { maxOff: 30, along: 14 });
     }
+
+    // SVG 需排版完成才有正确 getBoundingClientRect
+    if (document.readyState === 'complete') { run(); }
+    else { window.addEventListener('load', run); }
+    // 窗口尺寸变化重算(响应式; 防 resize 后粒子跑偏)
+    var rT;
+    window.addEventListener('resize', function(){
+        clearTimeout(rT);
+        rT = setTimeout(function(){
+            container.querySelectorAll('div').forEach(function(d){ d.remove(); });
+            run();
+        }, 300);
+    });
 })();
 
 (function(){
