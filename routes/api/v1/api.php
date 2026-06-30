@@ -70,6 +70,8 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     Route::get('zone/check', [ZoneController::class, 'zonesCheck']);
 
     Route::get('advertisement/list', [AdvertisementController::class, 'get_adds']);
+    Route::post('advertisement/click', [AdvertisementController::class, 'click'])->middleware('auth:api');
+    Route::post('advertisement/impression', [AdvertisementController::class, 'impression']);
     Route::get('addon-category/list', [AddonCategoryController::class, 'getList']);
 
     Route::get('terms-and-conditions', [HomeController::class, 'terms_and_conditions']);

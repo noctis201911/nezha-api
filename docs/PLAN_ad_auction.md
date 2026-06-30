@@ -74,3 +74,18 @@
 
 ## 8. 第二期（前端 + 界面）
 首页广告位前端（带推广标）+ 列表竞价位（不打标）+ 商家三旋钮看板（日预算 / 想多靠前低中高 / 已花费）+ 超管竞价参数页 + `ADMIN_GUIDE.md`/`MERCHANT_GUIDE.md`/`docs/compliance/CHANGELOG.md` 同步。
+
+
+## 9. 第一期交付状态（2026-07-02 上线·开关默认关）
+后端核心 T1~T6 全部落地并部署（`nezha_ad_auction_status=0` 灰度，关时零行为变化）：
+- **T1** 迁移 `2026_07_02_000100_nezha_ad_auction_v1`：`restaurant_wallets.ad_balance` / `advertisements` 加 `bid_amount,pricing_model,daily_budget,spent_today,budget_reset_date,slot,quality_score,mat_boost,mat_rank,mat_at` / 新表 `ad_events`(dedup 唯一索引) / 9 个 business_settings 键。全 additive、可回滚。
+- **T2** `nezha:recompute-ad-auction`（bootstrap withSchedule 每 5 分钟）：eCPM=bid×质量分→首价排序→物化 `mat_rank/mat_boost`；质量分=完单率/好评率/出餐速度（难刷信号）；关时清空物化。
+- **T3** `RestaurantLogic`：auction 开读 `mat_boost`，关走原 CPT EXISTS（不动）。
+- **T4** `Api/V1/AdvertisementController` `click`(auth:api)+`impression`(公开)：可信身份+首价+dedup+原子计费（锁序 wallet→ad→流水）；`get_adds` 读物化赢家。
+- **T5** click 内惰性预算重置（`budget_reset_date<今天` 先清零，Asia/Yerevan）。
+- **T6** `nezha:credit-ad-balance` CLI 充值入口（B2B 预付，原子 credit，第二期后台按钮复用）。
+
+> **流水类型 = `ad_click_fee`（业主 2026-07-02 拍板，对 §3/§4#9「advertisement_fee」措辞的有意偏离）**：CPC 动的是 `ad_balance` 不是 `deposit_balance`，单独 type 避免与 CPT 的 `advertisement_fee` 混淆 `balance_after` 语义、保 deposit 对账纯净（INV-1）。§4#9 对账据此读 `ad_click_fee`。
+
+死亡测试：`tests/Feature/NezhaAdAuctionTest`（PHPUnit 9/9）+ 真并发脚本（30/50 路零超扣·无死锁·对账一致·零残留）。
+⬜ 需业主亲测（开关开后）：真机广告位渲染、真人点击计费、真实刷量压力、live 顾客端竞价排序效果。

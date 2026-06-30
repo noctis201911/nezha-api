@@ -144,17 +144,28 @@ class RestaurantLogic
                                 ->groupBy('food.restaurant_id');
                         }, 'nz_comp_rating');
 
-                    // [哪吒广告计费 T1] 综合分 + 付费曝光权重: 餐馆存在「已扣费(is_paid=1)+审核通过+在投放期内」广告时, 综合分 +nezha_ad_boost_weight。
-                    //   只影响排序、不伪造数据/不改卡片。boost 钳到 [0,1.0] 防排序失真(综合分本身上限≈1.0); 设 0 即关闭加权。
-                    //   计费总开关关时无广告会 is_paid=1(扣费命令不跑) → EXISTS 恒 0 → 排序零行为变化。
-                    $nz_ad_boost = (float) (\App\Models\BusinessSetting::where('key', 'nezha_ad_boost_weight')->first()?->value ?? 0);
-                    $nz_ad_boost = max(0, min($nz_ad_boost, 1.0));
+                    // [哪吒广告 T1/T3] 综合分 + 付费曝光加成。两套计费并存、由开关切换:
+                    //   ① 竞价 CPC (nezha_ad_auction_status=1): 综合分 + 该餐馆在投 cpc 广告的 MAX(mat_boost)。
+                    //      mat_boost 由 nezha:recompute-ad-auction 物化(出价×质量分排名→加成), 已在命令内钳过上限(防碾压自然好店)。
+                    //      读物化=O(1)、可缓存(物化值每5分钟才变), 不在排序里实时跑竞价、不抬 P99。
+                    //   ② 按天 CPT (auction 关时, 原路径不动): is_paid EXISTS 二值加权(nezha_ad_boost_weight)。
+                    //   两开关皆关(默认)→ 无 is_paid=1、无 mat_rank → 加成恒 0 → 排序零行为变化。
+                    //   只影响排序、不伪造数据/不改卡片(INV-5 付费位不打广告标)。
                     $nz_comp_base = '0.45 * GREATEST(0, 1 - distance / 8000) + 0.30 * COALESCE(nz_comp_rating, 0) / 5 + 0.25 * LEAST(1, orders_count / 50)';
-                    if ($nz_ad_boost > 0) {
-                        $nz_today = date('Y-m-d');
-                        $query = $query->orderByRaw("(" . $nz_comp_base . " + ? * EXISTS(SELECT 1 FROM advertisements nz_ad WHERE nz_ad.restaurant_id = restaurants.id AND nz_ad.is_paid = 1 AND nz_ad.status = 'approved' AND DATE(nz_ad.start_date) <= ? AND DATE(nz_ad.end_date) >= ?)) DESC", [$nz_ad_boost, $nz_today, $nz_today]);
+                    $nz_auction_on = (int) (\App\Models\BusinessSetting::where('key', 'nezha_ad_auction_status')->first()?->value ?? 0);
+                    $nz_today = date('Y-m-d');
+                    if ($nz_auction_on === 1) {
+                        // 竞价 CPC: 出价驱动 boost(读物化 mat_boost; mat_rank 非空=当前在投赢家)
+                        $query = $query->orderByRaw("(" . $nz_comp_base . " + COALESCE((SELECT MAX(nz_ad.mat_boost) FROM advertisements nz_ad WHERE nz_ad.restaurant_id = restaurants.id AND nz_ad.pricing_model = 'cpc' AND nz_ad.mat_rank IS NOT NULL AND nz_ad.status = 'approved' AND DATE(nz_ad.start_date) <= ? AND DATE(nz_ad.end_date) >= ?), 0)) DESC", [$nz_today, $nz_today]);
                     } else {
-                        $query = $query->orderByRaw("(" . $nz_comp_base . ") DESC");
+                        // 按天 CPT(原路径, 不动): is_paid EXISTS 二值加权
+                        $nz_ad_boost = (float) (\App\Models\BusinessSetting::where('key', 'nezha_ad_boost_weight')->first()?->value ?? 0);
+                        $nz_ad_boost = max(0, min($nz_ad_boost, 1.0));
+                        if ($nz_ad_boost > 0) {
+                            $query = $query->orderByRaw("(" . $nz_comp_base . " + ? * EXISTS(SELECT 1 FROM advertisements nz_ad WHERE nz_ad.restaurant_id = restaurants.id AND nz_ad.is_paid = 1 AND nz_ad.status = 'approved' AND DATE(nz_ad.start_date) <= ? AND DATE(nz_ad.end_date) >= ?)) DESC", [$nz_ad_boost, $nz_today, $nz_today]);
+                        } else {
+                            $query = $query->orderByRaw("(" . $nz_comp_base . ") DESC");
+                        }
                     }
                 } else {
                     // 其它筛选(销量popular/好评率top_rated/距离near_by/delivery等)各有自己的主排序; 默认块这里只补订单量做稳定并列项, 不套综合分(否则销量等会被综合分打破并列,看起来与综合排序雷同)。

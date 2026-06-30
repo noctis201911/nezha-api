@@ -127,6 +127,12 @@ return Application::configure(basePath: dirname(__DIR__))
         //   L2 资金, 流水类型 advertisement_fee; 总开关 nezha_ad_billing_status(默认0关, 关时命令直接返回零扣费)。
         //   幂等(paid_at IS NULL 防重闸+事务内 lockForUpdate), 每小时跑一次, 起始日到达后尽快扣费; 余额不足跳过并提醒充值。
         $schedule->command('nezha:charge-ad-on-start')->hourly()->withoutOverlapping();
+        // 哪吒广告竞价 T2: 近实时物化竞价(eCPM=出价×质量分,首价). 每 5 分钟重算各广告位赢家/排名/综合分加成,
+        //   物化进 advertisements.mat_*; 顾客端排序/广告位读物化(O(1)), 不在每请求实时跑竞价 → 保住缓存、不抬 P99。
+        //   总开关 nezha_ad_auction_status(默认0关, 关时命令清空物化并返回, 排序退化到现行 CPT)。
+        //   间隔意图 = nezha_ad_recompute_min(默认5); 改间隔需同步改这里(DB-in-bootstrap 会拖垮 artisan, 故固定档)。
+        $schedule->command('nezha:recompute-ad-auction')->everyFiveMinutes()->withoutOverlapping();
+
 
         // 哪吒 B方案 商家逾期未退款兜底: 对 pending_merchant_refund 超过阈值天数仍未退的留痕施加非资金约束
         //   (记风控 refund_overdue / 催办商家 / 告警运营; 停接单由运营后台手动)。
