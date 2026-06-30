@@ -733,12 +733,22 @@
 让某家店在手机上即时收到新订单（最稳的商家提醒渠道，独立于网页 / App 推送）：
 1. 让商家用手机 Telegram 搜索并打开机器人 **&#64;Nz_order_bot**，点「开始 / Start」，随便发一句（如「你好」）。
 2. 后台进该餐厅：左侧「餐厅」→ 打开餐厅 →「**设置**」标签 → 找到「**Telegram 接单提醒**」卡片。
-3. 点「**查看最近联系机器人的会话**」→ 列出刚给机器人发过消息的会话及其 chat id → 点对应那条的「**填入**」（或手动把 chat id 粘进输入框）。
+3. 在卡片的「**发码绑定**」处会显示一个验证码——让商家用手机在 Telegram 里把这串验证码发给机器人，几秒后系统**自动**把该会话绑到这家店；点「**检测**」刷新即可看到「✓ 已绑定」（也可手动把 chat id 直接粘进输入框）。〔2026-07-01 起改为发码自动绑，替代旧的「查看最近会话」〕
 4. 点「保存」。完成。之后该店每来一笔新订单（pending / 确认），机器人私聊推一张卡片：单号 / 类型 / 合计 / 商品 / 时间。
 - 留空 = 不发；每笔订单只推一次（已去重）。
 - 群发：把机器人拉进店员群、填该群的 chat id（负数）即可，全店都能收到。
-- 目前仅平台运营在后台设置；商家端自助绑定后续可做。
-- 实现：`Helpers::sendTelegramOrderAlert()`（发送）+ 后台「设置」页卡片（`admin.restaurant.update-telegram` / `admin.restaurant.telegram-recent-chats`）+ 字段 `restaurants.telegram_chat_id`。
+- 商家也可在「商家后台 → 通知设置」**自助发码绑定**（推荐）；本页供平台运营代绑或排查。
+- 🔴 **绑定已改「发码自动绑」〔2026-07-01〕**：因 Telegram 双向客服已切 webhook 模式（见 9.8.1），旧的 getUpdates「查看最近会话」检测**已停用**；超管端与商家端均改为发码 → 商家把码发给机器人 → 机器人自动绑。
+- 实现：`Helpers::sendTelegramOrderAlert()`（发送）+ 后台「设置」页卡片（`admin.restaurant.update-telegram` / 发码状态 `admin.restaurant.telegram-bind-status`）+ webhook 自动消费绑定码（`TelegramWebhookController` + `NezhaCsAssistant::consumeBindCode`）+ 字段 `restaurants.telegram_chat_id`。
+
+### 9.8.1 Telegram 双向客服：超管在 TG 直接回复「转人工」顾客〔2026-07-01 上线〕
+
+顾客在客服「小哪」里明确要求**转人工**后（在线时段=中国 9:00–18:00 = 埃里温 5:00–14:00），系统会：
+1. 把转人工告警 + 顾客近期对话（已**去标识**：屏蔽电话/邮箱/钱包）推到**超管 Telegram**（`nezha_cs_handoff_chat_id`，未配则回退风控 admin chat `nezha_risk_admin_chat_id`）；人工接管静默期内，顾客每条新消息也会续推过来。
+2. 你**直接在 Telegram 里「回复」那条消息**（长按 → 回复 / 引用回复），内容就以「客服」身份回写进顾客的客服会话 + 推送顾客 App——**无需登录后台**。
+- 在线时段、欢迎语、转人工告警 chat_id 在「**客服设置**」页（聊天设置）配置。
+- ⏰ **注意值守时段**：转人工只在在线时段接真人；非在线时段系统会告知顾客时间 + 让其留言，AI 先帮。请在值守时段盯住超管 TG，否则顾客转人工后没人接。
+- 实现：入站 webhook `api/v1/nezha/telegram-webhook`（secret 校验）按 `nezha_cs_tg_map` 映射找回会话 → `NezhaCsAssistant::postHumanReply`。**回滚**：`deleteWebhook` + 删 `nezha_cs_tg_webhook_secret` 设置 + 清 `business_settings_all_data` 缓存即停整套入站双向。
 
 ### 9.9 超管后台订单提醒（不报新订单，只报「异常订单」）〔2026-06-22〕
 
