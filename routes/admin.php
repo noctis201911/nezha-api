@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AccountTransactionController;
 use App\Http\Controllers\Admin\NezhaDepositController;
+use App\Http\Controllers\Admin\NezhaConsolidationController;
 use App\Http\Controllers\Admin\AddonCategoryController;
 use App\Http\Controllers\Admin\AddOnController;
 use App\Http\Controllers\Admin\AdminEarningReportController;
@@ -135,7 +136,14 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
         });
 
         // Route::resource('provide-deliveryman-earnings', ProvideDMEarningController::class)->middleware('module:provide_dm_earning');
-        Route::middleware('module:provide_dm_earning')->group(function () {
+        // 哪吒 平台集运申报: 需求汇总
+        Route::group(['prefix' => 'nezha-consolidation', 'as' => 'nezha-consolidation.'], function () {
+            Route::get('/', [NezhaConsolidationController::class, 'index'])->name('index');
+            Route::get('export', [NezhaConsolidationController::class, 'export'])->name('export');
+            Route::get('{id}', [NezhaConsolidationController::class, 'show'])->name('show');
+        });
+
+Route::middleware('module:provide_dm_earning')->group(function () {
             Route::get('provide-deliveryman-earnings', [ProvideDMEarningController::class, 'index'])->name('provide-deliveryman-earnings.index');
             Route::post('provide-deliveryman-earnings', [ProvideDMEarningController::class, 'store'])->name('provide-deliveryman-earnings.store');
             Route::get('provide-deliveryman-earnings/{id}', [ProvideDMEarningController::class, 'show'])->name('provide-deliveryman-earnings.show');

@@ -69,7 +69,15 @@
                     </li>
                     @endif
 
-                    <!-- 哪吒 商家助手 -->
+                    <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/nezha-consolidation*')?'active':''}}">
+                        <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{route('vendor.nezha-consolidation.index')}}" title="{{translate('平台集运申报')}}">
+                            <i class="tio-shipping nav-icon"></i>
+                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{translate('平台集运申报')}}</span>
+                            <span class="badge badge-soft-primary ml-1">{{translate('新')}}</span>
+                        </a>
+                    </li>
+
+<!-- 哪吒 商家助手 -->
                     <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/nezha-assistant*')?'active':''}}">
                         <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{route('vendor.nezha-assistant.index')}}" title="{{translate('哪吒商家助手')}}">
                             <i class="tio-chat nav-icon"></i>

@@ -27,6 +27,7 @@ use App\Http\Controllers\Vendor\SubscriptionController;
 use App\Http\Controllers\Vendor\VendorTaxReportController;
 use App\Http\Controllers\Vendor\WalletController;
 use App\Http\Controllers\Vendor\NezhaDepositController;
+use App\Http\Controllers\Vendor\NezhaConsolidationController;
 use App\Http\Controllers\Vendor\WalletMethodController;
 
 Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
@@ -216,7 +217,13 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
             Route::post('update-alert', [NezhaDepositController::class, 'update_alert'])->name('update-alert');
         });
 
-        Route::group(['prefix' => 'withdraw-method', 'as' => 'wallet-method.', 'middleware' => ['module:wallet_method','subscription:wallet']], function () {
+        // 哪吒 平台集运申报: 商家需求登记表
+        Route::group(['prefix' => 'nezha-consolidation', 'as' => 'nezha-consolidation.'], function () {
+            Route::get('/', [NezhaConsolidationController::class, 'index'])->name('index');
+            Route::post('store', [NezhaConsolidationController::class, 'store'])->name('store');
+        });
+
+Route::group(['prefix' => 'withdraw-method', 'as' => 'wallet-method.', 'middleware' => ['module:wallet_method','subscription:wallet']], function () {
             Route::get('/', [WalletMethodController::class, 'index'])->name('index');
             Route::post('store/', [WalletMethodController::class, 'store'])->name('store');
             Route::get('default/{id}/{default}', [WalletMethodController::class, 'default'])->name('default');

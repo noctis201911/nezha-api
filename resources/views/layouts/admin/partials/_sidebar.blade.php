@@ -1587,7 +1587,14 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                             </a>
                         </li>
                     @endif
-                    <!-- withdraw -->
+                    <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-consolidation*') ? 'active' : '' }}">
+                        <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{ route('admin.nezha-consolidation.index') }}" title="{{ translate('平台集运申报') }}">
+                            <i class="tio-shipping nav-icon"></i>
+                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('平台集运申报') }}</span>
+                        </a>
+                    </li>
+
+<!-- withdraw -->
                     {{-- 哪吒 B方案隐藏「提现列表」: 平台不向商家打款(INVARIANTS L1-1/L1-5,提现/打款腿已拔除),withdraw_requests 恒空且审批不触发真实打款,此为StackFood残留菜单,避免误导运营。恢复直付台账时把 false 改回即可;路由 admin.restaurant.withdraw_list 未动 --}}
                     @if (false && Helpers::module_permission_check('withdraw_list'))
                         <li
