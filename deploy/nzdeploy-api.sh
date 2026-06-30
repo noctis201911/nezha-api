@@ -51,6 +51,22 @@ fi
 (cd "$REL" && sudo -u www -H php artisan migrate --force >>"$LOG" 2>&1)
 (cd "$REL" && sudo -u www -H php artisan generate:admin-route >>"$LOG" 2>&1; sudo -u www -H php artisan generate:restaurant-route >>"$LOG" 2>&1)
 
+# 哪吒[blade 编译探针 2026-06-26]: 切 current 前, 对本次相对上个 release 改动的 blade 做真实编译检查。
+# @php 误编译 / 源码多括号 typo 等畸形 php -l 测不出, FPM include 编译产物时才 fatal → 整页 500。
+# 失败则不切 current, 线上仍跑旧 release(零 500 窗口)。git/PREV_SHA 异常时降级放行(2>/dev/null→空)。详见 nzcheck-blade.php。
+if [ -n "$CUR" ]; then
+    PREV_SHA=$(basename "$CUR" | sed 's/.*-//')
+    CHANGED_BLADE=$(git -C "$SRC" diff --name-only "$PREV_SHA" "$SHA" -- '*.blade.php' 2>/dev/null)
+    if [ -n "$CHANGED_BLADE" ]; then
+        if ! sudo -u www -H php "$DEPLOY/nzcheck-blade.php" "$REL" $CHANGED_BLADE >>"$LOG" 2>&1; then
+            echo "[deploy] FATAL: blade 编译探针失败 -- 不切 current, 线上仍跑旧 release:"
+            grep 'blade-probe' "$LOG" | tail -8
+            exit 1
+        fi
+        echo "[deploy] blade-probe OK ($(echo "$CHANGED_BLADE" | wc -l) changed blade)"
+    fi
+fi
+
 PREV_TARGET="$CUR"
 ln -sfn "$REL" "$DEPLOY/current"
 [ -n "$PREV_TARGET" ] && ln -sfn "$PREV_TARGET" "$DEPLOY/previous"

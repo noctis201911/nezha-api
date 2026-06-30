@@ -35,12 +35,18 @@ use MatanYadaev\EloquentSpatial\Objects\Point;
 class ConfigController extends Controller
 {
     private $map_api_key;
+    private $places_key;
     use AddonHelper;
 
     function __construct()
     {
         $map_api_key_server = BusinessSetting::where(['key' => 'map_api_key_server'])->first()?->value ?? null;
         $this->map_api_key = $map_api_key_server;
+        // 哪吒[Places key 2026-06-28]: server key(map_api_key_server)的「API 限制」没放 Places,
+        // 但浏览器 key(map_api_key, 域名限 nezha.am)放了。后端调 Places(autocomplete/details)
+        // 改用浏览器 key + 带 Referer: https://nezha.am/ 满足其域名限制 → 搜索可用,无需改 Console。
+        // geocode/distance 仍用 server key(它们没被拦)。
+        $this->places_key = BusinessSetting::where(['key' => 'map_api_key'])->first()?->value ?? $map_api_key_server;
     }
 
     public function configuration()
@@ -528,7 +534,7 @@ class ConfigController extends Controller
         }
 
 
-        $apiKey = $this->map_api_key;
+        $apiKey = $this->places_key;
         $url = "https://places.googleapis.com/v1/places:autocomplete";
 
         $data = [
@@ -539,7 +545,7 @@ class ConfigController extends Controller
         $headers = [
             "Content-Type: application/json",
             "X-Goog-Api-Key: $apiKey",
-
+            "Referer: https://nezha.am/",
         ];
 
         $ch = curl_init($url);
@@ -620,7 +626,7 @@ class ConfigController extends Controller
         }
 
 
-        $apiKey = $this->map_api_key;
+        $apiKey = $this->places_key;
         $url = 'https://places.googleapis.com/v1/places/' . $request['placeid'];
 
         // Initialize cURL session
@@ -633,6 +639,7 @@ class ConfigController extends Controller
             'Content-Type: application/json',
             'X-Goog-Api-Key: ' . $apiKey,
             'X-Goog-FieldMask: id,displayName,formattedAddress,location',
+            'Referer: https://nezha.am/',
         ]);
 
         // Execute the request and get the response
