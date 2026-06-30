@@ -122,7 +122,8 @@ class LoginController extends Controller
             $password = Crypt::decryptString(Cookie::get('p_token'));
         }
 
-        return view('auth.login', compact('custome_recaptcha','email','password','role','site_direction','locale'));
+        $loginTemplate = ($role === 'admin') ? 'auth.admin-login' : 'auth.login';
+        return view($loginTemplate, compact('custome_recaptcha','email','password','role','site_direction','locale'));
     }
 
     public function login_attemp($role,$email ,$password, $ip, $remember = false){
