@@ -59,6 +59,7 @@ class EmployeeController extends Controller
         $employee->role_id = $request->role_id;
         $employee->password = bcrypt($request->password);
         $employee->image = Helpers::upload(dir:'admin/', format:'png', image: $request->file('image'));
+        $employee->employee_code = $this->nextEmployeeCode(AdminRole::find($request->role_id));
         $employee->save();
 
         // SEC-3 审计: 员工新增 (🔴 不记密码)
@@ -165,6 +166,9 @@ class EmployeeController extends Controller
         $employee->role_id = $request->role_id;
         $employee->password = $pass;
         $employee->image = $e['image'];
+        if (empty($employee->employee_code)) {
+            $employee->employee_code = $this->nextEmployeeCode(AdminRole::find($request->role_id));
+        }
         $employee->save();
 
         // SEC-3 审计: 员工变更 (password_changed 只记布尔, 🔴 不记明文)
@@ -221,6 +225,19 @@ class EmployeeController extends Controller
     //     }
     //     return (new FastExcel($withdraw_request))->download('Employee.xlsx');
     // }
+
+    // 哪吒: 按岗位前缀生成职员编号 (前缀-三位序号, 如 CS-001); 前缀取自角色 code_prefix, 无则 EMP。创建后固定不随改岗位变动。
+    private function nextEmployeeCode($role)
+    {
+        $prefix = ($role && $role->code_prefix) ? strtoupper(trim($role->code_prefix)) : 'EMP';
+        $max = 0;
+        foreach (Admin::where('employee_code', 'like', $prefix . '-%')->pluck('employee_code') as $code) {
+            if (preg_match('/-(\d+)$/', (string) $code, $m)) {
+                $max = max($max, (int) $m[1]);
+            }
+        }
+        return $prefix . '-' . str_pad((string) ($max + 1), 3, '0', STR_PAD_LEFT);
+    }
 
     function employee_list_export(Request $request)
     {

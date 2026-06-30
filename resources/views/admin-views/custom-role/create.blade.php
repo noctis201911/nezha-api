@@ -65,6 +65,15 @@
                     </div>
                 </div>
 
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label input-label" for="code_prefix">岗位编号前缀 <span class="input-label-secondary">（用于自动生成职员编号，如 CS → CS-001；可留空）</span></label>
+                            <input type="text" name="code_prefix" id="code_prefix" class="form-control" value="{{ old('code_prefix') }}" placeholder="CS" maxlength="10" style="text-transform:uppercase">
+                        </div>
+                    </div>
+                </div>
+
                 <div class="d-flex">
                     <h5 class="input-label m-0 text-capitalize">{{translate('messages.module_permission')}} : </h5>
                     <div class="check-item pb-0 w-auto">

@@ -79,6 +79,7 @@
                             <thead class="thead-light">
                             <tr>
                                 <th>{{ translate('messages.sl') }}</th>
+                                <th>编号</th>
                                 <th>{{translate('Employee Name')}}</th>
                                 <th>{{translate('messages.phone')}}</th>
                                 <th>{{translate('messages.email')}}</th>
@@ -94,6 +95,7 @@
                             @foreach($em as $k=>$e)
                                 <tr>
                                     <th scope="row">{{$k+$em->firstItem()}}</th>
+                                    <td><span class="badge badge-soft-secondary">{{ $e['employee_code'] ?? '—' }}</span></td>
                                     <td class="text-capitalize">{{$e['f_name']}} {{$e['l_name']}}</td>
                                     <td>{{$e['phone']}}</td>
                                     <td >

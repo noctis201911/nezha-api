@@ -85,6 +85,11 @@
 
 
 
+                        <div class="form-group">
+                            <label class="form-label input-label" for="code_prefix">岗位编号前缀 <span class="input-label-secondary">（用于自动生成职员编号，如 CS → CS-001；可留空）</span></label>
+                            <input type="text" name="code_prefix" id="code_prefix" class="form-control" value="{{ $role->code_prefix ?? '' }}" placeholder="CS" maxlength="10" style="text-transform:uppercase">
+                        </div>
+                        <hr>
                         <label class="input-label " for="name">{{translate('messages.module_permission')}} : </label>
                         <hr>
                         <div class="row">

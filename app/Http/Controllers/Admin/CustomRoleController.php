@@ -21,6 +21,7 @@ class CustomRoleController extends Controller
     {
         $request->validate([
             'name' => 'required|unique:admin_roles|max:191',
+            'code_prefix' => 'nullable|alpha|max:10|unique:admin_roles,code_prefix',
             'modules'=>'required|array|min:1'
         ],[
             'name.required'=>translate('messages.Role name is required!'),
@@ -33,6 +34,7 @@ class CustomRoleController extends Controller
             }
 
         $role = new AdminRole();
+        $role->code_prefix = $request->filled('code_prefix') ? strtoupper(trim($request->code_prefix)) : null;
         $role->name = $request->name[array_search('default', $request->lang)];
         $role->modules = json_encode($request['modules']);
         $role->status = 1;
@@ -81,7 +83,7 @@ class CustomRoleController extends Controller
         {
             return view('errors.404');
         }
-        $role=AdminRole::withoutGlobalScope('translate')->with('translations')->where(['id'=>$id])->first(['id','name','modules']);
+        $role=AdminRole::withoutGlobalScope('translate')->with('translations')->where(['id'=>$id])->first(['id','name','modules','code_prefix']);
         return view('admin-views.custom-role.edit',compact('role'));
     }
 
@@ -93,6 +95,7 @@ class CustomRoleController extends Controller
         }
         $request->validate([
             'name' => 'required|max:191|unique:admin_roles,name,'.$id,
+            'code_prefix' => 'nullable|alpha|max:10|unique:admin_roles,code_prefix,'.$id,
             'modules'=>'required|array|min:1'
         ],[
             'name.required'=>translate('messages.Role name is required!'),
@@ -104,6 +107,7 @@ class CustomRoleController extends Controller
             }
 
         $role = AdminRole::find($id);
+        $role->code_prefix = $request->filled('code_prefix') ? strtoupper(trim($request->code_prefix)) : null;
         // SEC-3 审计: 改名/改 modules 前先快照旧值
         $auditBefore = [
             'name'    => $role->name,
