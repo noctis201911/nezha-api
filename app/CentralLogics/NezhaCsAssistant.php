@@ -290,16 +290,41 @@ class NezhaCsAssistant
         }
     }
 
+    // 点2: 近 8 条对话(脱敏+截断)随告警发给超管 Telegram, 让超管接手前先看到顾客之前在平台发了什么。
+    protected static function recentHistoryForTelegram(Conversation $conversation, $customerUser): string
+    {
+        try {
+            $custInfoId = UserInfo::where('user_id', $customerUser->id)->value('id');
+            $msgs = Message::where('conversation_id', $conversation->id)->latest('id')->limit(8)->get()->reverse();
+            $lines = [];
+            foreach ($msgs as $m) {
+                $body = trim((string) $m->message);
+                if ($body === '') {
+                    continue;
+                }
+                $who = ((int) $m->sender_id === (int) $custInfoId) ? '顾客' : '客服';
+                $lines[] = $who . '：' . self::redactPii(mb_substr($body, 0, 100));
+            }
+            return $lines ? "\n\n最近对话(脱敏)：\n" . implode("\n", $lines) : '';
+        } catch (\Throwable $e) {
+            return '';
+        }
+    }
+
     protected static function notifyHandoffToAdmin(Conversation $conversation, $customerUser, string $incomingText, bool $online): void
     {
         try {
             $order = self::relevantOrder($customerUser);
             $token = $order->OrderReference->token_number ?? null;
             $when = $online ? '🟢 在线时段 · 请尽快接入' : '🌙 非在线时段 · 顾客留言待跟进';
-            $excerpt = self::redactPii(mb_substr(trim($incomingText), 0, 80));
+            $history = self::recentHistoryForTelegram($conversation, $customerUser);
+            if ($history === '') {
+                $history = "\n顾客说：" . self::redactPii(mb_substr(trim($incomingText), 0, 100));
+            }
             $text = "👤 哪吒人工客服请求\n{$when}\n会话ID：{$conversation->id}"
                 . ($token ? "\n相关取餐号：{$token}" : '')
-                . "\n顾客说：{$excerpt}\n—— 请登录后台『客服会话』回复顾客";
+                . $history
+                . "\n\n—— 请登录后台『客服会话』回复顾客";
             Helpers::sendTelegramCsHandoff($text);
         } catch (\Throwable $e) {
             Log::warning('nezha cs handoff notify failed: ' . $e->getMessage());
