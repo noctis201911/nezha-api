@@ -6215,4 +6215,5 @@
   'Express Delivery Charge' => '极速配送费',
   'Ratting' => '评分',
   'ratting' => '评分',
+  'Incomplete_profile' => '资料未完善',
 );
