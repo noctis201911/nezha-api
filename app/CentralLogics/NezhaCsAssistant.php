@@ -46,6 +46,7 @@ class NezhaCsAssistant
 
         // 人工接管中（在线转人工后静默 30 分钟，避免 AI 与真人重复回复；无人回则自动恢复，防晾着顾客）。
         if (\Illuminate\Support\Facades\Cache::get('nezha_cs_human:' . $conversation->id)) {
+            self::pushCustomerMsgToAdmin($conversation, $customerUser, $text);
             return;
         }
 
@@ -290,6 +291,38 @@ class NezhaCsAssistant
         }
     }
 
+    // 阶段D: 记 TG消息↔会话 映射，供超管在 TG 里"回复"时按 reply_to 找回会话。
+    protected static function mapTgToConversation($chatId, $tgMessageId, $conversationId, string $scope = 'admin'): void
+    {
+        try {
+            DB::table('nezha_cs_tg_map')->insert([
+                'tg_chat_id' => (string) $chatId,
+                'tg_message_id' => (string) $tgMessageId,
+                'conversation_id' => $conversationId,
+                'scope' => $scope,
+                'created_at' => Carbon::now(),
+            ]);
+        } catch (\Throwable $e) {
+        }
+    }
+
+    // 阶段D: 人工接管期间，把顾客每条新消息推到超管 TG(带映射)，让超管在 TG 里看到并能回复。
+    protected static function pushCustomerMsgToAdmin(Conversation $conversation, $customerUser, string $text): void
+    {
+        try {
+            $chatId = Helpers::csHandoffChatId();
+            if (!$chatId) {
+                return;
+            }
+            $body = "💬 顾客（会话 {$conversation->id}）：" . self::redactPii(mb_substr(trim($text), 0, 300));
+            $mid = Helpers::sendTelegramRaw($chatId, $body);
+            if ($mid) {
+                self::mapTgToConversation($chatId, $mid, $conversation->id, 'admin');
+            }
+        } catch (\Throwable $e) {
+        }
+    }
+
     // 点2: 近 8 条对话(脱敏+截断)随告警发给超管 Telegram, 让超管接手前先看到顾客之前在平台发了什么。
     protected static function recentHistoryForTelegram(Conversation $conversation, $customerUser): string
     {
@@ -323,9 +356,14 @@ class NezhaCsAssistant
             }
             $text = "👤 哪吒人工客服请求\n{$when}\n会话ID：{$conversation->id}"
                 . ($token ? "\n相关取餐号：{$token}" : '')
-                . $history
-                . "\n\n—— 请登录后台『客服会话』回复顾客";
-            Helpers::sendTelegramCsHandoff($text);
+                . $history;
+            $chatId = Helpers::csHandoffChatId();
+            if ($chatId) {
+                $mid = Helpers::sendTelegramRaw($chatId, $text);
+                if ($mid) {
+                    self::mapTgToConversation($chatId, $mid, $conversation->id, 'admin');
+                }
+            }
         } catch (\Throwable $e) {
             Log::warning('nezha cs handoff notify failed: ' . $e->getMessage());
         }

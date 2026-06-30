@@ -2173,6 +2173,16 @@ class Helpers
         }
     }
 
+    // 哪吒 阶段D: 解析转人工/双向用的超管 chat_id(优先 nezha_cs_handoff_chat_id, 回退风控 admin chat)。
+    public static function csHandoffChatId()
+    {
+        $chatId = self::get_business_settings('nezha_cs_handoff_chat_id', false);
+        if (!$chatId) {
+            $chatId = self::get_business_settings('nezha_risk_admin_chat_id', false);
+        }
+        return $chatId ?: null;
+    }
+
     // 哪吒 阶段D: 给任意 chat 发消息(可作为对某条的回复)。复用 telegram_bot_token。返回 Telegram 的 message_id(失败 null)。
     public static function sendTelegramRaw($chatId, $text, $replyToMessageId = null)
     {
