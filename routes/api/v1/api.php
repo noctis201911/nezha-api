@@ -83,7 +83,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
 
     Route::group(['prefix' => 'auth', 'namespace' => 'Auth', 'middleware' => 'rateLimiter'], function () {
 
-        Route::post('sign-up', [CustomerAuthController::class, 'register'])->name('register')->middleware(['throttle:5,1', 'throttle:30,60']); // 哪吒[防脚本注册 2026-07-01]: 每IP注册限流(5/分钟突发+30/小时), reCAPTCHA落地前interim; CGNAT共享IP需复评
+        Route::post('sign-up', [CustomerAuthController::class, 'register'])->name('register')->middleware('throttle:signup'); // 哪吒[防脚本注册 2026-07-01]: 每IP注册限流(5/分钟突发+30/小时), reCAPTCHA落地前interim; CGNAT共享IP需复评
         Route::post('login', [CustomerAuthController::class, 'login'])->name('login');
         Route::post('verify-phone', [CustomerAuthController::class, 'verify_phone_or_email']);
         Route::post('update-info', [CustomerAuthController::class, 'update_info']);
