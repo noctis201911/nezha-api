@@ -338,6 +338,7 @@ Route::middleware('module:provide_dm_earning')->group(function () {
                 Route::post('update-telegram/{restaurant}', [VendorController::class, 'updateTelegramChatId'])->name('update-telegram');
                 Route::post('update-timeout-notify/{restaurant}', [VendorController::class, 'updateTimeoutNotify'])->name('update-timeout-notify');
                 Route::get('telegram-recent-chats', [VendorController::class, 'telegramRecentChats'])->name('telegram-recent-chats');
+                Route::get('telegram-bind-status/{restaurant}', [VendorController::class, 'telegramBindStatus'])->name('telegram-bind-status');
                 Route::delete('clear-discount/{restaurant}', [VendorController::class, 'cleardiscount'])->name('clear-discount');
                 Route::get('view/{restaurant}/{tab?}/{sub_tab?}', [VendorController::class, 'view'])->name('view');
                 Route::get('pending/list', [VendorController::class, 'pending'])->name('pending');

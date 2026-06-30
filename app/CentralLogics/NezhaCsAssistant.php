@@ -306,6 +306,55 @@ class NezhaCsAssistant
         }
     }
 
+    // 阶段D-③: 记住绑定码(反查 码→目标), 供入站 webhook 在 setWebhook 激活后自动绑定。30分钟有效。
+    public static function rememberBindCode(string $code, string $type, $id): void
+    {
+        $code = strtoupper(trim($code));
+        if ($code === '') {
+            return;
+        }
+        \Illuminate\Support\Facades\Cache::put('nezha_tg_bind:' . $code, $type . ':' . $id, now()->addMinutes(30));
+    }
+
+    // 阶段D-③: webhook 收到消息正文 → 尝试当绑定码消费; 命中则完成绑定并返回店铺名(供回执)。
+    public static function consumeBindCode(string $text, $chatId): ?string
+    {
+        $key = 'nezha_tg_bind:' . strtoupper(trim($text));
+        $target = \Illuminate\Support\Facades\Cache::get($key);
+        if (!$target || !is_string($target)) {
+            return null;
+        }
+        [$type, $id] = array_pad(explode(':', $target, 2), 2, null);
+        if ($type === 'restaurant' && $id) {
+            \Illuminate\Support\Facades\Cache::forget($key);
+            return self::bindRestaurantChat((int) $id, $chatId);
+        }
+        return null;
+    }
+
+    // 阶段D-③: 绑定逻辑单一来源(webhook自动绑 / 旧getUpdates检测 共用)。返回店铺名(失败 null)。
+    public static function bindRestaurantChat($restaurantId, $chatId): ?string
+    {
+        $r = Restaurant::find($restaurantId);
+        if (!$r) {
+            return null;
+        }
+        $r->telegram_chat_id = (string) $chatId;
+        $r->timeout_notify_telegram = 1;
+        $r->nezha_alert_exempt = 0;
+        $r->save();
+        \Illuminate\Support\Facades\Cache::forget('nezha_tg_bind_code_' . $r->id);
+        return $r->name ?: ('#' . $r->id);
+    }
+
+    // 阶段D-④: webhook 激活后给推超管的消息加"回复本条"提示(未激活前返回空, 防死指引)。
+    protected static function tgReplyHint(): string
+    {
+        return Helpers::get_business_settings('nezha_cs_tg_webhook_secret', false)
+            ? "\n\n↩️ 回复本条即可回复顾客。"
+            : '';
+    }
+
     // 阶段D: 人工接管期间，把顾客每条新消息推到超管 TG(带映射)，让超管在 TG 里看到并能回复。
     protected static function pushCustomerMsgToAdmin(Conversation $conversation, $customerUser, string $text): void
     {
@@ -314,7 +363,7 @@ class NezhaCsAssistant
             if (!$chatId) {
                 return;
             }
-            $body = "💬 顾客（会话 {$conversation->id}）：" . self::redactPii(mb_substr(trim($text), 0, 300));
+            $body = "💬 顾客（会话 {$conversation->id}）：" . self::redactPii(mb_substr(trim($text), 0, 300)) . self::tgReplyHint();
             $mid = Helpers::sendTelegramRaw($chatId, $body);
             if ($mid) {
                 self::mapTgToConversation($chatId, $mid, $conversation->id, 'admin');
@@ -356,7 +405,7 @@ class NezhaCsAssistant
             }
             $text = "👤 哪吒人工客服请求\n{$when}\n会话ID：{$conversation->id}"
                 . ($token ? "\n相关取餐号：{$token}" : '')
-                . $history;
+                . $history . self::tgReplyHint();
             $chatId = Helpers::csHandoffChatId();
             if ($chatId) {
                 $mid = Helpers::sendTelegramRaw($chatId, $text);

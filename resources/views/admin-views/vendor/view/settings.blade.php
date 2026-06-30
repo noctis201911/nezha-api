@@ -55,9 +55,35 @@
                     </div>
                     <div class="col-sm-12 col-md-5">
                         <button type="submit" class="btn btn-primary">{{ translate('messages.save') }}</button>
+                        @unless($tgWebhookActive ?? false)
                         <button type="button" class="btn btn-outline-secondary" id="tg-recent-btn">查看最近联系机器人的会话</button>
+                        @endunless
                     </div>
                 </form>
+                @if($tgWebhookActive ?? false)
+                <div class="mt-3 small">
+                    <div class="text-muted mb-1">发码绑定：让商家在 Telegram 把下面验证码发给 <b>&#64;Nz_order_bot</b>，几秒后自动绑定，点「检测」刷新：</div>
+                    <code class="fs-14 fw-bold">{{ $tgBindCode ?? '' }}</code>
+                    <button type="button" class="btn btn-sm btn-primary ml-2" id="tg-bind-detect">检测</button>
+                    <span id="tg-bind-result" class="ml-2"></span>
+                </div>
+                <script>
+                    (function () {
+                        var btn = document.getElementById('tg-bind-detect'); if (!btn) return;
+                        btn.addEventListener('click', function () {
+                            var res = document.getElementById('tg-bind-result'); btn.disabled = true; res.textContent = '检测中…';
+                            fetch("{{ route('admin.restaurant.telegram-bind-status', [$restaurant->id]) }}", { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                                .then(function (r) { return r.json(); })
+                                .then(function (d) {
+                                    btn.disabled = false;
+                                    if (d.ok) { res.innerHTML = '<span class="text-success">✓ 已绑定 ' + d.chat_id + '</span>'; setTimeout(function () { location.reload(); }, 900); }
+                                    else { res.innerHTML = '<span class="text-danger">' + (d.msg || '还没检测到') + '</span>'; }
+                                })
+                                .catch(function () { btn.disabled = false; res.innerHTML = '<span class="text-danger">网络错误</span>'; });
+                        });
+                    })();
+                </script>
+                @else
                 <div id="tg-recent-box" class="mt-3 small" style="display:none;">
                     <div class="text-muted mb-1">最近给 <b>&#64;Nz_order_bot</b> 发过消息的会话（点「填入」把 chat id 写进上面输入框）：</div>
                     <ul id="tg-recent-list" class="list-unstyled mb-0"></ul>
@@ -92,6 +118,7 @@
                         });
                     })();
                 </script>
+                @endif
             </div>
         </div>
         <div class="card mb-3">

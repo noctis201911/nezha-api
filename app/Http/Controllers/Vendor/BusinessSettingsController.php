@@ -68,6 +68,7 @@ class BusinessSettingsController extends Controller
                 $tgCode = 'NZ' . $restaurant->id . '-' . strtoupper(\Illuminate\Support\Str::random(5));
                 \Illuminate\Support\Facades\Cache::put($codeKey, $tgCode, now()->addMinutes(30));
             }
+            \App\CentralLogics\NezhaCsAssistant::rememberBindCode($tgCode, 'restaurant', $restaurant->id);
         }
 
         return view('vendor-views.business-settings.notification-index', compact('business_name', 'data', 'restaurant', 'botUser', 'tgCode'));
@@ -115,6 +116,14 @@ class BusinessSettingsController extends Controller
         $restaurant = Restaurant::find(Helpers::get_restaurant_id());
         if (!$restaurant) {
             return response()->json(['ok' => false, 'msg' => '店铺不存在']);
+        }
+        // 阶段D-③: webhook 已激活 → 绑定由入站 webhook 自动完成, 这里只查状态(不再 getUpdates)。
+        if (Helpers::get_business_settings('nezha_cs_tg_webhook_secret', false)) {
+            $restaurant->refresh();
+            if ($restaurant->telegram_chat_id) {
+                return response()->json(['ok' => true, 'chat_id' => (string) $restaurant->telegram_chat_id, 'msg' => 'Telegram 已连接成功']);
+            }
+            return response()->json(['ok' => false, 'msg' => '还没检测到。请确认已把验证码发给机器人（发送后会自动绑定，约几秒），再点一次。']);
         }
         $code = \Illuminate\Support\Facades\Cache::get('nezha_tg_bind_code_' . $restaurant->id);
         if (!$code) {

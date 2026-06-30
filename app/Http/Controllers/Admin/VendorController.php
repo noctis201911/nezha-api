@@ -771,7 +771,15 @@ class VendorController extends Controller
             $wallet->save();
         }
         if ($tab == 'settings') {
-            return view('admin-views.vendor.view.settings', compact('restaurant'));
+            // 阶段D-③: Telegram 发码绑定——为该店发码; 商家把码发给机器人后 webhook 自动绑定(激活后), 超管点检测查状态。
+            $tgBindCode = \Illuminate\Support\Facades\Cache::get('nezha_tg_bind_code_' . $restaurant->id);
+            if (!$tgBindCode) {
+                $tgBindCode = 'NZ' . $restaurant->id . '-' . strtoupper(\Illuminate\Support\Str::random(5));
+                \Illuminate\Support\Facades\Cache::put('nezha_tg_bind_code_' . $restaurant->id, $tgBindCode, now()->addMinutes(30));
+            }
+            \App\CentralLogics\NezhaCsAssistant::rememberBindCode($tgBindCode, 'restaurant', $restaurant->id);
+            $tgWebhookActive = (bool) \App\CentralLogics\Helpers::get_business_settings('nezha_cs_tg_webhook_secret', false);
+            return view('admin-views.vendor.view.settings', compact('restaurant', 'tgBindCode', 'tgWebhookActive'));
         } elseif ($tab == 'payment_info') {
             // 哪吒外卖 B方案: 收款信息(商家本人收款码/USDT地址) + 预存佣金概览/充值/流水
             $depositMode = \App\Http\Controllers\Api\V1\OrderController::nezha_commission_active($restaurant) ? 1 : 0;
@@ -1384,6 +1392,16 @@ class VendorController extends Controller
         }
 
         return response()->json(['ok' => true, 'chats' => $list, 'bot' => '@Nz_order_bot']);
+    }
+
+    // 阶段D-③: 超管侧查某店 Telegram 绑定状态(发码绑定后用; webhook 自动绑, 这里只读 DB)。
+    public function telegramBindStatus(Restaurant $restaurant, Request $request)
+    {
+        $restaurant->refresh();
+        if ($restaurant->telegram_chat_id) {
+            return response()->json(['ok' => true, 'chat_id' => (string) $restaurant->telegram_chat_id, 'msg' => '已绑定']);
+        }
+        return response()->json(['ok' => false, 'msg' => '还没检测到。让商家把验证码发给 @Nz_order_bot（发送后自动绑定），再点一次检测。']);
     }
 
     public function updateRestaurantSettings(Restaurant $restaurant, Request $request)

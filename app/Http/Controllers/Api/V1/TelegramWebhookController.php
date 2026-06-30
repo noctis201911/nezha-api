@@ -54,6 +54,13 @@ class TelegramWebhookController extends Controller
                     }
                 }
             }
+            // 阶段D-③: 非回复的纯文本 → 尝试当绑定码(发码自动绑)
+            elseif ($chatId !== null && $text !== '') {
+                $name = NezhaCsAssistant::consumeBindCode($text, $chatId);
+                if ($name) {
+                    Helpers::sendTelegramRaw((string) $chatId, "✅ 已绑定到店铺「{$name}」，今后该店的新订单 / 超时提醒会发送到这里。", $msg['message_id'] ?? null);
+                }
+            }
         } catch (\Throwable $e) {
             Log::warning('nezha tg webhook: ' . $e->getMessage());
         }
