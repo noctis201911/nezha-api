@@ -81,6 +81,8 @@ class VendorOrderController extends Controller
         if (!$zone) {
             return response()->json(['errors' =>  'order_id', 'message' => translate('out_of_coverage')], 403);
         }
+        // 哪吒[任务3]: 编辑配送地址弹窗无 delivery_note 输入, 重建快照会擦掉地址常备备注 → 先从原快照保留
+        $nz_prev_addr = $order->delivery_address ? json_decode($order->delivery_address, true) : [];
         $address = [
             'contact_person_name' => $request->contact_person_name,
             'contact_person_number' => $request->contact_person_number,
@@ -91,6 +93,7 @@ class VendorOrderController extends Controller
             'floor' => $request->floor,
             'house' => $request->house,
             'road' => $request->road,
+            'delivery_note' => is_array($nz_prev_addr) ? ($nz_prev_addr['delivery_note'] ?? null) : null,
         ];
 
         $order->delivery_address = json_encode($address);

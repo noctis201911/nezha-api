@@ -847,6 +847,8 @@ trait PlaceNewOrder
                     'floor' => $address?->floor,
                     'road' => $address?->road,
                     'house' => $address?->house,
+                    // 哪吒[任务3]: POS 单也快照地址常备备注 delivery_note(从所选地址行带入)
+                    'delivery_note' => $address?->delivery_note,
                 ];
             }
 

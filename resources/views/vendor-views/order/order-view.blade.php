@@ -1707,6 +1707,10 @@
                                 <span class="name">{{ translate('Floor') }}:</span>
                                 <span class="info">{{ isset($address['floor']) ? $address['floor'] : '' }}</span>
                             @endif
+                            @if (!empty($address['delivery_note']))
+                                <span class="name">备注:</span>
+                                <span class="info">{{ $address['delivery_note'] }}</span>
+                            @endif
                                 <span class="mt-2 d-flex w-100">
                                     <span><i class="tio-poi text--title"></i></span>
                                     @if (!in_array($order['order_type'], ['dine_in', 'take_away']) && isset($address['address']))
@@ -1724,6 +1728,13 @@
                                 </span>
                             @endif
                         </span>
+                        @php($nzCopyText = collect([$address['contact_person_name'] ?? null, !empty($address['contact_person_number']) ? '电话 '.$address['contact_person_number'] : null, $address['address'] ?? null, collect([!empty($address['house']) ? '门牌 '.$address['house'] : null, !empty($address['floor']) ? '楼层 '.$address['floor'] : null, !empty($address['road']) ? '街道 '.$address['road'] : null])->filter()->implode(' · ') ?: null, !empty($address['delivery_note']) ? '备注 '.$address['delivery_note'] : null, !empty($order->order_note) ? '下单备注 '.$order->order_note : null, (!empty($address['latitude']) && !empty($address['longitude'])) ? ($address['latitude'].','.$address['longitude']) : null])->filter()->implode("\n"))
+                        @if (!in_array($order->order_type, ['dine_in', 'take_away']) && trim($nzCopyText) !== '')
+                            <textarea id="nzFullAddr-{{ $order['id'] }}" class="nz-fulladdr-src" style="position:absolute;left:-9999px;top:-9999px;opacity:0;height:1px;width:1px;" readonly>{{ $nzCopyText }}</textarea>
+                            <button type="button" class="btn btn-primary btn-sm mt-3 nz-copy-addr" data-copy-src="nzFullAddr-{{ $order['id'] }}" style="border-radius:8px;">
+                                <i class="tio-copy mr-1"></i>复制完整配送地址
+                            </button>
+                        @endif
                     @endif
                 </div>
             </div>
@@ -3611,6 +3622,57 @@
             nzToast('操作失败：' + (err && err.message ? err.message : '网络错误，请重试'), true);
         });
     }, false);  // bubble phase
+})();
+</script>
+@endpush
+@push('script_2')
+<script>
+// 哪吒[任务3]: 商家订单详情「复制完整配送地址」—— 复制隐藏 textarea 里服务端拼好的整段(地址+门牌+楼层+街道+电话+坐标+地址备注+下单备注), 供商家整段贴去叫 Yandex/导航。纯 L3 呈现层, 复制的是本页已鉴权渲染的数据, 不新增端点。
+(function(){
+    function nzCopyToast(msg, isErr){
+        var t = document.createElement('div');
+        t.textContent = msg;
+        t.style.cssText = 'position:fixed;left:50%;top:24px;transform:translateX(-50%);z-index:11000;'
+            + 'padding:10px 18px;border-radius:10px;font-size:14px;font-weight:600;max-width:80vw;'
+            + 'background:' + (isErr ? '#FEE7EA' : '#E8F8EE') + ';'
+            + 'color:' + (isErr ? '#C4193E' : '#1F7A3A') + ';'
+            + 'box-shadow:0 4px 16px rgba(0,0,0,.15);transition:opacity .3s;';
+        document.body.appendChild(t);
+        setTimeout(function(){ t.style.opacity = '0'; }, 2000);
+        setTimeout(function(){ if (t.parentNode) t.parentNode.removeChild(t); }, 2400);
+    }
+    function nzFallbackCopy(text){
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;';
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
+        try { ta.setSelectionRange(0, 99999); } catch(e){}
+        var ok = false;
+        try { ok = document.execCommand('copy'); } catch(e){ ok = false; }
+        if (ta.parentNode) ta.parentNode.removeChild(ta);
+        return ok;
+    }
+    document.addEventListener('click', function(ev){
+        var btn = ev.target && ev.target.closest ? ev.target.closest('.nz-copy-addr') : null;
+        if (!btn) return;
+        ev.preventDefault();
+        var srcId = btn.getAttribute('data-copy-src');
+        var src = srcId ? document.getElementById(srcId) : null;
+        var text = src ? src.value : '';
+        if (!text) { nzCopyToast('没有可复制的地址', true); return; }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function(){
+                nzCopyToast('已复制完整配送地址', false);
+            }).catch(function(){
+                var ok = nzFallbackCopy(text);
+                nzCopyToast(ok ? '已复制完整配送地址' : '复制失败, 请手动选择文本', !ok);
+            });
+        } else {
+            var ok = nzFallbackCopy(text);
+            nzCopyToast(ok ? '已复制完整配送地址' : '复制失败, 请手动选择文本', !ok);
+        }
+    }, false);
 })();
 </script>
 @endpush

@@ -223,6 +223,8 @@ class OrderController extends Controller
             'floor' => $request->floor,
             'road' => $request->road,
             'house' => $request->house,
+            // 哪吒[任务3]: 把地址常备备注 delivery_note 一并快照进订单(地址级备注, 区别于每单 order_note), 供商家「复制完整配送地址」整段带走
+            'delivery_note' => $request->delivery_note,
             'longitude' => (string)$request->longitude,
             'latitude' => (string)$request->latitude,
         ];
