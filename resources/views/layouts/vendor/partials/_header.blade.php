@@ -85,6 +85,52 @@
                         </div>
                     </li>
 
+                    {{-- nz: 提示音设置(分类音量+总开关, 存本机) --}}
+                    <li class="nav-item mr-3" style="position:relative;">
+                        <div class="hs-unfold" style="position:relative;">
+                            <a id="nzSoundBtn" class="btn btn-icon btn-soft-secondary rounded-circle" href="javascript:;" data-toggle="tooltip" title="提示音设置" aria-label="提示音设置">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+                            </a>
+                            <div id="nzSoundPop" style="display:none;position:absolute;right:0;top:calc(100% + 8px);width:340px;max-width:88vw;background:#fff;border:1px solid #ededed;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.16);z-index:100001;font-family:'PingFang SC','Microsoft YaHei',sans-serif;text-align:left;">
+                                <style>
+                                #nzSoundPop .nz-snd-grp{font-size:12px;color:#9aa0a6;padding:10px 14px 4px;}
+                                #nzSoundPop .nz-snd-row{display:flex;align-items:center;gap:10px;padding:6px 14px;}
+                                #nzSoundPop .nz-snd-name{width:78px;flex:none;font-size:13.5px;color:#1f1f1f;}
+                                #nzSoundPop .nz-snd-sl{flex:1;min-width:0;accent-color:#C4193E;height:20px;}
+                                #nzSoundPop .nz-snd-val{width:36px;flex:none;text-align:right;font-size:12.5px;color:#6b7075;}
+                                #nzSoundPop .nz-snd-test{flex:none;width:28px;height:28px;border-radius:7px;border:1px solid #e6e6e6;background:#fafafa;color:#6b7075;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;font-size:10px;line-height:1;}
+                                #nzSoundPop .nz-snd-test:hover{background:#f0f0f0;}
+                                #nzSoundPop .nz-snd-off .nz-snd-row{opacity:.4;}
+                                #nzSoundPop .nz-snd-sw{position:relative;display:inline-block;width:42px;height:24px;vertical-align:middle;}
+                                #nzSoundPop .nz-snd-sw input{opacity:0;width:0;height:0;position:absolute;margin:0;}
+                                #nzSoundPop .nz-snd-sw .nz-snd-track{position:absolute;inset:0;background:#ccc;border-radius:20px;transition:.15s;cursor:pointer;}
+                                #nzSoundPop .nz-snd-sw .nz-snd-track:before{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.15s;}
+                                #nzSoundPop .nz-snd-sw input:checked + .nz-snd-track{background:#C4193E;}
+                                #nzSoundPop .nz-snd-sw input:checked + .nz-snd-track:before{transform:translateX(18px);}
+                                </style>
+                                <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #f0f0f0;">
+                                    <span style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px;color:#1f1f1f;">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C4193E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+                                        提示音
+                                    </span>
+                                    <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:#6b7075;cursor:pointer;margin:0;">全部开启
+                                        <span class="nz-snd-sw"><input type="checkbox" id="nzSoundMaster" checked><span class="nz-snd-track"></span></span>
+                                    </label>
+                                </div>
+                                <div id="nzSoundBody">
+                                    <div class="nz-snd-grp">接单提醒</div>
+                                    <div class="nz-snd-row"><span class="nz-snd-name">新订单</span><input type="range" class="nz-snd-sl" data-cat="new_order" min="0" max="100" step="1" value="90"><span class="nz-snd-val" data-cat="new_order">90%</span><button type="button" class="nz-snd-test" data-cat="new_order" data-el="myAudio" aria-label="试听新订单">&#9654;</button></div>
+                                    <div class="nz-snd-row"><span class="nz-snd-name">订单超时</span><input type="range" class="nz-snd-sl" data-cat="timeout" min="0" max="100" step="1" value="90"><span class="nz-snd-val" data-cat="timeout">90%</span><button type="button" class="nz-snd-test" data-cat="timeout" data-el="myAudio" aria-label="试听订单超时">&#9654;</button></div>
+                                    <div class="nz-snd-grp">消息提醒</div>
+                                    <div class="nz-snd-row"><span class="nz-snd-name">顾客消息</span><input type="range" class="nz-snd-sl" data-cat="customer_msg" min="0" max="100" step="1" value="70"><span class="nz-snd-val" data-cat="customer_msg">70%</span><button type="button" class="nz-snd-test" data-cat="customer_msg" data-el="nzMsgAudio" aria-label="试听顾客消息">&#9654;</button></div>
+                                    <div class="nz-snd-row"><span class="nz-snd-name">平台客服</span><input type="range" class="nz-snd-sl" data-cat="platform_msg" min="0" max="100" step="1" value="70"><span class="nz-snd-val" data-cat="platform_msg">70%</span><button type="button" class="nz-snd-test" data-cat="platform_msg" data-el="nzAdminMsgAudio" aria-label="试听平台客服">&#9654;</button></div>
+                                    <div class="nz-snd-grp">物流提醒</div>
+                                    <div class="nz-snd-row"><span class="nz-snd-name">催配送</span><input type="range" class="nz-snd-sl" data-cat="deliv" min="0" max="100" step="1" value="70"><span class="nz-snd-val" data-cat="deliv">70%</span><button type="button" class="nz-snd-test" data-cat="deliv" data-el="nzDelivAudio" aria-label="试听催配送">&#9654;</button></div>
+                                </div>
+                                <div style="padding:10px 14px;background:#FFF7E6;color:#8a6d1b;font-size:12px;line-height:1.55;border-top:1px solid #f5ecd0;">静音只关声音——新订单提示弹窗和订单列表照常显示，不会漏单。</div>
+                            </div>
+                        </div>
+                    </li>
                     <li class="nav-item d-none d-sm-inline-block mr-4">
                         <!-- Notification -->
                         <div class="hs-unfold">

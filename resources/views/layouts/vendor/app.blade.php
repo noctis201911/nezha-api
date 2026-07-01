@@ -585,6 +585,34 @@
     <source src="{{dynamicAsset('assets/admin/sound/deliv-link-voice.mp3')}}?v=1" type="audio/mpeg">
 </audio>
 <script>
+/* nz: 商家提示音偏好(分类音量+总开关, 存本机 localStorage) */
+(function(){
+    var KEY='nz_sound_prefs_v1';
+    var CATS=['new_order','timeout','customer_msg','platform_msg','deliv'];
+    var DEF={on:1,new_order:90,timeout:90,customer_msg:70,platform_msg:70,deliv:70};
+    function load(){var p={};try{p=JSON.parse(localStorage.getItem(KEY)||'{}')||{};}catch(e){p={};}var o={};o.on=(p.on===undefined)?DEF.on:(p.on?1:0);CATS.forEach(function(c){var v=p[c];v=(v===undefined||v===null)?DEF[c]:parseInt(v,10);if(isNaN(v))v=DEF[c];o[c]=Math.max(0,Math.min(100,v));});return o;}
+    var prefs=load();
+    function save(){try{localStorage.setItem(KEY,JSON.stringify(prefs));}catch(e){}}
+    window.nzSound={
+        getVol:function(cat){if(!prefs.on)return 0;var v=prefs[cat];if(v===undefined)v=100;return Math.max(0,Math.min(100,v))/100;},
+        get:function(){return prefs;},
+        setCat:function(cat,val){prefs[cat]=Math.max(0,Math.min(100,parseInt(val,10)||0));save();},
+        setOn:function(on){prefs.on=on?1:0;save();}
+    };
+    document.addEventListener('DOMContentLoaded',function(){
+        var btn=document.getElementById('nzSoundBtn');var pop=document.getElementById('nzSoundPop');if(!pop)return;
+        var master=document.getElementById('nzSoundMaster');var body=document.getElementById('nzSoundBody');
+        function reflect(){if(!body)return;if(prefs.on)body.classList.remove('nz-snd-off');else body.classList.add('nz-snd-off');body.querySelectorAll('input.nz-snd-sl,button.nz-snd-test').forEach(function(el){el.disabled=!prefs.on;});}
+        if(master)master.checked=!!prefs.on;
+        pop.querySelectorAll('input.nz-snd-sl').forEach(function(sl){var cat=sl.getAttribute('data-cat');sl.value=prefs[cat];var val=pop.querySelector('.nz-snd-val[data-cat="'+cat+'"]');if(val)val.textContent=prefs[cat]+'%';sl.addEventListener('input',function(){if(val)val.textContent=Math.round(sl.value)+'%';window.nzSound.setCat(cat,sl.value);});});
+        pop.querySelectorAll('button.nz-snd-test').forEach(function(b){b.addEventListener('click',function(ev){ev.preventDefault();ev.stopPropagation();var cat=b.getAttribute('data-cat');var a=document.getElementById(b.getAttribute('data-el'));if(!a)return;var v=window.nzSound.getVol(cat);try{a.volume=Math.max(0,v);a.currentTime=0;var p=a.play();if(p&&p.catch)p.catch(function(){});}catch(e){}});});
+        if(master)master.addEventListener('change',function(){window.nzSound.setOn(master.checked);reflect();});
+        reflect();
+        if(btn){btn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();pop.style.display=(pop.style.display==='block')?'none':'block';});document.addEventListener('click',function(e){if(pop.style.display==='block'&&!pop.contains(e.target)&&e.target!==btn&&!btn.contains(e.target))pop.style.display='none';});}
+    });
+})();
+</script>
+<script>
     // 哪吒: 首次用户交互时解锁提示音(绕开浏览器自动播放限制)——之后轮询新消息能稳定响铃
     (function(){
         function nzUnlockAudio(){
@@ -623,8 +651,8 @@
         "use strict";
     let audio = document.getElementById("myAudio");
 
-    function playAudio() {
-        try { var p = audio.play(); if (p && p.catch) { p.catch(function(){}); } } catch(e){}
+    function playAudio(cat) {
+        try { var v = (window.nzSound ? window.nzSound.getVol(cat || 'new_order') : 1); if (v <= 0) return; audio.volume = v; var p = audio.play(); if (p && p.catch) { p.catch(function(){}); } } catch(e){}
     }
 
     function pauseAudio() {
@@ -917,7 +945,7 @@
         if(payload.data.order_id && payload.data.type === 'new_order'){
             @if(\App\CentralLogics\Helpers::employee_module_permission_check('order') && $order_notification_type == 'firebase')
             order_type = payload.data.order_type
-            playAudio();
+            playAudio('new_order');
             $('#popup-modal').appendTo("body").modal('show');
             @endif
         }else if(payload.data.type === 'message'){
@@ -981,7 +1009,7 @@
                 var viewingId = nzViewingOrderDetail();
                 var viewingThisOrder = viewingId && ids.indexOf(viewingId) !== -1;
                 if (freshIds.length > 0) {
-                    if (!viewingThisOrder) { playAudio(); }
+                    if (!viewingThisOrder) { playAudio('timeout'); }
                     toDismissed = false;
                     freshIds.forEach(function(id){ seen.add(id); });
                     toSaveSeen(seen);
@@ -1003,7 +1031,7 @@
             var dvMemSeen  = new Set();
             var dvAudioEl  = document.getElementById('nzDelivAudio');
             var dvSounded  = false;
-            function dvPlay(){ try { if (dvAudioEl) { dvAudioEl.currentTime = 0; var p = dvAudioEl.play(); if (p && p.catch) { p.catch(function(){}); } } } catch(e){} }
+            function dvPlay(){ try { if (dvAudioEl) { var _v=(window.nzSound?window.nzSound.getVol('deliv'):1); if(_v<=0)return; dvAudioEl.volume=_v; dvAudioEl.currentTime = 0; var p = dvAudioEl.play(); if (p && p.catch) { p.catch(function(){}); } } } catch(e){} }
             function dvLoadSeen(){ try { return new Set(JSON.parse(localStorage.getItem(DELIV_SEEN_KEY) || '[]')); } catch(e){ return dvMemSeen; } }
             function dvSaveSeen(set){ dvMemSeen = set; try { var arr = Array.from(set); if (arr.length > 200) { arr = arr.slice(arr.length - 200); } localStorage.setItem(DELIV_SEEN_KEY, JSON.stringify(arr)); } catch(e){} }
             function dvShow(count){ if (dvCountEl) { dvCountEl.textContent = count; } if (dvToast) { dvToast.style.display = 'block'; } }
@@ -1069,7 +1097,7 @@
                         var freshIds = ids.filter(function(id){ return !seen.has(id); });
 
                         if (freshIds.length > 0) {
-                            playAudio();
+                            playAudio('new_order');
                             dismissed = false;
                             freshIds.forEach(function(id){ seen.add(id); });
                             saveSeen(seen);
@@ -1135,7 +1163,7 @@
                             return;
                         }
 
-                        function nzPlay(id){ try { var a = document.getElementById(id); if (a) { a.currentTime = 0; var p = a.play(); if (p && p.catch) { p.catch(function(){}); } } } catch(e){} }
+                        function nzPlay(id){ try { var a = document.getElementById(id); if (a) { var _c=(id==='nzAdminMsgAudio')?'platform_msg':'customer_msg'; var _v=(window.nzSound?window.nzSound.getVol(_c):1); if(_v<=0)return; a.volume=_v; a.currentTime = 0; var p = a.play(); if (p && p.catch) { p.catch(function(){}); } } } catch(e){} }
                         // 正开着该会话(conversation 参数=新消息所属会话)时不重复响铃/弹窗，仅静默刷新
                         function nzViewing(convId){ if (!convId) return false; if (typeof document !== 'undefined' && document.hidden) return false; var oc = (typeof getUrlParameter === 'function') ? getUrlParameter('conversation') : null; return !!(oc && String(oc) === String(convId)); }
                         function nzRefreshLists(){
