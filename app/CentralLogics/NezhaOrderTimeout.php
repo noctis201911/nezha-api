@@ -29,8 +29,13 @@ class NezhaOrderTimeout
     const PHASE_PICKED   = 'picked_up';      // E 配送中: picked_up
 
     /** 阈值（business_settings，可后台调；测试可注入）。单位=分钟。 */
+    private static $settingsCache = null;
+
     public static function settings(): array
     {
+        if (self::$settingsCache !== null) {
+            return self::$settingsCache;
+        }
         $rows = DB::table('business_settings')->whereIn('key', [
             'nezha_timeout_status',
             'nezha_timeout_remind_min',
@@ -43,7 +48,7 @@ class NezhaOrderTimeout
             'nezha_timeout_picked_min',
         ])->pluck('value', 'key');
 
-        return [
+        self::$settingsCache = [
             'status'         => isset($rows['nezha_timeout_status']) ? (int) $rows['nezha_timeout_status'] : 1,
             'remind'         => (int) ($rows['nezha_timeout_remind_min'] ?? 5),
             'email_merchant' => (int) ($rows['nezha_timeout_email_merchant_min'] ?? 10),
@@ -54,6 +59,8 @@ class NezhaOrderTimeout
             'handover'       => (int) ($rows['nezha_timeout_handover_min'] ?? 45),
             'picked'         => (int) ($rows['nezha_timeout_picked_min'] ?? 90),
         ];
+
+        return self::$settingsCache;
     }
 
     /** 订单当前所属超时阶段，不在范围返回 null。 */

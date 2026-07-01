@@ -967,6 +967,8 @@ class OrderController extends Controller
             $data['delivery_address'] = $data['delivery_address']?json_decode($data['delivery_address']):$data['delivery_address'];
             $data['restaurant'] = $data['restaurant']?Helpers::restaurant_data_formatting($data['restaurant']):$data['restaurant'];
             $data['delivery_man'] = $data['delivery_man']?Helpers::deliverymen_data_formatting([$data['delivery_man']]):$data['delivery_man'];
+            // 哪吒: 进行中列表也下发超时状态(消息卡/进行中卡的"已超时"角标读它, severity 与详情页同源规则)。
+            $data['nezha_timeout'] = \App\CentralLogics\NezhaOrderTimeout::describe($data);
             return $data;
         }, $paginator->items());
         $data = [
