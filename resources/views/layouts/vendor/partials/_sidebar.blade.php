@@ -153,14 +153,8 @@
                                         <span class="text-truncate sidebar--badge-container">
                                             {{translate('messages.all')}}
                                             <span class="badge badge-soft-info badge-pill ml-1">
-                                                {{\App\Models\Order::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())
-                                                    ->where(function($query) use($data){
-                                                        return $query->whereNotIn('order_status',(config('order_confirmation_model') == 'restaurant'|| $data)?['failed','canceled', 'refund_requested', 'refunded']:['pending','failed','canceled', 'refund_requested', 'refunded'])
-                                                        ->orWhere(function($query){
-                                                            return $query->where('order_status','pending')->whereIn('order_type', ['take_away','dine_in']);
-                                                        });
-                                                })->Notpos()->HasSubscriptionToday()->NotDigitalOrder()
-                                                ->count()}}
+                                                {{-- 哪吒[2026-07-01 P5]: 全部=真全部, 与列表'all'同口径(Notpos, 不排除状态, 不NotDigitalOrder) --}}
+                                                {{\App\Models\Order::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->Notpos()->HasSubscriptionToday()->count()}}
                                             </span>
                                         </span>
                                     </a>

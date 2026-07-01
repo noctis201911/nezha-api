@@ -132,15 +132,9 @@ class OrderController extends Controller
                     }
                 });
             })
-            ->when($status == 'all', function ($query) use ($data) {
-                return $query->where(function ($q1) use ($data) {
-                    $q1->whereNotIn('order_status', (config('order_confirmation_model') == 'restaurant' || $data) ? ['failed', 'canceled', 'refund_requested', 'refunded'] : ['pending', 'failed', 'canceled', 'refund_requested', 'refunded'])
-                        ->orWhere(function ($q2) {
-                            return $q2->where('order_status', 'pending')->whereIn('order_type', ['take_away', 'dine_in']);
-                        })->orWhere(function ($q3) {
-                            return $q3->where('order_status', 'pending')->whereNotNull('subscription_id');
-                        });
-                });
+            // 哪吒[2026-07-01 P5]: 「全部」= 真正的全部(不排除已取消/失败/退款/待接单), 名副其实且≥任何子类; 老单由前端「显示已完成·近N天」收起, 不在此排除。
+            ->when($status == 'all', function ($query) {
+                return $query;
             })
             ->when(in_array($status, ['pending', 'confirmed']), function ($query) {
                 return $query->OrderScheduledIn(30);
@@ -157,7 +151,7 @@ class OrderController extends Controller
             ->Notpos()
             // 哪吒: 「待确认收款」+「待退款」+「超时单」+「客户催促」视图放开 NotDigitalOrder(它会隐藏 pending+offline 单); 其余视图行为不变。
             // 超时集合含 pending+offline_payment 单, 漏放行会被 NotDigitalOrder 静默隐藏 → 列表数<卡数, 破坏数字同源。
-            ->when(!in_array($status, ['offline_pending', 'refund_pending', 'timeout', 'customer_nudged'], true), function ($query) {
+            ->when(!in_array($status, ['all', 'offline_pending', 'refund_pending', 'timeout', 'customer_nudged'], true), function ($query) {
                 return $query->NotDigitalOrder();
             })
             ->hasSubscriptionToday()
