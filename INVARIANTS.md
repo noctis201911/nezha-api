@@ -72,3 +72,18 @@
 ### L1-7 附注：违规帖「证据冻结」(legal hold) 有限例外〔2026-06-21〕
 
 L1-7 要求 PII 到期删除。本地生活违规帖证据冻结是其**有限例外**(已批准)：运营对判定违规/需配合执法的帖置 `local_life_posts.legal_hold=1` → 豁免 30 天到期清除(`nezha:purge-locallife-pii` 跳过)，供留证。**边界**：仅运营人工设/解(非举报自动触发，防滥用与过度留存)；目的限违规处理/配合主管机关调查；用尽目的应解除冻结。用户协议 §5.3 已同步加例外条款使政策与行为一致。改动此机制(扩大冻结触发面/延长留存)仍需按 L1 流程取得批准。
+
+
+---
+
+## 附: 数据完整性墙 (L3 · task9 · 2026-07-01 上线 a05ce34)
+
+给 StackFood 松字段加的结构性约束(定级 L3 表结构)。因 MySQL 5.7 静默忽略 CHECK + App 连接 strict=false(config/database.php:59) 非严格模式静默 coerce, 真正能"拒绝"坏数据的只有**外键 + 触发器 SIGNAL**。看到下列拒绝是**预期、不是 bug**:
+
+- **价格≥0 触发器**(`nz_*_price_bi/bu`, 10 个): food/add_ons/variation_options/item_campaigns 的 price·tax·discount + order_details 的 price·tax_amount·total_add_on_price≥0 且 quantity≥1。负值写入 → `SIGNAL 45000`。未含 orders 聚合金额(adjusment 合法可负)与钱包余额流水(可负)。
+- **外键防孤儿**(ON DELETE RESTRICT): order_details.order_id→orders(`nz_fk_od_order`) / food.restaurant_id→restaurants(`nz_fk_food_restaurant`) / orders.restaurant_id→restaurants(`nz_fk_orders_restaurant`)。孤儿写入 → 1452; 删被引用父行 → 1451。
+  - 🔺 **删餐厅**: 有订单/菜品的店不能删(FK 挡, 顺带保护 **L1-4 订单留存** 不被删店误删)。`VendorController::destroy` 已配套友好拦截(有订单历史→提示不可删; 无订单→先清菜品再删)。
+- **状态非空白触发器**(`nz_orders_status_bi/bu`): orders.order_status/payment_status 不可空白 ''。完整状态词表合法性交**应用层 in: 校验**(order_status 跨 6+ 端点动态写入, 含易漏的 accepted/paused, 严格 DB 词表墙经审计判高破坏风险已弃)。
+- **food.name NOT NULL**。
+
+迁移 `database/migrations/2026_07_02_0100~0103_nezha_*.php`。全程 staging(nezha_staging)验证下单不破 + 每墙可回滚。改这些墙前先想清与下单/删店/改单流程的交互。详见 memory nezha-data-integrity-walls。
