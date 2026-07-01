@@ -15,7 +15,15 @@
     $name = $name ?? 'image';
     $imageFormat = $imageFormat ?? IMAGE_FORMAT;
     $pixel = isset($pixel) && $pixel !== '' ? $pixel . ' px' : null;
-    $size = $pixel ?? $ratio;
+    // 哪吒: 未显式传 pixel 时, 按比例给出推荐像素, 让用户知道该传多大效果好 (纯数字+比例, 不引入新翻译词)
+    $recommendedPixel = $pixel ?? match ($ratio) {
+        '1:1' => '800 x 800 px',
+        '2:1' => '1200 x 600 px',
+        '3:1' => '1200 x 400 px',
+        '9:1' => '1200 x 140 px',
+        default => null,
+    };
+    $size = $recommendedPixel ? $recommendedPixel . ' · ' . $ratio : $ratio;
 @endphp
 
 <div class="upload-file mx-auto" data-invalid-icon="{{ dynamicAsset('assets/admin/img/invalid-icon.png') }}">
@@ -48,5 +56,5 @@
 </div>
 <p class="fs-10 text-center mb-0 mt-4 text-capitalize">
     {{ translate($imageFormat . ' Image size : Max ' . $maxSize . ' MB')}} <span
-        class="font-medium text-title">{{ translate('(' . $size . ')')}}</span>
+        class="font-medium text-title">({{ $size }})</span>
 </p>
