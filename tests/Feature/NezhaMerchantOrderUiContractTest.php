@@ -62,6 +62,51 @@ class NezhaMerchantOrderUiContractTest extends TestCase
         $this->assertStringContainsString('nz-mobile-action-label', $blade);
     }
 
+    public function testMerchantOrderTablePutsDetailsBeforePrintAction(): void
+    {
+        $blade = file_get_contents(resource_path('views/vendor-views/order/list.blade.php'));
+
+        $detailHeader = strpos($blade, '>订单详情</th>');
+        $printHeader = strpos($blade, '>打印小票</th>');
+        $detailCell = strpos($blade, '<td class="text-center nz-detail-action-cell"');
+        $printCell = strpos($blade, '<td class="text-center nz-print-action-cell"');
+
+        $this->assertNotFalse($detailHeader);
+        $this->assertNotFalse($printHeader);
+        $this->assertNotFalse($detailCell);
+        $this->assertNotFalse($printCell);
+        $this->assertLessThan($printHeader, $detailHeader);
+        $this->assertLessThan($printCell, $detailCell);
+    }
+
+    public function testMerchantOrderTableSupportsOperatorTableControls(): void
+    {
+        $blade = file_get_contents(resource_path('views/vendor-views/order/list.blade.php'));
+
+        $exportArea = strpos($blade, 'nz-export-area');
+        $searchArea = strpos($blade, 'nz-search-area');
+
+        $this->assertNotFalse($exportArea);
+        $this->assertNotFalse($searchArea);
+        $this->assertLessThan($searchArea, $exportArea);
+        $this->assertStringContainsString('nz-resizable-table', $blade);
+        $this->assertStringContainsString('nz-col-resizer', $blade);
+        $this->assertStringContainsString('nzOrderColumnWidths', $blade);
+    }
+
+    public function testMerchantOrderTableShowsCurrencyHintsAndPaymentProofThumbnail(): void
+    {
+        $blade = file_get_contents(resource_path('views/vendor-views/order/list.blade.php'));
+
+        $this->assertStringContainsString('Currency::whereIn', $blade);
+        $this->assertStringContainsString('nz-order-converted-amounts', $blade);
+        $this->assertStringContainsString("'USD'", $blade);
+        $this->assertStringContainsString("'CNY'", $blade);
+        $this->assertStringContainsString('offline_payment_formater', $blade);
+        $this->assertStringContainsString('nz-payment-proof-thumb', $blade);
+        $this->assertStringContainsString('nzProofModal', $blade);
+    }
+
     public function testMerchantOrderSidebarShowsAllStatusesWithoutMoreFold(): void
     {
         $blade = file_get_contents(resource_path('views/layouts/vendor/partials/_sidebar.blade.php'));

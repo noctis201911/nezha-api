@@ -10,6 +10,10 @@
         .nz-order-table-card { border: 1px solid #E6EAF0; border-radius: 10px; box-shadow: 0 1px 4px rgba(16,24,40,.04); overflow: hidden; }
         .nz-order-table-card .card-header { border-bottom: 1px solid #EDF1F5; background: #fff; }
         .nz-order-table-card #datatable { table-layout: fixed; min-width: 1180px; }
+        .nz-order-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; }
+        .nz-export-area { flex: 0 0 auto; }
+        .nz-search-area { flex: 0 1 360px; margin-left: auto; }
+        .nz-search-area .input--group { width: 360px; max-width: 100%; }
         .nz-order-table-card #datatable th:nth-child(1), .nz-order-table-card #datatable td:nth-child(1) { width: 4%; }
         .nz-order-table-card #datatable th:nth-child(2), .nz-order-table-card #datatable td:nth-child(2) { width: 24%; }
         .nz-order-table-card #datatable th:nth-child(3), .nz-order-table-card #datatable td:nth-child(3) { width: 13%; }
@@ -27,6 +31,16 @@
         .nz-order-foods { font-size: 12px; color: #6B7280; max-width: 220px; white-space: normal; line-height: 1.4; margin-top: 4px; }
         .nz-order-time strong { display: block; font-size: 14px; color: #102A4C; }
         .nz-order-money { font-size: 15px; font-weight: 800; color: #102A4C; }
+        .nz-order-converted-amounts { margin-top: 3px; color: #667085; font-size: 11px; line-height: 1.35; font-weight: 700; }
+        .nz-order-converted-amounts span { display: block; white-space: nowrap; }
+        .nz-resizable-table th { position: relative; }
+        .nz-col-resizer { position: absolute; top: 0; right: -3px; width: 8px; height: 100%; cursor: col-resize; user-select: none; z-index: 3; }
+        .nz-col-resizer::after { content: ""; position: absolute; top: 25%; bottom: 25%; left: 3px; width: 2px; border-radius: 2px; background: transparent; }
+        .nz-col-resizer:hover::after, body.nz-col-resizing .nz-col-resizer::after { background: #9DBBE8; }
+        .nz-payment-proof-list { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
+        .nz-payment-proof-thumb { width: 42px; height: 42px; padding: 0; border: 1px solid #D8E0EA; border-radius: 7px; background: #fff; overflow: hidden; cursor: zoom-in; }
+        .nz-payment-proof-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .nz-proof-modal-img { width: 100%; max-height: 76vh; object-fit: contain; background: #0F172A; border-radius: 8px; }
         .nz-order-status-muted { color: #8A94A6; font-size: 12px; font-weight: 600; }
         .nz-step-empty { color: #98A2B3; font-size: 12px; font-weight: 700; }
         .nz-step-btn { border-radius: 7px !important; font-size: 12px !important; padding: 6px 12px !important; min-width: 86px; font-weight: 800 !important; }
@@ -56,8 +70,9 @@
             .nz-mobile-status-strip a { flex: 0 0 auto; min-height: 36px; padding: 8px 11px; border-radius: 7px; }
             .nz-order-table-card { border-radius: 9px; overflow: visible; }
             .nz-mobile-toolbar { padding: 10px 10px 8px !important; }
-            .nz-mobile-toolbar .search--button-wrapper { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; }
-            .nz-mobile-toolbar form { min-width: 0; }
+            .nz-mobile-toolbar .search--button-wrapper, .nz-mobile-toolbar .nz-order-toolbar { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: start; width: 100%; }
+            .nz-mobile-toolbar form, .nz-search-area { min-width: 0; }
+            .nz-search-area { margin-left: 0; }
             .nz-mobile-toolbar .input--group { width: 100%; }
             .nz-mobile-toolbar .hs-unfold { margin-right: 0 !important; }
             .nz-mobile-toolbar .hs-unfold > .btn { min-height: 42px; border-radius: 8px; }
@@ -160,6 +175,21 @@
     ];
     $nzStatusTabs = ['all','offline_pending','refund_pending','pending','confirmed','cooking','ready_for_delivery','food_on_the_way','delivered','refunded','refund_requested','scheduled','payment_failed','canceled'];
     $nzCurrentMeta = $nzStatusMeta[$nzRawStatus] ?? ['label' => str_replace('_', ' ', $nzRawStatus), 'hint' => '查看该状态下的订单。', 'empty' => '暂无该状态订单。', 'icon' => 'tio-shopping-cart'];
+    $nzBaseCurrency = \App\CentralLogics\Helpers::currency_code();
+    $nzCurrencyRows = \App\Models\Currency::whereIn('currency_code', [$nzBaseCurrency, 'USD', 'CNY'])->get()->keyBy('currency_code');
+    $nzBaseRate = (float) optional($nzCurrencyRows->get($nzBaseCurrency))->exchange_rate;
+    $nzBaseRate = $nzBaseRate > 0 ? $nzBaseRate : 1;
+    $nzFxTargets = [];
+    foreach (['USD', 'CNY'] as $__code) {
+        $__currency = $nzCurrencyRows->get($__code);
+        $__rate = (float) optional($__currency)->exchange_rate;
+        if ($__code !== $nzBaseCurrency && $__rate > 0) {
+            $nzFxTargets[$__code] = [
+                'rate' => $__rate,
+                'symbol' => $__currency->currency_symbol ?: $__code,
+            ];
+        }
+    }
 @endphp
     <div class="content container-fluid">
         <!-- Page Header -->
@@ -199,22 +229,8 @@
         <div class="card nz-order-table-card">
             <!-- Header -->
             <div class="card-header py-2 nz-mobile-toolbar">
-                <div class="search--button-wrapper justify-content-end max-sm-flex-100">
-                    <form >
-                        <!-- Search -->
-                        <div class="input-group input--group">
-                            <input id="datatableSearch_" type="search" name="search" class="form-control" value="{{ request()?->search ?? null}}"
-                                    placeholder="{{ translate('Ex : Search by Order Id') }}" aria-label="{{translate('messages.search')}}">
-                            <button type="submit" class="btn btn--secondary">
-                                <i class="tio-search"></i>
-                            </button>
-                        </div>
-                        <!-- End Search -->
-                    </form>
-
-                    <div class="d-sm-flex justify-content-sm-end align-items-sm-center m-0">
-
-
+                <div class="search--button-wrapper nz-order-toolbar max-sm-flex-100">
+                    <div class="d-sm-flex align-items-sm-center m-0 nz-export-area">
                         <!-- Unfold -->
                         <div class="hs-unfold mr-2">
                             <a class="js-hs-unfold-invoker btn btn-sm btn-white dropdown-toggle" href="javascript:;"
@@ -246,6 +262,17 @@
                             </div>
                         </div>
                     </div>
+                    <form class="nz-search-area">
+                        <!-- Search -->
+                        <div class="input-group input--group">
+                            <input id="datatableSearch_" type="search" name="search" class="form-control" value="{{ request()?->search ?? null}}"
+                                    placeholder="{{ translate('Ex : Search by Order Id') }}" aria-label="{{translate('messages.search')}}">
+                            <button type="submit" class="btn btn--secondary">
+                                <i class="tio-search"></i>
+                            </button>
+                        </div>
+                        <!-- End Search -->
+                    </form>
                 </div>
             </div>
             <div class="nz-print-settings d-print-none" id="nzPrintSettings">
@@ -272,7 +299,7 @@
             <!-- Table -->
             <div class="table-responsive datatable-custom">
                 <table id="datatable"
-                       class="table table-hover table-borderless table-thead-bordered table-nowrap table-align-middle card-table"
+                       class="table table-hover table-borderless table-thead-bordered table-nowrap table-align-middle card-table nz-resizable-table"
                        data-hs-datatables-options='{
                                  "order": [],
                                  "orderCellsTop": true,
@@ -289,8 +316,8 @@
                         <th class="w-110px">{{translate('messages.total_amount')}}</th>
                         <th class="w-110px text-center">{{translate('messages.order_status')}}</th>
                         <th class="w-130px text-center">下一步操作</th>
-                        <th class="w-80px text-center">打印小票</th>
                         <th class="w-80px text-center">订单详情</th>
+                        <th class="w-80px text-center">打印小票</th>
                     </tr>
                     </thead>
 
@@ -358,6 +385,27 @@
                                     <label
                                         class="badge badge--pending">{{translate('messages.Walk_In_Customer')}}</label>
                                 @endif
+                                @php
+                                    $__proofs = [];
+                                    if ($order->offline_payments) {
+                                        $__offline = \App\CentralLogics\Helpers::offline_payment_formater($order->offline_payments);
+                                        foreach (($__offline['input'] ?? []) as $__input) {
+                                            $__url = $__input['file_url'] ?? null;
+                                            if (!empty($__input['is_file']) && $__url && preg_match('/\.(png|jpe?g|webp|gif)(\?|$)/i', $__url)) {
+                                                $__proofs[] = $__url;
+                                            }
+                                        }
+                                    }
+                                @endphp
+                                @if(!empty($__proofs))
+                                    <div class="nz-payment-proof-list">
+                                        @foreach(array_slice($__proofs, 0, 3) as $__proofUrl)
+                                            <button type="button" class="nz-payment-proof-thumb" data-nz-proof-src="{{ $__proofUrl }}" title="查看付款截图">
+                                                <img src="{{ $__proofUrl }}" alt="付款截图">
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                @endif
                             </td>
                             <td class="nz-order-amount-cell" data-label="{{translate('messages.total_amount')}}">
 
@@ -366,6 +414,13 @@
                                     <div class="nz-order-money">
                                         {{\App\CentralLogics\Helpers::format_currency($order['order_amount'])}}
                                     </div>
+                                    @if(!empty($nzFxTargets))
+                                        <div class="nz-order-converted-amounts" data-nz-base-currency="{{ $nzBaseCurrency }}">
+                                            @foreach($nzFxTargets as $__code => $__fx)
+                                                <span>≈ {{ $__fx['symbol'] }}{{ number_format(((float) $order['order_amount'] * $__fx['rate']) / $nzBaseRate, 2) }} {{ $__code }}</span>
+                                            @endforeach
+                                        </div>
+                                    @endif
                                     @if($order->payment_status=='paid')
                                     <strong class="text-success">
                                         {{translate('messages.paid')}}
@@ -523,18 +578,18 @@
                                     <span class="nz-step-empty">无需操作</span>
                                 @endif
                             </td>
-                            <td class="text-center nz-print-action-cell" data-label="打印小票">
-                                <a class="btn action-btn btn--primary btn-outline-primary nz-action-icon" target="_blank"
-                                    title="打印小票"
-                                    href="{{route('vendor.order.generate-invoice',[$order['id']])}}">
-                                    <i class="tio-print"></i><span class="nz-mobile-action-label">打印</span>
-                                </a>
-                            </td>
                             <td class="text-center nz-detail-action-cell" data-label="订单详情">
                                 <a class="btn action-btn btn--warning btn-outline-warning nz-action-icon"
                                     title="订单详情"
                                     href="{{route('vendor.order.details',['id'=>$order['id']])}}">
                                     <i class="tio-open-in-new"></i><span class="nz-mobile-action-label">详情</span>
+                                </a>
+                            </td>
+                            <td class="text-center nz-print-action-cell" data-label="打印小票">
+                                <a class="btn action-btn btn--primary btn-outline-primary nz-action-icon" target="_blank"
+                                    title="打印小票"
+                                    href="{{route('vendor.order.generate-invoice',[$order['id']])}}">
+                                    <i class="tio-print"></i><span class="nz-mobile-action-label">打印</span>
                                 </a>
                             </td>
                         </tr>
@@ -567,6 +622,21 @@
             <!-- End Footer -->
         </div>
         <!-- End Card -->
+        <div class="modal fade" id="nzProofModal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header py-2">
+                        <h5 class="modal-title">客户付款截图</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <img id="nzProofModalImg" class="nz-proof-modal-img" src="" alt="客户付款截图">
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
 @endsection
@@ -617,6 +687,60 @@
                 }
             }
 
+            function initColumnResize(){
+                var table = document.getElementById('datatable');
+                if (!table || window.innerWidth < 768) return;
+                var ths = Array.prototype.slice.call(table.querySelectorAll('thead th'));
+                if (!ths.length) return;
+                var storeKey = 'nzOrderColumnWidths:' + location.pathname;
+                try {
+                    var saved = JSON.parse(localStorage.getItem(storeKey) || '[]');
+                    saved.forEach(function(width, i){
+                        if (width && ths[i]) ths[i].style.width = width + 'px';
+                    });
+                } catch (e) {}
+                ths.forEach(function(th, index){
+                    if (th.querySelector('.nz-col-resizer')) return;
+                    var grip = document.createElement('span');
+                    grip.className = 'nz-col-resizer';
+                    grip.setAttribute('aria-hidden', 'true');
+                    th.appendChild(grip);
+                    grip.addEventListener('pointerdown', function(e){
+                        e.preventDefault();
+                        var startX = e.clientX;
+                        var startWidth = th.offsetWidth;
+                        document.body.classList.add('nz-col-resizing');
+                        function onMove(ev){
+                            var next = Math.max(54, startWidth + ev.clientX - startX);
+                            th.style.width = next + 'px';
+                        }
+                        function onUp(){
+                            document.removeEventListener('pointermove', onMove);
+                            document.removeEventListener('pointerup', onUp);
+                            document.body.classList.remove('nz-col-resizing');
+                            var widths = ths.map(function(item){ return Math.round(item.offsetWidth); });
+                            try { localStorage.setItem(storeKey, JSON.stringify(widths)); } catch (e) {}
+                        }
+                        document.addEventListener('pointermove', onMove);
+                        document.addEventListener('pointerup', onUp);
+                    });
+                });
+            }
+
+            function initProofPreview(){
+                document.addEventListener('click', function(e){
+                    var btn = e.target && e.target.closest ? e.target.closest('.nz-payment-proof-thumb') : null;
+                    if (!btn) return;
+                    var src = btn.getAttribute('data-nz-proof-src');
+                    var img = document.getElementById('nzProofModalImg');
+                    if (!src || !img) return;
+                    img.src = src;
+                    if (window.$ && $('#nzProofModal').modal) {
+                        $('#nzProofModal').modal('show');
+                    }
+                });
+            }
+
             window.nzMaybeAutoPrintAfterOrderAction = function(invoiceUrl){
                 if (!isAutoPrintReady() || !invoiceUrl) return;
                 sessionStorage.setItem('nzAutoPrintInvoiceUrl', invoiceUrl);
@@ -624,6 +748,8 @@
 
             document.addEventListener('DOMContentLoaded', function(){
                 applyPrintSettings();
+                initColumnResize();
+                initProofPreview();
 
                 var ready = $('nzPrintReady');
                 var auto = $('nzAutoPrintReady');
