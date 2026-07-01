@@ -963,7 +963,7 @@
                 var form = document.getElementById('nzRejectForm');
                 var lbl = document.getElementById('nzRejectOrdLabel');
                 if (!menu || !modal || !form) return;
-                var curReject = '', curLabel = '';
+                var curReject = '', curLabel = '', openedAt = 0;
                 function closeMenu(){ menu.classList.remove('nz-open'); }
                 function openMenu(btn){
                     mDetail.href = btn.getAttribute('data-detail-url') || '#';
@@ -974,6 +974,7 @@
                     mReject.style.display = can ? '' : 'none';
                     mRejectDiv.style.display = can ? '' : 'none';
                     menu.classList.add('nz-open');
+                    openedAt = Date.now();
                     var r = btn.getBoundingClientRect();
                     var mw = menu.offsetWidth, mh = menu.offsetHeight;
                     var left = Math.max(8, Math.min(r.right - mw, window.innerWidth - mw - 8));
@@ -987,7 +988,7 @@
                     if (btn){ e.preventDefault(); if (menu.classList.contains('nz-open')) { closeMenu(); } else { openMenu(btn); } return; }
                     if (!menu.contains(e.target)) closeMenu();
                 });
-                window.addEventListener('scroll', closeMenu, true);
+                window.addEventListener('scroll', function(){ if (Date.now() - openedAt > 350) closeMenu(); }, true);
                 window.addEventListener('resize', closeMenu);
                 function openReject(){
                     form.action = curReject;
