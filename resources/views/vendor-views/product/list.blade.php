@@ -107,9 +107,9 @@
                             @if ($productWiseTax)
                                 <th  class="text-center">{{ translate('messages.Vat/Tax') }}</th>
                             @endif
-                            <th class="text-center">{{translate('messages.Recommended')}}</th>
-                            <th class="text-center">今日售罄</th>
-                            <th class="text-center">{{translate('messages.status')}}</th>
+                            <th class="text-center">{{translate('messages.Recommended')}} <span class="nz-help" role="button" tabindex="0" data-nz-title="推荐（招牌推荐）" data-nz-help="打开后，这道菜会进入顾客端餐厅页顶部的「招牌推荐」栏，获得更多曝光位；关掉则只在下方普通菜单里显示。" style="cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#e7eaf3;color:#5f6368;font-size:10px;font-weight:700;line-height:1;vertical-align:middle;margin-left:3px;">?</span></th>
+                            <th class="text-center">今日售罄 <span class="nz-help" role="button" tabindex="0" data-nz-title="今日售罄" data-nz-help="打开＝把这道菜标记为「今日售罄」：顾客端会灰置显示「已售罄」且无法下单；次日自动恢复正常销售。适合当天卖完、但明天还供应的菜。" style="cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#e7eaf3;color:#5f6368;font-size:10px;font-weight:700;line-height:1;vertical-align:middle;margin-left:3px;">?</span></th>
+                            <th class="text-center">{{translate('messages.status')}} <span class="nz-help" role="button" tabindex="0" data-nz-title="状态（上架 / 下架）" data-nz-help="商品的「上架 / 下架」开关。打开＝顾客能看到并下单；关掉＝从顾客端完全隐藏这道菜（不影响已产生的订单）。" style="cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#e7eaf3;color:#5f6368;font-size:10px;font-weight:700;line-height:1;vertical-align:middle;margin-left:3px;">?</span></th>
                             <th class="text-center">{{translate('messages.action')}}</th>
                         </tr>
                     </thead>
@@ -743,5 +743,20 @@
 
             updateTrack();
         });
+    </script>
+    <script>
+        (function(){
+            function nzHelp(el){
+                var title = el.getAttribute('data-nz-title') || '说明';
+                var text = el.getAttribute('data-nz-help') || '';
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({ title: title, text: text, icon: 'info', confirmButtonText: '知道了', confirmButtonColor: '#ea4a2f' });
+                } else { alert(title + '\n\n' + text); }
+            }
+            document.querySelectorAll('.nz-help').forEach(function(el){
+                el.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); nzHelp(el); });
+                el.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); nzHelp(el); } });
+            });
+        })();
     </script>
 @endpush
