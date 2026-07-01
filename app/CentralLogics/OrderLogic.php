@@ -755,9 +755,9 @@ class OrderLogic
                 if($deducted > 0){
                     // [哪吒 退出结算 §C3] 退出中/已退出的店(offboard_status != active): 不自动回充 deposit ——
                     //   结算窗口 deposit 只经三腿受控变动以保 approved 快照稳定; 已 paid/offboarded 的店回充会把钱打进死账户造成漏损。
-                    //   改为在结算工单记 shortfall(待人工核算该笔退款佣金是否退回)+ 审计留痕, 不动 deposit(§C3「记 shortfall 非回充」)。
+                    //   改为在结算工单记独立字段 frozen_reversal_owed(平台欠商家, 与 shortfall_amount 分开)+ 审计留痕, 不动 deposit(§C3「非回充」待人工核算)。
                     if(\App\CentralLogics\NezhaOffboard::is_deposit_credit_frozen($order->restaurant_id)){
-                        \App\CentralLogics\NezhaOffboard::recordFrozenReversalShortfall($order, (float) $deducted);
+                        \App\CentralLogics\NezhaOffboard::recordFrozenReversalOwed($order, (float) $deducted);
                     } else {
                         // F-3 防并发 lost-update: 同扣减, lockForUpdate 读最新余额后返还; 由函数末尾 save() 落库。
                         $freshBalance = (float) (RestaurantWallet::where('vendor_id', $order->restaurant->vendor->id)->lockForUpdate()->value('deposit_balance') ?? 0);

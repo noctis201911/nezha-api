@@ -33,6 +33,7 @@ class RestaurantOffboardSettlement extends Model
         'ad_amt'               => 'float',
         'net_amount'           => 'float',
         'shortfall_amount'     => 'float',
+        'frozen_reversal_owed' => 'float',
         'pending_clawback'     => 'float',
     ];
 

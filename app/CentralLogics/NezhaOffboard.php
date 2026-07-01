@@ -190,10 +190,11 @@ class NezhaOffboard
     }
 
     /**
-     * 退出冻结期 refund_reversal「记 shortfall 非回充」(§C3): 本该回充的佣金记到结算工单
-     * shortfall_amount(待人工核算该笔退款佣金是否退回), 不动 deposit; 审计留痕。无工单时仅留痕。
+     * 退出冻结期 refund_reversal「记 frozen_reversal_owed 非回充」(§C3): 本该回充的佣金记到结算工单
+     * 独立字段 frozen_reversal_owed(平台欠商家 —— 与 shortfall_amount[商家欠平台·net<0] 方向相反, 分开记),
+     * 待人工核算该笔退款佣金是否退回, 不动 deposit; 审计留痕。无工单时仅留痕。
      */
-    public static function recordFrozenReversalShortfall($order, float $deducted): void
+    public static function recordFrozenReversalOwed($order, float $deducted): void
     {
         $vendorId = (int) ($order->restaurant->vendor->id ?? 0);
         if ($vendorId <= 0 || $deducted <= 0) {
@@ -202,10 +203,10 @@ class NezhaOffboard
         $s = self::activeSettlement($vendorId)
             ?: RestaurantOffboardSettlement::where('vendor_id', $vendorId)->orderByDesc('id')->first();
         if ($s) {
-            $s->shortfall_amount = (float) $s->shortfall_amount + $deducted;
+            $s->frozen_reversal_owed = (float) $s->frozen_reversal_owed + $deducted;
             $note = trim((string) $s->note);
             $s->note = ($note !== '' ? $note . ' | ' : '')
-                . '退出冻结期退款#' . ($order->id ?? '?') . ' 应返还佣金 ' . $deducted . ' 记 shortfall 待人工核算(非自动回充)';
+                . '退出冻结期退款#' . ($order->id ?? '?') . ' 应返还佣金 ' . $deducted . ' 记 frozen_reversal_owed 待人工核算(非自动回充)';
             $s->save();
         }
         self::auditLog($order->restaurant_id ?? null, 'offboard_frozen_reversal', [

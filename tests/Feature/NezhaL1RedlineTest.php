@@ -186,7 +186,7 @@ class NezhaL1RedlineTest extends TestCase
         $src = file_get_contents(base_path('app/CentralLogics/OrderLogic.php'));
         $this->assertStringContainsString('NezhaOffboard::is_deposit_credit_frozen($order->restaurant_id)', $src,
             'L1-8 违反: refund_reversal 冻结判定被移除 → 退出中/已退出店会自动回充 deposit。');
-        $this->assertStringContainsString('recordFrozenReversalShortfall', $src,
-            'L1-8 违反: 冻结期 refund_reversal 未记 shortfall(§C3 非回充需留痕待人工核算)。');
+        $this->assertStringContainsString('recordFrozenReversalOwed', $src,
+            'L1-8 违反: 冻结期 refund_reversal 未记 frozen_reversal_owed(§C3 非回充需留痕待人工核算)。');
     }
 }
