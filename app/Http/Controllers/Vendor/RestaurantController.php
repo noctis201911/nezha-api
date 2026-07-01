@@ -158,6 +158,21 @@ class RestaurantController extends Controller
         return back();
     }
 
+    // 哪吒: 只更新分享缩略图(meta_image) — 独立小接口, 绝不走 updateStoreMetaData(那是餐厅配置大表单, 会连带清零 delivery 等设置)
+    public function meta_image_update(Request $request)
+    {
+        $request->validate([
+            'meta_image' => 'nullable|image|max:2048',
+        ]);
+
+        $shop = Restaurant::findOrFail(Helpers::get_restaurant_id());
+        $shop->meta_image = $request->has('meta_image') ? Helpers::update(dir: 'restaurant/', old_image: $shop->meta_image, format: 'png', image: $request->file('meta_image')) : $shop->meta_image;
+        $shop?->save();
+
+        Toastr::success(translate('分享图已更新'));
+        return back();
+    }
+
     public function update_message(Request $request)
     {
         $request->validate([

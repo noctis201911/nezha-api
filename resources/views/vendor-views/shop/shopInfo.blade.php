@@ -33,9 +33,14 @@
                     <h3 class="mb-1"> {{translate('Restaurant_Details')}} </h3>
                     <p class="fs-12 mb-0">{{translate('Created_at')}} {{ \App\CentralLogics\Helpers::time_date_format($shop->created_at) }}</p>
                 </div>
-                <a href="{{route('vendor.shop.edit')}}" class="btn btn--primary d-flex gap-2 align-items-baseline">
-                    <i class="tio-open-in-new"></i> {{translate('Edit_Information')}}
-                </a>
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="{{route('vendor.shop.brand')}}" class="btn btn--primary d-flex gap-2 align-items-baseline">
+                        <i class="tio-photo"></i> {{translate('门店形象')}}
+                    </a>
+                    <a href="{{route('vendor.shop.edit')}}" class="btn btn-outline-primary d-flex gap-2 align-items-baseline">
+                        <i class="tio-open-in-new"></i> {{translate('Edit_Information')}}
+                    </a>
+                </div>
             </div>
             <div class="card-body">
                 <!-- Banner -->
@@ -47,27 +52,8 @@
                                 alt="image"> -->
 
                             <div class="shop-details__thumb-wrap block-size-custom position-relative">
-                                <div class="upload-file mx-auto w-100">
-                                    <input type="file" name="photo" class="upload-file__input single_file_input"
-                                            accept=".jpg, .png, .jpeg, .gif, .bmp, .tif, .tiff|image/*">
-                                    <label class="upload-file__wrapper m-0">
-                                        <div class="upload-file-textbox text-center" style="">
-                                            <img width="34" class="svg" src="{{dynamicAsset('assets/admin/img/image-upload.png')}}" alt="img">
-                                            <h6 class="mt-1 text-gray1 fw-medium fs-10 lh-base text-center">
-                                                <span class="text-info">{{ translate('messages.Click_to_upload') }}</span>
-                                                <br>
-                                                {{ translate('messages.or_drag_and_drop') }}
-                                            </h6>
-                                        </div>
-                                        <img class="upload-file-img" loading="lazy"
-                                            src="{{ $shop?->cover_photo_full_url ?? dynamicAsset('assets/admin/img/restaurant_cover.jpg') }}"
-                                            data-default-src="{{ $shop?->cover_photo_full_url ?? dynamicAsset('assets/admin/img/restaurant_cover.jpg') }}"
-                                            alt="" style="display: none;">
-                                    </label>
-                                </div>
-                                <button type="button" class="btn z-index-2 bg-white text-hover-primary btn-outline-info w-30px h-30px p-0 edit_btn-main end--0 m-xxl-4 m-xl-3 m-2 top--0 position-absolute">
-                                    <i class="tio-edit"></i>
-                                </button>
+                                <img class="shop-details-banner-img w-100" style="height:100%;object-fit:cover;border-radius:8px;"
+                                     src="{{ $shop?->cover_photo_full_url ?? dynamicAsset('assets/admin/img/restaurant_cover.jpg') }}" alt="cover">
                             </div>
 
                             <div class="shop-details-banner-content px-3 px-xxl-4 z-index-2 position-relative">
@@ -76,27 +62,8 @@
                                     src="{{ $shop?->logo_full_url ?? dynamicAsset('assets/admin/img/160x160/img1.jpg') }}"
                                     alt="image"> -->
                                     <div class="shop-details__thumb-wrap2 position-relative">
-                                        <div class="upload-file mx-auto">
-                                            <input type="file" name="image" class="upload-file__input single_file_input"
-                                                    accept=".jpg, .png, .jpeg, .gif, .bmp, .tif, .tiff|image/*">
-                                            <label class="upload-file__wrapper ratio-1 mx-auto m-0">
-                                                <div class="upload-file-textbox text-center" style="">
-                                                    <img width="34" class="svg" src="{{dynamicAsset('assets/admin/img/image-upload.png')}}" alt="img">
-                                                    <h6 class="mt-1 text-gray1 fw-medium fs-10 lh-base text-center">
-                                                        <span class="text-info">{{ translate('messages.Click_to_upload') }}</span>
-                                                        <br>
-                                                        {{ translate('messages.or_drag_and_drop') }}
-                                                    </h6>
-                                                </div>
-                                                <img class="upload-file-img" loading="lazy"
-                                                    src="{{ $shop?->logo_full_url ?? dynamicAsset('assets/admin/img/image-place-holder.png') }}"
-                                                    data-default-src="{{ $shop?->logo_full_url ?? dynamicAsset('assets/admin/img/image-place-holder.png') }}"
-                                                    alt="" style="display: none;">
-                                            </label>
-                                        </div>
-                                        <button type="button" class="btn z-index-2 bg-white text-hover-primary btn-outline-info w-30px h-30px p-0 edit_btn-main end--0 m-2 top--0 position-absolute">
-                                            <i class="tio-edit"></i>
-                                        </button>
+                                        <img class="w-100 ratio-1" style="object-fit:cover;border-radius:8px;display:block;"
+                                             src="{{ $shop?->logo_full_url ?? dynamicAsset('assets/admin/img/image-place-holder.png') }}" alt="logo">
                                     </div>
                                 </div>
                                 <div class="shop-details-banner-content-content">

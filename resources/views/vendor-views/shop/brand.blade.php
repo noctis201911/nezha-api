@@ -83,11 +83,22 @@
                             @endif
                         </div>
                         <div class="flex-grow-1" style="min-width:180px;">
-                            <h3 class="mb-0" style="font-size:16px;">{{ translate('分享图') }}</h3>
+                            <div class="d-flex align-items-center gap-2">
+                                <h3 class="mb-0" style="font-size:16px;">{{ translate('分享图') }}</h3>
+                                @if($shop?->meta_image)
+                                    <span style="font-size:11px;color:#0F6E56;background:#E1F5EE;border-radius:20px;padding:1px 8px;">{{ translate('已上传') }}</span>
+                                @else
+                                    <span style="font-size:11px;color:#854F0B;background:#FAEEDA;border-radius:20px;padding:1px 8px;">{{ translate('未上传') }}</span>
+                                @endif
+                            </div>
                             <p class="fs-12 text-muted mb-1 mt-2"><i class="tio-visible"></i> {{ translate('显示在：转发 / 分享店铺链接时的卡片') }}</p>
                             <p class="fs-12 text-muted mb-0">{{ translate('推荐 1200 × 630 · 不传则用封面兜底') }}</p>
                         </div>
-                        <a href="{{ url('restaurant-panel/business-settings/restaurant-setup') }}" class="btn btn-outline-primary btn-sm mb-0">{{ translate('去设置') }}</a>
+                        <form action="{{ route('vendor.shop.meta-image-update') }}" method="post" enctype="multipart/form-data" class="mb-0">
+                            @csrf
+                            <input type="file" name="meta_image" accept="image/*" id="brandMetaFile" class="d-none" onchange="this.form.submit()">
+                            <label for="brandMetaFile" class="btn btn--primary btn-sm mb-0">{{ $shop?->meta_image ? translate('更换') : translate('上传') }}</label>
+                        </form>
                     </div>
                 </div>
 

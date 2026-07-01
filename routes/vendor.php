@@ -367,6 +367,7 @@ Route::group(['prefix' => 'withdraw-method', 'as' => 'wallet-method.', 'middlewa
             Route::post('update', [RestaurantController::class, 'update'])->name('update');
             Route::post('logo/update', [RestaurantController::class, 'logo_update'])->name('logo-update');
             Route::post('cover/update', [RestaurantController::class, 'cover_update'])->name('cover-update');
+            Route::post('meta-image/update', [RestaurantController::class, 'meta_image_update'])->name('meta-image-update');
             Route::post('update-message', [RestaurantController::class, 'update_message'])->name('update-message');
             Route::post('qr-store', [RestaurantController::class, 'qr_store'])->name('qr-store');
             Route::get('qr-view', [RestaurantController::class, 'qr_view'])->name('qr-view')->withoutMiddleware('module:my_restaurant')->middleware('module:my_qr_code');
