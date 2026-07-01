@@ -59,6 +59,7 @@
         .badge.nz-st-done { background:#DCFAE6 !important; color:#0A6B1F !important; }
         .badge.nz-st-cancel { background:#F0F0F0 !important; color:#4B5563 !important; }
         .badge.nz-st-alert { background:#FEEBEE !important; color:#A3121B !important; }
+        .nz-step-btn.btn-warning { background:#F6EBD6 !important; border-color:#E7CE9A !important; color:#8A5A06 !important; }
         .nz-status-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
         .nz-status-empty-copy { color: #102A4C; font-weight: 900; }
         .nz-status-empty-help { color: #667085; font-size: 13px; margin-top: -4px; }
@@ -494,7 +495,7 @@
 
                                 <?php $nzTo = \App\CentralLogics\NezhaOrderTimeout::describe($order); ?>
                                 @if($nzTo && in_array($nzTo['severity'], ['warning','error']) && !empty($nzTo['elapsed_minutes']))
-                                    <span class="badge {{ $nzTo['severity']==='error' ? 'badge-soft-danger' : 'badge-soft-warning' }} d-block mb-1" title="{{ $nzTo['title'] }}">
+                                    <span class="badge {{ $nzTo['severity']==='error' ? 'badge-soft-danger' : 'badge-soft-warning' }} d-inline-block mb-1" title="{{ $nzTo['title'] }}">
                                         ⏱ {{ \App\CentralLogics\NezhaOrderTimeout::humanDuration($nzTo['elapsed_minutes']) }}
                                     </span>
                                 @endif
