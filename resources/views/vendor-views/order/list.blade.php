@@ -48,15 +48,15 @@
         .nz-order-converted-amounts span { display: block; white-space: nowrap; }
         .nz-resizable-table th { position: relative; }
         .nz-col-resizer { position: absolute; top: 0; right: -3px; width: 8px; height: 100%; cursor: col-resize; user-select: none; z-index: 3; }
-        .nz-col-resizer::after { content: ""; position: absolute; top: 25%; bottom: 25%; left: 3px; width: 2px; border-radius: 2px; background: transparent; }
-        .nz-col-resizer:hover::after, body.nz-col-resizing .nz-col-resizer::after { background: #9DBBE8; }
+        .nz-col-resizer::after { content: ""; position: absolute; top: 25%; bottom: 25%; left: 3px; width: 2px; border-radius: 2px; background: #C3CDDB; }
+        .nz-col-resizer:hover::after, body.nz-col-resizing .nz-col-resizer::after { background: #94A0AF; }
         /* 哪吒 P7: 列设置(列显隐 + 工具按钮显隐, localStorage 本机记住) */
         .nz-col-settings-wrap { position: relative; margin-left: auto; }
         .nz-col-settings-btn { display: inline-flex; align-items: center; white-space: nowrap; }
         .nz-col-settings-menu { position: fixed; z-index: 11050; width: 264px; background: #fff; border: 1px solid #E4E9F0; border-radius: 11px; box-shadow: 0 12px 30px rgba(20,22,40,.16); padding: 8px 6px 10px; display: none; }
         .nz-col-settings-menu.nz-open { display: block; }
-        .nz-col-sec-label { font-size: 11.5px; font-weight: 800; color: #8A94A6; padding: 6px 10px 4px; }
-        .nz-col-opt { display: flex; align-items: center; gap: 10px; padding: 7px 10px; margin: 0; border-radius: 7px; font-size: 13.5px; font-weight: 600; color: #1F2329; cursor: pointer; }
+        .nz-col-sec-label { font-size: 12px; font-weight: 600; color: #8A94A6; padding: 6px 10px 4px; }
+        .nz-col-opt { display: flex; align-items: center; gap: 10px; padding: 7px 10px; margin: 0; border-radius: 7px; font-size: 13.5px; font-weight: 500; color: #1F2329; cursor: pointer; }
         .nz-col-opt:hover { background: #F4F6F9; }
         .nz-col-opt input { width: 16px; height: 16px; accent-color: #102A4C; flex: 0 0 auto; }
         .nz-col-opt span { flex: 1; }
@@ -68,7 +68,7 @@
         .nz-col-hint { display: flex; gap: 7px; padding: 9px 10px; margin: 8px 6px 0; background: #F7F9FB; border: 1px solid #EAEEF3; border-radius: 8px; font-size: 12px; color: #667085; line-height: 1.5; }
         .nz-col-hint i { font-size: 14px; color: #98A2B3; flex: 0 0 auto; margin-top: 1px; }
         .nz-col-foot { display: flex; align-items: center; justify-content: space-between; padding: 10px 10px 2px; }
-        .nz-col-reset { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; color: #1E4FBF; font-size: 12.5px; font-weight: 700; cursor: pointer; padding: 0; }
+        .nz-col-reset { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; color: #475467; font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 0; }
         .nz-col-foot-note { font-size: 11.5px; color: #98A2B3; }
         @media (max-width: 767.98px) { .nz-col-settings-wrap { display: none; } }
         .nz-payment-proof-list { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
@@ -421,7 +421,7 @@
                             <div class="nz-col-hint"><i class="tio-info-outlined"></i><span>隐藏「更多」后，补打小票可点订单号进详情页，不影响操作。</span></div>
                             <div class="nz-col-foot">
                                 <button type="button" class="nz-col-reset" id="nzColReset"><i class="tio-refresh"></i>恢复默认</button>
-                                <span class="nz-col-foot-note">只你自己看得到 · 本机记住</span>
+                                <span class="nz-col-foot-note">仅本机保存</span>
                             </div>
                         </div>
                     </div>
@@ -1139,9 +1139,9 @@
                     });
                     styleEl.textContent = css;
                     var exp = document.querySelector('.nz-export-area');
-                    if (exp) exp.style.display = (prefs['tool_export'] === false) ? 'none' : '';
+                    if (exp) { if (prefs['tool_export'] === false) { exp.style.setProperty('display', 'none', 'important'); } else { exp.style.removeProperty('display'); } }
                     var batchBtn = document.getElementById('nzBatchOpenBtn');
-                    if (batchBtn) batchBtn.style.display = (prefs['tool_batch'] === false) ? 'none' : '';
+                    if (batchBtn) { if (prefs['tool_batch'] === false) { batchBtn.style.setProperty('display', 'none', 'important'); } else { batchBtn.style.removeProperty('display'); } }
                     if (prefs['tool_batch'] === false && document.body.classList.contains('nz-batch-mode')){
                         var bc = document.getElementById('nzBatchCancel'); if (bc) bc.click();
                     }
