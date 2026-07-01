@@ -29,6 +29,7 @@ class VendorKycProfile extends Model
         'beneficial_owner_name' => 'encrypted',
         'id_doc_number'         => 'encrypted',
         'bank_account'          => 'encrypted',
+        'account_holder_name'   => 'encrypted',
         'contact_phone'         => 'encrypted',
         'note'                  => 'encrypted',
         // —— 时间 ——

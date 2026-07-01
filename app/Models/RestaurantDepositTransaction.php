@@ -13,12 +13,15 @@ class RestaurantDepositTransaction extends Model
     protected $fillable = [
         'vendor_id', 'restaurant_id', 'order_id', 'type',
         'amount', 'commission', 'balance_after', 'note', 'created_by',
+        'currency', 'original_amount', 'original_ref',
     ];
 
     protected $casts = [
         'amount' => 'float',
         'commission' => 'float',
         'balance_after' => 'float',
+        'original_amount' => 'float',
+        'original_ref' => 'encrypted',
     ];
 
     public function restaurant()

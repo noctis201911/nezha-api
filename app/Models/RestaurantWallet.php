@@ -14,7 +14,7 @@ class RestaurantWallet extends Model
      *
      * @var array
      */
-    protected $fillable = ['vendor_id'];
+    protected $fillable = ['vendor_id', 'guarantee_balance'];
 
     public function getBalanceAttribute()
     {
