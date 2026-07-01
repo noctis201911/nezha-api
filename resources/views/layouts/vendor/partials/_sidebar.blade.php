@@ -854,6 +854,19 @@
                         </li>
                     @endif
 
+                    @if(\App\CentralLogics\Helpers::employee_module_permission_check('my_restaurant'))
+                        <li class="navbar-vertical-aside-has-menu {{ Request::is('restaurant-panel/restaurant/brand') ? 'active' : '' }}">
+                            <a class="js-navbar-vertical-aside-menu-link nav-link"
+                               href="{{ route('vendor.shop.brand') }}"
+                               title="{{ translate('门店形象') }}">
+                                <i class="tio-photo nav-icon"></i>
+                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
+                                    {{ translate('门店形象') }}
+                                </span>
+                            </a>
+                        </li>
+                    @endif
+
 
                 @if(false && \App\CentralLogics\Helpers::employee_module_permission_check('business_plan')) {{-- 哪吒停用·StackFood残留 --}}
                         <li class="navbar-vertical-aside-has-menu @yield('subscriberList')">

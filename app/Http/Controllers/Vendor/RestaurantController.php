@@ -19,6 +19,13 @@ class RestaurantController extends Controller
         return view('vendor-views.shop.shopInfo', compact('shop'));
     }
 
+    // 哪吒: 门店形象合并页 — logo/封面/分享图集中一处 + 顾客端预览 + 显示位置标注
+    public function brand()
+    {
+        $shop = Helpers::get_restaurant_data();
+        return view('vendor-views.shop.brand', compact('shop'));
+    }
+
     public function edit()
     {
         $shop = Restaurant::withoutGlobalScope('translate')->with('translations')->find(Helpers::get_restaurant_id());
@@ -134,7 +141,7 @@ class RestaurantController extends Controller
         }
 
         Toastr::success(translate('messages.restaurant_logo_updated'));
-        return redirect()->route('vendor.shop.view');
+        return back();
     }
 
     public function cover_update(Request $request)
@@ -148,7 +155,7 @@ class RestaurantController extends Controller
         $shop?->save();
 
         Toastr::success(translate('messages.restaurant_cover_photo_updated'));
-        return redirect()->route('vendor.shop.view');
+        return back();
     }
 
     public function update_message(Request $request)

@@ -362,6 +362,7 @@ Route::group(['prefix' => 'withdraw-method', 'as' => 'wallet-method.', 'middlewa
 
         Route::group(['prefix' => 'restaurant', 'as' => 'shop.', 'middleware' => ['module:my_restaurant','subscription:my_shop' ]], function () {
             Route::get('view', [RestaurantController::class, 'view'])->name('view');
+            Route::get('brand', [RestaurantController::class, 'brand'])->name('brand');
             Route::get('edit', [RestaurantController::class, 'edit'])->name('edit');
             Route::post('update', [RestaurantController::class, 'update'])->name('update');
             Route::post('logo/update', [RestaurantController::class, 'logo_update'])->name('logo-update');
