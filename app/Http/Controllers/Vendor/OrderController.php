@@ -132,8 +132,22 @@ class OrderController extends Controller
                     }
                 });
             })
-            // 哪吒[2026-07-01 P5]: 「全部」= 真正的全部(不排除已取消/失败/退款/待接单), 名副其实且≥任何子类; 老单由前端「显示已完成·近N天」收起, 不在此排除。
-            ->when($status == 'all', function ($query) {
+            // 哪吒[2026-07-01 P5]: 「全部」= 真正的全部(默认不排除任何状态, 名副其实且≥任何子类)。
+            // 商家可用列表「显示已完成·近N天」控件收起老的已关闭单: nz_done=0 隐藏全部已关闭单(只留进行中);
+            // nz_done_days=N 进行中单始终显示 + 已关闭单只保留近N天(按下单时间)。默认(无参)= return $query 原样, 与改动前完全一致。
+            // 纯 L3 呈现层筛选, 不碰资金/状态机; 已关闭集合与详情列表「订单已关闭」判定同源。
+            ->when($status == 'all', function ($query) use ($request) {
+                $nzClosed = ['delivered', 'canceled', 'failed', 'refunded', 'refund_request_canceled'];
+                if ($request->query('nz_done', '1') === '0') {
+                    return $query->whereNotIn('order_status', $nzClosed);
+                }
+                $nzDoneDays = (int) $request->query('nz_done_days', 0);
+                if ($nzDoneDays > 0) {
+                    return $query->where(function ($q) use ($nzClosed, $nzDoneDays) {
+                        $q->whereNotIn('order_status', $nzClosed)
+                            ->orWhere('created_at', '>=', now()->subDays($nzDoneDays));
+                    });
+                }
                 return $query;
             })
             ->when(in_array($status, ['pending', 'confirmed']), function ($query) {
@@ -157,7 +171,8 @@ class OrderController extends Controller
             ->hasSubscriptionToday()
             ->where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())
             ->orderBy('schedule_at', 'desc')
-            ->paginate(config('default_pagination'));
+            ->paginate(config('default_pagination'))
+            ->withQueryString(); // 哪吒 P5: 分页链接保留 nz_done/nz_done_days/search 等参数, 防翻页丢筛选
 
         $st = $status;
         // 哪吒: offline_pending / refund_pending / timeout / customer_nudged 无翻译 key, 直接给中文标题避免显示英文键名。

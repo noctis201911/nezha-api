@@ -63,10 +63,19 @@
         .nz-status-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
         .nz-status-empty-copy { color: #102A4C; font-weight: 900; }
         .nz-status-empty-help { color: #667085; font-size: 13px; margin-top: -4px; }
+        .nz-done-filter { display: flex; align-items: center; flex-wrap: wrap; gap: 11px; padding: 11px 14px; margin-bottom: 12px; border: 1px solid #D8E0EA; border-radius: 10px; background: #fff; box-shadow: 0 1px 4px rgba(16,24,40,.04); }
+        .nz-done-filter .nz-done-toggle { display: inline-flex; align-items: center; gap: 7px; margin: 0; font-size: 13px; font-weight: 800; color: #102A4C; cursor: pointer; }
+        .nz-done-filter .nz-done-toggle input { accent-color: #102A4C; width: 16px; height: 16px; }
+        .nz-done-days-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #344054; }
+        .nz-done-days { width: 64px; height: 32px; text-align: center; border: 1px solid #D8E0EA; border-radius: 7px; font-size: 13px; padding: 0 6px; }
+        .nz-done-days:disabled { background: #F7F8FA; color: #98A2B3; border-color: #EDF1F5; }
+        .nz-done-hint { color: #667085; font-size: 12px; font-weight: 600; }
         .nz-mobile-print-toggle, .nz-order-mobile-amount, .nz-mobile-action-label { display: none; }
         @media (max-width: 767.98px) {
             .content.container-fluid { padding-left: 10px; padding-right: 10px; }
             .page-header { margin-bottom: 6px; }
+            .nz-done-filter { gap: 8px 11px; padding: 10px 12px; margin-bottom: 8px; }
+            .nz-done-hint { flex-basis: 100%; }
             .nz-order-status-hero { display: block; padding: 11px 12px; margin-bottom: 8px; border-radius: 9px; }
             .nz-order-status-hero h2 { font-size: 18px; }
             .nz-order-status-hero p { font-size: 12px; line-height: 1.35; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -230,6 +239,23 @@
 
 
         <!-- End Page Header -->
+
+        {{-- 哪吒 P5: 「显示已完成·近N天」筛选控件, 只在「全部」页出现。默认显示全部; 关掉只留进行中;
+             设天数只保留近N天已关闭单。服务端筛选(见 OrderController@list 的 all 分支), localStorage 本机记住。 --}}
+        @if($nzRawStatus === 'all')
+        <div class="nz-done-filter d-print-none" id="nzDoneFilter">
+            <label class="nz-done-toggle">
+                <input type="checkbox" id="nzDoneShow">
+                显示已完成订单
+            </label>
+            <span class="nz-done-days-wrap">
+                近
+                <input type="number" min="1" max="365" inputmode="numeric" id="nzDoneDays" class="nz-done-days" placeholder="不限">
+                天
+            </span>
+            <span class="nz-done-hint" id="nzDoneHint">默认显示全部（含已送达、已取消、已退款等历史单）</span>
+        </div>
+        @endif
 
         <!-- Card -->
         <div class="card nz-order-table-card">
@@ -683,6 +709,82 @@
                 }
             }
 
+            var DONE_SHOW_KEY = 'nzOrderDoneShow';
+            var DONE_DAYS_KEY = 'nzOrderDoneDays';
+
+            function nzDoneReadPref(){
+                var show = localStorage.getItem(DONE_SHOW_KEY);
+                if (show !== '0') show = '1';
+                var days = parseInt(localStorage.getItem(DONE_DAYS_KEY) || '', 10);
+                if (isNaN(days) || days < 1) days = 0;
+                if (days > 365) days = 365;
+                return { show: show, days: days };
+            }
+
+            function nzDoneBuildUrl(pref){
+                var p = new URLSearchParams(location.search);
+                p.delete('nz_done');
+                p.delete('nz_done_days');
+                p.delete('page');
+                if (pref.show === '0') {
+                    p.set('nz_done', '0');
+                } else if (pref.days > 0) {
+                    p.set('nz_done_days', String(pref.days));
+                }
+                var qs = p.toString();
+                return location.pathname + (qs ? '?' + qs : '');
+            }
+
+            function initDoneFilter(){
+                var wrap = document.getElementById('nzDoneFilter');
+                if (!wrap) return; // 只在「全部」页存在
+                var showBox = document.getElementById('nzDoneShow');
+                var daysInput = document.getElementById('nzDoneDays');
+                var hint = document.getElementById('nzDoneHint');
+                if (!showBox || !daysInput || !hint) return;
+
+                var pref = nzDoneReadPref();
+                // 持久化: 用本机首选项校正 URL —— 经状态 tab / 「全部」按钮跳回时 URL 无参, 在此补回后重载
+                var params = new URLSearchParams(location.search);
+                var wantDone = pref.show === '0' ? '0' : null;
+                var wantDays = (pref.show !== '0' && pref.days > 0) ? String(pref.days) : null;
+                if (params.get('nz_done') !== wantDone || params.get('nz_done_days') !== wantDays) {
+                    location.replace(nzDoneBuildUrl(pref));
+                    return;
+                }
+
+                function render(){
+                    var s = nzDoneReadPref();
+                    showBox.checked = s.show !== '0';
+                    daysInput.value = (s.show !== '0' && s.days > 0) ? String(s.days) : '';
+                    daysInput.disabled = !showBox.checked;
+                    if (!showBox.checked) {
+                        hint.textContent = '只显示进行中订单（已送达/已取消/已退款等全部收起）';
+                    } else if (s.days > 0) {
+                        hint.textContent = '进行中订单 + 近 ' + s.days + ' 天内已完成单（更早的收起）';
+                    } else {
+                        hint.textContent = '默认显示全部（含已送达、已取消、已退款等历史单）';
+                    }
+                }
+                render();
+
+                showBox.addEventListener('change', function(){
+                    localStorage.setItem(DONE_SHOW_KEY, showBox.checked ? '1' : '0');
+                    render();
+                    location.replace(nzDoneBuildUrl(nzDoneReadPref()));
+                });
+                daysInput.addEventListener('change', function(){
+                    var v = parseInt(daysInput.value, 10);
+                    if (isNaN(v) || v < 1) {
+                        localStorage.setItem(DONE_DAYS_KEY, '');
+                    } else {
+                        localStorage.setItem(DONE_DAYS_KEY, String(Math.min(v, 365)));
+                    }
+                    render();
+                    location.replace(nzDoneBuildUrl(nzDoneReadPref()));
+                });
+            }
+
             function initColumnResize(){
                 var table = document.getElementById('datatable');
                 if (!table || window.innerWidth < 768) return;
@@ -759,6 +861,7 @@
                 applyPrintSettings();
                 initColumnResize();
                 initProofPreview();
+                initDoneFilter();
 
                 var ready = $('nzPrintReady');
                 var auto = $('nzAutoPrintReady');
