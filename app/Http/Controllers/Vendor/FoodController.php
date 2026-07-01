@@ -11,6 +11,7 @@ use App\Models\Category;
 use App\Models\Food;
 use App\Models\FoodSeoData;
 use App\Models\Nutrition;
+use App\Models\OrderDetail;
 use App\Models\Review;
 use App\Models\Tag;
 use App\Models\Variation;
@@ -650,6 +651,14 @@ class FoodController extends Controller
         }
         $product = Food::find($request->id);
 
+        // 哪吒[有订单不删 · 与批量删除一致]: 有历史订单的菜不硬删(不会撞外键/不破坏历史快照,
+        //   但删掉会丢失销量报表/复购/收藏的引用); 引导商家改用「下架」。
+        if ($product && OrderDetail::where('food_id', $product->id)->exists()) {
+            Toastr::warning('该菜品有历史订单，不能删除；如需下线请用「下架」。');
+
+            return back();
+        }
+
         if ($product->image) {
             Helpers::check_and_delete('product/', $product['image']);
         }
@@ -754,11 +763,13 @@ class FoodController extends Controller
         $productWiseTax = $taxData['productWiseTax'];
 
         $categoriesList = Category::select('id', 'name')->orderBy('name')->get();
+        // 哪吒[批量改分类]: 父级分类(position 0), 供批量操作弹窗父类选择; 子类走 get-categories AJAX。
+        $parentCategories = Category::where('position', 0)->orderBy('name')->get();
         $minMaxPrices = Food::active()->selectRaw('MIN(price) as min_price, MAX(price) as max_price')->first();
         $foodMinPrice = round($minMaxPrices->min_price, 2);
         $foodMaxPrice = round(($minMaxPrices->max_price + 1), 2);
 
-        return view('vendor-views.product.list', compact('foods', 'category', 'type', 'productWiseTax', 'addons', 'categoriesList', 'foodMinPrice', 'foodMaxPrice'));
+        return view('vendor-views.product.list', compact('foods', 'category', 'type', 'productWiseTax', 'addons', 'categoriesList', 'parentCategories', 'foodMinPrice', 'foodMaxPrice'));
     }
 
     // public function search(Request $request)
@@ -1252,6 +1263,223 @@ class FoodController extends Controller
         }
         $product->save();
         Toastr::success('价格已更新');
+        return back();
+    }
+
+    /**
+     * 哪吒[菜品批量操作]: 从请求 ids 解析出「本店」菜品集合。
+     * Food 全局 RestaurantScope 自动把查询限制在当前餐厅 => 外店 id 传进来查不到,
+     * 天然防对象级越权(IDOR); 再对数量封顶 200 防误选全部撑爆事务。
+     */
+    private function nezhaBulkFoods(Request $request)
+    {
+        $ids = collect((array) $request->input('ids', []))
+            ->map(fn ($v) => (int) $v)
+            ->filter(fn ($v) => $v > 0)
+            ->unique()
+            ->take(200)
+            ->values()
+            ->all();
+
+        return Food::whereIn('id', $ids)->get();
+    }
+
+    // 哪吒[批量上/下架]: 下架时同步清空顾客购物车中该菜(对齐单条 status 行为)。
+    public function bulkStatus(Request $request)
+    {
+        if (! Helpers::get_restaurant_data()->food_section) {
+            Toastr::warning(translate('messages.permission_denied'));
+
+            return back();
+        }
+        $request->validate(['ids' => 'required|array', 'status' => 'required|in:0,1']);
+        $status = (int) $request->status;
+        $foods = $this->nezhaBulkFoods($request);
+        if ($foods->isEmpty()) {
+            Toastr::warning('未选择有效菜品');
+
+            return back();
+        }
+        $ids = $foods->pluck('id')->all();
+        DB::transaction(function () use ($foods, $ids, $status) {
+            Food::whereIn('id', $ids)->update(['status' => $status]);
+            if ($status !== 1) {
+                $foods->each(fn ($f) => $f->carts()?->delete());
+            }
+        });
+        Toastr::success(($status ? '已上架 ' : '已下架 ').count($ids).' 个菜品');
+
+        return back();
+    }
+
+    // 哪吒[批量改价]: mode=discount 统一设折扣(各自原价不变) / mode=scale 按比例调价(×百分比)。
+    //   异常项(固定折扣≥价 / 调后价≤0)逐项跳过并统计, 不整批失败。
+    public function bulkPrice(Request $request)
+    {
+        if (! Helpers::get_restaurant_data()->food_section) {
+            Toastr::warning(translate('messages.permission_denied'));
+
+            return back();
+        }
+        $request->validate(['ids' => 'required|array', 'mode' => 'required|in:discount,scale']);
+        $foods = $this->nezhaBulkFoods($request);
+        if ($foods->isEmpty()) {
+            Toastr::warning('未选择有效菜品');
+
+            return back();
+        }
+
+        if ($request->mode === 'discount') {
+            $request->validate([
+                'discount' => 'required|numeric|min:0',
+                'discount_type' => 'required|in:percent,amount',
+            ], [
+                'discount.required' => '请填写折扣值',
+                'discount.numeric' => '折扣需为数字',
+            ]);
+            $discount = (float) $request->discount;
+            $type = $request->discount_type;
+            if ($type === 'percent' && $discount > 100) {
+                Toastr::error('百分比折扣不能超过 100%');
+
+                return back();
+            }
+            $applied = 0;
+            $skipped = 0;
+            DB::transaction(function () use ($foods, $discount, $type, &$applied, &$skipped) {
+                foreach ($foods as $f) {
+                    if ($type === 'amount' && $discount >= (float) $f->price) {
+                        $skipped++;
+
+                        continue;
+                    }
+                    $f->discount = $discount;
+                    $f->discount_type = $type;
+                    $f->save();
+                    $applied++;
+                }
+            });
+            $msg = "已给 {$applied} 个菜品设折扣";
+            if ($skipped > 0) {
+                $msg .= "；{$skipped} 个因折扣≥原价已跳过";
+            }
+            Toastr::success($msg);
+
+            return back();
+        }
+
+        // mode = scale
+        $request->validate([
+            'percent' => 'required|numeric|between:-90,900',
+        ], [
+            'percent.required' => '请填写调价百分比',
+            'percent.between' => '调价百分比需在 -90% ~ 900% 之间',
+        ]);
+        $factor = 1 + ((float) $request->percent / 100);
+        $applied = 0;
+        $skipped = 0;
+        DB::transaction(function () use ($foods, $factor, &$applied, &$skipped) {
+            foreach ($foods as $f) {
+                $newPrice = round(((float) $f->price) * $factor, 2);
+                if ($newPrice <= 0 || ($f->discount_type === 'amount' && (float) $f->discount >= $newPrice)) {
+                    $skipped++;
+
+                    continue;
+                }
+                $f->price = $newPrice;
+                $f->save();
+                $applied++;
+            }
+        });
+        $msg = "已调价 {$applied} 个菜品";
+        if ($skipped > 0) {
+            $msg .= "；{$skipped} 个因调后价异常已跳过";
+        }
+        Toastr::success($msg);
+
+        return back();
+    }
+
+    // 哪吒[批量改分类]: 写 category_id(叶子) + category_ids JSON(position 1父/2子), 与 store()/update() 同构。
+    public function bulkCategory(Request $request)
+    {
+        if (! Helpers::get_restaurant_data()->food_section) {
+            Toastr::warning(translate('messages.permission_denied'));
+
+            return back();
+        }
+        $request->validate([
+            'ids' => 'required|array',
+            'category_id' => 'required|integer|exists:categories,id',
+            'sub_category_id' => 'nullable|integer|exists:categories,id',
+        ], [
+            'category_id.required' => '请选择分类',
+            'category_id.exists' => '所选分类不存在',
+        ]);
+        $foods = $this->nezhaBulkFoods($request);
+        if ($foods->isEmpty()) {
+            Toastr::warning('未选择有效菜品');
+
+            return back();
+        }
+        $category = [['id' => (int) $request->category_id, 'position' => 1]];
+        if ($request->sub_category_id) {
+            $category[] = ['id' => (int) $request->sub_category_id, 'position' => 2];
+        }
+        $leaf = $request->sub_category_id ?: $request->category_id;
+        $json = json_encode($category);
+        $ids = $foods->pluck('id')->all();
+        DB::transaction(function () use ($ids, $leaf, $json) {
+            Food::whereIn('id', $ids)->update(['category_id' => $leaf, 'category_ids' => $json]);
+        });
+        Toastr::success('已更新 '.count($ids).' 个菜品的分类');
+
+        return back();
+    }
+
+    // 哪吒[批量删除]: 有历史订单的菜跳过不删(不会撞外键/不破坏历史快照,但保留报表/复购/收藏引用),
+    //   引导改用下架; 可删的复用单条 delete() 的全套清理。
+    public function bulkDelete(Request $request)
+    {
+        if (! Helpers::get_restaurant_data()->food_section) {
+            Toastr::warning(translate('messages.permission_denied'));
+
+            return back();
+        }
+        $request->validate(['ids' => 'required|array']);
+        $foods = $this->nezhaBulkFoods($request);
+        if ($foods->isEmpty()) {
+            Toastr::warning('未选择有效菜品');
+
+            return back();
+        }
+        $withOrders = OrderDetail::whereIn('food_id', $foods->pluck('id'))->distinct()->pluck('food_id')->all();
+        $deletable = $foods->reject(fn ($f) => in_array($f->id, $withOrders));
+
+        $deleted = 0;
+        DB::transaction(function () use ($deletable, &$deleted) {
+            foreach ($deletable as $product) {
+                if ($product->image) {
+                    Helpers::check_and_delete('product/', $product['image']);
+                }
+                $product?->carts()?->delete();
+                $product?->newVariationOptions()?->delete();
+                $product?->newVariations()?->delete();
+                $product?->translations()?->delete();
+                $product?->taxVats()->delete();
+                $product->delete();
+                $deleted++;
+            }
+        });
+
+        $blocked = count($withOrders);
+        $msg = "已删除 {$deleted} 个菜品";
+        if ($blocked > 0) {
+            Toastr::warning($msg."；{$blocked} 个有历史订单未删，如需下线请用「下架」。");
+        } else {
+            Toastr::success($msg);
+        }
+
         return back();
     }
 

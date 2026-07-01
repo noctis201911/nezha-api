@@ -183,6 +183,11 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
             Route::get('out-of-stock-list', [FoodController::class, 'stockOutList'])->name('stockOutList');
             Route::post('update-stock', [FoodController::class, 'updateStock'])->name('updateStock');
             Route::post('update-price', [FoodController::class, 'updatePrice'])->name('updatePrice');
+            // 哪吒[菜品批量操作]: 全选后批量上下架/改价/改分类/删除 (RestaurantScope 限本店防越权)
+            Route::post('bulk-status', [FoodController::class, 'bulkStatus'])->name('bulk-status');
+            Route::post('bulk-price', [FoodController::class, 'bulkPrice'])->name('bulk-price');
+            Route::post('bulk-category', [FoodController::class, 'bulkCategory'])->name('bulk-category');
+            Route::post('bulk-delete', [FoodController::class, 'bulkDelete'])->name('bulk-delete');
             Route::post('/add-to-session', [FoodController::class, 'addToSession'])->name('addToSession');
             Route::get('export', [FoodController::class, 'export'])->name('export');
 

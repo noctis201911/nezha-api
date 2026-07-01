@@ -100,6 +100,7 @@
                  >
                     <thead class="global-bg-box">
                         <tr>
+                            <th class="text-center" style="width:36px;"><input type="checkbox" id="nzCheckAll" aria-label="全选" style="width:16px;height:16px;vertical-align:middle;cursor:pointer;"></th>
                             <th>{{ translate('messages.sl') }}</th>
                             <th class="w-20p">{{translate('messages.name')}}</th>
                             <th class="w-20p">{{translate('messages.category')}}</th>
@@ -119,6 +120,7 @@
                     @php( $stock_out = null)
 
                         <tr>
+                            <td class="text-center"><input type="checkbox" class="nz-row-check" value="{{ $food['id'] }}" aria-label="选择菜品" style="width:16px;height:16px;vertical-align:middle;cursor:pointer;"></td>
                             <td>{{$key+$foods->firstItem()}}</td>
                             <td>
                                 <a class="media align-items-center min-w-370" href="{{route('vendor.food.view',[$food['id']])}}">
@@ -595,6 +597,108 @@
 </div>
 <div id="offcanvasOverlay" class="offcanvas-overlay"></div>
 
+{{-- 哪吒[菜品批量操作] 底部操作条 + 弹窗 --}}
+<style>
+.nz-bulk-bar{position:fixed;left:0;right:0;bottom:0;z-index:1030;background:#2b2b2b;color:#fff;box-shadow:0 -2px 12px rgba(0,0,0,.18);}
+.nz-bulk-inner{max-width:1600px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.nz-bulk-count{font-size:14px;}
+.nz-bulk-count b{color:#4a9fe0;}
+.nz-bulk-clear{color:#bbb;text-decoration:underline;font-size:12px;margin-left:10px;}
+.nz-bulk-clear:hover{color:#fff;}
+.nz-bulk-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.nz-bulk-actions .nzb{font-size:13px;padding:7px 16px;border-radius:6px;border:0;cursor:pointer;background:#3d3d3d;color:#fff;}
+.nz-bulk-actions .nzb:hover{background:#4a4a4a;}
+.nz-bulk-actions .nzb-primary{background:var(--primary-clr);}
+.nz-bulk-actions .nzb-danger{background:transparent;color:#ff9a9a;border:1px solid #ff9a9a;}
+.nz-bulk-actions .nzb-danger:hover{background:rgba(255,120,120,.12);}
+.nz-mode-tab{border:1px solid #e2e2e2;background:#f6f7f9;color:#666;border-radius:6px;padding:8px;font-size:13px;}
+.nz-mode-tab.active{background:var(--primary-clr);color:#fff;border-color:var(--primary-clr);}
+.nz-hint{font-size:12px;color:#888;margin-top:10px;line-height:1.6;background:#f6f8fb;border-radius:6px;padding:9px 11px;}
+</style>
+
+<div id="nzBulkBar" class="nz-bulk-bar" style="display:none;">
+    <div class="nz-bulk-inner">
+        <div class="nz-bulk-count">已选 <b id="nzBulkCount">0</b> 项<a href="javascript:" id="nzBulkClear" class="nz-bulk-clear">取消选择</a></div>
+        <div class="nz-bulk-actions">
+            <button type="button" class="nzb nzb-primary" data-nz-bulk="up">上架</button>
+            <button type="button" class="nzb" data-nz-bulk="down">下架</button>
+            <button type="button" class="nzb" data-toggle="modal" data-target="#nzBulkPrice">改价</button>
+            <button type="button" class="nzb" data-toggle="modal" data-target="#nzBulkCategory">改分类</button>
+            <button type="button" class="nzb nzb-danger" data-nz-bulk="delete"><i class="tio-delete-outlined"></i> 删除</button>
+        </div>
+    </div>
+</div>
+
+<form id="nzBulkActionForm" method="POST" style="display:none;">@csrf</form>
+
+<div class="modal fade" id="nzBulkPrice" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content text-left">
+            <form action="{{ route('vendor.food.bulk-price') }}" method="POST" class="nz-bulk-form">
+                @csrf
+                <input type="hidden" name="mode" id="nzPriceMode" value="discount">
+                <div class="modal-header"><h5 class="modal-title">批量改价 · <span class="nz-sel-count">0</span> 个菜品</h5><button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button></div>
+                <div class="modal-body">
+                    <div style="display:flex;gap:8px;margin-bottom:16px;">
+                        <button type="button" class="nz-mode-tab flex-grow-1 active" style="flex:1;" data-mode="discount">设折扣</button>
+                        <button type="button" class="nz-mode-tab flex-grow-1" style="flex:1;" data-mode="scale">按比例调价</button>
+                    </div>
+                    <div class="nz-mode-pane" data-pane="discount">
+                        <div class="row g-2">
+                            <div class="col-6 text-left">
+                                <label class="input-label">折扣类型</label>
+                                <select name="discount_type" class="form-control">
+                                    <option value="percent">百分比 (%)</option>
+                                    <option value="amount">固定金额</option>
+                                </select>
+                            </div>
+                            <div class="col-6 text-left">
+                                <label class="input-label">折扣值</label>
+                                <input type="number" name="discount" step="0.01" min="0" class="form-control" placeholder="例：15">
+                            </div>
+                        </div>
+                        <div class="nz-hint">给选中的菜统一设此折扣，各自原价不变；固定折扣 ≥ 某菜原价的会自动跳过并统计。</div>
+                    </div>
+                    <div class="nz-mode-pane d-none" data-pane="scale">
+                        <label class="input-label">调价百分比（%）</label>
+                        <input type="number" name="percent" step="0.01" min="-90" max="900" class="form-control" placeholder="涨价填 10，降价填 -20">
+                        <div class="nz-hint">按此百分比统一调整原价（四舍五入到分）；调后价异常（≤0 或低于固定折扣）的会自动跳过。</div>
+                    </div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">取消</button><button type="submit" class="btn btn--primary btn-sm">保存</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="nzBulkCategory" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content text-left">
+            <form action="{{ route('vendor.food.bulk-category') }}" method="POST" class="nz-bulk-form">
+                @csrf
+                <div class="modal-header"><h5 class="modal-title">批量改分类 · <span class="nz-sel-count">0</span> 个菜品</h5><button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button></div>
+                <div class="modal-body">
+                    <div class="form-group text-left">
+                        <label class="input-label">分类 <span class="text-danger">*</span></label>
+                        <select name="category_id" id="nzBulkCatParent" class="form-control" required>
+                            <option value="" disabled selected>请选择分类</option>
+                            @foreach($parentCategories ?? [] as $pc)
+                                <option value="{{ $pc->id }}">{{ $pc->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="form-group text-left">
+                        <label class="input-label">子分类（可选）</label>
+                        <select name="sub_category_id" id="nzBulkCatSub" class="form-control"><option value="">不设子分类</option></select>
+                    </div>
+                    <div class="nz-hint">选中的菜品将统一归到该分类。</div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">取消</button><button type="submit" class="btn btn--primary btn-sm">保存</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
 @endsection
 
 @push('script_2')
@@ -757,6 +861,88 @@
                 el.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); nzHelp(el); });
                 el.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); nzHelp(el); } });
             });
+        })();
+    </script>
+
+    {{-- 哪吒[菜品批量操作] 选择跟踪 / 底部操作条 / 弹窗提交 --}}
+    <script>
+        (function () {
+            var NZ_ROUTE_STATUS = '{{ route('vendor.food.bulk-status') }}';
+            var NZ_ROUTE_DELETE = '{{ route('vendor.food.bulk-delete') }}';
+            var NZ_ROUTE_SUBCAT = '{{ route('vendor.food.get-categories') }}';
+
+            function nzSelectedIds() {
+                return $('.nz-row-check:checked').map(function () { return this.value; }).get();
+            }
+            function nzUpdateBar() {
+                var n = nzSelectedIds().length;
+                $('#nzBulkCount').text(n);
+                $('.nz-sel-count').text(n);
+                $('#nzBulkBar').css('display', n > 0 ? 'block' : 'none');
+                var total = $('.nz-row-check').length;
+                $('#nzCheckAll').prop('checked', n > 0 && n === total).prop('indeterminate', n > 0 && n < total);
+            }
+            function nzWarn(msg) { if (window.toastr) { toastr.warning(msg); } else { alert(msg); } }
+
+            $(document).on('change', '.nz-row-check', nzUpdateBar);
+            $(document).on('change', '#nzCheckAll', function () {
+                $('.nz-row-check').prop('checked', this.checked);
+                nzUpdateBar();
+            });
+            $(document).on('click', '#nzBulkClear', function () {
+                $('.nz-row-check, #nzCheckAll').prop('checked', false);
+                nzUpdateBar();
+            });
+
+            function nzSubmitAction(action, extra) {
+                var ids = nzSelectedIds();
+                if (!ids.length) { nzWarn('请先勾选菜品'); return; }
+                var $f = $('#nzBulkActionForm');
+                $f.attr('action', action).find('.nz-inject').remove();
+                ids.forEach(function (id) { $f.append('<input type="hidden" class="nz-inject" name="ids[]" value="' + id + '">'); });
+                if (extra) { Object.keys(extra).forEach(function (k) { $f.append('<input type="hidden" class="nz-inject" name="' + k + '" value="' + extra[k] + '">'); }); }
+                $f.submit();
+            }
+
+            $(document).on('click', '[data-nz-bulk]', function () {
+                var act = $(this).data('nz-bulk');
+                var ids = nzSelectedIds();
+                if (!ids.length) { nzWarn('请先勾选菜品'); return; }
+                if (act === 'up') { nzSubmitAction(NZ_ROUTE_STATUS, { status: 1 }); }
+                else if (act === 'down') { nzSubmitAction(NZ_ROUTE_STATUS, { status: 0 }); }
+                else if (act === 'delete') {
+                    if (confirm('确定删除选中的 ' + ids.length + ' 个菜品吗？有历史订单的会自动跳过并提示。')) {
+                        nzSubmitAction(NZ_ROUTE_DELETE, {});
+                    }
+                }
+            });
+
+            $(document).on('click', '.nz-mode-tab', function () {
+                var mode = $(this).data('mode');
+                $('#nzPriceMode').val(mode);
+                $('.nz-mode-tab').removeClass('active');
+                $(this).addClass('active');
+                $('.nz-mode-pane').addClass('d-none');
+                $('.nz-mode-pane[data-pane="' + mode + '"]').removeClass('d-none');
+            });
+
+            $(document).on('change', '#nzBulkCatParent', function () {
+                var pid = $(this).val();
+                if (!pid) { $('#nzBulkCatSub').html('<option value="">不设子分类</option>'); return; }
+                $.get(NZ_ROUTE_SUBCAT + '?parent_id=' + pid, function (res) {
+                    $('#nzBulkCatSub').html('<option value="">不设子分类</option>' + ((res && res.options) || '')).val('');
+                });
+            });
+
+            $(document).on('submit', '.nz-bulk-form', function (e) {
+                var ids = nzSelectedIds();
+                if (!ids.length) { e.preventDefault(); nzWarn('请先勾选菜品'); return false; }
+                var $f = $(this);
+                $f.find('.nz-inject').remove();
+                ids.forEach(function (id) { $f.append('<input type="hidden" class="nz-inject" name="ids[]" value="' + id + '">'); });
+            });
+
+            nzUpdateBar();
         })();
     </script>
 @endpush
