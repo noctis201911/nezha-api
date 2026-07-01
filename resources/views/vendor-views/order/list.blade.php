@@ -593,8 +593,8 @@
                                         && $order->offline_payments && $order->offline_payments->status === 'pending') {
                                         $__qa = ['route' => route('vendor.order.confirm-offline-payment', $order['id']),
                                                   'label' => '确认收款', 'cls' => 'btn-success', 'icon' => 'tio-checkmark-circle',
-                                                  'confirm' => '确认：您已在自己的账户收到本单付款？',
-                                                  'auto_print' => true];
+                                                  'confirm' => '确认：您已在自己的账户收到本单顾客的付款？',
+                                                  'auto_print' => true, 'prep_prompt' => true, 'prep_title' => '确认收款', 'prep_ok' => '确认收款', 'prep_color' => '#1FA463', 'prep_note' => '确认后将通知顾客并开始备餐。', 'prep_default' => (int) (\App\CentralLogics\Helpers::get_business_settings('nezha_default_prep_min') ?: 30)];
                                     } elseif ($__os === 'pending') {
                                         $__qa = ['route' => route('vendor.order.status-update', $order['id']),
                                                   'label' => '接单', 'cls' => 'btn-success', 'icon' => 'tio-checkmark-circle',
@@ -604,9 +604,9 @@
                                     } elseif (in_array($__os, ['confirmed','accepted'], true)) {
                                         $__qa = ['route' => route('vendor.order.status-update', $order['id']),
                                                   'label' => '开始备餐', 'cls' => 'btn-info', 'icon' => 'tio-restaurant',
-                                                  'confirm' => '开始备餐？',
+                                                  'prep_prompt' => true, 'prep_title' => '开始备餐', 'prep_ok' => '开始备餐', 'prep_color' => '#1F6FD0', 'prep_note' => '顾客会看到这个预计时间。默认取店铺设置，可临时改本单。', 'prep_default' => (int) explode('-', $restaurant->delivery_time ?? '30-60')[0],
                                                   'extra' => ['order_status'=>'processing','id'=>$order['id'],
-                                                              'processing_time'=>explode('-',$restaurant->delivery_time ?? '30-60')[0]]];
+                                                              ]];
                                     } elseif (in_array($__os, ['processing','handover'], true) && ($order['order_type'] ?? '') === 'delivery') {
                                         // 哪吒 P3: 配送单出餐环节改「叫车配送」→ 底部抽屉(叫车工具 + 贴链接 + 标记配送中), 不进详情页
                                         $__qa = ['type' => 'dispatch', 'label' => '叫车配送', 'icon' => 'tio-send'];
@@ -643,18 +643,18 @@
                                 @elseif($__qa && (($__qa['type'] ?? 'form') === 'closed'))
                                     <span class="nz-step-empty">{{ $__qa['label'] }}</span>
                                 @elseif($__qa)
-                                    <form class="nz-order-step-form" method="POST" action="{{ $__qa['route'] }}" style="margin:0"
+                                    <form class="nz-order-step-form{{ !empty($__qa['prep_prompt']) ? ' nz-prep-form' : '' }}" method="POST" action="{{ $__qa['route'] }}" style="margin:0"
                                         data-nz-invoice-url="{{route('vendor.order.generate-invoice',[$order['id']])}}?nz_auto_print=1"
                                         data-nz-order-id="{{$order['id']}}"
                                         data-nz-auto-print-action="{{ !empty($__qa['auto_print']) ? '1' : '0' }}"
-                                        onsubmit="return confirm('{{ $__qa['confirm'] }}')">
+                                        @if(!empty($__qa['prep_prompt'])) data-nz-prep-default="{{ $__qa['prep_default'] ?? 30 }}" data-nz-prep-title="{{ $__qa['prep_title'] ?? '开始备餐' }}" data-nz-prep-ok="{{ $__qa['prep_ok'] ?? '确认' }}" data-nz-prep-color="{{ $__qa['prep_color'] ?? '#1F6FD0' }}" data-nz-prep-note="{{ $__qa['prep_note'] ?? '' }}" data-nz-prep-confirm="{{ $__qa['confirm'] ?? '' }}"@else onsubmit="return confirm('{{ $__qa['confirm'] }}')"@endif>
                                         @csrf @method('PUT')
                                         @if(!empty($__qa['extra']))
                                             @foreach($__qa['extra'] as $__k => $__v)
                                                 <input type="hidden" name="{{ $__k }}" value="{{ $__v }}">
                                             @endforeach
                                         @endif
-                                        <button type="submit" class="btn btn-sm {{ $__qa['cls'] }} nz-step-btn text-nowrap text-white">
+                                        @if(!empty($__qa['prep_prompt']))<input type="hidden" name="processing_time" value="{{ $__qa['prep_default'] ?? 30 }}">@endif<button type="submit" class="btn btn-sm {{ $__qa['cls'] }} nz-step-btn text-nowrap text-white">
                                             <i class="{{ $__qa['icon'] }} mr-1"></i>{{ $__qa['label'] }}
                                         </button>
                                     </form>
@@ -1071,6 +1071,62 @@
                 return false;
             };
 
+            function initPrepPrompt(){
+                document.addEventListener('click', function(e){
+                    var t = e.target;
+                    if (!t || !t.closest) return;
+                    var btn = t.closest('form.nz-prep-form button[type="submit"]');
+                    if (!btn) return;
+                    var form = btn.closest('form.nz-prep-form');
+                    if (!form || form.getAttribute('data-nz-prep-done') === '1') return;
+                    e.preventDefault();
+                    var def = parseInt(form.getAttribute('data-nz-prep-default'), 10) || 30;
+                    var title = form.getAttribute('data-nz-prep-title') || '开始备餐';
+                    var okTxt = form.getAttribute('data-nz-prep-ok') || '确认';
+                    var color = form.getAttribute('data-nz-prep-color') || '#1F6FD0';
+                    var note = form.getAttribute('data-nz-prep-note') || '';
+                    var confirmLine = form.getAttribute('data-nz-prep-confirm') || '';
+                    function setAndGo(val){
+                        var inp = form.querySelector('input[name="processing_time"]');
+                        if (!inp) { inp = document.createElement('input'); inp.type = 'hidden'; inp.name = 'processing_time'; form.appendChild(inp); }
+                        inp.value = val;
+                        form.setAttribute('data-nz-prep-done', '1');
+                        if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
+                    }
+                    if (typeof Swal === 'undefined') {
+                        var pv = window.prompt((confirmLine ? confirmLine + '\n\n' : '') + '预计出餐时间（分钟）', def);
+                        if (pv === null) return;
+                        pv = parseInt(pv, 10);
+                        if (!pv || pv < 1) { alert('请填写预计出餐时间（至少 1 分钟）'); return; }
+                        setAndGo(Math.min(pv, 1440));
+                        return;
+                    }
+                    var html = '';
+                    if (confirmLine) { html += '<div style="text-align:left;font-size:13.5px;color:#475467;line-height:1.5;background:#F7F9FB;border:1px solid #EAEEF3;border-radius:9px;padding:10px 12px;margin:0 0 14px;">' + confirmLine + '</div>'; }
+                    html += '<div style="text-align:left;font-size:13.5px;font-weight:700;color:#344054;margin:0 0 6px;">预计出餐时间（分钟）</div>';
+                    if (note) { html += '<div style="text-align:left;font-size:12px;color:#98A2B3;line-height:1.5;margin:6px 0 0;">' + note + '</div>'; }
+                    Swal.fire({
+                        title: title,
+                        html: html,
+                        input: 'number',
+                        inputValue: def,
+                        inputAttributes: { min: 1, max: 1440, step: 1 },
+                        showCancelButton: true,
+                        confirmButtonText: okTxt,
+                        cancelButtonText: '取消',
+                        confirmButtonColor: color,
+                        cancelButtonColor: '#98A2B3',
+                        reverseButtons: true,
+                        inputValidator: function(value){
+                            if (!value || !/^[0-9]+$/.test(String(value)) || parseInt(value, 10) < 1) { return '请填写预计出餐时间（至少 1 分钟）'; }
+                            if (parseInt(value, 10) > 1440) { return '预计出餐时间过大（最多 1440 分钟）'; }
+                        }
+                    }).then(function(r){
+                        if (r && r.value) { setAndGo(parseInt(r.value, 10)); }
+                    });
+                }, false);
+            }
+
             window.nzMaybeAutoPrintAfterOrderAction = function(invoiceUrl){
                 if (!isAutoPrintReady() || !invoiceUrl) return;
                 sessionStorage.setItem('nzAutoPrintInvoiceUrl', invoiceUrl);
@@ -1084,6 +1140,7 @@
                 initDispatchDrawer();
                 initTodayRev();
                 initRowMenu();
+                initPrepPrompt();
 
                 var ready = $('nzPrintReady');
                 var auto = $('nzAutoPrintReady');

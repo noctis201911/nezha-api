@@ -1022,7 +1022,7 @@ class OrderLogic
      * @param  int|null     $confirmer_id    操作人 id (留痕用)
      * @return Order
      */
-    public static function confirm_offline_payment($order, $confirmer_type = 'admin', $confirmer_id = null, $allow_inconclusive = false)
+    public static function confirm_offline_payment($order, $confirmer_type = 'admin', $confirmer_id = null, $allow_inconclusive = false, $processing_time = null)
     {
         // 🔴 L1-6 制裁名单筛查(机制②): 确认收款 = 放行出餐的闸口。USDT 付款先反查链上来源地址,
         //    命中 OFAC SDN/黑名单 → 拒收 + 留痕 + 不放行(平台不与受制裁主体交易)。
@@ -1067,7 +1067,11 @@ class OrderLogic
         if (!$nz_is_scheduled) {
             $order->processing = now();
             $order->order_status = 'processing';
-            if (empty($order->processing_time)) {
+            // 哪吒 P4: 商家「确认收款」时可传本单预计出餐时间(1-1440); 未传则退回平台默认(仅当当前为空)。纯展示 ETA, 不碰资金/状态流转(L3)。
+            $nz_pt = (int) $processing_time;
+            if ($nz_pt >= 1) {
+                $order->processing_time = min($nz_pt, 1440);
+            } elseif (empty($order->processing_time)) {
                 $order->processing_time = (int) (\App\CentralLogics\Helpers::get_business_settings('nezha_default_prep_min') ?: 30);
             }
         }

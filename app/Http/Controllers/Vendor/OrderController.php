@@ -276,6 +276,15 @@ class OrderController extends Controller
      */
     public function confirm_offline_payment(Request $request, $id)
     {
+        // 哪吒 P4: 确认收款(离线三合一→备餐中)时可选填本单预计出餐时间, 未填走平台默认。
+        $request->validate([
+            'processing_time' => 'nullable|integer|min:1|max:1440',
+        ], [
+            'processing_time.integer' => '预计出餐时间需为整数分钟',
+            'processing_time.min'     => '预计出餐时间至少 1 分钟',
+            'processing_time.max'     => '预计出餐时间过大（最多 1440 分钟）',
+        ]);
+
         $order = Order::with('offline_payments')
             ->where(['id' => $id, 'restaurant_id' => Helpers::get_restaurant_id()])
             ->first();
@@ -296,7 +305,7 @@ class OrderController extends Controller
         }
 
         try {
-            \App\CentralLogics\OrderLogic::confirm_offline_payment($order, 'vendor', auth('vendor')->id() ?? auth('vendor_employee')->id());
+            \App\CentralLogics\OrderLogic::confirm_offline_payment($order, 'vendor', auth('vendor')->id() ?? auth('vendor_employee')->id(), processing_time: $request->processing_time);
         } catch (\App\Exceptions\SanctionScreenException $e) {
             // 哪吒 A1: reject(命中制裁) 与 hold(来源待核验) 都抛此异常, 按类型给固定脱敏文案。
             // 不裸透传 $e->getMessage(): reject 的 message 含 from/tx/sdn_uid 命中内幕, 会泄露给商家。
