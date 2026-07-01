@@ -3628,19 +3628,8 @@
 @push('script_2')
 <script>
 // 哪吒[任务3]: 商家订单详情「复制完整配送地址」—— 复制隐藏 textarea 里服务端拼好的整段(地址+门牌+楼层+街道+电话+坐标+地址备注+下单备注), 供商家整段贴去叫 Yandex/导航。纯 L3 呈现层, 复制的是本页已鉴权渲染的数据, 不新增端点。
+// 反馈(2026-07-01): 按钮文案恒为「复制完整配送地址」(只表达动作, 不声称剪贴板持有内容); 成功时在按钮旁闪一个约1.2秒即淡出的「已复制」瞬时提示, 不做持久变色状态 —— 避免用户随后复制别的东西后按钮仍误示"已复制"。
 (function(){
-    function nzCopyToast(msg, isErr){
-        var t = document.createElement('div');
-        t.textContent = msg;
-        t.style.cssText = 'position:fixed;left:50%;top:24px;transform:translateX(-50%);z-index:11000;'
-            + 'padding:10px 18px;border-radius:10px;font-size:14px;font-weight:600;max-width:80vw;'
-            + 'background:' + (isErr ? '#FEE7EA' : '#E8F8EE') + ';'
-            + 'color:' + (isErr ? '#C4193E' : '#1F7A3A') + ';'
-            + 'box-shadow:0 4px 16px rgba(0,0,0,.15);transition:opacity .3s;';
-        document.body.appendChild(t);
-        setTimeout(function(){ t.style.opacity = '0'; }, 2000);
-        setTimeout(function(){ if (t.parentNode) t.parentNode.removeChild(t); }, 2400);
-    }
     function nzFallbackCopy(text){
         var ta = document.createElement('textarea');
         ta.value = text;
@@ -3653,6 +3642,18 @@
         if (ta.parentNode) ta.parentNode.removeChild(ta);
         return ok;
     }
+    function nzFlash(btn, msg, ok){
+        var ex = btn.parentNode ? btn.parentNode.querySelector('.nz-copied-flash') : null;
+        if (ex && ex.parentNode) ex.parentNode.removeChild(ex);
+        var s = document.createElement('span');
+        s.className = 'nz-copied-flash';
+        s.textContent = msg;
+        s.style.cssText = 'display:inline-flex;align-items:center;margin-left:8px;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600;vertical-align:middle;white-space:nowrap;'
+            + 'background:' + (ok ? '#E8F8EE' : '#FEE7EA') + ';color:' + (ok ? '#1F7A3A' : '#C4193E') + ';transition:opacity .35s;opacity:1;';
+        btn.insertAdjacentElement('afterend', s);
+        setTimeout(function(){ s.style.opacity = '0'; }, 850);
+        setTimeout(function(){ if (s.parentNode) s.parentNode.removeChild(s); }, 1250);
+    }
     document.addEventListener('click', function(ev){
         var btn = ev.target && ev.target.closest ? ev.target.closest('.nz-copy-addr') : null;
         if (!btn) return;
@@ -3660,17 +3661,17 @@
         var srcId = btn.getAttribute('data-copy-src');
         var src = srcId ? document.getElementById(srcId) : null;
         var text = src ? src.value : '';
-        if (!text) { nzCopyToast('没有可复制的地址', true); return; }
+        if (!text) { nzFlash(btn, '无地址可复制', false); return; }
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(text).then(function(){
-                nzCopyToast('已复制完整配送地址', false);
+                nzFlash(btn, '✓ 已复制', true);
             }).catch(function(){
                 var ok = nzFallbackCopy(text);
-                nzCopyToast(ok ? '已复制完整配送地址' : '复制失败, 请手动选择文本', !ok);
+                nzFlash(btn, ok ? '✓ 已复制' : '复制失败', ok);
             });
         } else {
             var ok = nzFallbackCopy(text);
-            nzCopyToast(ok ? '已复制完整配送地址' : '复制失败, 请手动选择文本', !ok);
+            nzFlash(btn, ok ? '✓ 已复制' : '复制失败', ok);
         }
     }, false);
 })();
