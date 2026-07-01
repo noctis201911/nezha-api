@@ -180,8 +180,11 @@ UNIQUE(vendor_id) 挡 rejected/failed 重试→放宽"仅活跃一条唯一"(生
 ### K.4 ✅ 三队独立确认站得住(骨架别推翻)
 §0 直付 410 终态(三队实测) · UNIQUE 幂等根方向(资金+实现) · §C2 lockForUpdate 成熟范式(资金+实现) · §F 隔离守 INV-1(三队) · §D 制裁门查主体状态方向对(三队,读法要改) · §G controller 侧 match 修对(三队) · 迁移全 additive 可回滚 greenfield(实现) · §H 无定时任务避开 bootstrap 坑(实现)。
 
-### K.5 下一步:DESIGN v2(待用户拍板 3 处后修订)
-需用户定:① penalty 删还是先定义(建议删) ② 存量商家 KYC 门(强制补建 vs grandfather) ③ HMAC 指纹(做 vs D 降级人工)。定后出 DESIGN v2 折叠 K.1+K.2,再评估是否第三轮 debate。
+### K.5 用户已拍板(2026-07-01)→ 出 DESIGN v2
+① penalty **本版删掉**:net = 三账户和 − 未结佣金;未结佣金 = settling 首步强制跑完在途 `settle_delivered` 后的确定值。将来真要罚款另立独立功能,不阻塞退出。
+② 存量商家 KYC 门 **退出前强制补建 KYC+审批**:申请退出时若无 approved KYC → 先转 KYC 补录+超管审批子流程,通过再继续退出(退款=对外付款,AML 先核验身份最稳)。§I 写明这是现网 7 店必经路径。
+③ 跨 vendor 身份匹配 **做 HMAC 指纹列**:加 `id_doc_fingerprint = HMAC(密钥, 规范化证件号)` 明文索引列,密钥进 `.env`(不入库);证件号确定性归一化(去空格/大小写/按 id_doc_type 分域)FE/BE 统一;接受漏匹配>误匹配,指纹只做退出审批页**辅助红标**非硬闸。
+> **下一步 = 出 DESIGN v2** 折叠 K.1(5🔴 修法)+ K.2(9🟡)+ 上述 3 决策(需补读 `nezha_store_paused` 结构/证件号归一化/KYC 补录子流程再落细)→ 评估是否第三轮 debate → 才写代码。
 
 ---
 *相关：`docs/PLAN_merchant_offboard.md`（政策/§8 红队/L1 决策）· `INVARIANTS.md` L1-8 · `OrderLogic.php`(扣佣/返佣 lock+tx 模式) · `NezhaSanctionScreen.php`(制裁引擎) · `Vendor/NezhaDepositController.php`(对账) · memory `project_nezha-merchant-accounts-reconciliation-refund`。*
