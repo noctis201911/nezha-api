@@ -1344,13 +1344,20 @@ class Helpers
         $config = self::get_business_settings('push_notification_service_file_content');
         $key = (array) $config;
         if (data_get($key, 'project_id')) {
+            // 哪吒[F1a 异步吞吐]: 复用已在生产验证的缓存 token(getFcmAccessTokenCached ~55min),
+            // 省掉每推一次的 OAuth 往返 -> 单 worker 扇出时吞吐翻倍; token 取不到则跳过, 不发无效(空 Bearer)请求。
+            $accessToken = self::getFcmAccessTokenCached($key);
+            if (!$accessToken) {
+                return false;
+            }
             $url = 'https://fcm.googleapis.com/v1/projects/'.$key['project_id'].'/messages:send';
             $headers = [
-                'Authorization' => 'Bearer '.self::getAccessToken($key),
+                'Authorization' => 'Bearer '.$accessToken,
                 'Content-Type' => 'application/json',
             ];
             try {
-                $http = Http::withHeaders($headers)->post($url, $data);
+                // 哪吒[R3]: 显式超时(< Job timeout 30s), 防跨境 FCM 卡死吊住 worker。
+                $http = Http::withHeaders($headers)->connectTimeout(5)->timeout(20)->post($url, $data);
                 info($http->body());
             } catch (\Exception $exception) {
                 info($exception->getMessage());
