@@ -126,6 +126,11 @@ class NezhaDepositController extends Controller
         $restaurant = Restaurant::findOrFail($request->restaurant_id);
         $vendorId = $restaurant->vendor_id;
 
+        if (\App\CentralLogics\NezhaOffboard::is_frozen($restaurant)) {
+            Toastr::error(translate('该商家正在办理退出结算, 结算期间不可变动预存佣金'));
+            return back();
+        }
+
         try {
             DB::beginTransaction();
             // 行锁防并发(与扣佣同口径), 读最新余额后累加
@@ -181,6 +186,11 @@ class NezhaDepositController extends Controller
         ]);
 
         $restaurant = Restaurant::findOrFail($request->restaurant_id);
+
+        if (\App\CentralLogics\NezhaOffboard::is_frozen($restaurant)) {
+            Toastr::error(translate('该商家正在办理退出结算, 结算期间不可缴纳押金'));
+            return back();
+        }
 
         // 入账 AMD 折算单值: CNY 按当刻汇率折算, AMD 原样(避免手填 amount 与回执原额分叉)
         $amount = $this->guaranteeAmountAmd($request->currency, (float) $request->original_amount, $this->rateCny());

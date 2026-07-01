@@ -711,6 +711,11 @@ class VendorController extends Controller
             return back();
         }
 
+        if (\App\CentralLogics\NezhaOffboard::is_frozen($restaurant)) {
+            Toastr::error(translate('该商家正在办理退出结算, 结算期间不可变动预存佣金余额'));
+            return back();
+        }
+
         $amount = round((float) $request->amount, 2);
 
         try {

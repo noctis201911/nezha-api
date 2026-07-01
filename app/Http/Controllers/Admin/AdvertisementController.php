@@ -281,6 +281,8 @@ class AdvertisementController extends Controller
                         \Illuminate\Support\Facades\DB::transaction(function () use ($advertisement, $nezhaRefund) {
                             $vendorId = $advertisement->restaurant?->vendor_id;
                             if (!$vendorId) { return; }
+                            // [哪吒 退出结算] settling 店暂不退广告费(避免污染结算快照), 待撤回退出或并入结算。
+                            if (\App\CentralLogics\NezhaOffboard::is_frozen_id($advertisement->restaurant_id)) { return; }
                             // 顺序: 钱包->广告, 与扣费命令一致防死锁。
                             $wallet = \App\Models\RestaurantWallet::where('vendor_id', $vendorId)->lockForUpdate()->first();
                             if (!$wallet) { return; }

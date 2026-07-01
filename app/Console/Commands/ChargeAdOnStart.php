@@ -65,6 +65,13 @@ class ChargeAdOnStart extends Command
                 continue;
             }
 
+            // [哪吒 退出结算] settling 店跳过广告扣费(避免污染结算快照)。
+            if (\App\CentralLogics\NezhaOffboard::is_frozen_id($ad->restaurant_id)) {
+                $skipped++;
+                $this->line("跳过 广告#{$ad->id}: 门店退出结算中(settling)");
+                continue;
+            }
+
             if ($dry) {
                 $bal = (float) (RestaurantWallet::where('vendor_id', $vendorId)->value('deposit_balance') ?? 0);
                 $ok = $bal >= $price;
