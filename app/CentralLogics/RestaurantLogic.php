@@ -786,9 +786,12 @@ class RestaurantLogic
 
     public static function recently_viewed_restaurants_data($request, $zone_id, $limit = 10, $offset = 1, $type='all',$longitude=0,$latitude=0)
     {
+        // 哪吒[2026-07-02 修看过的餐厅]: recently-viewed 路由无 apiGuestCheck, $request->user 恒 null 致列表恒空;
+        // 改用 auth('api')->user() 按需解析登录用户(游客→null→空列表, 与原意一致).
         $user_id = null;
-        if($request->user !== null){
-            $user_id = $request->user->id;
+        $auth_user = auth('api')->user();
+        if($auth_user !== null){
+            $user_id = $auth_user->id;
         }
 
         $paginator = Restaurant::whereHas('users',function ($query) use($user_id){

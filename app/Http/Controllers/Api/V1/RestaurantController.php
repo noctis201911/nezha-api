@@ -128,8 +128,11 @@ class RestaurantController extends Controller
             $restaurant = Helpers::restaurant_data_formatting(data: $restaurant);
             $restaurant['category_ids'] = array_map('intval', $category_ids->pluck('categories')->toArray());
 
-            if($request->user !== null){
-                $customer_id = $request->user->id;
+            // 哪吒[2026-07-02 修看过的餐厅]: details/{id} 路由无 apiGuestCheck 中间件, $request->user 恒 null 致浏览从不入库(visit_count 全0);
+            // 改用 auth('api')->user() 按需解析 Bearer token(游客无 token→null, 不触发中间件401, 浏览照常).
+            $auth_user = auth('api')->user();
+            if($auth_user !== null){
+                $customer_id = $auth_user->id;
                 Helpers::visitor_log(model:'restaurant',user_id:$customer_id,visitor_log_id:$restaurant->id,order_count:false);
             }
         }
