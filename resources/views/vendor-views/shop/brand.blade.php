@@ -41,7 +41,7 @@
                         <form action="{{ route('vendor.shop.logo-update') }}" method="post" enctype="multipart/form-data" class="mb-0">
                             @csrf
                             <input type="file" name="logo" accept="image/*" id="brandLogoFile" class="d-none" onchange="this.form.submit()">
-                            <label for="brandLogoFile" class="btn btn--primary btn-sm mb-0">{{ $shop?->logo ? translate('更换') : translate('上传') }}</label>
+                            <label for="brandLogoFile" class="btn btn--primary btn-sm mb-0" style="color:#fff;">{{ $shop?->logo ? translate('更换') : translate('上传') }}</label>
                         </form>
                     </div>
                 </div>
@@ -67,7 +67,7 @@
                         <form action="{{ route('vendor.shop.cover-update') }}" method="post" enctype="multipart/form-data" class="mb-0">
                             @csrf
                             <input type="file" name="cover_photo" accept="image/*" id="brandCoverFile" class="d-none" onchange="this.form.submit()">
-                            <label for="brandCoverFile" class="btn btn--primary btn-sm mb-0">{{ $shop?->cover_photo ? translate('更换') : translate('上传') }}</label>
+                            <label for="brandCoverFile" class="btn btn--primary btn-sm mb-0" style="color:#fff;">{{ $shop?->cover_photo ? translate('更换') : translate('上传') }}</label>
                         </form>
                     </div>
                 </div>
@@ -92,12 +92,12 @@
                                 @endif
                             </div>
                             <p class="fs-12 text-muted mb-1 mt-2"><i class="tio-visible"></i> {{ translate('显示在：转发 / 分享店铺链接时的卡片') }}</p>
-                            <p class="fs-12 text-muted mb-0">{{ translate('推荐 1200 × 630 · 不传则用封面兜底') }}</p>
+                            <p class="fs-12 text-muted mb-0">{{ translate('推荐 1200 × 630 · JPG / PNG，≤2MB · 不传则用封面兜底') }}</p>
                         </div>
                         <form action="{{ route('vendor.shop.meta-image-update') }}" method="post" enctype="multipart/form-data" class="mb-0">
                             @csrf
                             <input type="file" name="meta_image" accept="image/*" id="brandMetaFile" class="d-none" onchange="this.form.submit()">
-                            <label for="brandMetaFile" class="btn btn--primary btn-sm mb-0">{{ $shop?->meta_image ? translate('更换') : translate('上传') }}</label>
+                            <label for="brandMetaFile" class="btn btn--primary btn-sm mb-0" style="color:#fff;">{{ $shop?->meta_image ? translate('更换') : translate('上传') }}</label>
                         </form>
                     </div>
                 </div>

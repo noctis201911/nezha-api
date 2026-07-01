@@ -34,7 +34,7 @@
                     <p class="fs-12 mb-0">{{translate('Created_at')}} {{ \App\CentralLogics\Helpers::time_date_format($shop->created_at) }}</p>
                 </div>
                 <div class="d-flex flex-wrap gap-2">
-                    <a href="{{route('vendor.shop.brand')}}" class="btn btn--primary d-flex gap-2 align-items-baseline">
+                    <a href="{{route('vendor.shop.brand')}}" class="btn btn--primary d-flex gap-2 align-items-baseline" style="color:#fff;">
                         <i class="tio-photo"></i> {{translate('门店形象')}}
                     </a>
                     <a href="{{route('vendor.shop.edit')}}" class="btn btn-outline-primary d-flex gap-2 align-items-baseline">

@@ -128,6 +128,8 @@ class RestaurantController extends Controller
     {
         $request->validate([
             'logo' => 'nullable|max:2048',
+        ], [
+            'logo.max' => '图片太大了，请压缩到 2MB 以内再上传',
         ]);
 
         $shop = Restaurant::findOrFail(Helpers::get_restaurant_id());
@@ -148,6 +150,8 @@ class RestaurantController extends Controller
     {
         $request->validate([
             'cover_photo' => 'nullable|max:2048',
+        ], [
+            'cover_photo.max' => '图片太大了，请压缩到 2MB 以内再上传',
         ]);
 
         $shop = Restaurant::findOrFail(Helpers::get_restaurant_id());
@@ -163,6 +167,9 @@ class RestaurantController extends Controller
     {
         $request->validate([
             'meta_image' => 'nullable|image|max:2048',
+        ], [
+            'meta_image.image' => '请上传图片文件（JPG / PNG / WebP）',
+            'meta_image.max' => '图片太大了，请压缩到 2MB 以内再上传',
         ]);
 
         $shop = Restaurant::findOrFail(Helpers::get_restaurant_id());
