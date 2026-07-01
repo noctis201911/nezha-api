@@ -97,6 +97,26 @@
             .nz-dispatch-grip { display: none; }
         }
         .nz-mobile-print-toggle, .nz-order-mobile-amount, .nz-mobile-action-label { display: none; }
+        /* 哪吒 P2: 行末「⋯」更多菜单 + 拒接本单弹窗 */
+        .nz-row-more-btn { display:inline-flex; align-items:center; justify-content:center; border:1px solid #D8E0EA; background:#fff; border-radius:6px; min-width:32px; height:32px; line-height:1; font-size:17px; font-weight:900; color:#475467; cursor:pointer; padding:0 6px; }
+        .nz-row-more-btn:hover { background:#F4F6F9; border-color:#C3CDDB; }
+        .nz-row-menu { position:fixed; z-index:11050; min-width:184px; background:#fff; border:1px solid #E4E9F0; border-radius:10px; box-shadow:0 12px 30px rgba(20,22,40,.16); padding:6px; display:none; }
+        .nz-row-menu.nz-open { display:block; }
+        .nz-row-menu a, .nz-row-menu button { display:flex; align-items:center; gap:9px; width:100%; text-align:left; padding:10px 11px; font-size:13.5px; font-weight:700; color:#1F2329; border-radius:7px; text-decoration:none; background:none; border:0; cursor:pointer; box-sizing:border-box; }
+        .nz-row-menu a:hover, .nz-row-menu button:hover { background:#F4F6F9; }
+        .nz-row-menu .nz-menu-div { height:1px; background:#F0F2F5; margin:4px 6px; }
+        .nz-row-menu .nz-menu-reject { color:#C0392B; }
+        .nz-reject-modal { position:fixed; inset:0; z-index:11060; display:none; align-items:center; justify-content:center; background:rgba(16,24,40,.45); padding:16px; }
+        .nz-reject-modal.nz-open { display:flex; }
+        .nz-reject-card { width:100%; max-width:440px; background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.3); }
+        .nz-reject-head { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #F0F2F5; }
+        .nz-reject-head h5 { margin:0; font-size:15px; }
+        .nz-reject-body { padding:16px 18px; }
+        .nz-reject-body label { font-size:13px; color:#555; display:block; margin-bottom:6px; }
+        .nz-reject-body textarea { width:100%; box-sizing:border-box; border:1px solid #D8E0EA; border-radius:9px; padding:9px 11px; font-size:13.5px; min-height:78px; font-family:inherit; }
+        .nz-reject-foot { display:flex; justify-content:flex-end; gap:8px; padding:12px 18px; border-top:1px solid #F0F2F5; }
+        .nz-reject-x { background:none; border:0; font-size:22px; line-height:1; color:#98A2B3; cursor:pointer; }
+        @media (max-width:576px){ .nz-reject-modal { align-items:flex-end; padding:0; } .nz-reject-card { max-width:none; border-radius:16px 16px 0 0; } }
         @media (max-width: 767.98px) {
             .content.container-fluid { padding-left: 10px; padding-right: 10px; }
             .page-header { margin-bottom: 6px; }
@@ -186,10 +206,9 @@
             #datatable tr.class-all td.nz-order-mobile-actions form,
             #datatable tr.class-all td.nz-order-mobile-actions .nz-step-btn { width: 100%; }
             #datatable tr.class-all td.nz-order-mobile-actions .nz-step-btn { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; }
-            #datatable tr.class-all td.nz-print-action-cell,
-            #datatable tr.class-all td.nz-detail-action-cell { display: inline-flex !important; width: 100% !important; max-width: 100%; box-sizing: border-box; justify-content: center; padding: 7px 4px; border-bottom: 0; }
-            #datatable tr.class-all td.nz-print-action-cell::before,
-            #datatable tr.class-all td.nz-detail-action-cell::before { display: none; }
+            #datatable tr.class-all td.nz-row-more-cell { display: block !important; width: 100% !important; padding: 4px 0 10px; border-bottom: 0; }
+            #datatable tr.class-all td.nz-row-more-cell::before { display: none; }
+            #datatable tr.class-all td.nz-row-more-cell .nz-row-more-btn { width: 100%; height: 44px; font-size: 15px; }
             #datatable tr.class-all td .action-btn { display: inline-flex !important; align-items: center; width: 100%; height: 42px; gap: 6px; font-size: 13px; font-weight: 800; justify-content: center !important; }  /* 加大点击热区 */
             .nz-mobile-action-label { display: inline; }
         }
@@ -389,8 +408,7 @@
                         <th class="w-110px">{{translate('messages.total_amount')}}</th>
                         <th class="w-110px text-center">{{translate('messages.order_status')}}</th>
                         <th class="w-130px text-center">下一步操作</th>
-                        <th class="w-80px text-center">订单详情</th>
-                        <th class="w-80px text-center">打印小票</th>
+                        <th class="w-56px text-center">更多</th>
                     </tr>
                     </thead>
 
@@ -644,19 +662,17 @@
                                     <span class="nz-step-empty">无需操作</span>
                                 @endif
                             </td>
-                            <td class="text-center nz-detail-action-cell" data-label="订单详情">
-                                <a class="btn action-btn btn--warning btn-outline-warning nz-action-icon"
-                                    title="订单详情"
-                                    href="{{route('vendor.order.details',['id'=>$order['id']])}}">
-                                    <i class="tio-open-in-new"></i><span class="nz-mobile-action-label">详情</span>
-                                </a>
-                            </td>
-                            <td class="text-center nz-print-action-cell" data-label="打印小票">
-                                <a class="btn action-btn btn--primary btn-outline-primary nz-action-icon" target="_blank"
-                                    title="打印小票"
-                                    href="{{route('vendor.order.generate-invoice',[$order['id']])}}">
-                                    <i class="tio-print"></i><span class="nz-mobile-action-label">打印</span>
-                                </a>
+                            {{-- 哪吒 P2: 「订单详情」「打印小票」两图标列合并进行末「⋯」菜单(查看详情/补打小票/拒接本单), 订单号本身已是详情链接 --}}
+                            <td class="text-center nz-row-more-cell" data-label="更多">
+                                <button type="button" class="nz-row-more-btn" aria-label="更多操作" data-nz-more
+                                    data-detail-url="{{ route('vendor.order.details',['id'=>$order['id']]) }}"
+                                    data-invoice-url="{{ route('vendor.order.generate-invoice',[$order['id']]) }}"
+                                    @if(in_array($order['order_status'], ['pending','confirmed'], true))
+                                    data-reject-url="{{ route('vendor.order.reject',['id'=>$order['id']]) }}"
+                                    @endif
+                                    data-order-label="#{{ $order['id'] }}">
+                                    <span aria-hidden="true">&#8943;</span><span class="nz-mobile-action-label">更多</span>
+                                </button>
                             </td>
                         </tr>
                     @endforeach
@@ -701,6 +717,33 @@
                         <img id="nzProofModalImg" class="nz-proof-modal-img" src="" alt="客户付款截图">
                     </div>
                 </div>
+            </div>
+        </div>
+        {{-- 哪吒 P2(2026-07-01): 行末「⋯」共享菜单(查看详情/补打小票/拒接本单) + 拒接本单弹窗。菜单 fixed 定位防表格裁剪; 点哪行由 JS 按 data 属性填充。拒接复用现有 vendor.order.reject 路由。 --}}
+        <div class="nz-row-menu d-print-none" id="nzRowMenu" role="menu">
+            <a href="#" id="nzMenuDetail" role="menuitem">🔍 查看详情</a>
+            <a href="#" id="nzMenuInvoice" target="_blank" role="menuitem">🖨 补打小票</a>
+            <div class="nz-menu-div" id="nzMenuRejectDiv"></div>
+            <button type="button" class="nz-menu-reject" id="nzMenuReject" role="menuitem">🚫 拒接本单</button>
+        </div>
+        <div class="nz-reject-modal d-print-none" id="nzRejectModal" aria-hidden="true">
+            <div class="nz-reject-card" role="dialog" aria-modal="true" aria-labelledby="nzRejectTitle">
+                <form method="post" id="nzRejectForm" action="">
+                    @csrf
+                    @method('put')
+                    <div class="nz-reject-head">
+                        <h5 id="nzRejectTitle">拒接本单 · <span id="nzRejectOrdLabel"></span></h5>
+                        <button type="button" class="nz-reject-x" data-nz-reject-close aria-label="关闭">&times;</button>
+                    </div>
+                    <div class="nz-reject-body">
+                        <label>请填写拒接原因（会通知顾客）</label>
+                        <textarea name="reason" required maxlength="500" rows="3" placeholder="例：该商品已售罄；今日已打烊；订单超出配送范围 / 无法叫到配送。"></textarea>
+                    </div>
+                    <div class="nz-reject-foot">
+                        <button type="button" class="btn btn-secondary btn-sm" data-nz-reject-close>关闭</button>
+                        <button type="submit" class="btn btn--danger btn-sm">确认拒接本单</button>
+                    </div>
+                </form>
             </div>
         </div>
         {{-- 哪吒 P3(2026-07-01): 叫车底部抽屉(移动端全屏) + 每单叫车卡隐藏源。点行内「叫车配送」把对应源移入抽屉, 复用详情页同款 partial --}}
@@ -910,6 +953,56 @@
                 });
             }
 
+            function initRowMenu(){
+                var menu = document.getElementById('nzRowMenu');
+                var mDetail = document.getElementById('nzMenuDetail');
+                var mInvoice = document.getElementById('nzMenuInvoice');
+                var mReject = document.getElementById('nzMenuReject');
+                var mRejectDiv = document.getElementById('nzMenuRejectDiv');
+                var modal = document.getElementById('nzRejectModal');
+                var form = document.getElementById('nzRejectForm');
+                var lbl = document.getElementById('nzRejectOrdLabel');
+                if (!menu || !modal || !form) return;
+                var curReject = '', curLabel = '';
+                function closeMenu(){ menu.classList.remove('nz-open'); }
+                function openMenu(btn){
+                    mDetail.href = btn.getAttribute('data-detail-url') || '#';
+                    mInvoice.href = btn.getAttribute('data-invoice-url') || '#';
+                    curReject = btn.getAttribute('data-reject-url') || '';
+                    curLabel = btn.getAttribute('data-order-label') || '';
+                    var can = !!curReject;
+                    mReject.style.display = can ? '' : 'none';
+                    mRejectDiv.style.display = can ? '' : 'none';
+                    menu.classList.add('nz-open');
+                    var r = btn.getBoundingClientRect();
+                    var mw = menu.offsetWidth, mh = menu.offsetHeight;
+                    var left = Math.max(8, Math.min(r.right - mw, window.innerWidth - mw - 8));
+                    var top = r.bottom + 6;
+                    if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 6);
+                    menu.style.left = left + 'px';
+                    menu.style.top = top + 'px';
+                }
+                document.addEventListener('click', function(e){
+                    var btn = e.target.closest ? e.target.closest('[data-nz-more]') : null;
+                    if (btn){ e.preventDefault(); if (menu.classList.contains('nz-open')) { closeMenu(); } else { openMenu(btn); } return; }
+                    if (!menu.contains(e.target)) closeMenu();
+                });
+                window.addEventListener('scroll', closeMenu, true);
+                window.addEventListener('resize', closeMenu);
+                function openReject(){
+                    form.action = curReject;
+                    lbl.textContent = curLabel;
+                    var ta = form.querySelector('textarea[name=reason]'); if (ta) ta.value = '';
+                    modal.classList.add('nz-open');
+                    document.body.style.overflow = 'hidden';
+                }
+                function closeReject(){ modal.classList.remove('nz-open'); document.body.style.overflow = ''; }
+                mReject.addEventListener('click', function(){ closeMenu(); openReject(); });
+                modal.addEventListener('click', function(e){ if (e.target === modal || (e.target.hasAttribute && e.target.hasAttribute('data-nz-reject-close'))) closeReject(); });
+                form.addEventListener('submit', function(e){ if (!confirm('确认拒接本单？订单将取消并通知顾客。若顾客已付款，需你按原路退还。')) e.preventDefault(); });
+                document.addEventListener('keydown', function(e){ if (e.key === 'Escape'){ closeMenu(); closeReject(); } });
+            }
+
             function initColumnResize(){
                 var table = document.getElementById('datatable');
                 if (!table || window.innerWidth < 768) return;
@@ -989,6 +1082,7 @@
                 initDoneFilter();
                 initDispatchDrawer();
                 initTodayRev();
+                initRowMenu();
 
                 var ready = $('nzPrintReady');
                 var auto = $('nzAutoPrintReady');
