@@ -1,173 +1,116 @@
-# DESIGN v2 — 商家退出结算/押金账户 实现设计（第二轮 debate 已折叠）
+# DESIGN v3 — 商家退出结算/押金账户 实现设计（三轮 debate 已折叠 · 实装就绪）
 
-> **版本**：v2（2026-07-01）。v1 经第二轮 /debate 三路红队核验（verdict 一致「需补后可实现」），本版折叠 5🔴 修法 + 9🟡 + 用户 3 决策（penalty 删 / 存量强制 KYC / 做 HMAC 指纹）。debate 结论见 §K（保留）。
-> **配套**：政策正本 `docs/PLAN_merchant_offboard.md`（§8）；红线 `INVARIANTS.md` L1-8（`926d388`）。
-> 🔴 **仍不进代码**：**第三轮 /debate 已跑（见 §L）**——核心骨架三轮验证站得住，但逮到状态机无回流边(3 死循环)+并发底座 2 新🔴，需出 **v3** 折叠 L.1/L.2 再进实装。
-> **代码锚（本会话核实）**：扣佣在 `OrderLogic::create_transaction`(:83，**订单完成时**扣，非下单时；:276 gated by `nezha_commission_active`+`is_direct_pay`，:278 `lockForUpdate`，:284 写 `commission_deduction` 流水) · 幂等先例 `settle_delivered:401`+`OrderTransaction::exists:416` · 接单闸 `nezha_store_paused:2318`(=`nezha_temp_closed || nezha_deposit_below_threshold:2307`，后者首行依赖 `nezha_commission_active`) · 制裁引擎 `NezhaKycScreen::screen_names:142`/`normalize_name:42` · KYC 审核 `NezhaKycController::save:69`(→pending)/`review:124`(→approved/rejected) · 对账 `Vendor/NezhaDepositController:108/:150` · 漏的 deposit 写路径 `refund_reversal OrderLogic:740`/`Admin/AdvertisementController:288`/`ChargeAdOnStart:90`/`store_recharge`.
+> **版本**：v3（2026-07-01）。经三轮 /debate（政策/设计/v2）核验，本版折叠全部 4+5+4 🔴 + 应修。**核心骨架三轮验证站得住**（资金账目/隔离/幂等根/接缝/制裁实时/直付 410），v3 主要补 v2 缺的**状态机回流边 + 全建单入口冻结 + 并发底座依赖**。debate 历史见 §K。
+> **配套**：政策正本 `docs/PLAN_merchant_offboard.md`（§8）；红线 `INVARIANTS.md` L1-8。
+> 🔴 **仍不进代码**：这是**最后一版设计**；建议按 §I 灰度直接实装，**staging 下单 harness 作资金正确性唯一验收**（CI 断言测不了资金闭环）。不再跑第四轮 debate（边际递减）。
+> 🔗 **前置依赖**：`order_transactions.order_id` 唯一约束（既有 LIVE 双扣佣 bug，独立任务 `task_fb41eea8`）须先修——C5 的并发结算安全依赖它。
+> **代码锚（三轮核实）**：扣佣 `OrderLogic::create_transaction:83`(订单完成时,:276 gate,:278 lockForUpdate,:284 commission_deduction 流水,:416 exists 幂等**无锁**) · `settle_delivered:401`(:412 前置只推 `handover`/`picked_up`、对已 delivered return false) · 接单闸 `nezha_store_paused:2318` · **POS 独立建单 `POSController:357`(不经 store_paused)** · 制裁 `NezhaKycScreen::screen_names:142`/`normalize_name:42` · KYC `NezhaKycController::save:69`(→pending)/`review:124`(→approved/rejected) · 对账 `Vendor/NezhaDepositController:108/:150`+`anchoredBounds:71` · 漏 deposit 写 `refund_reversal:740`/`AdvertisementController:288`/`ChargeAdOnStart:90` · `order_transactions` 无 order_id 唯一键(实测 SHOW INDEX)。
 
-## 0. 直付单退款武器已结构性失效（v1 保留）
-`refund_request` 对 `offline_payment`(直付=B方案默认)单在 `OrderController.php:1709` 一律 410。哪吒真实订单=直付→delivered 稳定终态、顾客翻不动。退出门 E 的"退款人质"武器只对非直付单成立(哪吒当前无此类单)，E 真武器=举报+风控(§E2)。
+## 0. 直付单退款武器已结构性失效（三轮确认）
+`refund_request` 对 `offline_payment`(直付=B方案默认)单在 `OrderController:1709` 一律 410 → delivered 稳定终态、顾客翻不动。退出门 E 的"退款人质"武器对哪吒真实订单(直付)失效，E 真武器=举报+风控(§E3)。
 
 ---
 
-## A. Schema（迁移 DDL · v2）
-**A1 `restaurant_wallets`**：`guarantee_balance decimal(24,2) default 0`。
-**A2 `restaurant_deposit_transactions`**（法币缴纳记录+回执留痕）：`currency varchar(8) default 'AMD'` + `original_amount decimal(24,2) null` + `original_ref text null`（模型 casts 加 `'original_ref'=>'encrypted'`）。🔴 **留存**：本表属 AML 法定留存，迁移注释 + INVARIANTS L1-8⑤ 明写「任何现有/未来 purge 任务不得清除本表」，加结构守卫测试（对齐 KYC 的显式豁免，堵 K.2-留存）。
-**A3 `restaurants`**：`onboard_source enum('self_register','admin_create','unknown') default 'unknown'`（**存量 7 店回填 `unknown`**，新入驻写真值，不可变）+ `offboard_status enum('active','settling','owing','offboarded') default 'active'`。
-**A4 `vendor_kyc_profiles`**：+ `account_holder_name text null`（模型 `encrypted` cast；把户名从 free-text `bank_account` 拆出结构化，供户名一致性 enforce，堵 K.2-户名）+ `id_doc_fingerprint varchar(64) null`（HMAC hex，明文可索引，加普通 index；见 §E）。
-**A5 新表 `restaurant_offboard_settlements`**：
+## A. Schema（迁移 DDL · v3）
+- **A1 `restaurant_wallets`**：`guarantee_balance decimal(24,2) default 0`。
+- **A2 `restaurant_deposit_transactions`**：`currency varchar(8) default 'AMD'` + `original_amount decimal(24,2) null` + `original_ref text null`(模型 `encrypted` cast)。🔴 **留存**：迁移注释 + INVARIANTS L1-8⑤ 明写「任何 purge 不得清除本表」+ 结构守卫测试(对齐 KYC 豁免范式)。
+- **A3 `restaurants`**：`onboard_source enum('self_register','admin_create','unknown') default 'unknown'`(存量 7 店回填 unknown,新入驻写真值,不可变) + `offboard_status enum('active','settling','owing','offboarded') default 'active'` + **`guarantee_tier enum('exempt','500','1000','5000') null`**(应缴档,L.2 设档核对;改需审计)。
+- **A4 `vendor_kyc_profiles`**：+ `account_holder_name text null`(`encrypted`,户名从 free-text `bank_account` 拆出供 enforce 核对) + `id_doc_fingerprint varchar(64) null index`(HMAC hex 明文可索引,见 §E2)。
+- **A5 新表 `restaurant_offboard_settlements`**：
 ```
 id, vendor_id, restaurant_id,
-active_uniq  tinyint null,                    -- 活跃时=1, 关闭(rejected/failed/paid)时置 NULL
-UNIQUE KEY uq_active (vendor_id, active_uniq),-- MySQL 5.7 NULL 视为相异→同 vendor 仅一条 active_uniq=1(幂等根),多条已关闭 NULL 并存(可重申)
-status enum('applied','kyc_pending','approved','rejected','paying','paid','partial','failed') default 'applied',
-applied_at, cooldown_until,                    -- 冷静期 applied 当刻锚定, 撤回重提不重置
-kyc_gate_passed bool default 0, sanction_rescreen_at,  -- KYC/制裁门留痕
-holder_verified bool default 0,                -- 户名逐字核对留痕(超管勾选)
-guarantee_amt, deposit_amt, ad_amt,            -- approved 当刻锁定的三账户快照
-net_amount, shortfall_amount,
+active_uniq tinyint null,                       -- 活跃=1 / 关闭(withdrawn/rejected/failed/paid)=NULL
+UNIQUE KEY uq_active (vendor_id, active_uniq),  -- 5.7 NULL 相异→同 vendor 仅一条 active,已关闭多条 NULL 并存(可重申);应用层须 catch 唯一冲突当幂等勿 500
+status enum('applied','kyc_pending','approved','rejected','withdrawn','paying','paid','partial','failed') default 'applied',
+applied_at, cooldown_until,                     -- applied 当刻锚定,撤回重提不重置
+kyc_gate_passed bool default 0, sanction_rescreen_at, holder_verified bool default 0,
+guarantee_amt, deposit_amt, ad_amt, net_amount, shortfall_amount,  -- approved 当刻锁定快照
+pending_clawback decimal(24,2) default 0,       -- 垫付追偿减项接口(现恒 0,§F)
 leg_deposit_paid bool default 0, leg_ad_paid bool default 0, leg_guarantee_paid bool default 0,
 approved_by, approved_at, payout_ref, note, timestamps
 ```
-> `UNIQUE(vendor_id, active_uniq)` 用 NULL 相异特性做"仅一条活跃"部分唯一(替代 v1 的 `UNIQUE(vendor_id)`，堵 K.2-重试死角：rejected/failed 置 active_uniq=NULL 后可重新申请)。
+- **A6 前置依赖(独立任务)**：`order_transactions.order_id` 加 UNIQUE(清历史重复后)——治双扣佣底座(L-C)。**非本设计新增,但 C5 依赖它**。
 
 ---
 
-## B. 退出结算状态机（v2 · 阻断 B 原子性/幂等 + K-D KYC 前置）
+## B. 退出结算状态机（v3 · 补全回流边,治 L-A 三死循环）
 ```
-[对账中心底部「申请退出结算」]
-   │ 前置硬门(§E2)全过
-   ▼
- (无 approved KYC?)──是──► kyc_pending ──(KYC补录+超管审批 §D)──► ┐
-   │否                                                              │
-   ▼◄───────────────────────────────────────────────────────────┘
- applied ──(制裁re-screen过 §D · 冷静期满 · 超管审批+户名核对)──► approved
-   │                                                    │(锁定三账户快照+net)
-   ├──(前置门/制裁/KYC不过)──► rejected(active_uniq=NULL)  │
-   │                                                    ▼
-   │                                    paying ─┬─► paid(三腿全到账,余额置0,active_uniq=NULL)
-   │                                            └─► partial(部分腿失败,人工续,逐腿幂等)
-   └──(净额<0)──────────────────────────────────► owing(标欠款,不退,人工追缴)
+ active ──[商家申请退出]──► applied ─┐
+   ▲  ▲                             │(无 approved KYC?)
+   │  │  ┌──(商家撤回/超管取消·approved前)──┘        ├─是─► kyc_pending ─(review approved)─► applied
+   │  │  │  =回 active:offboard_status=active,               │                 └(review rejected)─► ★回 active(status=rejected,身份没核成功不给退但恢复营业)
+   │  │  │   active_uniq=NULL,status=withdrawn                │
+   │  └──┴──────────────────────────────────────────────────┘
+   │                    applied ─(制裁re-screen过·冷静期满·超管审批+户名核对·净额>0)─► approved ─► paying ─┬─► paid(三腿置0,active_uniq=NULL)
+   │                       │(净额<0)                                   (锁定快照)                          └─► partial(逐腿幂等续)
+   │                       ▼
+   └──(追缴到账,超管store_recharge补平)── owing ──(长期追缴失败)──► written_off(坏账核销,记审计,店永久offboarded不占号)
 ```
-- **applied**：`nezha_commission_active` 无关；insert settlement(active_uniq=1)，`restaurants.offboard_status='settling'`(触发 §C 冻结)，`cooldown_until=now+20d`。
-- **KYC 前置(K-D)**：applied 时若 `vendor_kyc_profiles.kyc_status != 'approved'`(现网 7 店全 `none`)→转 `kyc_pending`，走 `NezhaKycController::save`(→pending)+`review`(→approved)子流程，通过才回 applied。**§I 写明这是存量店退出的必经路径**。
-- **approved**：**审批当刻重跑制裁 re-screen(§D)** + 户名核对(holder_verified) + 锁定 `guarantee_amt/deposit_amt/ad_amt/net_amount` 快照。
-- **paying→paid**：净额计算+置零+写退款流水**同一锁同一事务**(§C2)；三腿各标 `leg_*_paid`，任一腿失败标 `partial` **不置零该腿**；**partial 恢复逐腿幂等**：`for each leg: if leg_paid then skip`(照抄 `ChargeAdOnStart:81` 事务内重读 paid 标记)，net 用 approved 快照不重算。
-- 记账(置零+负流水)与"已确认线下到账"两状态位解耦。
+- **★回流边(L-A 核心补丁)**：①`applied`/`kyc_pending` **可撤回→active**(商家反悔/超管取消,仅 approved 前;同时 offboard_status→active 解冻、active_uniq→NULL、status→withdrawn)——治"误点=永久停业"。②KYC `review` **拒绝→回 active**(status=rejected,店恢复营业)——治"KYC 拒卡死"。③`owing` **两出口**(追缴补平→继续退/销户;长期失败→`written_off` 终态)——治"owing limbo"。
+- **applied**：insert(active_uniq=1),`offboard_status='settling'`(触发 §C 冻结),`cooldown_until=now+20d`。
+- **KYC 前置**：`kyc_status!='approved'`(现网 7 店全 none)→`kyc_pending`,走 `NezhaKycController::save→review`;通过回 applied,拒绝回 active。
+- **approved**：重跑制裁 re-screen(§D1)+户名核对(holder_verified)+锁定快照。
+- **paying→paid**：净额+置零+退款流水同锁同事务(§C4);三腿标 `leg_*_paid`,失败标 `partial` 不置零该腿;**partial 恢复逐腿幂等**(for each leg: if leg_paid skip,net 用快照不重算),恢复入口 `lockForUpdate` 锁 settlement 行防并发双续。
+- **法人级欠款硬约束**：同 `id_doc_fingerprint`/`legal_name` 有未结 `owing`/`written_off` 时,该法人新入驻或其它 vendor 退出**超管强确认**(比红标重一档)——治老赖换 vendor 马甲带款跑。
 
-## B'. 押金缴纳记账（新增 · 补 K.2-缴纳地基，对称 `store_recharge`）
-超管后台 `store_guarantee` 方法（镜像 `Admin/NezhaDepositController::store_recharge:99-141` 全配套）：validate(`restaurant_id`/`amount≥0.01`/`currency∈{AMD,CNY}`/`original_amount`/`original_ref` 必填)→`DB::beginTransaction`+`lockForUpdate`→wallet 不存在则建→写 `guarantee_balance += amount` + `create` 一笔 `type='guarantee_deposit'`(带 `currency/original_amount/original_ref/balance_after/created_by`)→Toastr→异常 rollback。配套后台 blade 表单。缴纳流水 `type` 进 `ACCOUNTS['guarantee']`。
-
----
-
-## C. 锁 + 冻结（v2 · K-A 重做接缝 + 补全路径 + 快照安全网）
-**C1 停接单**（独立接缝，不碰 `nezha_commission_active`）：`nezha_store_paused:2318` 加一条与 `nezha_temp_closed` 并列的判断——
-```php
-if ($tempClosed || (($restaurant->offboard_status ?? 'active') === 'settling')) return true;
-```
-（v1 错在改 `nezha_commission_active`→`nezha_deposit_below_threshold:2308` 首行依赖它→反而让 `store_paused` 返 false 照样接单。修正后停接单与抽佣开关正交。）
-**C2 停扣佣**（独立接缝）：`OrderLogic::create_transaction:276` 扣佣条件加 `&& ($order->restaurant->offboard_status ?? 'active') !== 'settling'`（`:411` 已 `loadMissing('restaurant')`，读已加载列**不产生额外查询**，K.3 证实）。
-**C3 补全 4 条漏的 deposit 写路径**（settling 期间各自处置）：
-- `refund_reversal`(`OrderLogic:740`，门是 `is_direct_pay` **不看** commission_active)：settling 时**记 shortfall 而非回充 deposit**。
-- 平台下架广告退费(`Admin/AdvertisementController:288`)：settling 时 Toastr 拒绝，要求先撤退出。
-- admin 手改(`store_recharge`/`rechargeDeposit:718`)：settling 时拒绝。
-- `ChargeAdOnStart:90`(每小时 cron，从 deposit 扣广告投放费)：跳过 settling 店(本就该停投)。
-**C4 快照安全网（K-A 核心防呆，兜住漏冻结+锁边界跨天）**：`paying→paid` 事务内 `lockForUpdate` 重读真实三余额，**与 approved 快照比对：一致才置零放款；不一致(说明某路径漏冻结/冷静期内变动)→不放款，abort 转人工重审**。→ 漏没漏冻结路径都不错退。
-**C5 结算事务**（镜像 `OrderLogic:278` 成熟范式）：`settling 首步强制 settle_delivered 跑完所有 delivered-but-unsettled 单`(使佣金全部落 `commission_deduction`)→单事务 `lockForUpdate` 锁 wallet 行→读净额→置零→写三笔 `*_refund` 负流水(`balance_after=0` §G)。
+## B'. 押金缴纳记账（对称 `store_recharge` + 档位核对）
+超管后台 `store_guarantee`(镜像 `Admin/NezhaDepositController::store_recharge:99-141`):validate(`amount≥0.01`/`currency∈{AMD,CNY}`/`original_amount`/`original_ref` 必填)→`DB::beginTransaction`+`lockForUpdate`→`guarantee_balance+=amount`+`create` `type='guarantee_deposit'`(带 currency/original_amount/original_ref/balance_after/created_by)。**缴纳页显示「应缴(guarantee_tier)/实缴/缺口」**(L.2 设档核对,超管一眼可见)。缴纳 type 进 `ACCOUNTS['guarantee']`。
 
 ---
 
-## D. 制裁门 + KYC 门（v2 · K-C 实时重筛 + K-D 前置 + 户名 enforce）
-**D1 制裁(K-C 修 stale)**：**不读 `screen_status` 旧列**（入驻当刻写、名单每日刷新不重算=L1-6 退款空转）。改为 applied + approved 两道门**用当前 `nezha_sanction_names` 表实时 RE-run** `NezhaKycScreen::screen_names([legal_name, beneficial_owner_name])`；`hit`→挡+`rejected`；`possible`/名单反查未决→**一律 fail-closed** 转人工 AML(退款=对外付款属高危，不止挡 hit)。命中 `Helpers::sendTelegramToAdmin` 告警。
-**D2 KYC 前置(K-D)**：`kyc_status='approved'` 才放行；否则转 `kyc_pending` 子流程(§B)。（退款给商家=对外付款，主体没核验身份不能付；现网 7 店 0 档，此为必经。）
-**D3 户名核对 enforce(K.2-户名)**：退款前审批页强制超管**逐字核对** `legal_name == account_holder_name(§A4 已拆结构化) == 缴纳凭证付款人`→勾选写 `holder_verified` 审计；高额(5000)双人复核。（把 v1 的"写进 SOP 口头核对"变留痕 enforce 动作。）
+## C. 锁 + 冻结（v3 · 全入口冻结 + C4 恢复 + C5 语义对齐）
+- **C1 停接单(补 L-B POS)**：抽 helper `nezha_offboard_frozen($restaurant) = (offboard_status==='settling')`,在**所有建单入口**显式调:①顾客 API `nezha_store_paused:2318`(与 `nezha_temp_closed` 并列)②`POSController::place_order:357` 建单前(现不经 store_paused)③结算预检 `:2553`。grep 全库建单点确认无第 4 处漏。
+- **C2 停扣佣(补 L.2 stale)**：`create_transaction:276` 扣佣条件加 settling 判断,gate 用**显式 fresh 查询** `Restaurant::where('id',$order->restaurant_id)->value('offboard_status')`(1 次轻查,避 6+ 调用者 lazy relation 读到缓存旧值 'active' 的 N+1/stale)。与抽佣开关正交(不碰 `nezha_commission_active`)。
+- **C3 补全 4 条漏的 deposit 写路径**(settling 期各处置)：`refund_reversal:740`(记 shortfall 非回充)/下架退费 `AdvertisementController:288`(拒,要求先撤退出)/admin 手改 `store_recharge`(拒)/`ChargeAdOnStart:90` cron(跳过 settling 店)。
+- **C4 快照安全网 + 确定性恢复(补 L-D DoS)**：`paying→paid` 事务内 `lockForUpdate` 重读三余额 vs approved 快照:**一致才置零放款;不一致→不放款,回 `approved`、作废旧快照、重跑 settle_delivered 归零在途佣金后重锁重算 net**(非无限 abort);**连续 abort N 次→熔断告警超管人工**。→ 漏冻结/跨天变动都不错退,且不 DoS 商家退出。
+- **C5 结算首步(补 L-D 语义对齐)**：settling 首步对**所有 `handover`/`picked_up` 在途单调 `settle_delivered` 推进结算**(使佣金落 commission_deduction);**真"delivered-but-unsettled"漏结单用 `create_transaction` 补**(非 settle_delivered,其 :412 对已 delivered return false);**`cooking`/`accepted`/`pending` 等非终态活跃单→前置门①(§E3)直接挡 applied**,要商家先处理完(门前移,不等到 paying)。🔴 **并发依赖**：C5 与 `auto-finalize-handover` cron/顾客确认多路并发调 settle_delivered,靠 `order_transactions.order_id` UNIQUE(A6 前置任务)DB 兜底防双扣。
+- **C6 结算事务**：镜像 `OrderLogic:278` 成熟范式,单事务 `lockForUpdate` 锁 wallet 行→读净额→置零→写三笔 `*_refund` 负流水(`balance_after=0`)。
 
 ---
 
-## E. 来路溯源 + 指纹 + 退出门（v2 · K-E 指纹落地 + 补第3路径）
-**E1 来路(补 K.2-第3路径)**：`onboard_source` 入驻当刻写死，**三条建店路径都写**：`VendorLoginController::register:102`(=`self_register`)、`Admin/VendorController@store:65`(=`admin_create`)、**顶层 `VendorController@store:148/:160`**(StackFood 多步入驻向导，v1 漏了，=`self_register`)。grep 全库 `new Restaurant`/`Restaurant::create` 已确认无第 4 条。
-**E2 指纹(K-E · 用户已批做)**：`id_doc_fingerprint = HMAC-SHA256($env_key, normalize_doc_number(id_doc_number))`。
-- `normalize_doc_number`：镜像 `NezhaKycScreen::normalize_name`(大写/去标点/压空白) + 按 `id_doc_type` 分域前缀(如 `passport:`)；FE/BE 统一规范化。
-- 密钥 `NEZHA_KYC_FP_KEY` 进 `.env`(**不入库、独立于表空间加密 key**，一处泄露不双沦陷)。
-- 退出审批 + 新入驻时按 fingerprint 跨 vendor 查历史 `restaurant_offboard_settlements`/KYC `closed_at`→命中则**审批页红标"该主体退过押金 N 次"**。
-- 🔴 **只做辅助红标、非硬闸**：接受**漏匹配>误匹配**(录入差异漏网 < 误红标真人)；因此"防换号薅豁免"是超管决策的辅助信号，不做自动拒绝。
-**E3 退出门(E2 修正后)**：门①订单终态(直付单本就稳定 §0)；门②改「无**经甄别真实相关** pending 纠纷」+超管「标恶意/驳回」动作(驳回的不计入)——治举报/风控被武器化；门③冷静期 applied 锚定、撤回重提不重置；**申请后新增纠纷走人工、不自动阻断已进结算的退出**。
+## D. 制裁门 + KYC 门（v3 · 实时重筛 + 运营 SLA + 单超管现实）
+- **D1 制裁(K-C)**：**不读 `screen_status` 旧列**(入驻当刻写、名单每日刷新不重算=空转)。applied+approved 两道门用当前 `nezha_sanction_names`(43,576 条)实时 RE-run `NezhaKycScreen::screen_names([legal_name,beneficial_owner_name])`;`hit`→挡+rejected;`possible`/未决**一律 fail-closed** 转人工 AML(退款=对外付款高危)。🔴 **实装须同步 INVARIANTS L1-8③ 文本**(现写"读 screen_status 列",按 L1 变更流程改为"实时 RE-run screen_names",记 CHANGELOG——否则 L1 正本与实现漂移,L.2)。
+- **D2 KYC 前置 + 运营 SLA**：`kyc_status='approved'` 才放行,否则 `kyc_pending`(§B,现网 7 店 0 档必经)。**KYC 仅 admin 后台可录**(无商家自助入口=有意,降 PII 负债)→补运营 SLA:①`kyc_pending` 时商家对账页显「已收到退出申请,平台需完成身份核验(预计 N 工作日),届时联系视频核验」②admin 侧「待退出核验」队列(KYC index 加 `offboard_status='kyc_pending'` 筛)③核验超期自动提醒超管。KYC `review` 拒绝→回 active(§B)。
+- **D3 户名 enforce + 单超管现实**：审批页强制超管逐字核对 `legal_name==account_holder_name(§A4)==缴纳凭证付款人`→勾 `holder_verified` 审计。**单超管无第二人**→§J2「双人复核」明确降级为 **§H 异步二次确认(强制次日转+独立信道 TG 确认链接+审计双时间戳)= 等价替身**(同人、两时点、两信道,防盗号/诱导),不追求不可交付的"真双人"。
+
+## E. 来路溯源 + 指纹 + 退出门（v3）
+- **E1 来路(补第 3 路径)**：`onboard_source` 入驻当刻写死,**三条建店路径都写**:`VendorLoginController::register:102`(self_register)、`Admin/VendorController@store:65`(admin_create)、顶层 `VendorController@store:148/:160`(self_register,v1/v2 漏)。
+- **E2 指纹(K-E)**：`id_doc_fingerprint=HMAC-SHA256($env_key, normalize_doc_number(id_doc_number))`;`normalize_doc_number` 镜像 `normalize_name`(大写/去标点/压空白)+按 `id_doc_type` 分域前缀;密钥 `NEZHA_KYC_FP_KEY` 进 `.env`(不入库,独立于表空间加密 key)。退出审批/新入驻按**多信号**(fingerprint + legal_name + 手机号,非单键)跨 vendor 查历史→红标"该主体退过押金/欠款 N 次"。🔴 **只做辅助红标非硬闸**(接受漏匹配>误匹配;换证件类型漏匹配靠多信号降低)。**密钥轮换预案**(L.3):一次性 artisan 遍历解密 `id_doc_number`(cast 自动)用新 key 重算回写;辅助红标非闸,重算期短暂失效可接受。
+- **E3 退出门**：门①订单终态(直付本就稳定;非终态活跃单挡 applied,§C5);门②「无**经甄别真实相关** pending 纠纷」+超管「标恶意/驳回」动作(驳回不计入)——治举报/风控武器化;门③冷静期 applied 锚定不重置,申请后新增纠纷走人工不阻断已进结算的退出。
+
+## F. 抵扣 + 净额 + 隔离（v3 · 删 penalty + 预留追偿钩子）
+- **net = `guarantee_balance + deposit_balance + ad_balance − pending_clawback`**。settling 首步(§C5)已把所有佣金落 commission_deduction 从 deposit 扣净→**无独立"未结佣金"减项、无 penalty**(删,K-B)。`pending_clawback` 现**恒 0**,预留「平台垫付赔顾客」追偿(L1-8 同骨,该项目落地接;L.3)。deposit 被佣金扣负→该负值即 shortfall→net<0→`owing`。
+- **INV-1 隔离**：`ad_refund` 写 ad_balance/`guarantee_refund` 写 guarantee_balance,各退各账、抵扣不跨户。断言:`NezhaL1RedlineTest` **加正向断言**(offboard `ad_refund` 只允许 type/全额/不改 deposit),**不改 `NezhaAdAuctionTest:test_9`**(只 sum ad_click_fee,不撞;禁"删断言绕过")。
+
+## G. 对账中心接入（v3）
+- controller:`ACCOUNTS+=guarantee`;`normalizeAccount` 放行;`:108`/`:150` 二元三目→`match($account)`;`account_label:164`/`$slug:176` 同步。
+- **blade 8 处**(`index.blade` `$account===` 裸分支 `:49/:61/:83/:86/:131/:170/:210`)→数据驱动(controller 下发 `accountTitle`/`showRechargeHelp`),充值/低额告警块保留仅 deposit 语义。grep 零残留。
+- 退还三笔 `balance_after=0`;退出时写对齐调整流水抹平 `anchoredBounds:71` 历史偏差。`$typeLabels`+导出 `$labels` 补 guarantee/refund 中英,grep 零残留 key。
+
+## H. 审批异步二次闸 + 审计 + 被动红旗（v3）
+异步:settlement 持久工单+20 天冷静期;**高额(5000)/大额强制次日转+邮件/TG 二次确认链接 = 单超管下"双人复核"等价替身**(§D3)。审计:`guarantee_tier` 设定/变更 + offboard `approved_by/approved_at/holder_verified` 留痕。被动红旗:对账/风控页高亮「实缴<应缴档」「高单量却低押金档」店(纯查询零 cron,避 bootstrap 调度坑)。
+
+## I. 实现顺序（灰度 · v3）
+0. 🔗 **前置**：修 `order_transactions.order_id` 唯一约束(独立任务 `task_fb41eea8`)——C5 并发结算安全依赖。
+1. **迁移(A)** + 模型 casts/fillable + **对账三态(G,纯读先上)**。迁移随 `nzdeploy-api.sh migrate`;5.7 `ADD COLUMN` nullable+default 走 `INPLACE,LOCK=NONE`;FK 有先例;全 additive 可回滚 greenfield。
+2. **缴纳 B'** `store_guarantee` + 档位核对 + 押金 Tab 点亮。
+3. **KYC 子流程(D2)+运营 SLA + `onboard_source` 三路径(E1)+ `id_doc_fingerprint`(E2)**。
+4. **状态机(B,含回流边)+锁/冻结(C:`nezha_offboard_frozen` 全入口 + C4 恢复 + C5 语义)+抵扣隔离(F)** — staging 下单 harness 全绿才上。
+5. **制裁 re-screen(D1)+ L1-8③ 文本同步 + 审批闸/审计/红旗(H)**。
+- **断言分层(L.2)**：进 `NezhaL1RedlineTest` **只写结构守卫层**(re-screen 调用点存在/`ad_refund` 不写 deposit 源码守卫/法币-only 开关/purge 豁免),明写「只保证开关态与代码守卫、**不替代资金闭环**」;**资金置零/leg 幂等/C4 快照拒付 归 staging 下单 harness 唯一验收**(CI 连生产库、只事务回滚,测不了持久资金)。
+- 🔴 存量 7 店:KYC 补录是退出必经路径,别默默 reject。
+
+## J. 开放点（v3 · 已基本清空）
+三轮共 ~15 问题全部折叠。**无阻断级余留**。实装期细节(可 code review/staging 兜):`normalize_doc_number` 各证件类型格式细化 · owing 追缴的催缴时效/坏账核销审批 · KYC 运营 SLA 的具体天数 · `pending_clawback` 接口待垫付项目对接。
 
 ---
 
-## F. 抵扣 + 净额 + 隔离（v2 · K-B 删 penalty）
-- **net = `guarantee_balance + deposit_balance + ad_balance`**（settling 首步已强制 settle_delivered 把所有佣金落进 `commission_deduction`、从 deposit 扣净→**无独立"未结佣金"减项、更无 penalty**，K-B 悬空项消除）。
-- deposit 若被佣金扣成负→该负值即 shortfall→net 可能<0→`owing`(标欠款、阻断 re-onboard 豁免)。
-- **INV-1 隔离**：`ad_refund` 写 `ad_balance` 负流水、`guarantee_refund` 写 `guarantee_balance`，**各退各账、抵扣不跨账户**(未结佣金只体现在 deposit)。ad/guarantee 独立全额退。
-- **断言(K.3)**：`ad_refund` 不撞 `NezhaAdAuctionTest:test_9`(只 sum `ad_click_fee`)；实装给 `NezhaL1RedlineTest` **加正向断言**(offboard `ad_refund` 只允许 type/全额/不改 deposit)，**不改 test_9 过滤**(禁"删断言绕过")。
-
-## G. 对账中心接入（v2 · controller + 8 处 blade）
-- **controller**：`ACCOUNTS += 'guarantee'=>['guarantee_deposit','guarantee_refund']`；`normalizeAccount` 放行 guarantee；`:108`/`:150` 二元三目 → `match($account){'ad'=>$ad,'guarantee'=>$guarantee,default=>$deposit}`；`account_label:164`/`$slug:176` 同步。
-- **blade(补 K.2-8处)**：`vendor-views/nezha-deposit/index.blade.php` 的 8 处 `$account==='deposit'/'ad'` 裸分支(余额卡 `:49/:61`、Tab active `:83/:86`、汇总 `:131`、流水标题 `:170`、页尾充值+低额告警 `:210`)→**改数据驱动**(controller 下发 `accountTitle`/`showRechargeHelp` 等，blade 不硬判 account)；充值说明/低额告警块保留"仅 deposit"语义、别误挂 guarantee。grep 零残留 `$account === '`。
-- 退还三笔 `balance_after` 精确=0；退出时写一笔**对齐调整流水**抹平 `anchoredBounds` 历史偏差(`:71` 倒推 vs 种子无流水，K.3-🟢)。
-- `$typeLabels`+导出 `$labels` 补 guarantee/refund 各 type 中英，grep 零残留 key。
-
-## H. 审批异步二次闸 + 审计 + 被动红旗（v2 保留）
-异步：settlement 持久工单+20 天冷静期=已含异步；高档(5000)/大额强制次日转+邮件/TG 二次确认链接。审计：档位设定/变更 + offboard `approved_by/approved_at/holder_verified` 留痕。被动红旗：对账/风控页高亮"高单量却低押金档"店(纯查询、零 cron，避开 bootstrap 调度坑)。
-
-## I. 实现顺序（灰度 · v2 补迁移/KYC 路径）
-1. **迁移(A)** + 模型 casts/fillable + **对账三态(G，纯读先上不碰资金)**。迁移 commit+push 进 release 随 `nzdeploy-api.sh migrate`(release 部署，工作树改动不上线)；5.7 `ADD COLUMN` nullable+default 走 `ALGORITHM=INPLACE,LOCK=NONE`(hasColumn 守卫先例)；新表 FK 有先例(`2026_07_02_010200`)；全 additive 可回滚(greenfield 已 grep 无残留)。
-2. **缴纳记账 B'** `store_guarantee` + 押金 Tab 点亮。
-3. **KYC 补录子流程(D2)接入 + `onboard_source` 三路径(E1) + `id_doc_fingerprint`(E2)**。
-4. **退出结算状态机(B)+锁/冻结(C，含 4 路径+C4 快照安全网)+抵扣隔离(F)** — staging 下单 harness 全绿才上。
-5. **制裁 re-screen(D1)+审批闸/审计/红旗(H)**。同步 `NezhaL1RedlineTest`(制裁 re-screen + 法币-only + 隔离正向断言 + `original_ref` 留存断言)。
-- 🔴 **存量 7 店**：KYC 补录是退出必经路径(D2)，别默默 reject。
-
-## J. 开放点（v2 · 多数已解，余留第三轮 debate）
-已解：penalty(删)/KYC 门(强制补建)/HMAC(做)/停接单接缝/net 公式/8 处 blade/第 3 建店路径/UNIQUE 重试。**余留 debate**：① `normalize_doc_number` 分域规则细节(护照 vs 身份证 vs 居留证号格式差异，漏匹配率) ② `holder_verified` 高额双人复核的"双人"在单超管现实下如何落地(次日转+TG 二次确认是否等价) ③ settling 首步"强制 settle_delivered 在途单"与 `auto-finalize-handover` cron 的并发(会不会双结算，靠 `OrderTransaction::exists` 幂等兜住需实测) ④ `owing` 欠款的人工追缴闭环(催缴/时效/是否影响法人名下其它 vendor)。
+## K. Debate 历史（三轮 · 骨架三轮站得住,详报存 scratch）
+- **一轮(政策·PLAN §8)**：资金/合规/防薅三红队 → verdict 全🔴阻断上线,5 阻断项 → 定 L1 决策 + 押金**法币-only** + 记 INVARIANTS L1-8。报告 `debate_1/2/3`。
+- **二轮(设计·§K@v1)**：资金正确性/合规落地/实现可行性 → 需补后可实现,5🔴(冻结接缝/net 悬空/制裁 stale/KYC 卡存量/加密 PII 硬墙)+9🟡 → v2。报告 `debate2_1/2/3`。
+- **三轮(v2·§L)**：并发/合规/端到端 → verdict 不一致但收敛,4🔴(状态机无回流边 3 死循环/POS 漏冻结/`order_transactions` 双扣佣既有 bug/C5 语义+C4 DoS)+🟡 → **本 v3**。报告 `debate3_1/2/3`。
+- **三轮一致确认站得住**：资金账目自洽 · 三腿原子性+逐腿幂等 · 隔离 INV-1 · 停接单/停扣佣接缝正交 · net=三账户和删 penalty · active_uniq NULL 5.7 部分唯一 · 制裁实时 re-screen · §0 直付 410 · 迁移 additive 可回滚 · 合规修法无假落地。
+> §L(v2 第三轮结论全文)保留于 git 历史 commit `623b87b`;v1/v2 全文见 `b695a58`/`deb46b1`。
 
 ---
-
-## K. 第二轮 /debate 结论（2026-07-01 · 三路独立核验 DESIGN 本身）
-> 三路红队(资金正确性/合规落地/实现可行性)独立核验 v1。**三方 verdict 一致：需补后可实现**(骨架站得住，非推倒重做)。完整报告存本地 scratch debate2_1/2/3。本 v2 已折叠下列全部修法。
-
-### K.1 🔴 必修（v2 已折叠）
-- **K-A 冻结接缝错+覆盖不全**→ §C(停接单 `nezha_store_paused` 独立加 settling / 停扣佣 `create_transaction:276` 独立加 / 补全 4 路径 / C4 快照安全网)。
-- **K-B net 公式悬空**→ §F(删 penalty；未结佣金经 settling 首步强制 settle_delivered 归零，net=三账户和)。
-- **K-C 制裁门读旧快照**→ §D1(实时 RE-run `screen_names`，不读 `screen_status`；possible/未决 fail-closed)。
-- **K-D KYC 门卡死 100% 存量**→ §B/§D2(KYC 补录审批前置子流程；§I 列为存量店必经)。
-- **K-E 加密 PII 撞硬墙**→ §A4/§E2(`id_doc_fingerprint` HMAC 明文索引列+归一化+密钥进 .env；只做辅助红标)。
-
-### K.2 🟡 已折叠
-UNIQUE 重试→§A5 `active_uniq` NULL 部分唯一 · partial 腿级幂等→§B · 户名核对→§A4 `account_holder_name`+§D3 enforce · original_ref 留存→§A2 断言 · 第3建店路径→§E1 · 8 处 blade→§G · 迁移锁窗/部署→§I · 缴纳记账→§B' · balance_after 精度→§G 对齐流水。
-
-### K.3 🟢 设计担忧被证伪（v2 采纳）
-`ad_refund` 不撞断言(test_9 只 sum `ad_click_fee`)→§F 加正向断言别删 test_9 · 每单不多查 restaurants(已 loadMissing)→§C2。
-
-### K.4 ✅ 三队确认站得住（v2 保留骨架）
-§0 直付 410 · UNIQUE 幂等根方向 · §C2 lockForUpdate 范式 · §F 隔离守 INV-1 · §D 制裁查主体状态方向(读法已改) · §G controller match · 迁移 additive 可回滚 · §H 无定时任务避开 bootstrap 坑。
-
-### K.5 用户已拍板(2026-07-01)
-① penalty 本版删；② 存量商家退出前强制补建 KYC+审批；③ 做 HMAC 指纹列。均已折叠进 v2 §A–§I。
-
----
-
-## L. 第三轮 /debate 结论（2026-07-01 · 三路核验 v2）
-> 三路红队(并发/状态机/回归 · 合规/KYC/指纹 · 端到端/边界/运营)核验 v2。**verdict 不一致但收敛**：合规队「可进代码需补」；并发队「还需补 3(2🔴)」；端到端队「7 断点(3🔴死循环)不可进代码」。**第三轮没橡皮图章——逮到前两轮分节 review 漏掉的两类新问题：状态机无回流边 + 并发底座**。核心骨架经三轮验证站得住。报告存 scratch debate3_1/2/3。
-
-### L.1 🔴 必修（v3 折叠）
-- **L-A 状态机无回流边（端到端·3 死循环）**：`settling`/`kyc_pending`/`owing` 全"进得去出不来"——①商家 applied 后无 cancel/withdraw→误点=永久停业；②KYC review 拒绝(`NezhaKycController:124` rejected 永非 approved)→卡 `kyc_pending`+settling；③`owing` 无出口边→net<0 进 limbo，老赖同法人换 vendor 带款跑路。→**修**：状态机补回流矩阵(撤回→active/KYC拒→active/owing→补平或 `written_off` 销户)+法人级欠款硬约束。
-- **L-B C1 停接单漏 POS 入口（并发）**：`POSController:357 place_order` 不经 `nezha_store_paused`→settling 店仍可商家后台柜台收单。→**修**：抽 `nezha_offboard_frozen($restaurant)` helper 在所有建单入口(place_order API + POS)调。
-- **L-C `order_transactions` 无 order_id 唯一约束→双扣佣（并发·⚠️LIVE 既有 bug）**：实测无 order_id 唯一键 + `exists():416` 无锁 check-then-insert + 多套 racy 实现(settle_delivered/Vendor:653/cron)。C5 首步强制结算新增第三并发调用者放大双扣窗口。→**修**：`order_transactions.order_id` 加 UNIQUE(先清历史重复)让 DB 兜底。**此为既有 latent bug，非 offboard 引入，已另开任务。**
-- **L-D C5 语义错位 + C4 DoS（端到端+并发）**：C5"强制 settle_delivered 跑 delivered-but-unsettled 单"语义错(`settle_delivered:412` 只推 handover/picked_up、对已 delivered return false)；C4"快照不一致就 abort"在冻结不完备(L-B/L-C 制造合法变动)时→商家退出被无限 abort DoS 且无恢复路径。→**修**：C5 措辞对齐真实语义+前置门前移；C4 定义确定性恢复(回 approved 作废旧快照重锁)+连续 abort 熔断告警。
-
-### L.2 🟡 需补（v3/实装）
-- 合规：**L1-8③ INVARIANTS 文本须同步**(现写"读 screen_status 列"、v2 改实时重跑，L1 正本与实现漂移，实装按 L1 变更流程改文本+CHANGELOG) · **断言分层**(结构守卫进 CI/资金闭环归 staging harness 唯一验收/别当空壳) · **KYC 运营 SLA**(商家端 0 自助入口→7 店退出全卡 admin 手工，补商家可见等待态+admin 待核验队列)。
-- 设档 vs 缴纳无核对闸(可设 5000 只缴 500)→加 `guarantee_tier` 应缴档可核对 · 单超管"双人"不可交付→§H 异步二次确认认定等价替身、§J2 收敛 · re-onboard 数据血缘+换证漏匹配→多信号关联 · C2 gate 读 stale/N+1→显式 fresh 查 `offboard_status` · partial 恢复加 settlement 行锁。
-
-### L.3 🟢 前瞻/建议
-指纹密钥轮换预案(现规模成本≈0，补一句) · 与"平台垫付赔顾客"追偿(L1-8 同骨)net 预留 `pending_clawback` 接口(现恒 0)。
-
-### L.4 ✅ 三轮验证站得住（骨架焊死，别推翻）
-资金账目自洽(对账 anchoredBounds 缴退对平) · 三腿原子性+逐腿幂等 · 隔离 INV-1(ad_refund 不撞 test_9) · 停接单/停扣佣接缝正交(除 POS 遗漏) · net=三账户和删 penalty · active_uniq NULL 5.7 部分唯一 · 制裁实时 re-screen · §0 直付 410 · 迁移 additive 可回滚 · 合规修法无假落地。
-
-### L.5 收敛判断
-三轮共逮 ~15 个真问题、核心骨架已从政策/设计/集成/运营/并发五角度焊死。**建议：出 v3 折叠 L.1+L.2 → 直接进实装(staging harness 作资金正确性唯一验收)，不再跑第四轮 debate**——剩余是实装+staging 能兜的实现细节，继续 debate 边际递减。`order_transactions` 双扣佣既有 bug 另行修复。
-
----
-*相关：`docs/PLAN_merchant_offboard.md`（政策/§8 红队/L1 决策）· `INVARIANTS.md` L1-8 · `OrderLogic.php`(create_transaction 扣佣/settle_delivered 幂等/refund_reversal) · `NezhaKycScreen.php`(制裁名筛+归一化) · `NezhaKycController.php`(KYC save/review) · `Vendor/NezhaDepositController.php`(对账) · memory `project_nezha-merchant-accounts-reconciliation-refund` · 两轮红队报告存 scratch debate_1/2/3+debate2_1/2/3。*
+*相关：`docs/PLAN_merchant_offboard.md`（政策/L1 决策）· `INVARIANTS.md` L1-8 · `OrderLogic.php`(create_transaction/settle_delivered/refund_reversal) · `POSController.php:357`(POS 建单) · `NezhaKycScreen/Controller`(制裁名筛+KYC) · `Vendor/NezhaDepositController`(对账) · 独立任务 `task_fb41eea8`(order_transactions 唯一约束) · memory `project_nezha-merchant-accounts-reconciliation-refund` · 三轮红队报告 scratch `debate_1/2/3`+`debate2_1/2/3`+`debate3_1/2/3`。*
