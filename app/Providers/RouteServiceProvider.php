@@ -94,5 +94,15 @@ class RouteServiceProvider extends ServiceProvider
                 Limit::perHour(30)->by($request->ip()),
             ];
         });
+
+        // 哪吒[防滥用 2026-07-01]: 「没有收到餐」申诉端点限流。游客可发(guest_id可再生), 按 user_id 或 IP 键 + 硬性每IP日上限, 防批量诬告刷申诉。
+        RateLimiter::for('nezha_appeal', function (Request $request) {
+            $key = optional($request->user())->id ? ('u' . $request->user()->id) : ('ip' . $request->ip());
+            return [
+                Limit::perMinute(3)->by($key),
+                Limit::perHour(10)->by($key),
+                Limit::perDay(20)->by('appeal_ip_' . $request->ip()),
+            ];
+        });
     }
 }

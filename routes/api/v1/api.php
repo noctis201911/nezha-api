@@ -493,7 +493,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
             Route::put('cancel-request', [OrderController::class, 'cancel_request']); // 哪吒B方案: 接单后(confirmed/processing)申请取消→商家裁决
             Route::put('confirm-delivery', [OrderController::class, 'confirm_delivery']); // 哪吒B方案: 顾客确认收货收尾(A)
             Route::post('remind-delivery-link', [OrderController::class, 'remind_delivery_link']); // 哪吒B方案: 配送中无链接时顾客一键提醒商家分享Yandex追踪
-            Route::post('delivery-appeal', [OrderController::class, 'submit_delivery_appeal']); // 哪吒B方案: 「没有收到餐/配送异常」专用申诉留痕(req 4), 不自动退款
+            Route::post('delivery-appeal', [OrderController::class, 'submit_delivery_appeal'])->middleware('throttle:nezha_appeal'); // 哪吒B方案: 「没有收到餐/配送异常」专用申诉留痕(req 4), 不自动退款 + 防刷限流(2026-07-01)
             Route::post('refund-request', [OrderController::class, 'refund_request']);
             Route::post('nudge-refund', [OrderController::class, 'nudge_refund']); // 哪吒B方案: 待退款单顾客「催一下」→平台替顾客提醒商家(站内信+Telegram), 不碰钱
             Route::post('cancel-refund-request', [OrderController::class, 'cancel_refund_request']); // 哪吒2026-06-26: 顾客自主撤销退款申请(只能撤 refund_requested 态本人单), 转 refund_request_canceled, L1-1 不碰钱仅状态留痕+通知商家

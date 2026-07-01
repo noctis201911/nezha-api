@@ -117,6 +117,7 @@ class NezhaRefundController extends Controller
         $remindHours  = \App\CentralLogics\NezhaRefundOverdue::thresholdHours('nezha_refund_overdue_remind_hours', 'nezha_refund_overdue_remind_days', 12);
         $suspendHours = \App\CentralLogics\NezhaRefundOverdue::thresholdHours('nezha_refund_overdue_suspend_hours', 'nezha_refund_overdue_suspend_days', 72);
         $status      = (int) (\App\Models\BusinessSetting::where('key', 'nezha_refund_overdue_status')->value('value') ?? 0);
+        $autoSuspend = (int) (\App\Models\BusinessSetting::where('key', 'nezha_refund_overdue_auto_suspend')->value('value') ?? 0);
 
         $records = NezhaRefundRecord::with(['order', 'restaurant'])
             ->where('status', 'pending_merchant_refund')
@@ -129,7 +130,7 @@ class NezhaRefundController extends Controller
             ->orderByDesc('nezha_suspended_at')
             ->get(['id', 'name', 'nezha_order_suspended', 'nezha_suspend_reason', 'nezha_suspended_at']);
 
-        return view('admin-views.nezha-refund.overdue', compact('records', 'suspended', 'remindHours', 'suspendHours', 'status'));
+        return view('admin-views.nezha-refund.overdue', compact('records', 'suspended', 'remindHours', 'suspendHours', 'status', 'autoSuspend'));
     }
 
     /** 运营手动: 据某退款留痕暂停该商家接单(非资金, 留人工复核口子)。 */
@@ -185,6 +186,7 @@ class NezhaRefundController extends Controller
     {
         $request->validate([
             'nezha_refund_overdue_status'        => 'required|in:0,1',
+            'nezha_refund_overdue_auto_suspend'  => 'nullable|in:0,1',
             'nezha_refund_overdue_remind_hours'  => 'required|integer|min:1|max:720',
             'nezha_refund_overdue_suspend_hours' => 'required|integer|min:1|max:2160',
         ]);
@@ -196,13 +198,17 @@ class NezhaRefundController extends Controller
         }
         foreach ([
             'nezha_refund_overdue_status'        => (string) ((int) $request->nezha_refund_overdue_status),
+            'nezha_refund_overdue_auto_suspend'  => (string) ((int) $request->input('nezha_refund_overdue_auto_suspend', 0)),
             'nezha_refund_overdue_remind_hours'  => (string) $remind,
             'nezha_refund_overdue_suspend_hours' => (string) $suspend,
         ] as $key => $val) {
             \App\Models\BusinessSetting::updateOrCreate(['key' => $key], ['value' => $val]);
         }
         if ((int) $request->nezha_refund_overdue_status === 1) {
-            Toastr::success(translate('已保存。⚠️ 兜底已开启: 系统将每小时自动催办逾期商家+计入风控+告警; 停接单仍需您手动。'));
+            $autoOn = (int) $request->input('nezha_refund_overdue_auto_suspend', 0) === 1;
+            Toastr::success(translate($autoOn
+                ? '已保存。⚠️ 兜底已开启(自动模式): 系统自动催办+记风控+告警, 并在逾期达阈值时自动停接单(退款后自愈)。'
+                : '已保存。⚠️ 兜底已开启(手动模式): 系统自动催办+记风控+告警; 停接单需您在本页手动处置。'));
         } else {
             Toastr::success(translate('已保存。兜底总开关保持关闭, 系统不会自动催办/记风控/告警(本页仍可手动处置)。'));
         }

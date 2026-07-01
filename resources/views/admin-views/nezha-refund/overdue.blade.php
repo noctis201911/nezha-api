@@ -23,20 +23,27 @@
                 <form method="POST" action="{{ route('admin.nezha-refund.overdue.settings') }}">
                     @csrf
                     <div class="row align-items-end">
-                        <div class="col-sm-4 form-group mb-2">
+                        <div class="col-sm-3 form-group mb-2">
                             <label class="input-label">{{ translate('兜底总开关') }}</label>
                             <select name="nezha_refund_overdue_status" class="form-control">
                                 <option value="0" {{ $status != 1 ? 'selected' : '' }}>{{ translate('关闭(只看与手动处置, 不自动催办)') }}</option>
-                                <option value="1" {{ $status == 1 ? 'selected' : '' }}>{{ translate('开启(每小时自动催办+记风控+告警+逾期自动停接单)') }}</option>
+                                <option value="1" {{ $status == 1 ? 'selected' : '' }}>{{ translate('开启(每小时自动催办+记风控+告警)') }}</option>
                             </select>
-                            <small class="text-danger">{{ translate('⚠️ 开启=真实影响: 会自动催办逾期商家、计入风控, 并在逾期达阈值时自动停其接单(退款后自动恢复)。') }}</small>
+                            <small class="text-danger">{{ translate('⚠️ 开启=真实影响: 自动催办逾期商家、计入风控、告警。停接单方式见右(默认手动)。') }}</small>
                         </div>
                         <div class="col-sm-3 form-group mb-2">
-                            <label class="input-label">{{ translate('逾期几小时起 催办+记风控') }}</label>
+                            <label class="input-label">{{ translate('停接单方式') }}</label>
+                            <select name="nezha_refund_overdue_auto_suspend" class="form-control">
+                                <option value="0" {{ (int) ($autoSuspend ?? 0) !== 1 ? 'selected' : '' }}>{{ translate('手动(推荐): 仅告警建议, 由您手动停接单') }}</option>
+                                <option value="1" {{ (int) ($autoSuspend ?? 0) === 1 ? 'selected' : '' }}>{{ translate('自动: 逾期达阈值系统自动停(退款后自愈)') }}</option>
+                            </select>
+                        </div>
+                        <div class="col-sm-2 form-group mb-2">
+                            <label class="input-label">{{ translate('逾期几小时 催办') }}</label>
                             <input type="number" name="nezha_refund_overdue_remind_hours" class="form-control" min="1" max="720" value="{{ $remindHours }}" required>
                         </div>
-                        <div class="col-sm-3 form-group mb-2">
-                            <label class="input-label">{{ translate('逾期几小时起 自动停接单') }}</label>
+                        <div class="col-sm-2 form-group mb-2">
+                            <label class="input-label">{{ translate('逾期几小时 停接单') }}</label>
                             <input type="number" name="nezha_refund_overdue_suspend_hours" class="form-control" min="1" max="2160" value="{{ $suspendHours }}" required>
                         </div>
                         <div class="col-sm-2 form-group mb-2">

@@ -75,15 +75,22 @@ class RefundOverdueSweep extends Command
             }, "逾期{$overdueLabel} 催办商家") ? 1 : 0;
 
             $acted += $this->fireOnce($rec->id, $rec->restaurant_id, 'escalate_t1', function () use ($rec, $overdueLabel) {
-                $this->escalate($rec, $overdueLabel, false);
+                $this->escalate($rec, $overdueLabel, 't1');
             }, "逾期{$overdueLabel} 告警运营") ? 1 : 0;
 
-            // T2: 逾期达停接单阈值 -> 自动停接单(非资金) + 超管 Telegram 提醒 + 运营邮件留痕。幂等一次。
-            //     商家原路退款并标记后, lift_suspend_if_clear 自动解除接单挂起(见 Vendor/OrderController::mark_refunded)=自愈。
+            // T2: 逾期达停接单阈值。默认【手动】(nezha_refund_overdue_auto_suspend=0): 仅升级告警"建议运营手动停接单"(escalate_t2), 不自动停。
+            //     子开关=1 时才自动停接单(auto_suspend)。商家原路退款并标记后, lift_suspend_if_clear 自动解除接单挂起=自愈。
             if ($overdueHours >= $suspendHours) {
-                $acted += $this->fireOnce($rec->id, $rec->restaurant_id, 'auto_suspend', function () use ($rec, $overdueLabel) {
-                    $this->autoSuspend($rec, $overdueLabel);
-                }, "逾期{$overdueLabel} 自动停接单+提醒超管") ? 1 : 0;
+                $autoSuspendOn = (int) (BusinessSetting::where('key', 'nezha_refund_overdue_auto_suspend')->value('value') ?? 0) === 1;
+                if ($autoSuspendOn) {
+                    $acted += $this->fireOnce($rec->id, $rec->restaurant_id, 'auto_suspend', function () use ($rec, $overdueLabel) {
+                        $this->autoSuspend($rec, $overdueLabel);
+                    }, "逾期{$overdueLabel} 自动停接单+提醒超管") ? 1 : 0;
+                } else {
+                    $acted += $this->fireOnce($rec->id, $rec->restaurant_id, 'escalate_t2', function () use ($rec, $overdueLabel) {
+                        $this->escalate($rec, $overdueLabel, 'suggest_suspend');
+                    }, "逾期{$overdueLabel} 建议运营手动停接单") ? 1 : 0;
+                }
             }
         }
 
@@ -197,7 +204,7 @@ class RefundOverdueSweep extends Command
             . "后台「风控中心 → 逾期未退款」可手动解除/维持。"
         );
         // 运营邮件留痕(失败吞掉, 不反复重发)。
-        $this->escalate($rec, $overdueLabel, true);
+        $this->escalate($rec, $overdueLabel, 'auto_suspended');
         Log::warning("NEZHA_REFUND_OVERDUE auto_suspend restaurant#{$rec->restaurant_id} refund#{$rec->id} 逾期{$overdueLabel}");
     }
 
@@ -205,12 +212,14 @@ class RefundOverdueSweep extends Command
      * 告警运营(平台客服信箱)。发信失败吞掉(账本行已占, 不反复重发), 仅记日志。
      * $suggestSuspend=true 时升级为「建议停接单」(运营据此手动处置)。
      */
-    private function escalate(NezhaRefundRecord $rec, string $overdueLabel, bool $suggestSuspend): void
+    private function escalate(NezhaRefundRecord $rec, string $overdueLabel, string $mode = 't1'): void
     {
         $name = $rec->restaurant?->name ?? ('餐厅#' . $rec->restaurant_id);
-        $head = $suggestSuspend
-            ? "商家逾期未退款已达 {$overdueLabel}, 系统已【自动停接单】(非资金), 商家原路退款并标记后自动恢复。"
-            : "商家逾期未退款 {$overdueLabel}, 已记风控并催办商家。";
+        $head = match ($mode) {
+            'auto_suspended'  => "商家逾期未退款已达 {$overdueLabel}, 系统已【自动停接单】(非资金), 商家原路退款并标记后自动恢复。",
+            'suggest_suspend' => "商家逾期未退款已达停接单阈值({$overdueLabel}), 【建议运营在后台手动停接单】(当前为手动模式)。商家原路退款并标记后可恢复接单。",
+            default           => "商家逾期未退款 {$overdueLabel}, 已记风控并催办商家。",
+        };
         $body = $head . "\n\n商家: {$name}\n退款留痕#{$rec->id} 订单#{$rec->order_id} 应退≈{$rec->refund_amount}"
             . "\n请登录后台「风控中心 → 逾期未退款」跟进(平台不代退, 仅约束/催办)。";
         try {
