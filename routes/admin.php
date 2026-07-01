@@ -274,6 +274,12 @@ Route::middleware('module:provide_dm_earning')->group(function () {
             Route::get('/billing-settings', [AdvertisementController::class, 'billingSettings'])->name('billing-settings');
             Route::post('/billing-settings', [AdvertisementController::class, 'updateBillingSettings'])->name('billing-settings.update');
 
+            // [哪吒广告竞价] 第二期超管侧: 竞价参数页 + 广告余额充值(L2)
+            Route::get('/auction-settings', [AdvertisementController::class, 'auctionSettings'])->name('auction-settings');
+            Route::post('/auction-settings', [AdvertisementController::class, 'updateAuctionSettings'])->name('auction-settings.update');
+            Route::get('/ad-recharge', [AdvertisementController::class, 'adRecharge'])->name('ad-recharge');
+            Route::post('/ad-recharge', [AdvertisementController::class, 'storeAdRecharge'])->name('ad-recharge.store');
+
         });
 
         Route::group(['prefix' => 'coupon', 'as' => 'coupon.', 'middleware' => ['module:coupon']], function () {

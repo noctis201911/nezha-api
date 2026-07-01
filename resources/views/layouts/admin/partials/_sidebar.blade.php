@@ -904,6 +904,20 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                                         <span class="text-truncate">{{ translate('messages.Ads_list') }}</span>
                                     </a>
                                 </li>
+                                <li class="nav-item @yield('advertisement_auction')">
+                                    <a class="nav-link " href="{{ route('admin.advertisement.auction-settings') }}"
+                                        title="竞价参数设置">
+                                        <span class="tio-circle nav-indicator-icon"></span>
+                                        <span class="text-truncate">竞价参数设置</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item @yield('advertisement_recharge')">
+                                    <a class="nav-link " href="{{ route('admin.advertisement.ad-recharge') }}"
+                                        title="广告余额充值">
+                                        <span class="tio-circle nav-indicator-icon"></span>
+                                        <span class="text-truncate">广告余额充值</span>
+                                    </a>
+                                </li>
                             </ul>
                         </li>
                     @endif

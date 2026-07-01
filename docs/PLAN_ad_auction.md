@@ -89,3 +89,10 @@
 
 死亡测试：`tests/Feature/NezhaAdAuctionTest`（PHPUnit 9/9）+ 真并发脚本（30/50 路零超扣·无死锁·对账一致·零残留）。
 ⬜ 需业主亲测（开关开后）：真机广告位渲染、真人点击计费、真实刷量压力、live 顾客端竞价排序效果。
+
+
+## 10. 第二期落地进度
+
+- **Slice A · 超管侧（2026-07-02 · 提交见 CHANGELOG）**：✅ 竞价参数页（`admin/advertisement/auction-settings`，9 键 + 守卫 floor>0/封顶≥floor/日预算≥floor + 总开关翻转写 AdminAuditLog）+ 广告余额充值页（`admin/advertisement/ad-recharge`，复用 `AdBalanceLogic::credit` 单一真相源，只充值不扣减 + 二次确认 + 审计）+ 侧栏两入口。开关仍默认关、纯超管 UI 零 live 影响。验证：进程内真渲染两页 22/22（字段齐 + 隔离证伪 deposit 纹丝不动 + 事务 rollback 零残留）+ route:list 四路由注册。§3/§4#9 的 CLI 充值逻辑已抽到 `App\CentralLogics\AdBalanceLogic::credit`，CLI 与后台按钮共用。
+- **Slice B · 商家三旋钮看板**：未做（日预算 / 想多靠前低中高 / 已花费+点击数）。碰 vendor 侧 `routes/vendor.php` + vendor 侧栏，需与"优惠券重做"窗口协调。
+- **Slice C · 顾客端广告位**（首页位 / 列表竞价位 / 去首页横滑卡「推广」角标 / 点击·曝光事件接线）：未做；因碰真金"每次有效点击=一笔扣费"，开工前先走 `/debate` 三路对抗核验（业主 2026-07-02 拍板）。重点核验：点击事件不重复触发 / 不在渲染滚动时误发 / 尊重后端 dedup / 全不打标。

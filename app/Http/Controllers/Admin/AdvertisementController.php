@@ -11,6 +11,9 @@ use App\Http\Controllers\Controller;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
+use App\Models\AdminAuditLog;
+use App\CentralLogics\AdBalanceLogic;
 use App\Http\Requests\AdvertisementStoreRequest;
 use App\Http\Requests\AdvertisementUpdateRequest;
 use App\Mail\AdversitementStatusMail;
@@ -682,6 +685,119 @@ class AdvertisementController extends Controller
             \App\Models\BusinessSetting::updateOrCreate(['key' => $key], ['value' => $value]);
         }
         Toastr::success('广告计费设置已更新');
+        return back();
+    }
+
+    /**
+     * [哪吒广告竞价] 竞价参数设置页 (L2 业务参数). 见 docs/PLAN_ad_auction.md §8.
+     */
+    public function auctionSettings()
+    {
+        $keys = [
+            'nezha_ad_auction_status', 'nezha_ad_floor_price', 'nezha_ad_max_daily_budget',
+            'nezha_ad_max_per_click', 'nezha_ad_dedup_window_sec', 'nezha_ad_natural_reserved_slots',
+            'nezha_ad_max_share_per_store', 'nezha_ad_recompute_min', 'nezha_ad_trusted_min_orders',
+        ];
+        $settings = \App\Models\BusinessSetting::whereIn('key', $keys)->pluck('value', 'key')->toArray();
+        return view('admin-views.advertisement.auction-settings', compact('settings'));
+    }
+
+    /**
+     * [哪吒广告竞价] 保存竞价参数. 全 L2 业务参数, 不动 L1 资金红线.
+     * 守卫: floor>0 / 单次封顶>=floor / 日预算上限>=floor / 各整数下限; 总开关翻转写审计日志.
+     */
+    public function updateAuctionSettings(Request $request)
+    {
+        $request->validate([
+            'nezha_ad_auction_status'         => 'required|in:0,1',
+            'nezha_ad_floor_price'            => 'required|numeric|min:1',
+            'nezha_ad_max_per_click'          => 'required|numeric|gte:nezha_ad_floor_price',
+            'nezha_ad_max_daily_budget'       => 'required|numeric|gte:nezha_ad_floor_price',
+            'nezha_ad_dedup_window_sec'       => 'required|integer|min:0',
+            'nezha_ad_natural_reserved_slots' => 'required|integer|min:0',
+            'nezha_ad_max_share_per_store'    => 'required|integer|min:1',
+            'nezha_ad_recompute_min'          => 'required|integer|min:1',
+            'nezha_ad_trusted_min_orders'     => 'required|integer|min:0',
+        ], [
+            'nezha_ad_floor_price.min'         => '保底点击价必须 > 0(INV-7 floor>0)。',
+            'nezha_ad_max_per_click.gte'       => '单次点击封顶不能低于保底点击价。',
+            'nezha_ad_max_daily_budget.gte'    => '日预算上限不能低于保底点击价。',
+            'nezha_ad_max_share_per_store.min' => '单店最多占位至少为 1。',
+            'nezha_ad_recompute_min.min'       => '重算间隔至少为 1 分钟。',
+        ]);
+
+        $keys = [
+            'nezha_ad_auction_status', 'nezha_ad_floor_price', 'nezha_ad_max_daily_budget',
+            'nezha_ad_max_per_click', 'nezha_ad_dedup_window_sec', 'nezha_ad_natural_reserved_slots',
+            'nezha_ad_max_share_per_store', 'nezha_ad_recompute_min', 'nezha_ad_trusted_min_orders',
+        ];
+        $before = \App\Models\BusinessSetting::whereIn('key', $keys)->pluck('value', 'key')->toArray();
+
+        $after = [];
+        foreach ($keys as $key) {
+            $after[$key] = (string) $request->input($key);
+            \App\Models\BusinessSetting::updateOrCreate(['key' => $key], ['value' => $after[$key]]);
+        }
+
+        // 总开关是"真实影响开关"(开=CPC 真金按点击计费), 变更写审计日志(复用 SEC-3 AdminAuditLog)
+        if (($before['nezha_ad_auction_status'] ?? '0') !== $after['nezha_ad_auction_status']) {
+            AdminAuditLog::record('ad_auction_switch', 'business_settings', 'nezha_ad_auction_status',
+                ['status' => $before['nezha_ad_auction_status'] ?? '0'], ['status' => $after['nezha_ad_auction_status']]);
+        }
+
+        Toastr::success('竞价参数已保存');
+        return back();
+    }
+
+    /**
+     * [哪吒广告竞价] 广告余额(ad_balance)充值页. B2B 预付, 只动 ad_balance 不碰 deposit(INV-1).
+     */
+    public function adRecharge()
+    {
+        $restaurants = DB::table('restaurants')
+            ->leftJoin('restaurant_wallets', 'restaurants.vendor_id', '=', 'restaurant_wallets.vendor_id')
+            ->whereNotNull('restaurants.vendor_id')
+            ->orderBy('restaurants.name')
+            ->select('restaurants.id', 'restaurants.name', 'restaurants.vendor_id',
+                     DB::raw('COALESCE(restaurant_wallets.ad_balance, 0) as ad_balance'))
+            ->get();
+
+        $recent = DB::table('restaurant_deposit_transactions')
+            ->leftJoin('restaurants', 'restaurant_deposit_transactions.restaurant_id', '=', 'restaurants.id')
+            ->where('restaurant_deposit_transactions.type', 'ad_recharge')
+            ->orderByDesc('restaurant_deposit_transactions.id')
+            ->limit(20)
+            ->select('restaurant_deposit_transactions.*', 'restaurants.name as restaurant_name')
+            ->get();
+
+        return view('admin-views.advertisement.ad-recharge', compact('restaurants', 'recent'));
+    }
+
+    /**
+     * [哪吒广告竞价] 执行广告充值. 复用 AdBalanceLogic::credit(单一真相源, 原子 INV-1/2) + 审计日志.
+     */
+    public function storeAdRecharge(Request $request)
+    {
+        $request->validate([
+            'vendor_id' => 'required|integer|min:1',
+            'amount'    => 'required|numeric|min:1',
+            'note'      => 'nullable|string|max:191',
+        ], [
+            'amount.min' => '充值金额必须 > 0。',
+        ]);
+
+        $note = $request->note ?: '超管后台广告充值';
+        try {
+            $newBal = AdBalanceLogic::credit((int) $request->vendor_id, (float) $request->amount, $note);
+            AdminAuditLog::record('ad_balance_recharge', 'vendor', $request->vendor_id, null,
+                ['amount' => (float) $request->amount, 'new_ad_balance' => $newBal, 'note' => $note]);
+            Toastr::success('广告余额充值成功: vendor#' . $request->vendor_id . ' 充后 ad_balance = ' . $newBal . ' ֏');
+        } catch (\InvalidArgumentException | \RuntimeException $e) {
+            Toastr::error($e->getMessage());
+        } catch (\Throwable $e) {
+            \Log::warning('[admin ad-recharge] failed: ' . $e->getMessage());
+            Toastr::error('充值失败, 请重试');
+        }
         return back();
     }
 
