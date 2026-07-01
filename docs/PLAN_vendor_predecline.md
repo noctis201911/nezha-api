@@ -1,3 +1,11 @@
+> ⚠️⚠️ **已废弃 / SUPERSEDED（2026-07-01 · 商家订单页窗口核实后）—— 请勿据此写代码** ⚠️⚠️
+>
+> 核实线上代码后发现：本单要建的 `predecline_order` 与**既有** `reject_order`（`app/Http/Controllers/Vendor/OrderController.php:749`，路由 `vendor.order.reject`）+ 详情页按钮（`resources/views/vendor-views/order/order-view.blade.php:1165`，`@if(in_array($order->order_status,['pending','confirmed']))`）**完全重复**。既有 reject 已覆盖"商家付款前对未付单一键拒 · 零退款"——`finalize_cancellation` 按 OfflinePayments **记录存在性**分叉（本单 §4/§5 的洞察正确，但它恰恰解释了**为何 reject 本就安全、无需新 guard**：未付单无记录→天然走无退款分支；垃圾凭证单有记录→安全按"有记录"处理不丢钱）。§1「商家对 pending 单无任何主动拒动作」前提**证伪**。
+>
+> **已落地的实际动作**：给既有 reject 补了**列表页快捷入口**（= 本单 §7 标"可选"那条）——列表行末「⋯」菜单里的「🚫 拒接本单」，复用 `vendor.order.reject` 零后端改动，提交 `bda8c7c` + `1822766`（deploy 上线 · 真机验证 formAction 精确指向所点订单 · console 0）。**本设计单仅存档留证，勿再实现 predecline_order**（否则详情页会出现两个拒单按钮=重复红线）。
+>
+> ---
+
 # 哪吒 — 商家「无法配送此单」付款前主动拒单 (vendor_predecline) — 实现交接单
 
 > 交接自「配送范围/远单」讨论窗口 → 商家订单页窗口（你正在改 order-view/list.blade + en messages）。
