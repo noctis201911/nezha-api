@@ -1319,6 +1319,28 @@ class Helpers
 
     public static function sendNotificationToHttp(?array $data)
     {
+        // 哪吒: 推送异步化 —— 跨境 FCM 往返(OAuth token + messages:send)本可甩到 nezha-queue worker。
+        // 灰度开关 nezha_notif_async_status(默认 0=关): 关=保持异步化前的内联同步发送(pushHttpSyncSend);
+        // 开=入队交 worker。历史契约: 本方法一贯返回 false, 无调用方依赖其结果。
+        if (! is_array($data)) {
+            return false;
+        }
+        if ((int) self::get_business_settings('nezha_notif_async_status') !== 1) {
+            return self::pushHttpSyncSend($data);
+        }
+        try {
+            \App\Jobs\SendPushNotificationJob::dispatch($data);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('push enqueue failed, fallback sync: '.$e->getMessage());
+            return self::pushHttpSyncSend($data);
+        }
+
+        return false;
+    }
+
+    /** 真正的 FCM HTTP 发送(worker 内执行, 或 redis 挂时兜底)。逻辑与异步化前一致。 */
+    public static function pushHttpSyncSend(?array $data)
+    {
         $config = self::get_business_settings('push_notification_service_file_content');
         $key = (array) $config;
         if (data_get($key, 'project_id')) {
@@ -2120,9 +2142,34 @@ class Helpers
 
     public static function sendTelegramToRestaurant($restaurant, $text)
     {
+        // 哪吒: Telegram 异步化 —— 甩到 worker, 不吊住请求(原 3s+4s curl 超时)。发送逻辑见 telegramSyncSend()。
+        self::enqueueTelegram($restaurant?->telegram_chat_id, $text);
+    }
+
+    /** 统一 Telegram 入队入口: 空 chatId/text 不入队; redis 挂则兜底同步。 */
+    public static function enqueueTelegram($chatId, $text)
+    {
+        if (!$chatId || !$text) {
+            return;
+        }
+        // 灰度开关 nezha_notif_async_status(默认 0=关): 关=内联同步发送(异步化前行为)。
+        if ((int) self::get_business_settings('nezha_notif_async_status') !== 1) {
+            self::telegramSyncSend($chatId, $text);
+            return;
+        }
+        try {
+            \App\Jobs\SendTelegramMessageJob::dispatch((string) $chatId, (string) $text);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('telegram enqueue failed, fallback sync: '.$e->getMessage());
+            self::telegramSyncSend($chatId, $text);
+        }
+    }
+
+    /** 真正的 Telegram 发送(worker 内执行, 或 redis 挂时兜底)。逻辑与异步化前一致。 */
+    public static function telegramSyncSend($chatId, $text)
+    {
         try {
             $token = self::get_business_settings('telegram_bot_token', false);
-            $chatId = $restaurant?->telegram_chat_id;
             if (!$token || !is_string($token) || !$chatId || !$text) {
                 return;
             }
@@ -2141,7 +2188,7 @@ class Helpers
             curl_exec($ch);
             curl_close($ch);
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('telegram restaurant msg failed: ' . $e->getMessage());
+            \Illuminate\Support\Facades\Log::warning('telegram msg failed: ' . $e->getMessage());
         }
     }
 
@@ -2149,29 +2196,8 @@ class Helpers
     // 发到 nezha_risk_admin_chat_id(后台配); 未配=静默降级(只落库不告警, 不阻断主流程、不报错)。
     public static function sendTelegramToAdmin($text)
     {
-        try {
-            $token = self::get_business_settings('telegram_bot_token', false);
-            $chatId = self::get_business_settings('nezha_risk_admin_chat_id', false);
-            if (!$token || !is_string($token) || !$chatId || !$text) {
-                return;
-            }
-            $ch = curl_init('https://api.telegram.org/bot' . $token . '/sendMessage');
-            curl_setopt_array($ch, [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_CONNECTTIMEOUT => 3,
-                CURLOPT_TIMEOUT => 4,
-                CURLOPT_POST => true,
-                CURLOPT_POSTFIELDS => http_build_query([
-                    'chat_id' => $chatId,
-                    'text' => $text,
-                    'disable_web_page_preview' => true,
-                ]),
-            ]);
-            curl_exec($ch);
-            curl_close($ch);
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('telegram admin risk msg failed: ' . $e->getMessage());
-        }
+        // 哪吒: Telegram 异步化 —— 同上甩到 worker。chatId = 风控 admin chat。
+        self::enqueueTelegram(self::get_business_settings('nezha_risk_admin_chat_id', false), $text);
     }
 
     // 哪吒 阶段D: 解析转人工/双向用的超管 chat_id(优先 nezha_cs_handoff_chat_id, 回退风控 admin chat)。

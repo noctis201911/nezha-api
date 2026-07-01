@@ -1,0 +1,35 @@
+<?php
+
+namespace App\Jobs;
+
+use App\CentralLogics\Helpers;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+
+/**
+ * 哪吒: Telegram 通知异步化 —— 把 3s+4s 超时的 curl 甩到 nezha-queue worker。
+ * 只带标量 chatId + text(序列化安全); token 在 worker 内解析。
+ * 真实发送逻辑见 Helpers::telegramSyncSend()(与异步化前一致)。
+ */
+class SendTelegramMessageJob implements ShouldQueue
+{
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    public int $tries = 3;
+
+    public int $backoff = 10;
+
+    public int $timeout = 15;
+
+    public function __construct(public string $chatId, public string $text)
+    {
+    }
+
+    public function handle(): void
+    {
+        Helpers::telegramSyncSend($this->chatId, $this->text);
+    }
+}
