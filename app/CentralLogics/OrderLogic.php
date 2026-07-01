@@ -189,6 +189,11 @@ class OrderLogic
         }
         $restaurant_amount =$restaurant_amount+ $order_amount + $order->total_tax_amount + $order->extra_packaging_amount - $comission_amount - $restaurant_coupon_discount_subsidy ;
         try{
+            // [哪吒 双扣佣底座 · task_fb41eea8 / DESIGN_merchant_offboard A6·C5] order_transactions.order_id 有 UNIQUE 约束。
+            // 并发结算(顾客确认 settle_delivered / 超时兜底 cron / 商家 status())可能同时越过上游 exists() 幂等闸后进到这里,
+            // 只有先到者能 insert 成功, 后到者撞唯一键抛 1062 → 下面 catch 当幂等跳过并 return false(不进扣佣/改钱包/推状态),
+            // 保证 commission_deduction 对每单恰好扣一次。⚠️ 勿删 order_transactions.order_id 的 UNIQUE 约束: C5 并发结算安全依赖它。
+            try {
             OrderTransaction::insert([
                 'vendor_id' =>$order->restaurant->vendor->id,
                 'delivery_man_id'=>$order->delivery_man_id,
@@ -219,6 +224,14 @@ class OrderLogic
                 'extra_packaging_amount' => $order->extra_packaging_amount,
                 'ref_bonus_amount' => $order->ref_bonus_amount,
             ]);
+            } catch (\Illuminate\Database\QueryException $e) {
+                // 1062 = MySQL 唯一键冲突: 本单已被并发的另一路结算记过流水, 当幂等跳过(不重复扣佣)。
+                if ((int) ($e->errorInfo[1] ?? 0) === 1062) {
+                    info('nezha 双扣佣防护: order_transaction 已存在(并发结算), 幂等跳过 order#' . $order->id);
+                    return false;
+                }
+                throw $e; // 其它 DB 错误交由外层 catch 记录并 return false, 行为不变
+            }
             $adminWallet = AdminWallet::firstOrNew(
                 ['admin_id' => Admin::where('role_id', 1)->first()->id]
             );
