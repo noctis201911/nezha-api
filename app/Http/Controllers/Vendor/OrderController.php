@@ -175,13 +175,17 @@ class OrderController extends Controller
             ->withQueryString(); // 哪吒 P5: 分页链接保留 nz_done/nz_done_days/search 等参数, 防翻页丢筛选
 
         $st = $status;
+        // 哪吒 P6: 「今日营收」条数据(仅「全部」页需要), 与首屏今日经营卡同源(DashboardController::nezha_today_sales)
+        $nzToday = $st === 'all'
+            ? \App\Http\Controllers\Vendor\DashboardController::nezha_today_sales(Helpers::get_restaurant_id())
+            : null;
         // 哪吒: offline_pending / refund_pending / timeout / customer_nudged 无翻译 key, 直接给中文标题避免显示英文键名。
         $status = $status == 'offline_pending' ? '待确认收款'
             : ($status == 'refund_pending' ? '待退款'
             : ($status == 'timeout' ? '超时单'
             : ($status == 'customer_nudged' ? '客户催促'
             : translate('messages.' . $status))));
-        return view('vendor-views.order.list', compact('orders', 'status', 'st', 'restaurant'));
+        return view('vendor-views.order.list', compact('orders', 'status', 'st', 'restaurant', 'nzToday'));
     }
 
     public function search(Request $request)

@@ -211,14 +211,10 @@ class DashboardController extends Controller
         $rid = $restaurant?->id;
         $vendorId = Helpers::get_vendor_id();
 
-        $today_orders = Order::whereDate('created_at', Carbon::today())
-            ->where('restaurant_id', $rid)->Notpos()->count();
-
-        $today_collected = (float) Order::whereDate('created_at', Carbon::today())
-            ->where('restaurant_id', $rid)
-            ->where('payment_status', 'paid')
-            ->whereNotIn('order_status', ['canceled', 'failed', 'refunded'])
-            ->Notpos()->sum('order_amount');
+        // 哪吒 P6: 今日单数/已确认到账抽为共享 helper, 与订单列表页「今日营收」条同源(防两处口径 drift)
+        $__ts = self::nezha_today_sales($rid);
+        $today_orders = $__ts['orders'];
+        $today_collected = $__ts['collected'];
 
         // 保证金余额 + 健康四档
         $balance = (float) (\App\Models\RestaurantWallet::where('vendor_id', $vendorId)->value('deposit_balance') ?? 0);
@@ -259,6 +255,24 @@ class DashboardController extends Controller
             'rate_cny'        => $rateCny,
             'rate_usd'        => $rateUsd,
         ];
+    }
+
+    /**
+     * 哪吒 P6(2026-07-01): 今日单数 + 今日已确认到账 的单一真相源。
+     * 商家首屏「今日经营卡」与订单列表页「今日营收」条共用, 防两处口径 drift。纯 L3 只读聚合, 平台不碰钱(B方案)。
+     * 已确认到账 = payment_status='paid' 且排除 取消/退款/失败 的 order_amount 合计(Notpos, 今日) —— 只算已确认收到款的,
+     * 排除仍 unpaid 的待核验单, 不误导商家; 不含 total_earning(直付不记, L1-5)。
+     */
+    public static function nezha_today_sales($rid): array
+    {
+        $orders = Order::whereDate('created_at', Carbon::today())
+            ->where('restaurant_id', $rid)->Notpos()->count();
+        $collected = (float) Order::whereDate('created_at', Carbon::today())
+            ->where('restaurant_id', $rid)
+            ->where('payment_status', 'paid')
+            ->whereNotIn('order_status', ['canceled', 'failed', 'refunded'])
+            ->Notpos()->sum('order_amount');
+        return ['orders' => $orders, 'collected' => (float) $collected];
     }
 
     public function order_stats(Request $request)

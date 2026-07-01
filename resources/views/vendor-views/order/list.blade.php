@@ -70,6 +70,16 @@
         .nz-done-days { width: 64px; height: 32px; text-align: center; border: 1px solid #D8E0EA; border-radius: 7px; font-size: 13px; padding: 0 6px; }
         .nz-done-days:disabled { background: #F7F8FA; color: #98A2B3; border-color: #EDF1F5; }
         .nz-done-hint { color: #667085; font-size: 12px; font-weight: 600; }
+        .nz-today-rev { flex-basis: 100%; display: none; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; padding-bottom: 9px; margin-bottom: 3px; border-bottom: 1px solid #F2F4F7; }
+        .nz-done-filter.nz-rev-on .nz-today-rev { display: flex; }
+        .nz-today-rev-label { font-size: 13px; color: #475467; font-weight: 700; }
+        .nz-today-rev-label b { color: #102A4C; }
+        .nz-today-rev-amt { font-size: 18px; font-weight: 900; color: #102A4C; }
+        .nz-today-rev-fx { font-size: 11.5px; color: #98A2B3; font-weight: 700; }
+        .nz-today-rev-note { font-size: 11px; color: #98A2B3; }
+        .nz-rev-toggle { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 0 auto; font-size: 12.5px; color: #667085; font-weight: 700; cursor: pointer; }
+        .nz-rev-toggle input { accent-color: #102A4C; width: 15px; height: 15px; }
+        .nz-done-filter.nz-rev-on .nz-rev-toggle { color: #102A4C; }
         .nz-step-btn.nz-dispatch-open { background:#1F6FD0 !important; border-color:#1F6FD0 !important; color:#fff !important; }
         .nz-step-btn.nz-dispatch-open:hover { background:#1A5FB4 !important; border-color:#1A5FB4 !important; }
         body.nz-dispatch-lock { overflow: hidden; }
@@ -260,6 +270,15 @@
              设天数只保留近N天已关闭单。服务端筛选(见 OrderController@list 的 all 分支), localStorage 本机记住。 --}}
         @if($nzRawStatus === 'all')
         <div class="nz-done-filter d-print-none" id="nzDoneFilter">
+            @if($nzToday)
+            {{-- 哪吒 P6: 今日营收(今日单数 + 已确认到账), 默认关(遮屏隐私·商家自己勾), 本机记住; 数字与首屏今日经营卡同源。 --}}
+            <div class="nz-today-rev" id="nzTodayRev">
+                <span class="nz-today-rev-label">今日 <b>{{ $nzToday['orders'] }}</b> 单 · 已确认到账</span>
+                <span class="nz-today-rev-amt">֏{{ number_format($nzToday['collected']) }}</span>
+                <span class="nz-today-rev-fx">≈¥{{ number_format($nzToday['collected'] / max($nzCnyToAmd, 1)) }} · ≈${{ number_format($nzToday['collected'] / max($nzUsdToAmd, 1)) }}</span>
+                <span class="nz-today-rev-note">商家自有订单额 · 可在右侧关闭</span>
+            </div>
+            @endif
             <label class="nz-done-toggle">
                 <input type="checkbox" id="nzDoneShow">
                 显示已完成订单
@@ -270,6 +289,12 @@
                 天
             </span>
             <span class="nz-done-hint" id="nzDoneHint">默认显示全部（含已送达、已取消、已退款等历史单）</span>
+            @if($nzToday)
+            <label class="nz-rev-toggle" title="只你自己看得到、本机记住；显示的是「已确认收到款」的今日合计">
+                <input type="checkbox" id="nzTodayRevToggle">
+                今日营收
+            </label>
+            @endif
         </div>
         @endif
 
@@ -872,6 +897,19 @@
                 });
             }
 
+            function initTodayRev(){
+                var wrap = document.getElementById('nzDoneFilter');
+                var toggle = document.getElementById('nzTodayRevToggle');
+                if (!wrap || !toggle) return;
+                var KEY = 'nzOrderTodayRev';
+                wrap.classList.toggle('nz-rev-on', localStorage.getItem(KEY) === '1');
+                toggle.checked = localStorage.getItem(KEY) === '1';
+                toggle.addEventListener('change', function(){
+                    localStorage.setItem(KEY, toggle.checked ? '1' : '0');
+                    wrap.classList.toggle('nz-rev-on', toggle.checked);
+                });
+            }
+
             function initColumnResize(){
                 var table = document.getElementById('datatable');
                 if (!table || window.innerWidth < 768) return;
@@ -950,6 +988,7 @@
                 initProofPreview();
                 initDoneFilter();
                 initDispatchDrawer();
+                initTodayRev();
 
                 var ready = $('nzPrintReady');
                 var auto = $('nzAutoPrintReady');
