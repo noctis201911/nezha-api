@@ -953,10 +953,14 @@ class VendorController extends Controller
         $cuisine_id = $request->query('cuisine_id', 'all');
         $type = $request->query('type', 'all');
         $typ = $request->query('restaurant_model', '');
+        // [哪吒 押金状态] 押金过滤 + 全局开关/阈值(逐行 tier 判定用, 见下方 NezhaDepositHealth)
+        $depositFilter = $request->query('deposit', 'all');
+        $depoMode = (int) (BusinessSetting::where('key', 'nezha_deposit_mode_status')->first()?->value ?? 0);
+        $depoThreshold = (float) (BusinessSetting::where('key', 'nezha_min_deposit_threshold')->first()?->value ?? 0);
         $restaurants = Restaurant::when(is_numeric($zone_id), function ($query) use ($zone_id) {
             return $query->where('zone_id', $zone_id);
         })
-            ->with(['zone', 'cuisine', 'vendor'])
+            ->with(['zone', 'cuisine', 'vendor', 'wallet'])
             ->withSum('reviews', 'rating')
             ->withCount('reviews')
             ->whereHas('vendor', function ($q) {
@@ -981,11 +985,35 @@ class VendorController extends Controller
                         });
                 });
             })
+            ->when($depositFilter === 'insufficient', function ($q) use ($depoThreshold) {
+                // 仅看押金不足: 无钱包行(视为0) 或 余额 <= 下线阈值
+                $q->where(function ($w) use ($depoThreshold) {
+                    $w->whereDoesntHave('wallet')
+                        ->orWhereHas('wallet', function ($ww) use ($depoThreshold) {
+                            $ww->where('deposit_balance', '<=', $depoThreshold);
+                        });
+                });
+            })
             ->cuisine($cuisine_id)
             ->type($type)->RestaurantModel($typ)->latest()->paginate(config('default_pagination'));
         $zone = is_numeric($zone_id) ? Zone::findOrFail($zone_id) : null;
 
-        return view('admin-views.vendor.list', compact('restaurants', 'zone', 'type', 'typ', 'cuisine_id'));
+        // [哪吒 押金状态] 逐行押金健康四档(复用商家端判定 NezhaDepositHealth, 单一真相源); 批量预取"有流水的 vendor"防 N+1
+        $vendorIds = collect($restaurants->items())->pluck('vendor_id')->filter()->unique()->values();
+        $vendorsWithHistory = $vendorIds->isEmpty()
+            ? collect()
+            : \App\Models\RestaurantDepositTransaction::whereIn('vendor_id', $vendorIds->all())->distinct()->pluck('vendor_id')->flip();
+        $depositInfo = [];
+        foreach ($restaurants as $r) {
+            $bal = (float) ($r->wallet->deposit_balance ?? 0);
+            $active = $depoMode === 1 && (int) ($r->nezha_commission_enabled ?? 0) === 1;
+            $depositInfo[$r->id] = [
+                'balance' => $bal,
+                'tier' => \App\CentralLogics\NezhaDepositHealth::tier($r, $bal, $active, $depoThreshold, isset($vendorsWithHistory[$r->vendor_id])),
+            ];
+        }
+
+        return view('admin-views.vendor.list', compact('restaurants', 'zone', 'type', 'typ', 'cuisine_id', 'depositInfo', 'depositFilter', 'depoMode'));
     }
 
     public function pending(Request $request)

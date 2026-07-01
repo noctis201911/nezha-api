@@ -222,18 +222,14 @@ class DashboardController extends Controller
         $threshold = (float) (\App\Models\BusinessSetting::where('key', 'nezha_min_deposit_threshold')->first()?->value ?? 0);
         $hasHistory = \App\Models\RestaurantDepositTransaction::where('vendor_id', $vendorId)->exists();
 
-        if (! \App\Http\Controllers\Api\V1\OrderController::nezha_commission_active($restaurant) || ! $hasHistory) {
-            // 未启用佣金预存扣佣 / 无扣佣历史 → 无从评估健康, 诚实显"样本不足", 不伪造"充足"。
-            $deposit_tier = 'sample';
-        } elseif ($balance <= $threshold) {
-            // 已达下线阈值 → 可能无法接新单(与接单闸 nezha_deposit_below_threshold 同源)。
-            $deposit_tier = 'insufficient';
-        } else {
-            // 偏低线: 用商家自设的低额告警阈值(deposit_alert_threshold)作"偏低"区; 未设则只分充足/不足。
-            $alertT = ($restaurant && $restaurant->deposit_alert_enabled && $restaurant->deposit_alert_threshold !== null)
-                ? (float) $restaurant->deposit_alert_threshold : null;
-            $deposit_tier = ($alertT !== null && $balance <= $alertT) ? 'low' : 'sufficient';
-        }
+        // [哪吒 押金四档] 收口到单一真相源 NezhaDepositHealth::tier(与超管后台商家列表押金列同判定, 防 drift)。
+        $deposit_tier = \App\CentralLogics\NezhaDepositHealth::tier(
+            $restaurant,
+            $balance,
+            \App\Http\Controllers\Api\V1\OrderController::nezha_commission_active($restaurant),
+            $threshold,
+            $hasHistory
+        );
 
         // 店铺评分(累计) — 与顾客端餐厅页同源
         $rating_agg = \App\Models\Restaurant::where('id', $rid)

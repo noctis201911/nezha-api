@@ -73,6 +73,14 @@
                     </select>
                     </div>
                 </div>
+                <div class="col-sm-6 col-md-3">
+                    <div class="select-item">
+                        <select name="deposit" data-url="{{url()->full()}}" data-filter="deposit" data-placeholder="押金" class="form-control js-select2-custom set-filter">
+                            <option value="all" {{ (($depositFilter ?? 'all')=='all') ? 'selected' : '' }}>押金：全部</option>
+                            <option value="insufficient" {{ (($depositFilter ?? 'all')=='insufficient') ? 'selected' : '' }}>仅看押金不足</option>
+                        </select>
+                    </div>
+                </div>
                 @if(!isset(auth('admin')->user()->zone_id))
                     <div class="col-sm-6 col-md-3">
                         <div class="select-item">
@@ -263,6 +271,7 @@
                                 <th class="w-130px">{{translate('messages.cuisine')}}</th>
                                 <th class="w-100px">{{translate('messages.status')}}</th>
                                 <th class="w-100px text-center">抽佣</th>
+                                <th class="w-130px text-center">押金</th>
                                 <th class="text-center w-60px">{{translate('messages.action')}}</th>
                             </tr>
                             </thead>
@@ -333,6 +342,21 @@
                                         @else
                                             <span class="badge badge-soft-danger">{{translate('messages.not_approved')}}</span>
                                         @endif
+                                    </td>
+                                    <td class="text-center">
+                                        @php($__commOn = (bool) ($dm->nezha_commission_enabled ?? false))
+                                        <label class="toggle-switch toggle-switch-sm" for="commCheckbox{{$dm->id}}">
+                                            <input type="checkbox" data-url="{{route('admin.restaurant.toggle-commission',[$dm->id, $__commOn?0:1])}}" data-message="确定切换该店「抽佣」开关吗？（仅当抽佣总开关也开启时才实际扣佣、并受下线阈值约束）" class="toggle-switch-input status_change_alert" id="commCheckbox{{$dm->id}}" {{$__commOn?'checked':''}}>
+                                            <span class="toggle-switch-label"><span class="toggle-switch-indicator"></span></span>
+                                        </label>
+                                    </td>
+                                    <td class="text-center">
+                                        @php($__dep = $depositInfo[$dm->id] ?? ['balance' => 0, 'tier' => 'sample'])
+                                        @php($__depBadge = \App\CentralLogics\NezhaDepositHealth::badge($__dep['tier']))
+                                        <div class="d-flex flex-column align-items-center">
+                                            <span class="font-weight-bold text-nowrap">{{ \App\CentralLogics\Helpers::format_currency($__dep['balance']) }}</span>
+                                            <span class="badge badge-soft-{{ $__depBadge['cls'] }} mt-1" @if($__depBadge['note']) data-toggle="tooltip" title="{{ $__depBadge['note'] }}" @endif>{{ $__depBadge['label'] }}</span>
+                                        </div>
                                     </td>
                                     <td>
                                         <div class="btn--container justify-content-center">
