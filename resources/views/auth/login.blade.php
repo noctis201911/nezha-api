@@ -1,440 +1,409 @@
 <!DOCTYPE html>
-    <?php
-    $log_email_succ = session()->get('log_email_succ');
-    ?>
-<html dir="{{ $site_direction }}" lang="{{ $locale }}" class="{{ $site_direction === 'rtl'?'active':'' }}">
+<?php $log_email_succ = session()->get('log_email_succ'); ?>
+<html dir="{{ $site_direction }}" lang="{{ $locale }}">
 <head>
-    <!-- Required Meta Tags Always Come First -->
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     @php
         $app_name = \App\CentralLogics\Helpers::get_business_settings('business_name', false);
         $icon = \App\CentralLogics\Helpers::get_business_settings('icon', false);
+        $recaptcha = \App\CentralLogics\Helpers::get_business_settings('recaptcha');
+        $isVendor = in_array($role ?? '', ['vendor', 'vendor_employee']);
     @endphp
-    <!-- Title -->
-    <title>{{ translate('messages.login') }} | {{$app_name??'哪吒外卖'}}</title>
-
-    <!-- Favicon -->
-    <link rel="shortcut icon" href="{{asset($icon ? 'storage/app/public/business/'.$icon : 'public/favicon.ico')}}">
-
-    <!-- Font -->
-    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600&amp;display=swap" rel="stylesheet">
-    <!-- CSS Implementing Plugins -->
-    <link rel="stylesheet" href="{{dynamicAsset('assets/admin')}}/css/vendor.min.css">
-    <link rel="stylesheet" href="{{dynamicAsset('assets/admin')}}/vendor/icon-set/style.css">
-    <!-- CSS Front Template -->
-    <link rel="stylesheet" href="{{dynamicAsset('assets/admin')}}/css/bootstrap.min.css">
-    <link rel="stylesheet" href="{{dynamicAsset('assets/admin')}}/css/theme.minc619.css?v=1.0">
-    <link rel="stylesheet" href="{{dynamicAsset('assets/admin')}}/css/style.css">
-    <link rel="stylesheet" href="{{dynamicAsset('assets/admin')}}/css/toastr.css">
+    <title>{{ translate('messages.login') }} | {{ $app_name ?? '哪吒外卖' }}</title>
+    <link rel="shortcut icon" href="{{ asset($icon ? 'storage/app/public/business/'.$icon : 'public/favicon.ico') }}">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* 哪吒品牌背景 - inline覆盖CSS缓存 */
-        .auth-bg { background: url('{{ dynamicAsset("assets/admin/css/images/auth-bg-v2.png") }}') no-repeat center center/cover !important; }
-        /* 正方形logo */
-        .auth-logo img { max-height: 100px !important; width: auto !important; max-width: 120px !important; border-radius: 50% !important; }
-        .auth-logo { text-align: center !important; display: block !important; }
-        .auth-content { background: transparent !important; color: #8A5A4E !important; }
-        .auth-content .title { color: #C4193E !important; }
-        #signInBtn { background:#C4193E !important; border-color:#C4193E !important; }
-        #signInBtn:hover { background:#A8152F !important; border-color:#A8152F !important; }
-        .badge-soft-success.initial-1 { display:none !important; }
+        :root {
+            --bg: #FFFAF5; --fg: #1C1917; --muted: #78716C;
+            --accent: #C4193E; --accent-hover: #A8152F; --gold: #E8B53A;
+            --card: #FFFFFF; --border: #E7E5E4;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Noto Sans SC', 'Space Grotesk', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg); color: var(--fg); min-height: 100vh; overflow-x: hidden;
+        }
+        .font-display { font-family: 'Space Grotesk', 'Noto Sans SC', sans-serif; }
+
+        .login-page {
+            min-height: 100vh;
+            background: linear-gradient(180deg, #FFFAF5 0%, #FEF3E7 100%);
+            position: relative; overflow: hidden;
+        }
+        .city-skyline { position: absolute; bottom: 0; left: 0; right: 0; height: 300px; opacity: 0.12; pointer-events: none; }
+        .floating-food { position: absolute; width: 60px; height: 60px; opacity: 0.15; animation: floatFood 15s ease-in-out infinite; pointer-events: none; }
+        @keyframes floatFood { 0%,100% { transform: translateY(0) rotate(0deg); } 25% { transform: translateY(-20px) rotate(5deg); } 75% { transform: translateY(10px) rotate(-5deg); } }
+        .warm-glow { position: absolute; width: 600px; height: 600px; background: radial-gradient(circle, rgba(196,25,62,0.08) 0%, transparent 70%); top: -200px; right: -200px; animation: pulseGlow 8s ease-in-out infinite; pointer-events: none; }
+        @keyframes pulseGlow { 0%,100% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.2); opacity: 0.8; } }
+        .ribbon { position: absolute; top: -40px; left: -60px; width: 520px; opacity: 0.9; pointer-events: none; }
+        #particles { position: absolute; inset: 0; pointer-events: none; }
+
+        .login-inner { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; position: relative; z-index: 10; }
+        .login-columns { width: 100%; max-width: 1080px; display: flex; flex-direction: column; align-items: center; gap: 48px; }
+        @media (min-width: 992px) { .login-columns { flex-direction: row; gap: 64px; } .brand-col { text-align: left; } .brand-col .brand-desc { margin-left: 0; } .brand-col .features { margin-left: 0; } }
+
+        .brand-col { flex: 1; text-align: center; }
+        .brand-logo { display: inline-block; line-height: 0; }
+        .brand-logo img { height: 104px; width: auto; display: inline-block; }
+        .brand-title { font-size: 30px; line-height: 1.2; font-weight: 700; color: #1C1917; margin: 24px 0 24px; }
+        @media (min-width: 992px) { .brand-title { font-size: 36px; } }
+        .brand-desc { font-size: 16px; color: #78716C; max-width: 480px; margin: 0 auto 40px; line-height: 1.7; }
+        .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 400px; margin: 0 auto; }
+        .feature-card { padding: 20px 12px; background: #fff; border-radius: 16px; border: 1px solid var(--border); transition: all 0.3s ease; text-align: center; }
+        .feature-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(196,25,62,0.06); border-color: rgba(196,25,62,0.2); }
+        .feature-ic { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; }
+        .feature-card .ft { font-weight: 600; font-size: 14px; color: #1C1917; }
+        .feature-card .fs { font-size: 12px; margin-top: 4px; color: #A8A29E; }
+
+        .card-col { width: 100%; max-width: 440px; }
+        .login-card {
+            background: var(--card); border: 1px solid var(--border); border-radius: 24px;
+            padding: 40px 36px; width: 100%; position: relative; z-index: 10;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02), 0 25px 50px -12px rgba(196,25,62,0.10);
+        }
+        .card-title { font-size: 22px; font-weight: 700; color: var(--fg); }
+        .card-sub { font-size: 14px; color: var(--muted); margin: 4px 0 26px; }
+
+        .input-group { position: relative; margin-bottom: 20px; }
+        .field-label { display: block; font-size: 13px; font-weight: 500; color: var(--muted); margin-bottom: 8px; transition: color 0.3s ease; }
+        .input-wrapper { position: relative; display: flex; align-items: center; }
+        .input-wrapper > svg.field-icon { position: absolute; left: 16px; width: 20px; height: 20px; color: var(--muted); transition: color 0.3s ease; pointer-events: none; }
+        .form-input { width: 100%; padding: 14px 16px 14px 48px; background: #FEFDFB; border: 1px solid var(--border); border-radius: 12px; font-size: 15px; color: var(--fg); font-family: inherit; transition: all 0.3s ease; outline: none; }
+        .form-input::placeholder { color: #A8A29E; }
+        .form-input:focus { border-color: var(--accent); background: #FFFFFF; box-shadow: 0 0 0 4px rgba(196,25,62,0.08); }
+        .form-input:focus ~ svg.field-icon { color: var(--accent); }
+        .pass-toggle { position: absolute; right: 14px; background: none; border: none; color: var(--muted); cursor: pointer; display: flex; align-items: center; padding: 4px; }
+        .pass-toggle svg { width: 20px; height: 20px; }
+
+        .captcha-row { display: flex; gap: 10px; align-items: stretch; }
+        .captcha-row .input-wrapper { flex: 1; }
+        .captcha-img-wrap { display: flex; align-items: center; gap: 4px; background: #F5F5F5; border: 1px solid var(--border); border-radius: 12px; padding: 0 8px 0 6px; cursor: pointer; flex-shrink: 0; }
+        .captcha-img-wrap img { height: 40px; max-width: 120px; border-radius: 8px; display: block; }
+        .captcha-reload { color: var(--muted); font-size: 17px; line-height: 1; padding: 0 4px; transition: color 0.2s, transform 0.4s; flex-shrink: 0; }
+        .captcha-img-wrap:hover .captcha-reload { color: var(--accent); transform: rotate(180deg); }
+
+        .form-meta { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 20px; font-size: 13px; }
+        .remember { display: flex; align-items: center; gap: 8px; color: var(--muted); cursor: pointer; user-select: none; }
+        .remember input { width: 16px; height: 16px; accent-color: var(--accent); }
+        .link { color: var(--accent); text-decoration: none; font-weight: 500; background: none; border: none; font-family: inherit; font-size: 13px; cursor: pointer; padding: 0; }
+        .link:hover { color: var(--accent-hover); }
+
+        .login-btn { width: 100%; padding: 16px; background: linear-gradient(135deg, #E03A4E, #C4193E); color: #fff; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; letter-spacing: 2px; cursor: pointer; transition: all 0.3s ease; position: relative; overflow: hidden; box-shadow: 0 10px 22px -8px rgba(196,25,62,0.55); font-family: inherit; }
+        .login-btn::before { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent); transition: left 0.5s ease; }
+        .login-btn:hover { transform: translateY(-2px); box-shadow: 0 14px 30px -8px rgba(196,25,62,0.5); }
+        .login-btn:hover::before { left: 100%; }
+        .login-btn:active { transform: translateY(0); }
+
+        .card-foot { text-align: center; margin-top: 24px; font-size: 12px; color: #A8A29E; }
+
+        .error-banner { background: rgba(196,25,62,0.08); border: 1px solid rgba(196,25,62,0.28); color: var(--accent-hover); padding: 12px 16px; border-radius: 12px; font-size: 14px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 10px; }
+        .error-banner ul { margin: 0; padding-left: 18px; }
+        .error-banner li + li { margin-top: 4px; }
+
+        .modal-backdrop { position: fixed; inset: 0; background: rgba(40,20,25,0.45); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+        .modal-backdrop.show { display: flex; }
+        .modal-box { background: #fff; border: 1px solid var(--border); border-radius: 20px; padding: 34px 30px 28px; width: 100%; max-width: 400px; box-shadow: 0 25px 70px rgba(0,0,0,0.18); text-align: center; position: relative; }
+        .modal-close { position: absolute; top: 14px; right: 16px; background: none; border: none; color: #A8A29E; font-size: 22px; cursor: pointer; line-height: 1; font-family: inherit; }
+        .modal-close:hover { color: var(--fg); }
+        .modal-icon { width: 60px; height: 60px; border-radius: 50%; background: rgba(196,25,62,0.10); color: var(--accent); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 26px; }
+        .modal-box h4 { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--fg); }
+        .modal-box p { font-size: 14px; color: var(--muted); margin-bottom: 20px; line-height: 1.5; }
+        .modal-box .form-input { padding-left: 16px; margin-bottom: 14px; }
+        .modal-box .login-btn { padding: 13px; }
+
+        .stagger-1 { animation-delay: 0.1s; } .stagger-2 { animation-delay: 0.2s; } .stagger-3 { animation-delay: 0.3s; } .stagger-4 { animation-delay: 0.4s; }
+        .fade-up { opacity: 0; transform: translateY(20px); animation: fadeUp 0.6s ease forwards; }
+        @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+
+        @media (max-width: 640px) { .login-card { padding: 30px 22px; } .feature-card { padding: 16px 8px; } }
+        @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }
     </style>
 </head>
-
 <body>
-<!-- ========== MAIN CONTENT ========== -->
-<main id="content" role="main" class="main auth-bg">
-    <!-- Content -->
-    <div class="d-flex flex-wrap align-items-center justify-content-between">
-        <div class="auth-content">
-            <div class="content">
-                <h2 class="title text-uppercase">{{translate('messages.welcome_to')}} {{ $app_name??'哪吒外卖' }}</h2>
-                <p>
-                    {{translate('Manage_your_app_&_website_easily')}}
+<main class="login-page">
+    <canvas id="particles"></canvas>
+    <div class="warm-glow"></div>
+
+    <svg class="ribbon" viewBox="0 0 520 300" fill="none">
+        <path d="M-20 60 C120 20 260 120 420 60 C480 40 520 80 540 60" stroke="#C4193E" stroke-width="26" stroke-linecap="round" opacity="0.12"/>
+        <path d="M-20 110 C140 70 280 160 440 100 C500 80 540 120 560 100" stroke="#E8B53A" stroke-width="16" stroke-linecap="round" opacity="0.14"/>
+        <path d="M-20 150 C120 120 300 200 460 150" stroke="#C4193E" stroke-width="10" stroke-linecap="round" opacity="0.10"/>
+    </svg>
+
+    <div class="floating-food" style="top: 15%; left: 8%; animation-delay: 0s;">
+        <svg viewBox="0 0 64 64" fill="none" stroke="#C4193E" stroke-width="1.5"><circle cx="32" cy="32" r="24"/><path d="M20 28 Q32 18 44 28 Q32 38 20 28" fill="rgba(196,25,62,0.1)"/><circle cx="26" cy="30" r="3" fill="rgba(196,25,62,0.2)"/><circle cx="38" cy="30" r="3" fill="rgba(196,25,62,0.2)"/></svg>
+    </div>
+    <div class="floating-food" style="top: 30%; right: 10%; animation-delay: 4s;">
+        <svg viewBox="0 0 64 64" fill="none" stroke="#E03A4E" stroke-width="1.5"><rect x="16" y="24" width="32" height="24" rx="4"/><path d="M22 24 V18 Q22 12 32 12 Q42 12 42 18 V24" fill="none"/><circle cx="26" cy="36" r="4" fill="rgba(224,58,78,0.15)"/><circle cx="38" cy="36" r="4" fill="rgba(224,58,78,0.15)"/></svg>
+    </div>
+    <div class="floating-food" style="bottom: 25%; left: 12%; animation-delay: 8s;">
+        <svg viewBox="0 0 64 64" fill="none" stroke="#E8B53A" stroke-width="1.5"><path d="M32 8 Q44 16 44 28 Q44 44 32 52 Q20 44 20 28 Q20 16 32 8"/><circle cx="32" cy="30" r="8" fill="rgba(232,181,58,0.15)"/></svg>
+    </div>
+
+    <svg class="city-skyline" viewBox="0 0 1440 300" preserveAspectRatio="xMidYMax slice">
+        <path fill="#292524" d="M0,300 L0,250 L40,250 L40,200 L60,200 L60,180 L80,180 L80,200 L100,200 L100,250 L140,250 L140,220 L160,220 L160,150 L180,150 L180,130 L200,130 L200,150 L220,150 L220,220 L260,220 L260,250 L300,250 L300,180 L320,180 L320,160 L340,160 L340,140 L360,140 L360,160 L380,160 L380,180 L400,180 L400,250 L440,250 L440,200 L480,200 L480,120 L500,120 L500,100 L520,100 L520,120 L540,120 L540,200 L580,200 L580,250 L620,250 L620,190 L660,190 L660,250 L700,250 L700,160 L720,160 L720,140 L740,140 L740,160 L760,160 L760,250 L800,250 L800,180 L820,180 L820,150 L840,150 L840,180 L860,180 L860,250 L900,250 L900,200 L940,200 L940,250 L980,250 L980,170 L1000,170 L1000,140 L1020,140 L1020,170 L1040,170 L1040,250 L1080,250 L1080,210 L1100,210 L1100,250 L1140,250 L1140,180 L1160,180 L1160,160 L1180,160 L1180,180 L1200,180 L1200,250 L1240,250 L1240,200 L1280,200 L1280,250 L1320,250 L1320,220 L1360,220 L1360,250 L1440,250 L1440,300 Z"/>
+    </svg>
+
+    <div class="login-inner">
+        <div class="login-columns">
+            <!-- 品牌区 -->
+            <div class="brand-col">
+                @php($systemlogo = \App\Models\BusinessSetting::where(['key' => 'logo'])->first())
+                <div class="brand-logo fade-up stagger-1">
+                    <img src="{{ dynamicAsset('assets/admin/img/nezha-brand-logo.png') }}"
+                         onerror="this.onerror=null;this.src='{{ \App\CentralLogics\Helpers::get_full_url('business', $systemlogo?->value, $systemlogo?->storage[0]?->value ?? 'public', 'authfav') }}'"
+                         alt="{{ $app_name ?? '哪吒外卖' }}">
+                </div>
+                <h1 class="font-display brand-title fade-up stagger-2">{{ $isVendor ? '商家管理后台' : '管理后台' }}</h1>
+                <p class="brand-desc fade-up stagger-3">
+                    @if ($isVendor)
+                        专为华人餐厅打造，一站式订单管理、菜品运营、数据分析平台。让您的餐厅轻松触达每一位食客。
+                    @else
+                        {{ translate('Manage_your_app_&_website_easily') }}
+                    @endif
                 </p>
-                <div style="margin-top:24px;display:flex;gap:10px;flex-wrap:wrap">
-                    <span style="background:rgba(196,25,62,0.1);color:#C4193E;padding:7px 15px;border-radius:20px;font-size:13px;font-weight:600">🍜 海量中餐</span>
-                    <span style="background:rgba(196,25,62,0.1);color:#C4193E;padding:7px 15px;border-radius:20px;font-size:13px;font-weight:600">🛵 极速配送</span>
-                    <span style="background:rgba(196,25,62,0.1);color:#C4193E;padding:7px 15px;border-radius:20px;font-size:13px;font-weight:600">🇨🇳 华人专属</span>
+                @if ($isVendor)
+                <div class="features fade-up stagger-4">
+                    <div class="feature-card">
+                        <div class="feature-ic" style="background: rgba(196,25,62,0.08);">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C4193E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                        </div>
+                        <div class="ft">实时接单</div><div class="fs">秒级响应</div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-ic" style="background: rgba(232,181,58,0.12);">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C4193E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+                        </div>
+                        <div class="ft">数据分析</div><div class="fs">智能洞察</div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-ic" style="background: rgba(196,25,62,0.08);">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C4193E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg>
+                        </div>
+                        <div class="ft">营销工具</div><div class="fs">引流获客</div>
+                    </div>
                 </div>
+                @endif
             </div>
-        </div>
-        <div class="auth-wrapper">
-            <div class="auth-wrapper-body auth-form-appear">
-                @php($systemlogo=\App\Models\BusinessSetting::where(['key'=>'logo'])->first())
-                @php($role = $role ?? null )
-                <a class="auth-logo mb-5" href="javascript:">
-                    <img class="z-index-2 onerror-image"
-                    src="{{ \App\CentralLogics\Helpers::get_full_url('business',$systemlogo?->value,$systemlogo?->storage[0]?->value ?? 'public', 'authfav') }}"
-                    data-onerror-image="{{ dynamicAsset('assets/admin/img/auth-fav.png') }}" alt="image">
-                </a>
-                <div class="text-center">
-                    <div class="auth-header mb-5">
-                        @if ($role == 'vendor')
-                        <h2 class="signin-txt">{{ translate('messages.Signin_To_Your_Restaurant_Panel')}}</h2>
-                        @else
 
-                        <h2 class="signin-txt">{{ translate('messages.Signin_To_Your_Panel')}}</h2>
-                        @endif
-                    </div>
-                </div>
+            <!-- 登录卡片 -->
+            <div class="card-col">
+                <div class="login-card fade-up stagger-3">
+                    <h2 class="card-title">{{ $isVendor ? '登录商家后台' : '登录管理后台' }}</h2>
+                    <p class="card-sub">{{ $isVendor ? '管理您的餐厅，触达更多食客' : translate('messages.Signin_To_Your_Panel') }}</p>
 
-                <div class="multi-language-change position-absolute start-0 top-0 mt-2">
-                    {{-- <select name="" id="" class="custom-select py-1 w-auto h-32px min-w-135px">
-                        <option value="1">English</option>
-                        <option value="1">Spanish</option>
-                        <option value="1">English</option>
-                        <option value="1">English</option>
-                    </select> --}}
-
-
-                </div>
-                <!-- Content -->
-                <label class="badge badge-soft-success float-right initial-1">
-                    {{translate('messages.software_version')}} : {{env('SOFTWARE_VERSION')}}
-                </label>
-                <!-- Form -->
-                <form class="login_form" action="{{route('login_post')}}" method="post" id="form-id">
-                    @csrf
-                    <input type="hidden" name="role" value="{{  $role ?? null }}">
-
-                    <div class="__bg-F8F9FC-card mb-20">
-                        <!-- Form Group -->
-                        <div class="js-form-message form-group mb-3">
-                            <label class="form-label text-capitalize" for="signinSrEmail">{{translate('messages.your_email')}}</label>
-                            <input type="email" class="form-control form-control-lg" value="{{ $email ?? '' }}" name="email" id="signinSrEmail"
-                                tabindex="1" aria-label="email@address.com"
-                                required data-msg="Please enter a valid email address.">
-                            <div class="focus-effects"></div>
+                    @if ($errors->any())
+                        <div class="error-banner">
+                            <span style="flex-shrink:0;">⚠️</span>
+                            <ul>
+                                @foreach ($errors->all() as $error)
+                                    <li>{{ translate($error) }}</li>
+                                @endforeach
+                            </ul>
                         </div>
-                        <!-- End Form Group -->
-                        <!-- Form Group -->
-                        <div class="js-form-message form-group">
-                            <label class="form-label text-capitalize" for="signupSrPassword" tabindex="0">
-                                <span class="d-flex justify-content-between align-items-center">
-                                {{translate('messages.password')}}
-                                </span>
-                            </label>
-                            <div class="input-group input-group-merge">
-                                <input type="password" class="js-toggle-password form-control form-control-lg __rounded"
-                                    name="password" id="signupSrPassword" value="{{ $password ?? '' }}"
-                                    aria-label="{{translate('messages.password_length_placeholder',['length'=>'6+'])}}" required
-                                    data-msg="{{translate('messages.invalid_password_warning')}}"
-                                    data-hs-toggle-password-options='{
-                                                "target": "#changePassTarget",
-                                        "defaultClass": "tio-hidden-outlined",
-                                        "showClass": "tio-visible-outlined",
-                                        "classChangeTarget": "#changePassIcon"
-                                        }'>
-
-                                <div class="focus-effects"></div>
-                                <div id="changePassTarget" class="input-group-append">
-                                    <a class="input-group-text" href="javascript:">
-                                        <i id="changePassIcon" class="tio-visible-outlined"></i>
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                        <!-- End Form Group -->
-
-                    </div>
-                        <div class="form-group mb-3">
-
-                            @php($recaptcha = \App\CentralLogics\Helpers::get_business_settings('recaptcha'))
-                            @if(isset($recaptcha) && $recaptcha['status'] == 1)
-                                @php($showImg = session('show_image_captcha'))
-                                <input type="hidden" name="g-recaptcha-response" id="g-recaptcha-response">
-
-                                <input type="hidden" name="set_default_captcha" id="set_default_captcha_value" value="1" >
-                                <div class="row p-2 " id="reload-captcha">
-                                    <div class="col-6 pr-0">
-                                        <input type="text" class="form-control form-control-lg" name="custome_recaptcha"
-                                            id="custome_recaptcha" required placeholder="{{translate('Enter recaptcha value')}}" autocomplete="off" value="{{env('APP_MODE')=='dev'? session('six_captcha'):''}}">
-                                    </div>
-                                    <div class="col-6 bg-white rounded d-flex">
-                                        <img src="<?php echo $custome_recaptcha->inline(); ?>" class="rounded w-100" />
-                                        <div class="p-3 pr-0 capcha-spin reloadCaptcha">
-                                            <i class="tio-cached"></i>
-                                        </div>
-                                    </div>
-                                </div>
-
-                            @else
-                                <div class="row p-2" id="reload-captcha">
-                                    <div class="col-6 pr-0">
-                                        <input type="text" class="form-control form-control-lg" name="custome_recaptcha"
-                                            id="custome_recaptcha" required placeholder="{{translate('Enter recaptcha value')}}" autocomplete="off" value="{{env('APP_MODE')=='dev'? session('six_captcha'):''}}">
-                                    </div>
-                                    <div class="col-6 bg-white rounded d-flex">
-                                        <img src="<?php echo $custome_recaptcha->inline(); ?>" class="rounded w-100" />
-                                        <div class="p-3 pr-0 capcha-spin reloadCaptcha">
-                                            <i class="tio-cached"></i>
-                                        </div>
-                                    </div>
-                                </div>
-                            @endif
-                        </div>
-                    <!-- Checkbox -->
-                    <div class="form-group mb-3">
-                        <div class="d-flex justify-content-between align-items-center gap-3">
-                            <div class="custom-control custom-checkbox mb-0">
-                                <input type="checkbox" class="custom-control-input" id="termsCheckbox" {{ $password ? 'checked' : '' }}
-                                    name="remember">
-                                <label class="custom-control-label text-muted" for="termsCheckbox">
-                                    {{translate('messages.remember_me')}}
-                                </label>
-                            </div>
-                            <!-- forget password -->
-                                <div class="{{ $role == 'admin' ? '' : 'd-none' }}"  id="forget-password">
-                                    <div class="custom-control text-hover-primary">
-                                        <span type="button" data-toggle="modal" data-target="#forgetPassModal">{{ translate('Forget_Password') }} ?</span>
-                                    </div>
-                                </div>
-                                <div class="{{ $role == 'vendor' ? '' : 'd-none' }}"  id="forget-password1">
-                                    <div class="custom-control text-hover-primary">
-                                        <span type="button" data-toggle="modal" data-target="#forgetPassModal1">{{ translate('Forget_Password') }} ?</span>
-                                    </div>
-                                </div>
-                            <!-- End forget password -->
-                        </div>
-                    </div>
-                    <!-- End Checkbox -->
-
-                    <button type="submit" class="btn btn-lg btn-block btn-primary" id="signInBtn">{{translate('messages.sign_in')}}</button>
-                     @if ($role == 'admin')
-                     @php($data = \App\Models\DataSetting::where('type', 'login_restaurant')->pluck('value')->first() ?? 'restaurant')
-                     <p class="text-center mt-4 fs-14">{{ translate('Login as Restaurant Owner?') }} <a href="{{url('/') }}/login/{{$data}}" class="text__primary font-semibold">{{ translate('Login Here') }}</a></p>
                     @endif
 
-                     
-                </form>
-                <!-- End Form -->
+                    <form class="login_form" action="{{ route('login_post') }}" method="post" id="form-id" autocomplete="off">
+                        @csrf
+                        <input type="hidden" name="role" value="{{ $role ?? null }}">
 
-                <!-- End Content -->
+                        <div class="input-group">
+                            <label class="field-label" for="signinSrEmail">{{ translate('messages.your_email') }}</label>
+                            <div class="input-wrapper">
+                                <input type="email" class="form-input" name="email" id="signinSrEmail" value="{{ $email ?? '' }}"
+                                       tabindex="1" required placeholder="name@restaurant.com"
+                                       data-msg="Please enter a valid email address.">
+                                <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label class="field-label" for="signupSrPassword">{{ translate('messages.password') }}</label>
+                            <div class="input-wrapper">
+                                <input type="password" class="form-input" name="password" id="signupSrPassword" value="{{ $password ?? '' }}"
+                                       tabindex="2" required placeholder="{{ translate('messages.password') }}"
+                                       style="padding-right: 48px;"
+                                       data-msg="{{ translate('messages.invalid_password_warning') }}">
+                                <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                <button type="button" class="pass-toggle" id="togglePass" aria-label="{{ translate('messages.show') ?? '显示密码' }}">
+                                    <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label class="field-label" for="custome_recaptcha">{{ translate('Enter recaptcha value') }}</label>
+                            @if (isset($recaptcha) && $recaptcha['status'] == 1)
+                                <input type="hidden" name="g-recaptcha-response" id="g-recaptcha-response">
+                                <input type="hidden" name="set_default_captcha" id="set_default_captcha_value" value="1">
+                            @endif
+                            <div class="captcha-row" id="reload-captcha">
+                                <div class="input-wrapper">
+                                    <input type="text" class="form-input" name="custome_recaptcha" id="custome_recaptcha"
+                                           placeholder="{{ translate('Enter recaptcha value') }}" required autocomplete="off" tabindex="3"
+                                           value="{{ env('APP_MODE')=='dev' ? session('six_captcha') : '' }}">
+                                    <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>
+                                </div>
+                                <div class="captcha-img-wrap reloadCaptcha" title="{{ translate('messages.refresh') ?? '刷新' }}">
+                                    <img src="<?php echo $custome_recaptcha->inline(); ?>" alt="captcha">
+                                    <span class="captcha-reload">⟳</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-meta">
+                            <label class="remember" for="termsCheckbox">
+                                <input type="checkbox" id="termsCheckbox" name="remember" {{ $password ? 'checked' : '' }}>
+                                {{ translate('messages.remember_me') }}
+                            </label>
+                            @if (($role ?? '') === 'vendor')
+                                <button type="button" class="link" id="openForgetModal">{{ translate('Forget_Password') }}?</button>
+                            @endif
+                        </div>
+
+                        <button type="submit" class="login-btn" id="signInBtn" tabindex="4">{{ translate('messages.sign_in') }}</button>
+                    </form>
+                </div>
+
+                <div class="card-foot fade-up stagger-4">
+                    © {{ date('Y') }} {{ $app_name ?? '哪吒外卖' }}
+                </div>
             </div>
-            @if(env('APP_MODE') =='demo' )
-                @if (isset($role) &&  $role == 'admin')
-                    <div class="auto-fill-data-copy">
-                        <div class="d-flex flex-wrap align-items-center justify-content-between">
-                            <div>
-                                <span class="d-block"><strong>Email</strong> : admin@admin.com</span>
-                                <span class="d-block"><strong>Password</strong> : 12345678</span>
-                            </div>
-                            <div>
-                                <button class="btn btn-primary m-0" id="copy_cred"><i class="tio-copy"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                @endif
-                @if (isset($role) &&  $role == 'vendor')
-                    <div class="auto-fill-data-copy">
-                        <div class="d-flex flex-wrap align-items-center justify-content-between">
-                            <div>
-                                <span class="d-block"><strong>Email</strong> : test.restaurant@gmail.com</span>
-                                <span class="d-block"><strong>Password</strong> : 12345678</span>
-                            </div>
-                            <div>
-                                <button class="btn btn-primary m-0" id="copy_cred2"><i class="tio-copy"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                @endif
-            @endif
         </div>
     </div>
 </main>
-<!-- ========== END MAIN CONTENT ========== -->
 
-
-<div class="modal fade" id="forgetPassModal">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header justify-content-end">
-          <span type="button" class="close-modal-icon" data-dismiss="modal">
-              <i class="tio-clear"></i>
-          </span>
-        </div>
-        <div class="modal-body">
-          <div class="forget-pass-content">
-              <img src="{{dynamicAsset('assets/admin/img/send-mail.svg')}}" alt="">
-              <!-- After Succeed -->
-              <h4>
-                  {{ translate('Send_Mail_to_Your_Email_?') }}
-              </h4>
-              <p>
-                  {{ translate('A_mail_will_be_send_to_your_registered_email_with_a_link_to_change_passowrd') }}
-              </p>
-              <a class="btn btn-lg btn-block btn--primary mt-3" href="{{route('reset-password')}}">
-                  {{ translate('Send_Mail') }}
-              </a>
-          </div>
-        </div>
-      </div>
+{{-- 忘记密码 Modal (商家: 邮箱找回) --}}
+@if (($role ?? '') === 'vendor')
+<div class="modal-backdrop" id="forgetPassModal">
+    <div class="modal-box">
+        <button type="button" class="modal-close" data-close>×</button>
+        <div class="modal-icon">✉</div>
+        <h4>{{ translate('messages.Send_Mail_to_Your_Email_?') }}</h4>
+        <p>{{ translate('A_mail_will_be_send_to_your_registered_email_with_a_link_to_change_passowrd') }}</p>
+        <form action="{{ route('vendor-reset-password') }}" method="post">
+            @csrf
+            <input type="email" name="email" class="form-input" required placeholder="name@restaurant.com">
+            <button type="submit" class="login-btn">{{ translate('messages.Send_Mail') }}</button>
+        </form>
     </div>
-  </div>
-  <div class="modal fade" id="forgetPassModal1">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header justify-content-end">
-          <span type="button" class="close-modal-icon" data-dismiss="modal">
-              <i class="tio-clear"></i>
-          </span>
-        </div>
-        <div class="modal-body">
-          <div class="forget-pass-content">
-              <img src="{{dynamicAsset('assets/admin/img/send-mail.svg')}}" alt="">
-              <!-- After Succeed -->
-              <h4>
-                  {{ translate('messages.Send_Mail_to_Your_Email_?') }}
-              </h4>
-              <form class="" action="{{ route('vendor-reset-password') }}" method="post">
-                  @csrf
-
-                  <input type="email" name="email" id="" class="form-control" required>
-                  <button type="submit" class="btn btn-lg btn-block btn--primary mt-3">{{ translate('messages.Send_Mail') }}</button>
-              </form>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="modal fade" id="successMailModal">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header justify-content-end">
-            <span type="button" class="close-modal-icon" data-dismiss="modal">
-                <i class="tio-clear"></i>
-            </span>
-          </div>
-          <div class="modal-body">
-            <div class="forget-pass-content">
-                <!-- After Succeed -->
-                <img src="{{dynamicAsset('assets/admin/img/sent-mail.svg')}}" alt="">
-                <h4>
-                  {{ translate('Mail Sent to Registered Email Successfully') }}
-                </h4>
-                <p>
-                  {{ translate('An email with password recovery instructions has been sent to your registered email address. Follow the link to reset your password.') }}
-                </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-
-<!-- JS Implementing Plugins -->
-<script src="{{dynamicAsset('assets/admin')}}/js/vendor.min.js"></script>
-
-<!-- JS Front -->
-<script src="{{dynamicAsset('assets/admin')}}/js/theme.min.js"></script>
-<script src="{{dynamicAsset('assets/admin')}}/js/toastr.js"></script>
-{!! Toastr::message() !!}
-
-@if ($errors->any())
-    <script>
-        @foreach($errors->all() as $error)
-        toastr.error('{{translate($error)}}');
-        @endforeach
-    </script>
+</div>
 @endif
+
+{{-- 邮件已发送成功提示 Modal --}}
 @if ($log_email_succ)
-@php(session()->forget('log_email_succ'))
-    <script>
-        $('#successMailModal').modal('show');
-    </script>
+    @php(session()->forget('log_email_succ'))
+    <div class="modal-backdrop show" id="successMailModal">
+        <div class="modal-box">
+            <button type="button" class="modal-close" data-close>×</button>
+            <div class="modal-icon" style="background:rgba(46,204,113,0.12);color:#2ecc71;">✓</div>
+            <h4>{{ translate('Mail Sent to Registered Email Successfully') }}</h4>
+            <p>{{ translate('An email with password recovery instructions has been sent to your registered email address. Follow the link to reset your password.') }}</p>
+        </div>
+    </div>
 @endif
 
 <script>
-    // $("#forget-password").hide();
-      $("#role-select").change(function() {
-        var selectValue = $(this).val();
-        if (selectValue == "admin") {
-          $("#forget-password").show();
-          $("#forget-password1").hide();
-        } else if(selectValue == "vendor") {
-          $("#forget-password").hide();
-          $("#forget-password1").show();
-        }
-        else {
-          $("#forget-password").hide();
-          $("#forget-password1").hide();
-        }
-      });
-</script>
-
-
-<script>
-    var nzCaptchaLoading = false;
-    $(document).on('click','.reloadCaptcha', function(){
-        if (nzCaptchaLoading) return;
-        nzCaptchaLoading = true;
-        $.ajax({
-            url: "{{ route('reload-captcha') }}",
-            type: "GET",
-            dataType: 'json',
-            beforeSend: function () {
-                $('#loading').show()
-                $('.capcha-spin').addClass('active')
-            },
-            success: function(data) {
-                $('#reload-captcha').html(data.view);
-            },
-            complete: function () {
-                $('#loading').hide()
-                $('.capcha-spin').removeClass('active')
-                nzCaptchaLoading = false;
+    // 粒子背景
+    (function initParticles() {
+        var canvas = document.getElementById('particles');
+        if (!canvas) return;
+        var ctx = canvas.getContext('2d');
+        var particles = [];
+        function resize() { canvas.width = canvas.parentElement.offsetWidth; canvas.height = canvas.parentElement.offsetHeight; }
+        function create() {
+            particles = [];
+            var count = Math.floor((canvas.width * canvas.height) / 30000);
+            for (var i = 0; i < count; i++) {
+                particles.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, radius: Math.max(1, Math.random()*2.5), vx: (Math.random()-0.5)*0.4, vy: (Math.random()-0.5)*0.4, alpha: Math.random()*0.35 + 0.1 });
             }
-        });
-    });
-</script>
-<!-- JS Plugins Init. -->
-<script>
-    $(document).on('ready', function () {
-        // INITIALIZATION OF SHOW PASSWORD
-        // =======================================================
-        $('.js-toggle-password').each(function () {
-            new HSTogglePassword(this).init()
-        });
-
-        // INITIALIZATION OF FORM VALIDATION
-        // =======================================================
-        $('.js-validate').each(function () {
-            $.HSCore.components.HSValidation.init($(this));
-        });
-    });
-</script>
-
-{{-- recaptcha scripts end (Google v3 retired: 图形验证码为唯一路径, 校验见 LoginController@submit) --}}
-
-
-
-@if(env('APP_MODE') =='demo')
-    <script>
-        $("#copy_cred").click(function() {
-            $('#signinSrEmail').val('admin@admin.com');
-            $('#signupSrPassword').val('12345678');
-            toastr.success('Copied successfully!', 'Success!', {
-                CloseButton: true,
-                ProgressBar: true
+        }
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(function(p) {
+                p.x += p.vx; p.y += p.vy;
+                if (p.x < 0) p.x = canvas.width; if (p.x > canvas.width) p.x = 0;
+                if (p.y < 0) p.y = canvas.height; if (p.y > canvas.height) p.y = 0;
+                ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(0.5, p.radius), 0, Math.PI*2);
+                ctx.fillStyle = 'rgba(196,25,62,' + p.alpha + ')'; ctx.fill();
             });
-        })
-        $("#copy_cred2").click(function() {
-            $('#signinSrEmail').val('test.restaurant@gmail.com');
-            $('#signupSrPassword').val('12345678');
-            toastr.success('Copied successfully!', 'Success!', {
-                CloseButton: true,
-                ProgressBar: true
-            });
-        })
-    </script>
-@endif
+            requestAnimationFrame(animate);
+        }
+        resize(); create(); animate();
+        window.addEventListener('resize', function() { resize(); create(); });
+    })();
 
-<!-- IE Support -->
-<script>
-    if (/MSIE \d|Trident.*rv:/.test(navigator.userAgent)) document.write('<script src="{{dynamicAsset('/assets/admin')}}/vendor/babel-polyfill/polyfill.min.js"><\/script>');
+    (function() {
+        // 显示/隐藏密码
+        var pwd = document.getElementById('signupSrPassword');
+        var toggle = document.getElementById('togglePass');
+        var eyeIcon = document.getElementById('eyeIcon');
+        if (toggle && pwd) {
+            toggle.addEventListener('click', function() {
+                if (pwd.type === 'password') {
+                    pwd.type = 'text';
+                    eyeIcon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
+                } else {
+                    pwd.type = 'password';
+                    eyeIcon.innerHTML = '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>';
+                }
+            });
+        }
+
+        // 输入框 label 聚焦变色
+        document.querySelectorAll('.form-input').forEach(function(input) {
+            input.addEventListener('focus', function() {
+                var g = input.closest('.input-group'); if (!g) return;
+                var l = g.querySelector('.field-label'); if (l) l.style.color = 'var(--accent)';
+            });
+            input.addEventListener('blur', function() {
+                var g = input.closest('.input-group'); if (!g) return;
+                var l = g.querySelector('.field-label'); if (l) l.style.color = 'var(--muted)';
+            });
+        });
+
+        // 忘记密码 Modal 开关
+        var openBtn = document.getElementById('openForgetModal');
+        var modal = document.getElementById('forgetPassModal');
+        if (openBtn && modal) { openBtn.addEventListener('click', function() { modal.classList.add('show'); }); }
+        document.querySelectorAll('[data-close]').forEach(function(btn) {
+            btn.addEventListener('click', function() { btn.closest('.modal-backdrop').classList.remove('show'); });
+        });
+        document.querySelectorAll('.modal-backdrop').forEach(function(m) {
+            m.addEventListener('click', function(e) { if (e.target === m) m.classList.remove('show'); });
+        });
+
+        // 刷新图形验证码 (服务端返回旧版 bootstrap markup, 只抽取 captcha 图片)
+        var captchaLoading = false;
+        document.addEventListener('click', function(e) {
+            var trigger = e.target.closest('.reloadCaptcha');
+            if (!trigger || captchaLoading) return;
+            captchaLoading = true;
+            var meta = document.querySelector('meta[name="csrf-token"]');
+            var token = meta ? meta.getAttribute('content') : '';
+            fetch("{{ route('reload-captcha') }}", { method: 'GET', credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': token } })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    var wrap = document.getElementById('reload-captcha');
+                    if (wrap && data.view) {
+                        var tmp = document.createElement('div'); tmp.innerHTML = data.view;
+                        var img = tmp.querySelector('img');
+                        var newImg = wrap.querySelector('.captcha-img-wrap img');
+                        if (img && newImg) {
+                            newImg.src = img.getAttribute('src');
+                            var inputEl = wrap.querySelector('input[name="custome_recaptcha"]');
+                            if (inputEl) inputEl.value = '';
+                        }
+                    }
+                })
+                .catch(function() {})
+                .finally(function() { captchaLoading = false; });
+        });
+    })();
 </script>
 </body>
 </html>
