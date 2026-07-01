@@ -173,6 +173,7 @@ class VendorLoginController extends Controller
         $vendor->save();
 
         $restaurant = new Restaurant;
+        $restaurant->onboard_source = 'self_register'; // 不可变来路(DESIGN §E1)
         $restaurant->name = $data[0]['value'];
         $restaurant->phone = $request->phone;
         $restaurant->email = $request->email;

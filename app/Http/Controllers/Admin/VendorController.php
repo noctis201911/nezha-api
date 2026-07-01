@@ -182,6 +182,7 @@ class VendorController extends Controller
         $vendor->save();
 
         $restaurant = new Restaurant;
+        $restaurant->onboard_source = 'admin_create'; // 不可变来路(DESIGN §E1)
         $restaurant->name = $request->name[array_search('default', $request->lang)];
         $restaurant->phone = $request->phone;
         $restaurant->email = $request->email;
