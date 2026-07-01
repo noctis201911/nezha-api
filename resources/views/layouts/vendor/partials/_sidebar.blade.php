@@ -535,9 +535,9 @@
                         <li class="navbar-vertical-aside-has-menu {{ Request::is('restaurant-panel/coupon*') ? 'active' : '' }}">
                             <a class="js-navbar-vertical-aside-menu-link nav-link"
                                href="{{ route('vendor.coupon.add-new') }}"
-                               title="{{ translate('messages.coupons') }}">
+                               title="{{ translate('messages.vendor_nav_coupon_management') }}">
                                 <i class="tio-ticket nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.coupons') }}</span>
+                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.vendor_nav_coupon_management') }}</span>
                             </a>
                         </li>
                     @endif
@@ -568,10 +568,10 @@
                     @if(\App\CentralLogics\Helpers::employee_module_permission_check('chat'))
                         <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/message*')?'active':''}}">
                             <a class="js-navbar-vertical-aside-menu-link nav-link"
-                               href="{{route('vendor.message.list', ['tab' => 'customer'])}}" title="{{translate('messages.chat')}}">
+                               href="{{route('vendor.message.list', ['tab' => 'customer'])}}" title="{{translate('messages.vendor_nav_messages')}}">
                                 <i class="tio-chat nav-icon"></i>
                                 <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                {{translate('messages.chat')}}
+                                {{translate('messages.vendor_nav_messages')}}
                             </span>
                             </a>
                         </li>
@@ -602,9 +602,9 @@
                         <li class="navbar-vertical-aside-has-menu @yield('advertisement_create')">
                             <a class="js-navbar-vertical-aside-menu-link nav-link"
                                href="{{ route('vendor.advertisement.create') }}"
-                               title="{{ translate('messages.New_Ads') }}">
+                               title="{{ translate('messages.vendor_nav_new_promotion') }}">
                                 <i class="tio-tv-old nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.New_Ads') }}</span>
+                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.vendor_nav_new_promotion') }}</span>
                             </a>
                         </li>
                     @endif
@@ -612,10 +612,10 @@
                     @if (\App\CentralLogics\Helpers::employee_module_permission_check('ads_list'))
                         <li class="navbar-vertical-aside-has-menu @yield('advertisement')">
                             <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle"
-                               href="javascript:" title="{{translate('messages.Ads_List')}}">
+                               href="javascript:" title="{{translate('messages.vendor_nav_promotion_list')}}">
                                 <i class="tio-format-bullets nav-icon"></i>
                                 <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{translate('messages.Ads_List')}}</span>
+                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{translate('messages.vendor_nav_promotion_list')}}</span>
                             </a>
                             <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
                                 style="display: {{ !Request::is('restaurant-panel/advertisement/create*') && Request::is('restaurant-panel/advertisement*')?'block':'none'}}">
