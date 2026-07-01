@@ -45,6 +45,7 @@
   'food_campaign' => '商品活动',
   'banners' => '首页轮播图',
   'coupons' => '优惠券',
+  'vendor_nav_coupon_management' => '优惠管理',
   'push_notification' => 'App推送',
   'order_management' => '订单管理',
   'orders' => '订单',
@@ -1647,6 +1648,7 @@
   'my_bank_info' => '黑盒资金清算渠道',
   'my_wallet' => '我的钱包',
   'chat' => '聊天',
+  'vendor_nav_messages' => '消息',
   'Report_section' => '数据报表',
   'employee_section' => '员工管理',
   'add_new_employee' => '新增员工',
@@ -2348,4 +2350,6 @@
   'The cm firebase token field is required.' => '推送令牌缺失',
   'The contact person name field is required.' => 'The contact person name field is required.',
   'The contact person number field is required.' => 'The contact person number field is required.',
+  'vendor_nav_new_promotion' => '新建推广',
+  'vendor_nav_promotion_list' => '推广列表',
 );
