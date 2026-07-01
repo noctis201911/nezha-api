@@ -150,4 +150,43 @@ class NezhaL1RedlineTest extends TestCase
         $this->assertStringContainsString('商家自掏折扣(满减/POS)100%记vendor', $src,
             'L1-9 违反: vendor 折扣 100% 记 vendor 的账务定性实现/说明被移除。');
     }
+
+    // ───────────────── L1-8 退出结算 三账户隔离(INV-1)+净额公式 结构守卫 (step4-3) ─────────────────
+
+    /**
+     * 退出结算三腿"各退各账": deposit_refund 只置零 deposit / ad_refund 只置零 ad / guarantee_refund 只置零 guarantee,
+     * 抵扣不跨户(INV-1 / L1-8④, 守 ad 资金隔离); net = 三账户和 − pending_clawback(无悬空 penalty)。
+     * 【源码守卫层: 只保证账户列↔退款 type 配对与 net 公式不被改写; 资金置零/leg 幂等/C4 快照拒付
+     *   由 staging 下单 harness 唯一验收(DESIGN §I 断言分层, 本测试不替代资金闭环)。】
+     */
+    public function test_L1_8_offboard_three_leg_account_isolation_and_net_formula(): void
+    {
+        $src = file_get_contents(base_path('app/CentralLogics/NezhaOffboard.php'));
+        // 三腿严格一一配对(账户列 ↔ 退款 type), 不跨户
+        $this->assertStringContainsString("self::payLeg(\$w, 'deposit_balance', 'deposit_refund'", $src,
+            'L1-8 违反: deposit 腿(账户列,type)配对被改写。');
+        $this->assertStringContainsString("self::payLeg(\$w, 'ad_balance', 'ad_refund'", $src,
+            'L1-8 违反: ad 腿必须只置零 ad_balance 且 type=ad_refund(INV-1 ad 资金隔离)。');
+        $this->assertStringContainsString("self::payLeg(\$w, 'guarantee_balance', 'guarantee_refund'", $src,
+            'L1-8 违反: guarantee 腿必须只置零 guarantee_balance 且 type=guarantee_refund。');
+        // payLeg 只按传入账户列置零(参数化, 不硬编码跨户写某余额)
+        $this->assertMatchesRegularExpression('/\$w->\{\$balanceCol\}\s*=\s*0\s*;/', $src,
+            'L1-8 违反: payLeg 不再按参数账户列置零(疑似硬编码跨户写余额)。');
+        // net = 三账户和 − pending_clawback(不得引入无来源 penalty 减项)
+        $this->assertStringContainsString('$deposit + $guarantee + $ad - $clawback', $src,
+            'L1-8 违反: net 公式被改(应为 deposit+guarantee+ad−pending_clawback, 无 penalty)。');
+    }
+
+    /**
+     * 退出冻结期 refund_reversal「记 shortfall 非回充」(§C3): 退出中/已退出的店(offboard_status!=active)
+     * 退款不得自动回充 deposit(污染结算快照 / 打入已关闭死账户漏损), 改记 shortfall 待人工核算。
+     */
+    public function test_L1_8_frozen_refund_reversal_does_not_credit_deposit(): void
+    {
+        $src = file_get_contents(base_path('app/CentralLogics/OrderLogic.php'));
+        $this->assertStringContainsString('NezhaOffboard::is_deposit_credit_frozen($order->restaurant_id)', $src,
+            'L1-8 违反: refund_reversal 冻结判定被移除 → 退出中/已退出店会自动回充 deposit。');
+        $this->assertStringContainsString('recordFrozenReversalShortfall', $src,
+            'L1-8 违反: 冻结期 refund_reversal 未记 shortfall(§C3 非回充需留痕待人工核算)。');
+    }
 }

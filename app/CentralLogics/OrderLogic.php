@@ -80,7 +80,10 @@ class OrderLogic
         return ['rate' => $rate, 'base' => $base, 'amount' => $amount, 'subscription' => false];
     }
 
-    public static function create_transaction($order, $received_by=false, $status = null)
+    // [哪吒 退出结算 §C5/DESIGN A6] $offboard_settle=true 表示本次结算由「商家退出结算」控制流(NezhaOffboard)驱动:
+    //   此时即使店处于 settling 冻结态, 也要把在途单的佣金落到 commission_deduction(受控收净), 故绕过 C2 冻结闸。
+    //   活线路径(顾客确认/超时兜底/商家标记, 默认 false)一律维持 C2 冻结行为不变。
+    public static function create_transaction($order, $received_by=false, $status = null, $offboard_settle = false)
     {
         $comission = !isset($order?->restaurant?->comission)?\App\Models\BusinessSetting::where('key','admin_commission')->first()?->value:$order?->restaurant?->comission;
 
@@ -286,7 +289,9 @@ class OrderLogic
                     // [组4 预存佣金扣佣] 开关(nezha_deposit_mode_status)开启时, 从商家预存佣金扣除本单"向商家收的佣金"。
                     // 注: 服务费(向客户收)不在此扣; 佣金率沿用现成 admin_commission/餐馆 comission(后台可调)。
                     // [哪吒 单店抽佣] 仅当该店启用抽佣(总开关+单店开关皆开)时扣佣; 单一真相源 OrderController::nezha_commission_active。
-                    if(\App\Http\Controllers\Api\V1\OrderController::nezha_commission_active($order->restaurant) && !\App\CentralLogics\NezhaOffboard::is_frozen_id($order->restaurant_id) && $comission_amount > 0){
+                    // [哪吒 退出结算 §C2/§C5] 冻结态(settling)默认停扣佣(is_frozen_id)保结算窗口 deposit 稳定;
+                    //   仅当 $offboard_settle=true(结算控制流受控收在途佣金, §C5「归零在途佣金」)时绕过冻结闸。
+                    if(\App\Http\Controllers\Api\V1\OrderController::nezha_commission_active($order->restaurant) && ($offboard_settle || !\App\CentralLogics\NezhaOffboard::is_frozen_id($order->restaurant_id)) && $comission_amount > 0){
                         // F-3 防并发 lost-update: 事务内 lockForUpdate 读最新余额, 串行化同商家并发扣减; 由函数末尾 $vendorWallet->save() 落库。
                         $freshBalance = (float) (RestaurantWallet::where('vendor_id', $order->restaurant->vendor->id)->lockForUpdate()->value('deposit_balance') ?? 0);
                         $vendorWallet->deposit_balance = $freshBalance - $comission_amount;
@@ -411,7 +416,7 @@ class OrderLogic
      * @param  int|null           $by_id         顾客 user_id（游客/自动为 null）
      * @return bool  true=本次完成收尾; false=不允许收尾(非 handover/picked_up / 已 delivered / 订阅单 / 建流水失败)
      */
-    public static function settle_delivered($order, $finalized_by = 'customer', $by_id = null)
+    public static function settle_delivered($order, $finalized_by = 'customer', $by_id = null, $offboard_settle = false)
     {
         // 订阅单有独立交付生命周期, 不走顾客确认/超时兜底。
         if ($order->subscription_id != null) {
@@ -432,9 +437,9 @@ class OrderLogic
             $unpaid_pay_method = $unpaid_payment ?: 'digital_payment';
 
             if ($order->payment_method == 'cash_on_delivery' || $unpaid_pay_method == 'cash_on_delivery') {
-                $ol = self::create_transaction(order: $order, received_by: 'restaurant', status: null);
+                $ol = self::create_transaction(order: $order, received_by: 'restaurant', status: null, offboard_settle: $offboard_settle);
             } else {
-                $ol = self::create_transaction(order: $order, received_by: 'admin', status: null);
+                $ol = self::create_transaction(order: $order, received_by: 'admin', status: null, offboard_settle: $offboard_settle);
             }
             if (!$ol) {
                 return false; // 建流水失败则不推进状态(与商家端一致, 不留半收尾状态)
@@ -748,21 +753,28 @@ class OrderLogic
                 $deducted = \App\Models\RestaurantDepositTransaction::where('order_id',$order->id)
                     ->where('type','commission_deduction')->sum('commission');
                 if($deducted > 0){
-                    // F-3 防并发 lost-update: 同扣减, lockForUpdate 读最新余额后返还; 由函数末尾 save() 落库。
-                    $freshBalance = (float) (RestaurantWallet::where('vendor_id', $order->restaurant->vendor->id)->lockForUpdate()->value('deposit_balance') ?? 0);
-                    $vendorWallet->deposit_balance = $freshBalance + $deducted;
-                    \App\Models\RestaurantDepositTransaction::insert([
-                        'vendor_id'     => $order->restaurant->vendor->id,
-                        'restaurant_id' => $order->restaurant->id,
-                        'order_id'      => $order->id,
-                        'type'          => 'refund_reversal',
-                        'amount'        => $deducted,
-                        'commission'    => $deducted,
-                        'balance_after' => $vendorWallet->deposit_balance,
-                        'note'          => '订单#'.$order->id.' 退款返还佣金',
-                        'created_at'    => now(),
-                        'updated_at'    => now(),
-                    ]);
+                    // [哪吒 退出结算 §C3] 退出中/已退出的店(offboard_status != active): 不自动回充 deposit ——
+                    //   结算窗口 deposit 只经三腿受控变动以保 approved 快照稳定; 已 paid/offboarded 的店回充会把钱打进死账户造成漏损。
+                    //   改为在结算工单记 shortfall(待人工核算该笔退款佣金是否退回)+ 审计留痕, 不动 deposit(§C3「记 shortfall 非回充」)。
+                    if(\App\CentralLogics\NezhaOffboard::is_deposit_credit_frozen($order->restaurant_id)){
+                        \App\CentralLogics\NezhaOffboard::recordFrozenReversalShortfall($order, (float) $deducted);
+                    } else {
+                        // F-3 防并发 lost-update: 同扣减, lockForUpdate 读最新余额后返还; 由函数末尾 save() 落库。
+                        $freshBalance = (float) (RestaurantWallet::where('vendor_id', $order->restaurant->vendor->id)->lockForUpdate()->value('deposit_balance') ?? 0);
+                        $vendorWallet->deposit_balance = $freshBalance + $deducted;
+                        \App\Models\RestaurantDepositTransaction::insert([
+                            'vendor_id'     => $order->restaurant->vendor->id,
+                            'restaurant_id' => $order->restaurant->id,
+                            'order_id'      => $order->id,
+                            'type'          => 'refund_reversal',
+                            'amount'        => $deducted,
+                            'commission'    => $deducted,
+                            'balance_after' => $vendorWallet->deposit_balance,
+                            'note'          => '订单#'.$order->id.' 退款返还佣金',
+                            'created_at'    => now(),
+                            'updated_at'    => now(),
+                        ]);
+                    }
                 }
             }
             else if($received_by=='admin')

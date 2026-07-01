@@ -3,9 +3,11 @@
         'recharge'             => translate('充值'),
         'commission_deduction' => translate('扣佣'),
         'refund_reversal'      => translate('退款返还'),
+        'deposit_refund'       => translate('预存佣金退还'),
         'advertisement_fee'    => translate('广告费(按天)'),
         'ad_recharge'          => translate('广告充值'),
         'ad_click_fee'         => translate('广告点击费'),
+        'ad_refund'            => translate('广告余额退还'),
         'guarantee_deposit'    => translate('押金缴纳'),
         'guarantee_refund'     => translate('押金退还'),
     ];

@@ -27,8 +27,8 @@ class NezhaDepositController extends Controller
 {
     /** 账户 -> 归属该账户的流水 type(按每个 type 影响哪个余额划分) */
     private const ACCOUNTS = [
-        'deposit'   => ['recharge', 'commission_deduction', 'refund_reversal', 'advertisement_fee'],
-        'ad'        => ['ad_recharge', 'ad_click_fee'],
+        'deposit'   => ['recharge', 'commission_deduction', 'refund_reversal', 'advertisement_fee', 'deposit_refund'],
+        'ad'        => ['ad_recharge', 'ad_click_fee', 'ad_refund'],
         'guarantee' => ['guarantee_deposit', 'guarantee_refund'],
     ];
 
