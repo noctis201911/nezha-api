@@ -133,6 +133,8 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('/', [NezhaDepositController::class, 'index'])->name('index');
             Route::get('transactions', [NezhaDepositController::class, 'transactions'])->name('transactions');
             Route::post('store-recharge', [NezhaDepositController::class, 'store_recharge'])->name('store-recharge');
+            Route::post('store-guarantee', [NezhaDepositController::class, 'store_guarantee'])->name('store-guarantee');
+            Route::post('set-guarantee-tier', [NezhaDepositController::class, 'set_tier'])->name('set-tier');
         });
 
         // Route::resource('provide-deliveryman-earnings', ProvideDMEarningController::class)->middleware('module:provide_dm_earning');
