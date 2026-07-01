@@ -266,14 +266,6 @@
                                     </a>
                                 </li>
                                 @endif
-                                {{-- 哪吒: 低频状态折叠 --}}
-                                <li class="nav-item">
-                                    <a class="nav-link" href="javascript:" onclick="var el=document.getElementById('nzSidebarMore');el.style.display=el.style.display==='none'?'block':'none';" title="更多">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">更多 ▾</span>
-                                    </a>
-                                </li>
-                                <div id="nzSidebarMore" style="display:{{ Request::is('restaurant-panel/order/list/refunded') || Request::is('restaurant-panel/order/list/refund_requested') || Request::is('restaurant-panel/order/list/scheduled') || Request::is('restaurant-panel/order/list/payment_failed') || Request::is('restaurant-panel/order/list/canceled') ? 'block' : 'none' }};">
                                 <li class="nav-item {{Request::is('restaurant-panel/order/list/refunded')?'active':''}} @yield('refunded')">
                                     <a class="nav-link " href="{{route('vendor.order.list',['refunded'])}}"  title="{{translate('Refunded')}}">
                                         <span class="tio-circle nav-indicator-icon"></span>
@@ -343,7 +335,6 @@
                                         </span>
                                     </a>
                                 </li>
-                                </div>
 
 
 

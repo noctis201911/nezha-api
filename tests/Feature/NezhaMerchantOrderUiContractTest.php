@@ -62,6 +62,25 @@ class NezhaMerchantOrderUiContractTest extends TestCase
         $this->assertStringContainsString('nz-mobile-action-label', $blade);
     }
 
+    public function testMerchantOrderSidebarShowsAllStatusesWithoutMoreFold(): void
+    {
+        $blade = file_get_contents(resource_path('views/layouts/vendor/partials/_sidebar.blade.php'));
+
+        $this->assertStringNotContainsString('nzSidebarMore', $blade);
+        $this->assertStringNotContainsString('更多', $blade);
+
+        foreach ([
+            'refunded',
+            'refund_requested',
+            'scheduled',
+            'payment_failed',
+            'canceled',
+        ] as $status) {
+            $this->assertStringContainsString("restaurant-panel/order/list/{$status}", $blade);
+            $this->assertStringContainsString("route('vendor.order.list',['{$status}'])", $blade);
+        }
+    }
+
     public function testRestaurantLoginLandsOnResponsiveOrderList(): void
     {
         $controller = file_get_contents(app_path('Http/Controllers/LoginController.php'));
