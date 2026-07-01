@@ -10,9 +10,9 @@
         .nz-order-table-card { border: 1px solid #E6EAF0; border-radius: 10px; box-shadow: 0 1px 4px rgba(16,24,40,.04); overflow: hidden; }
         .nz-order-table-card .card-header { border-bottom: 1px solid #EDF1F5; background: #fff; }
         .nz-order-table-card #datatable { table-layout: fixed; min-width: 1180px; }
-        .nz-order-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; }
+        .nz-order-toolbar { display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%; }
         .nz-export-area { flex: 0 0 auto; }
-        .nz-search-area { flex: 0 1 360px; margin-left: auto; }
+        .nz-search-area { flex: 0 1 360px; margin-left: 0; }
         .nz-search-area .input--group { width: 360px; max-width: 100%; }
         .nz-order-table-card #datatable th:nth-child(1), .nz-order-table-card #datatable td:nth-child(1) { width: 4%; }
         .nz-order-table-card #datatable th:nth-child(2), .nz-order-table-card #datatable td:nth-child(2) { width: 24%; }

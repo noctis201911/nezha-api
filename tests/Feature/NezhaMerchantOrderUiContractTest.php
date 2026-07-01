@@ -91,6 +91,8 @@ class NezhaMerchantOrderUiContractTest extends TestCase
         $this->assertNotFalse($exportArea);
         $this->assertNotFalse($searchArea);
         $this->assertLessThan($searchArea, $exportArea);
+        $this->assertStringContainsString('.nz-order-toolbar { display: flex; align-items: center; justify-content: flex-start;', $blade);
+        $this->assertStringNotContainsString('.nz-search-area { flex: 0 1 360px; margin-left: auto;', $blade);
         $this->assertStringContainsString('nz-resizable-table', $blade);
         $this->assertStringContainsString('nz-col-resizer', $blade);
         $this->assertStringContainsString('nzOrderColumnWidths', $blade);
