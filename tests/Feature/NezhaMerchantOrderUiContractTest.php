@@ -113,6 +113,8 @@ class NezhaMerchantOrderUiContractTest extends TestCase
         $this->assertStringContainsString('offline_payment_formater', $blade);
         $this->assertStringContainsString('nz-payment-proof-thumb', $blade);
         $this->assertStringContainsString('nzProofModal', $blade);
+        $this->assertStringContainsString("window.jQuery('#nzProofModal').modal('show')", $blade);
+        $this->assertStringNotContainsString("$('#nzProofModal').modal('show')", $blade);
     }
 
     public function testMerchantOrderListSupportsCustomerNudgeStatus(): void

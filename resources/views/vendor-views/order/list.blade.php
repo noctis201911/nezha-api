@@ -719,8 +719,16 @@
                     var img = document.getElementById('nzProofModalImg');
                     if (!src || !img) return;
                     img.src = src;
-                    if (window.$ && $('#nzProofModal').modal) {
-                        $('#nzProofModal').modal('show');
+                    if (window.jQuery && window.jQuery.fn && window.jQuery.fn.modal) {
+                        window.jQuery('#nzProofModal').modal('show');
+                    } else {
+                        var modal = document.getElementById('nzProofModal');
+                        if (modal) {
+                            modal.classList.add('show');
+                            modal.style.display = 'block';
+                            modal.removeAttribute('aria-hidden');
+                            document.body.classList.add('modal-open');
+                        }
                     }
                 });
             }
