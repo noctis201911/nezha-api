@@ -179,14 +179,22 @@
     $nzCurrencyRows = \App\Models\Currency::whereIn('currency_code', [$nzBaseCurrency, 'USD', 'CNY'])->get()->keyBy('currency_code');
     $nzBaseRate = (float) optional($nzCurrencyRows->get($nzBaseCurrency))->exchange_rate;
     $nzBaseRate = $nzBaseRate > 0 ? $nzBaseRate : 1;
+    $nzFxFallback = [
+        'USD' => ['multiplier' => 0.00272, 'symbol' => '$'],
+        'CNY' => ['multiplier' => 0.0185, 'symbol' => '¥'],
+    ];
     $nzFxTargets = [];
     foreach (['USD', 'CNY'] as $__code) {
         $__currency = $nzCurrencyRows->get($__code);
         $__rate = (float) optional($__currency)->exchange_rate;
-        if ($__code !== $nzBaseCurrency && $__rate > 0) {
+        $__multiplier = $__rate > 0 ? ($__rate / $nzBaseRate) : null;
+        if ($nzBaseCurrency === 'AMD' && (!$__multiplier || abs($__multiplier - 1) < 0.000001)) {
+            $__multiplier = $nzFxFallback[$__code]['multiplier'];
+        }
+        if ($__code !== $nzBaseCurrency && $__multiplier > 0) {
             $nzFxTargets[$__code] = [
-                'rate' => $__rate,
-                'symbol' => $__currency->currency_symbol ?: $__code,
+                'multiplier' => $__multiplier,
+                'symbol' => optional($__currency)->currency_symbol ?: ($nzFxFallback[$__code]['symbol'] ?? $__code),
             ];
         }
     }
@@ -417,7 +425,7 @@
                                     @if(!empty($nzFxTargets))
                                         <div class="nz-order-converted-amounts" data-nz-base-currency="{{ $nzBaseCurrency }}">
                                             @foreach($nzFxTargets as $__code => $__fx)
-                                                <span>≈ {{ $__fx['symbol'] }}{{ number_format(((float) $order['order_amount'] * $__fx['rate']) / $nzBaseRate, 2) }} {{ $__code }}</span>
+                                                <span>≈ {{ $__fx['symbol'] }}{{ number_format(((float) $order['order_amount'] * $__fx['multiplier']), 2) }} {{ $__code }}</span>
                                             @endforeach
                                         </div>
                                     @endif
