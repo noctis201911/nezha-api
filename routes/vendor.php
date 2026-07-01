@@ -174,6 +174,7 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
             Route::delete('delete/{id}', [FoodController::class, 'delete'])->name('delete');
             Route::get('status/{id}/{status}', [FoodController::class, 'status'])->name('status');
             Route::get('recommended/{id}/{status}', [FoodController::class, 'recommended'])->name('recommended');
+            Route::get('sold-out/{id}/{flag}', [FoodController::class, 'soldOut'])->name('sold-out');
             Route::post('search', [FoodController::class, 'search'])->name('search');
             Route::get('view/{id}', [FoodController::class, 'view'])->name('view');
             Route::get('get-categories', [FoodController::class, 'get_categories'])->name('get-categories');

@@ -37,10 +37,11 @@ class Food extends Model
         'order_count'=>'integer',
         'rating_count'=>'integer',
         'is_halal'=>'integer',
+        'nezha_sold_out_date'=>'date',
     ];
     protected $guarded = [];
 
-    protected $appends = ['image_full_url'];
+    protected $appends = ['image_full_url', 'is_sold_out'];
     public function getImageFullUrlAttribute(){
         $value = $this->image;
         if (count($this->storage) > 0) {
@@ -312,6 +313,17 @@ class Food extends Model
     }
     public function getItemStockAttribute($value){
         return $value - $this->sell_count > 0 ? $value - $this->sell_count : 0 ;
+    }
+
+    // 哪吒[今日售罄] 独立日期标记: nezha_sold_out_date==今天 -> 今日售罄; 次日按日期比较自动恢复(时区 Asia/Yerevan, 不碰数量库存)
+    public function isSoldOutToday(): bool
+    {
+        return $this->nezha_sold_out_date && $this->nezha_sold_out_date->isToday();
+    }
+
+    public function getIsSoldOutAttribute(): bool
+    {
+        return $this->isSoldOutToday();
     }
     public function getVariationsAttribute($value)
     {

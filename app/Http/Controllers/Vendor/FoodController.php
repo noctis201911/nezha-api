@@ -329,6 +329,27 @@ class FoodController extends Controller
         return back();
     }
 
+    // 哪吒[今日售罄] 商家一键标记/恢复; flag=1 标记(=今天), flag=0 恢复(null)。RestaurantScope 保证只能操作本店菜品。
+    public function soldOut(Request $request)
+    {
+        if (! Helpers::get_restaurant_data()->food_section) {
+            Toastr::warning(translate('messages.permission_denied'));
+
+            return back();
+        }
+        $product = Food::find($request->id);
+        if (! $product) {
+            Toastr::error('未找到该菜品');
+
+            return back();
+        }
+        $product->nezha_sold_out_date = $request->flag ? now()->toDateString() : null;
+        $product->save();
+        Toastr::success($request->flag ? '已标记今日售罄' : '已恢复正常销售');
+
+        return back();
+    }
+
     public function update(Request $request, $id)
     {
         if (! Helpers::get_restaurant_data()->food_section) {

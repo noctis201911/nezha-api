@@ -105,6 +105,7 @@
                                 <th  class="text-center">{{ translate('messages.Vat/Tax') }}</th>
                             @endif
                             <th class="text-center">{{translate('messages.Recommended')}}</th>
+                            <th class="text-center">今日售罄</th>
                             <th class="text-center">{{translate('messages.status')}}</th>
                             <th class="text-center">{{translate('messages.action')}}</th>
                         </tr>
@@ -234,6 +235,18 @@
                                     <div class="mx-auto">
                                         <label class="toggle-switch toggle-switch-sm mr-2"  data-toggle="tooltip" data-placement="top" title="{{ translate('messages.Recommend_to_customers') }}" for="stocksCheckbox{{$food->id}}">
                                             <input type="checkbox" data-url="{{route('vendor.food.recommended',[$food['id'],$food->recommended?0:1])}}" class="toggle-switch-input redirect-url" id="stocksCheckbox{{$food->id}}" {{$food->recommended?'checked':''}}>
+                                            <span class="toggle-switch-label">
+                                                <span class="toggle-switch-indicator"></span>
+                                            </span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex">
+                                    <div class="mx-auto">
+                                        <label class="toggle-switch toggle-switch-sm mr-2" data-toggle="tooltip" data-placement="top" title="标记今日售罄: 顾客端灰置「已售罄」并挡下单, 次日自动恢复" for="soldOutCheckbox{{$food->id}}">
+                                            <input type="checkbox" data-url="{{route('vendor.food.sold-out',[$food['id'],$food->is_sold_out?0:1])}}" class="toggle-switch-input redirect-url" id="soldOutCheckbox{{$food->id}}" {{$food->is_sold_out?'checked':''}}>
                                             <span class="toggle-switch-label">
                                                 <span class="toggle-switch-indicator"></span>
                                             </span>

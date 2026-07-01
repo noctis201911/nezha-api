@@ -4807,6 +4807,14 @@ class Helpers
 
     public static function addonAndVariationStockCheck($product, $quantity = 1, $add_on_qtys = 1, $variation_options = null, $add_on_ids = null, $incrementCount = false, $old_selected_variations = [], $old_selected_without_variation = 0, $old_selected_addons = [])
     {
+        // 哪吒[今日售罄] 独立日期标记, 覆盖所有 stock_type(含 unlimited); 商家一键标记, 次日自动恢复
+        if ($product instanceof \App\Models\Food && $product->isSoldOutToday()) {
+            return [
+                'out_of_stock' => ($product->name ?? '').' 今日已售罄',
+                'id' => $product->id,
+                'current_stock' => 0,
+            ];
+        }
 
         if ($product?->stock_type && $product?->stock_type !== 'unlimited') {
             $availableMainStock = $product->item_stock + $old_selected_without_variation;
