@@ -17,6 +17,9 @@
                 <div class="row g-2 align-items-center justify-content-sm-end">
 
                     <div class="col-auto">
+                        <a href="{{route('vendor.food.sort')}}" class="btn max-sm-12 fs-12 py-2 px-3 btn-outline-primary w-100"><i class="tio-sort mr-1"></i>菜品排序</a>
+                    </div>
+                    <div class="col-auto">
                         <a href="{{route('vendor.food.stockOutList')}}" class="btn max-sm-12 badge-soft-danger font-medium py-2 fs-12 w-100"> {{translate('messages.Out of Stock Foods')}}</a>
                     </div>
                     <div class="col-auto">

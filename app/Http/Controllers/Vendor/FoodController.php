@@ -350,6 +350,73 @@ class FoodController extends Controller
         return back();
     }
 
+
+    // 哪吒[拖拽排序] 菜品陈列排序页: 按分类分组展示本店菜品, 商家拖拽自定义顺序。
+    public function sortIndex(Request $request)
+    {
+        if (! Helpers::get_restaurant_data()->food_section) {
+            Toastr::warning(translate('messages.permission_denied'));
+
+            return back();
+        }
+
+        // 本店全部菜品(RestaurantScope 自动限本店), 按 分类内自定义序(NULL 落后) + 上架时间倒序, 与顾客端默认档口径一致。
+        $foods = Food::with(['category.parent'])
+            ->orderByRaw('nezha_order_column IS NULL, nezha_order_column ASC')
+            ->latest()
+            ->get();
+
+        // 按"展示分类"分组: 有父分类的归到父分类(与列表页 category 列口径一致), 否则归自身; 无分类 -> 未分类。
+        $groups = [];
+        foreach ($foods as $food) {
+            $cat = $food->category;
+            $displayCat = ($cat && $cat->parent) ? $cat->parent : $cat;
+            $key = $displayCat ? (int) $displayCat->id : 0;
+            if (! isset($groups[$key])) {
+                $groups[$key] = [
+                    'id' => $key,
+                    'name' => $displayCat ? $displayCat->name : translate('messages.uncategorize'),
+                    'foods' => [],
+                ];
+            }
+            $groups[$key]['foods'][] = $food;
+        }
+        $groups = collect($groups)->sortBy('name')->values();
+
+        return view('vendor-views.product.sort', compact('groups'));
+    }
+
+    // 哪吒[拖拽排序] 保存某分类的菜品顺序: order=[foodId,...] 新顺序 -> nezha_order_column = 下标。RestaurantScope + 显式 where 双保险防越权(IDOR)。
+    public function sortSave(Request $request)
+    {
+        if (! Helpers::get_restaurant_data()->food_section) {
+            return response()->json(['status' => false, 'message' => translate('messages.permission_denied')], 403);
+        }
+
+        $order = $request->input('order', []);
+        if (! is_array($order) || count($order) === 0) {
+            return response()->json(['status' => false, 'message' => '顺序为空'], 422);
+        }
+
+        $restaurantId = Helpers::get_restaurant_data()->id;
+        DB::beginTransaction();
+        try {
+            foreach (array_values($order) as $index => $foodId) {
+                Food::where('id', (int) $foodId)
+                    ->where('restaurant_id', $restaurantId)
+                    ->update(['nezha_order_column' => $index]);
+            }
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            info(['nezha_sort_save', $e->getLine(), $e->getMessage()]);
+
+            return response()->json(['status' => false, 'message' => '保存失败'], 500);
+        }
+
+        return response()->json(['status' => true, 'message' => '已保存']);
+    }
+
     public function update(Request $request, $id)
     {
         if (! Helpers::get_restaurant_data()->food_section) {

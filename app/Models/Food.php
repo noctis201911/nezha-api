@@ -38,6 +38,7 @@ class Food extends Model
         'rating_count'=>'integer',
         'is_halal'=>'integer',
         'nezha_sold_out_date'=>'date',
+        'nezha_order_column'=>'integer',
     ];
     protected $guarded = [];
 

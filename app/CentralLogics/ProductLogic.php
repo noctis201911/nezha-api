@@ -46,7 +46,14 @@ class ProductLogic
                 return $q->whereId($category_id)->orWhere('parent_id', $category_id);
             });
         }
-        $paginator = $paginator->where('restaurant_id', $restaurant_id)->latest()->paginate($limit, ['*'], 'page', $offset);
+        $paginator = $paginator->where('restaurant_id', $restaurant_id);
+        // 哪吒[拖拽排序] 仅顾客「默认/综合」档 + 指定餐厅菜单时, 以商家自定义序为底(未排序 nezha_order_column=NULL 落后, 再按上架时间倒序)。
+        // 非默认档(快送/A-Z/价格/评分)已由 applySorting()->reorder() 覆盖; 全 NULL 时退化为纯 created_at DESC = 原行为。
+        $nzSortBy = $additional_data['sort_by'] ?? '';
+        if (!empty($restaurant_id) && ($nzSortBy === '' || $nzSortBy === 'default')) {
+            $paginator = $paginator->orderByRaw('food.nezha_order_column IS NULL, food.nezha_order_column ASC');
+        }
+        $paginator = $paginator->latest()->paginate($limit, ['*'], 'page', $offset);
 
         return [
             'total_size' => $paginator->total(),
