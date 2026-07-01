@@ -96,6 +96,9 @@ class NezhaKycController extends Controller
         $profile->reject_reason = null;
         $profile->closed_at = null;
 
+        // E2: 证件号指纹(HMAC 明文索引, 辅助跨 vendor 身份红标; 无密钥/无证件号则 null)
+        $profile->id_doc_fingerprint = \App\CentralLogics\NezhaKycScreen::doc_fingerprint($request->input('id_doc_type'), $request->input('id_doc_number'));
+
         $profile->save();
 
         // 阶段1 制裁名字筛查(L1-6): 对法人 + 受益人姓名比对 OFAC SDN 人名名单 →

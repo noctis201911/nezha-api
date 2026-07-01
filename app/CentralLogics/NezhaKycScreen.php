@@ -53,6 +53,36 @@ class NezhaKycScreen
         $s = preg_replace('/\s+/', ' ', trim($s));
         return (string) $s;
     }
+    /**
+     * 证件号规范化: 大写 + 去非字母数字 + 按证件类型分域前缀(避免跨类型证件号碰撞).
+     * 例: passport "ab-1234 56" -> "PASSPORT:AB123456".
+     */
+    public static function normalize_doc_number(?string $type, ?string $number): string
+    {
+        $num = strtoupper(trim((string) $number));
+        $num = preg_replace('/[^A-Z0-9]+/', '', (string) $num);
+        if ($num === '') return '';
+        $t = trim((string) $type);
+        $t = $t === '' ? 'UNKNOWN' : strtoupper($t);
+        return $t . ':' . $num;
+    }
+
+    /**
+     * 证件号指纹 = HMAC-SHA256(env(NEZHA_KYC_FP_KEY), normalize_doc_number).
+     * 明文可索引(varchar(64)), 供退出/入驻跨 vendor 身份匹配的辅助红标(非硬闸, DESIGN §E2).
+     * 无密钥 或 无证件号 -> null(降级不出错; 密钥缺失绝不产生弱指纹).
+     */
+    public static function doc_fingerprint(?string $type, ?string $number): ?string
+    {
+        $norm = self::normalize_doc_number($type, $number);
+        if ($norm === '') return null;
+        $key = (string) env('NEZHA_KYC_FP_KEY', '');
+        if ($key === '') {
+            info('nezha kyc: NEZHA_KYC_FP_KEY missing, skip id_doc_fingerprint');
+            return null;
+        }
+        return hash_hmac('sha256', $norm, $key);
+    }
 
     /** 规范化名的有效 token(长度≥2, 去重保序). */
     protected static function tokens(string $norm): array
