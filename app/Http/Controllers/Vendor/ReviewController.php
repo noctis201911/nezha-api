@@ -17,6 +17,7 @@ class ReviewController extends Controller
             'start_date' => ['nullable','date_format:Y-m-d'],
             'end_date'   => ['nullable','date_format:Y-m-d'],
             'rating'     => ['nullable','integer','min:1','max:5'],
+            'rating_max' => ['nullable','integer','min:1','max:5'],
             'reply_status' => ['nullable','array'],
             'reply_status.*' => ['in:replied,no_reply'],
         ]);
@@ -44,6 +45,12 @@ class ReviewController extends Controller
             } else {
                 $reviewsQuery->where('rating', '>=', $rating);
             }
+        }
+
+        // 哪吒[差评预警]: 低分上限过滤(rating<=N), 供 Dashboard「差评预警」卡深链预筛差评(≤3星)+ 评价页「差评」勾选框。
+        // 与既有 rating(下限>=) 正交, 两者可并存独立开关。
+        if ($request->filled('rating_max')) {
+            $reviewsQuery->where('rating', '<=', (int) $request->input('rating_max'));
         }
 
         $replyStatuses = $request->input('reply_status');

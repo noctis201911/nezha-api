@@ -1,13 +1,20 @@
-{{-- 哪吒 M-01 待办行动条: 5 张卡, 点卡直达对应订单过滤列表。计数与轮询端点 restaurant_data() 同源(nezha_todo_counts)。
-     0 单也显示且置灰不隐藏(让商家确认"系统真没积压"而非"没加载出来"); 仅"配送催办"卡 0 时隐藏(边缘提醒)。
+{{-- 哪吒 M-01 待办行动条: 4 张常驻订单卡, 点卡直达对应订单过滤列表。计数与轮询端点 restaurant_data() 同源(nezha_todo_counts)。
+     0 单也显示且置灰不隐藏(让商家确认"系统真没积压"而非"没加载出来"); "配送催办"/"差评预警"为边缘提醒卡, 0 时隐藏(只在有事时推到眼前)。
+     差评预警数来自 nezha_today_summary(首屏计算, 不进 6s 轮询), 故不随轮询刷新, 属首屏快照。
      红点/计数只反映真实未读, 不造假(命中在场感知护栏)。 --}}
 @php
     $nz_todo = $nz_todo ?? [];
+    $nz_today = $nz_today ?? [];
     $nz_offline  = (int) ($nz_todo['new_offline_order'] ?? 0);
     $nz_pending  = (int) ($nz_todo['new_pending_order'] ?? 0);
     $nz_refund   = (int) ($nz_todo['refund_pending'] ?? 0);
     $nz_timeout  = (int) ($nz_todo['timeout_total'] ?? 0);
     $nz_deliv    = (int) ($nz_todo['deliv_link_total'] ?? 0);
+    // 哪吒[差评预警]: 最近N天 rating<=3 且未回复的新差评数(来自 nezha_today_summary, 首屏计算不进轮询)。
+    $nz_bad_review = (int) ($nz_today['bad_review_count'] ?? 0);
+    $nz_bad_days   = (int) ($nz_today['bad_review_days'] ?? 7);
+    $nz_bad_from   = $nz_today['bad_review_from'] ?? null;
+    $nz_bad_to     = $nz_today['bad_review_to'] ?? null;
 @endphp
 
 <div class="card mb-3 nz-todo-actionbar">
@@ -83,6 +90,24 @@
                             <span>配送催办</span>
                         </h6>
                         <span class="card-title h3 mb-0 text-info">{{ $nz_deliv }}</span>
+                    </div>
+                </a>
+            </div>
+            @endif
+
+            {{-- 差评预警 (最近N天新差评 ≤3星 且未回复); 0 时隐藏(边缘提醒, 只在有差评时推到眼前)。
+                 点卡直达评价页并预筛(未回复+≤3星+同一日期窗), 与卡上数字同源同集合(ReviewController@index)。
+                 纯只读统计, 不造假红点(命中在场感知护栏)。 --}}
+            @if($nz_bad_review > 0)
+            <div class="col-6 col-lg">
+                <a href="{{ route('vendor.reviews', ['rating_max' => 3, 'reply_status' => ['no_reply'], 'start_date' => $nz_bad_from, 'end_date' => $nz_bad_to]) }}"
+                   class="order--card h-100 d-block border-danger">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="card-subtitle m-0 d-flex align-items-center">
+                            <i class="tio-star mr-1 text-danger"></i>
+                            <span>差评预警<small class="text-muted ml-1">近{{ $nz_bad_days }}天 · 去回复</small></span>
+                        </h6>
+                        <span class="card-title h3 mb-0 text-danger">{{ $nz_bad_review }}</span>
                     </div>
                 </a>
             </div>

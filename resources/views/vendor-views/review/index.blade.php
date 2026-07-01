@@ -34,6 +34,11 @@
                         <input type="hidden" name="rating" value="{{ request('rating') }}">
                     @endif
 
+                    {{-- 哪吒[差评预警]: 保留低分过滤, 使商家在差评列表内用店名搜索时不丢「差评」筛选 --}}
+                    @if(request('rating_max'))
+                        <input type="hidden" name="rating_max" value="{{ request('rating_max') }}">
+                    @endif
+
                     @if(request('start_date'))
                         <input type="hidden" name="start_date" value="{{ request('start_date') }}">
                     @endif
@@ -59,7 +64,7 @@
 
                 </form>
 
-                @php($filtered = request()->has('rating') || request()->has('start_date') && request('start_date') != '' || request()->has('end_date') && request('end_date') != '' || request()->has('reply_status'))
+                @php($filtered = request()->has('rating') || request()->has('rating_max') || request()->has('start_date') && request('start_date') != '' || request()->has('end_date') && request('end_date') != '' || request()->has('reply_status'))
                 <div class="hs-unfold">
                     <a class="js-hs-unfold-invoker h-35 btn min-w-100px justify-content-center font-medium btn-sm filter-show offcanvas-trigger {{ $filtered ? 'filter-active' : 'btn-outline-primary' }}"
                             data-target="#Food-list_filter" href="javascript:">
@@ -400,6 +405,18 @@
                                         <input type="radio" class="custom--input" id="ratting1" name="rating" value="1" {{ request('rating') == '1' ? 'checked' : '' }}>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {{-- 哪吒[差评预警]: 低分(≤3星)开关, 与 Dashboard 差评预警卡深链联动; 与上方「评分」下限筛选正交 --}}
+                <div class="global-bg-box rounded p-xl-20 p-16">
+                    <h5 class="mb-10px font-regular text-color font-normal">差评</h5>
+                    <div class="bg-white rounded p-xl-3 p-2">
+                        <div class="form-group m-0">
+                            <div class="custom-control custom-checkbox">
+                                <input type="checkbox" class="custom-control-input" id="low_rating" name="rating_max" value="3" {{ request('rating_max') == '3' ? 'checked' : '' }}>
+                                <label class="custom-control-label text-title" for="low_rating">只看差评（≤3 星）</label>
                             </div>
                         </div>
                     </div>
