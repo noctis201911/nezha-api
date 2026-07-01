@@ -14,15 +14,15 @@
         .nz-export-area { flex: 0 0 auto; }
         .nz-search-area { flex: 0 1 360px; margin-left: 0; }
         .nz-search-area .input--group { width: 360px; max-width: 100%; }
-        .nz-order-table-card #datatable th:nth-child(1), .nz-order-table-card #datatable td:nth-child(1) { width: 4%; }
-        .nz-order-table-card #datatable th:nth-child(2), .nz-order-table-card #datatable td:nth-child(2) { width: 24%; }
-        .nz-order-table-card #datatable th:nth-child(3), .nz-order-table-card #datatable td:nth-child(3) { width: 13%; }
+        /* 哪吒 P7: 8 列宽度(此前为 9 列旧值套在现 8 列上, P2 合并两图标列为⋯后残留, 已校正) */
+        .nz-order-table-card #datatable th:nth-child(1), .nz-order-table-card #datatable td:nth-child(1) { width: 5%; }
+        .nz-order-table-card #datatable th:nth-child(2), .nz-order-table-card #datatable td:nth-child(2) { width: 20%; }
+        .nz-order-table-card #datatable th:nth-child(3), .nz-order-table-card #datatable td:nth-child(3) { width: 14%; }
         .nz-order-table-card #datatable th:nth-child(4), .nz-order-table-card #datatable td:nth-child(4) { width: 16%; }
         .nz-order-table-card #datatable th:nth-child(5), .nz-order-table-card #datatable td:nth-child(5) { width: 12%; }
         .nz-order-table-card #datatable th:nth-child(6), .nz-order-table-card #datatable td:nth-child(6) { width: 12%; }
-        .nz-order-table-card #datatable th:nth-child(7), .nz-order-table-card #datatable td:nth-child(7) { width: 10%; }
-        .nz-order-table-card #datatable th:nth-child(8), .nz-order-table-card #datatable td:nth-child(8) { width: 5%; }
-        .nz-order-table-card #datatable th:nth-child(9), .nz-order-table-card #datatable td:nth-child(9) { width: 4%; }
+        .nz-order-table-card #datatable th:nth-child(7), .nz-order-table-card #datatable td:nth-child(7) { width: 14%; }
+        .nz-order-table-card #datatable th:nth-child(8), .nz-order-table-card #datatable td:nth-child(8) { width: 7%; }
         .nz-print-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid #EDF1F5; background: #FFF7F8; color: #7c1228; font-size: 13px; }
         .nz-print-settings label { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 700; }
         .nz-print-settings input { accent-color: #C4193E; }
@@ -50,6 +50,27 @@
         .nz-col-resizer { position: absolute; top: 0; right: -3px; width: 8px; height: 100%; cursor: col-resize; user-select: none; z-index: 3; }
         .nz-col-resizer::after { content: ""; position: absolute; top: 25%; bottom: 25%; left: 3px; width: 2px; border-radius: 2px; background: transparent; }
         .nz-col-resizer:hover::after, body.nz-col-resizing .nz-col-resizer::after { background: #9DBBE8; }
+        /* 哪吒 P7: 列设置(列显隐 + 工具按钮显隐, localStorage 本机记住) */
+        .nz-col-settings-wrap { position: relative; margin-left: auto; }
+        .nz-col-settings-btn { display: inline-flex; align-items: center; white-space: nowrap; }
+        .nz-col-settings-menu { position: fixed; z-index: 11050; width: 264px; background: #fff; border: 1px solid #E4E9F0; border-radius: 11px; box-shadow: 0 12px 30px rgba(20,22,40,.16); padding: 8px 6px 10px; display: none; }
+        .nz-col-settings-menu.nz-open { display: block; }
+        .nz-col-sec-label { font-size: 11.5px; font-weight: 800; color: #8A94A6; padding: 6px 10px 4px; }
+        .nz-col-opt { display: flex; align-items: center; gap: 10px; padding: 7px 10px; margin: 0; border-radius: 7px; font-size: 13.5px; font-weight: 600; color: #1F2329; cursor: pointer; }
+        .nz-col-opt:hover { background: #F4F6F9; }
+        .nz-col-opt input { width: 16px; height: 16px; accent-color: #102A4C; flex: 0 0 auto; }
+        .nz-col-opt span { flex: 1; }
+        .nz-col-opt.nz-col-locked { color: #98A2B3; cursor: default; }
+        .nz-col-opt.nz-col-locked:hover { background: transparent; }
+        .nz-col-opt.nz-col-locked input { accent-color: #9AA4B2; }
+        .nz-col-opt.nz-col-locked i { font-size: 14px; color: #B7BECB; }
+        .nz-col-div { height: 1px; background: #F0F2F5; margin: 6px 8px; }
+        .nz-col-hint { display: flex; gap: 7px; padding: 9px 10px; margin: 8px 6px 0; background: #F7F9FB; border: 1px solid #EAEEF3; border-radius: 8px; font-size: 12px; color: #667085; line-height: 1.5; }
+        .nz-col-hint i { font-size: 14px; color: #98A2B3; flex: 0 0 auto; margin-top: 1px; }
+        .nz-col-foot { display: flex; align-items: center; justify-content: space-between; padding: 10px 10px 2px; }
+        .nz-col-reset { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; color: #1E4FBF; font-size: 12.5px; font-weight: 700; cursor: pointer; padding: 0; }
+        .nz-col-foot-note { font-size: 11.5px; color: #98A2B3; }
+        @media (max-width: 767.98px) { .nz-col-settings-wrap { display: none; } }
         .nz-payment-proof-list { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
         .nz-payment-proof-list--status { justify-content: center; margin-top: 0; margin-bottom: 8px; }
         .nz-payment-proof-thumb { width: 42px; height: 42px; padding: 0; border: 1px solid #D8E0EA; border-radius: 7px; background: #fff; overflow: hidden; cursor: zoom-in; }
@@ -378,6 +399,32 @@
                         </div>
                         <!-- End Search -->
                     </form>
+                    {{-- 哪吒 P7: 列设置(列显隐 + 工具按钮显隐, 核心列锁死, 本机记住) --}}
+                    <div class="nz-col-settings-wrap d-print-none" id="nzColSettingsWrap">
+                        <button type="button" class="btn btn-sm btn-white nz-col-settings-btn" id="nzColSettingsBtn" aria-haspopup="true" aria-expanded="false">
+                            <i class="tio-settings mr-1"></i>列设置<i class="tio-chevron-down ml-1"></i>
+                        </button>
+                        <div class="nz-col-settings-menu" id="nzColSettingsMenu" role="menu" aria-label="列与工具显示设置">
+                            <div class="nz-col-sec-label">显示的列</div>
+                            <label class="nz-col-opt"><input type="checkbox" data-nz-col="sl" checked><span>序号</span></label>
+                            <label class="nz-col-opt nz-col-locked"><input type="checkbox" checked disabled><span>订单号</span><i class="tio-lock"></i></label>
+                            <label class="nz-col-opt"><input type="checkbox" data-nz-col="date" checked><span>日期</span></label>
+                            <label class="nz-col-opt"><input type="checkbox" data-nz-col="customer" checked><span>顾客</span></label>
+                            <label class="nz-col-opt"><input type="checkbox" data-nz-col="total" checked><span>金额</span></label>
+                            <label class="nz-col-opt nz-col-locked"><input type="checkbox" checked disabled><span>订单状态</span><i class="tio-lock"></i></label>
+                            <label class="nz-col-opt nz-col-locked"><input type="checkbox" checked disabled><span>下一步操作</span><i class="tio-lock"></i></label>
+                            <label class="nz-col-opt"><input type="checkbox" data-nz-col="more" checked><span>更多（⋯ 菜单）</span></label>
+                            <div class="nz-col-div"></div>
+                            <div class="nz-col-sec-label">工具按钮</div>
+                            <label class="nz-col-opt"><input type="checkbox" data-nz-tool="export" checked><span>导出</span></label>
+                            <label class="nz-col-opt"><input type="checkbox" data-nz-tool="batch" checked><span>批量打印</span></label>
+                            <div class="nz-col-hint"><i class="tio-info-outlined"></i><span>隐藏「更多」后，补打小票可点订单号进详情页，不影响操作。</span></div>
+                            <div class="nz-col-foot">
+                                <button type="button" class="nz-col-reset" id="nzColReset"><i class="tio-refresh"></i>恢复默认</button>
+                                <span class="nz-col-foot-note">只你自己看得到 · 本机记住</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="nz-print-settings d-print-none" id="nzPrintSettings">
@@ -1056,13 +1103,80 @@
                             document.removeEventListener('pointermove', onMove);
                             document.removeEventListener('pointerup', onUp);
                             document.body.classList.remove('nz-col-resizing');
-                            var widths = ths.map(function(item){ return Math.round(item.offsetWidth); });
+                            var prevW = [];
+                            try { prevW = JSON.parse(localStorage.getItem(storeKey) || '[]') || []; } catch (e) { prevW = []; }
+                            var widths = ths.map(function(item, i){ var w = Math.round(item.offsetWidth); return w > 0 ? w : (prevW[i] || 0); });
                             try { localStorage.setItem(storeKey, JSON.stringify(widths)); } catch (e) {}
                         }
                         document.addEventListener('pointermove', onMove);
                         document.addEventListener('pointerup', onUp);
                     });
                 });
+            }
+
+            function initColumnSettings(){
+                var wrap = document.getElementById('nzColSettingsWrap');
+                var btn = document.getElementById('nzColSettingsBtn');
+                var menu = document.getElementById('nzColSettingsMenu');
+                var table = document.getElementById('datatable');
+                if (!menu || !table) return;
+                var STORE_KEY = 'nzOrderColPrefs';
+                // 可隐列 → 表头 1-based 列序(锁死列 订单号2/状态6/下一步7 不在此表, 不可隐)
+                var COL_POS = { sl: 1, date: 3, customer: 4, total: 5, more: 8 };
+                var styleEl = document.getElementById('nzColHideStyle');
+                if (!styleEl){ styleEl = document.createElement('style'); styleEl.id = 'nzColHideStyle'; document.head.appendChild(styleEl); }
+                var prefs = {};
+                try { prefs = JSON.parse(localStorage.getItem(STORE_KEY) || '{}') || {}; } catch (e) { prefs = {}; }
+                function save(){ try { localStorage.setItem(STORE_KEY, JSON.stringify(prefs)); } catch (e) {} }
+                function apply(){
+                    var css = '';
+                    Object.keys(COL_POS).forEach(function(key){
+                        if (prefs['col_' + key] === false){
+                            var p = COL_POS[key];
+                            css += '#datatable thead th:nth-child(' + p + '),#datatable tbody td:nth-child(' + p + '){display:none !important;}';
+                            if (key === 'more'){ css += '#datatable tr.class-all td.nz-row-more-cell{display:none !important;}'; }
+                        }
+                    });
+                    styleEl.textContent = css;
+                    var exp = document.querySelector('.nz-export-area');
+                    if (exp) exp.style.display = (prefs['tool_export'] === false) ? 'none' : '';
+                    var batchBtn = document.getElementById('nzBatchOpenBtn');
+                    if (batchBtn) batchBtn.style.display = (prefs['tool_batch'] === false) ? 'none' : '';
+                    if (prefs['tool_batch'] === false && document.body.classList.contains('nz-batch-mode')){
+                        var bc = document.getElementById('nzBatchCancel'); if (bc) bc.click();
+                    }
+                    if (menu){
+                        Array.prototype.slice.call(menu.querySelectorAll('input[data-nz-col]')).forEach(function(cb){ cb.checked = prefs['col_' + cb.getAttribute('data-nz-col')] !== false; });
+                        Array.prototype.slice.call(menu.querySelectorAll('input[data-nz-tool]')).forEach(function(cb){ cb.checked = prefs['tool_' + cb.getAttribute('data-nz-tool')] !== false; });
+                    }
+                }
+                apply();
+                if (!wrap || !btn) return;
+                function place(){
+                    var r = btn.getBoundingClientRect();
+                    menu.style.visibility = 'hidden'; menu.style.display = 'block';
+                    var mw = menu.offsetWidth, mh = menu.offsetHeight;
+                    menu.style.display = ''; menu.style.visibility = '';
+                    var left = Math.max(8, Math.min(r.right - mw, window.innerWidth - mw - 8));
+                    var top = r.bottom + 6;
+                    if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 6);
+                    menu.style.left = left + 'px';
+                    menu.style.top = top + 'px';
+                }
+                function openMenu(){ place(); menu.classList.add('nz-open'); btn.setAttribute('aria-expanded', 'true'); }
+                function closeMenu(){ menu.classList.remove('nz-open'); btn.setAttribute('aria-expanded', 'false'); }
+                btn.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); if (menu.classList.contains('nz-open')) closeMenu(); else openMenu(); });
+                document.addEventListener('click', function(e){ if (menu.classList.contains('nz-open') && !menu.contains(e.target) && !btn.contains(e.target)) closeMenu(); });
+                document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeMenu(); });
+                window.addEventListener('resize', closeMenu);
+                menu.addEventListener('change', function(e){
+                    var cb = e.target;
+                    if (!cb || !cb.getAttribute) return;
+                    if (cb.hasAttribute('data-nz-col')){ prefs['col_' + cb.getAttribute('data-nz-col')] = cb.checked; save(); apply(); }
+                    else if (cb.hasAttribute('data-nz-tool')){ prefs['tool_' + cb.getAttribute('data-nz-tool')] = cb.checked; save(); apply(); }
+                });
+                var resetBtn = document.getElementById('nzColReset');
+                if (resetBtn) resetBtn.addEventListener('click', function(){ prefs = {}; save(); apply(); });
             }
 
             function initProofPreview(){
@@ -1195,6 +1309,7 @@
                 initRowMenu();
                 initPrepPrompt();
                 initBatchPrint();
+                initColumnSettings();
 
                 var ready = $('nzPrintReady');
                 var auto = $('nzAutoPrintReady');
@@ -1355,31 +1470,7 @@
                 datatable.button('.buttons-print').trigger()
             });
 
-            $('#toggleColumn_order').change(function (e) {
-                datatable.columns(1).visible(e.target.checked)
-            })
-
-            $('#toggleColumn_date').change(function (e) {
-                datatable.columns(2).visible(e.target.checked)
-            })
-
-            $('#toggleColumn_customer').change(function (e) {
-                datatable.columns(3).visible(e.target.checked)
-            })
-
-            $('#toggleColumn_order_status').change(function (e) {
-                datatable.columns(5).visible(e.target.checked)
-            })
-
-
-            $('#toggleColumn_total').change(function (e) {
-                datatable.columns(4).visible(e.target.checked)
-            })
-
-            $('#toggleColumn_actions').change(function (e) {
-                datatable.columns(6).visible(e.target.checked)
-            })
-
+            // 哪吒 P7: 旧 StackFood toggleColumn_* 列显隐处理器已移除(绑定的 checkbox 不存在, 且会隐藏核心列, 与列设置面板决策冲突); 列显隐改由 initColumnSettings 统一实现。
 
             // INITIALIZATION OF TAGIFY
             // =======================================================
