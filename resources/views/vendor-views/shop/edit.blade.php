@@ -132,105 +132,26 @@
                         </div>
                     </div>
                     <div class="card card-body mb-20">
-                        <div class="mb-20">
-                            <h4 class="mb-1">{{ translate('messages.Logo_&_Cover') }}</h4>
-                            <p class="fs-12 mb-0">{{ translate('messages.Here you can set your brand logo for website & app.') }}</p>
+                        <div class="mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                            <div>
+                                <h4 class="mb-1">{{ translate('messages.Logo_&_Cover') }}</h4>
+                                <p class="fs-12 mb-0">{{ translate('店铺 Logo 和封面已统一在「门店形象」页管理，这里只看不改。') }}</p>
+                            </div>
+                            <a href="{{ route('vendor.shop.brand') }}" class="btn btn--primary" style="color:#fff;">
+                                <i class="tio-photo"></i> {{ translate('去门店形象页') }}
+                            </a>
                         </div>
                         <div class="row g-3">
                             <div class="col-lg-6">
-                                <div class="p-xxl-20 p-12 global-bg-box rounded mb-20 h-100">
-                                    <div class="">
-                                        <div class="mb-4">
-                                            <h5 class="mb-1">
-                                                {{ translate('messages.Restaurant Logo') }}
-                                            </h5>
-                                            <p class="mb-0 fs-12 gray-dark">{{ translate('messages.Upload your Business Logo') }}</p>
-                                        </div>
-                                        <div class="text-center">
-                                            <div class="upload-file mx-auto">
-                                                <input type="file" name="image" class="upload-file__input single_file_input"
-                                                        accept=".jpg, .png, .jpeg, .gif, .bmp, .tif, .tiff|image/*">
-                                                <label class="upload-file__wrapper ratio-1 mx-auto m-0">
-                                                    <div class="upload-file-textbox text-center" style="">
-                                                        <img width="34" class="svg" src="{{dynamicAsset('assets/admin/img/image-upload.png')}}" alt="img">
-                                                        <h6 class="mt-1 text-gray1 fw-medium fs-10 lh-base text-center">
-                                                            <span class="text-info">{{ translate('messages.Click_to_upload') }}</span>
-                                                            <br>
-                                                            {{ translate('messages.or_drag_and_drop') }}
-                                                        </h6>
-                                                    </div>
-                                                    <img class="upload-file-img" loading="lazy"
-                                                        src="{{ $shop?->logo_full_url ?? dynamicAsset('assets/admin/img/image-place-holder.png') }}"
-                                                        data-default-src="{{ $shop?->logo_full_url ?? dynamicAsset('assets/admin/img/image-place-holder.png') }}"
-                                                        alt="" style="display: none;">
-                                                </label>
-                                                <div class="overlay">
-                                                    <div class="d-flex gap-1 justify-content-center align-items-center h-100">
-                                                        <button type="button" class="btn btn-outline-info icon-btn view_btn">
-                                                            <i class="tio-invisible"></i>
-                                                        </button>
-                                                        <button type="button" class="btn btn-outline-info icon-btn edit_btn">
-                                                            <i class="tio-edit"></i>
-                                                        </button>
-                                                        {{-- <button type="button" class="remove_btn btn icon-btn">
-                                                            <i class="tio-delete text-danger"></i>
-                                                        </button> --}}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <p class="fs-10 text-center mb-0 mt-4">
-                                            {{ translate('messages.JPG, JPEG, PNG, Gif Image size : Max 2 MB') }} <span class="font-medium text-title">({{ translate('messages.1:1') }})</span>
-                                        </p>
-                                    </div>
+                                <div class="p-12 global-bg-box rounded text-center h-100">
+                                    <p class="fs-12 gray-dark mb-2">{{ translate('店铺 Logo') }}</p>
+                                    <img src="{{ $shop?->logo_full_url ?? dynamicAsset('assets/admin/img/image-place-holder.png') }}" alt="logo" style="width:110px;height:110px;object-fit:cover;border-radius:10px;border:1px solid #e7eaf3;">
                                 </div>
                             </div>
                             <div class="col-lg-6">
-                                <div class="p-xxl-20 p-12 global-bg-box rounded mb-20 h-100">
-                                    <div class="">
-                                        <div class="mb-4">
-                                            <h5 class="mb-1">
-                                                {{ translate('Cover Image') }}
-                                            </h5>
-                                            <p class="mb-0 fs-12 gray-dark">{{ translate('Upload your Business Logo') }}</p>
-                                        </div>
-                                        <div class="text-center">
-                                            <div class="upload-file mx-auto">
-                                                <input type="file" name="photo" class="upload-file__input single_file_input"
-                                                        accept=".jpg, .png, .jpeg, .gif, .bmp, .tif, .tiff|image/*">
-                                                <label class="upload-file__wrapper w-344 mx-auto m-0">
-                                                    <div class="upload-file-textbox text-center" style="">
-                                                        <img width="34" class="svg" src="{{dynamicAsset('assets/admin/img/image-upload.png')}}" alt="img">
-                                                        <h6 class="mt-1 text-gray1 fw-medium fs-10 lh-base text-center">
-                                                            <span class="text-info">{{ translate('messages.Click_to_upload') }}</span>
-                                                            <br>
-                                                            {{ translate('messages.or_drag_and_drop') }}
-                                                        </h6>
-                                                    </div>
-                                                    <img class="upload-file-img" loading="lazy"
-                                                        src="{{ $shop?->cover_photo_full_url ?? dynamicAsset('assets/admin/img/restaurant_cover.jpg') }}"
-                                                        data-default-src="{{ $shop?->cover_photo_full_url ?? dynamicAsset('assets/admin/img/restaurant_cover.jpg') }}"
-                                                        alt="" style="display: none;">
-                                                </label>
-                                                <div class="overlay">
-                                                    <div class="d-flex gap-1 justify-content-center align-items-center h-100">
-                                                        <button type="button" class="btn btn-outline-info icon-btn view_btn">
-                                                            <i class="tio-invisible"></i>
-                                                        </button>
-                                                        <button type="button" class="btn btn-outline-info icon-btn edit_btn">
-                                                            <i class="tio-edit"></i>
-                                                        </button>
-                                                        {{-- <button type="button" class="remove_btn btn icon-btn">
-                                                            <i class="tio-delete text-danger"></i>
-                                                        </button> --}}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <p class="fs-10 text-center mb-0 mt-4">
-                                            {{ translate('messages.JPG, JPEG, PNG, Gif Image size : Max 2 MB') }} <span class="font-medium text-title">({{ translate('messages.1100 x 320') }})</span>
-                                        </p>
-                                    </div>
+                                <div class="p-12 global-bg-box rounded text-center h-100">
+                                    <p class="fs-12 gray-dark mb-2">{{ translate('店铺封面') }}</p>
+                                    <img src="{{ $shop?->cover_photo_full_url ?? dynamicAsset('assets/admin/img/restaurant_cover.jpg') }}" alt="cover" style="width:100%;max-width:300px;height:88px;object-fit:cover;border-radius:10px;border:1px solid #e7eaf3;">
                                 </div>
                             </div>
                         </div>
