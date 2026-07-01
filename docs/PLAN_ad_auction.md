@@ -96,3 +96,21 @@
 - **Slice A · 超管侧（2026-07-02 · 提交见 CHANGELOG）**：✅ 竞价参数页（`admin/advertisement/auction-settings`，9 键 + 守卫 floor>0/封顶≥floor/日预算≥floor + 总开关翻转写 AdminAuditLog）+ 广告余额充值页（`admin/advertisement/ad-recharge`，复用 `AdBalanceLogic::credit` 单一真相源，只充值不扣减 + 二次确认 + 审计）+ 侧栏两入口。开关仍默认关、纯超管 UI 零 live 影响。验证：进程内真渲染两页 22/22（字段齐 + 隔离证伪 deposit 纹丝不动 + 事务 rollback 零残留）+ route:list 四路由注册。§3/§4#9 的 CLI 充值逻辑已抽到 `App\CentralLogics\AdBalanceLogic::credit`，CLI 与后台按钮共用。
 - **Slice B · 商家三旋钮看板（2026-07-02 上线）**：✅ 商家后台「广告→竞价推广」3 旋钮（开关 / 低中高 / 日预算）+ 只读 广告余额·今日已花·今日点击；一店一条 cpc `advertisements` 行(upsert)、tier→出价跟随 floor/max_per_click 自动、出价对商家隐藏；自助即时(status=approved)、IDOR 服务端取 restaurant_id；CPT 广告列表已过滤 cpc 行；侧栏菜单跟随总开关(关时隐藏)。零 live 影响(开关默认关 + ad_balance=0 惰性)。验证进程内真渲染 + upsert 20/20 + 门控 4/4。
 - **Slice C · 顾客端广告位**（首页位 / 列表竞价位 / 去首页横滑卡「推广」角标 / 点击·曝光事件接线）：未做；因碰真金"每次有效点击=一笔扣费"，开工前先走 `/debate` 三路对抗核验（业主 2026-07-02 拍板）。重点核验：点击事件不重复触发 / 不在渲染滚动时误发 / 尊重后端 dedup / 全不打标。
+
+
+## 11. Slice C `/debate` 结论（2026-07-02 · 三路红队 + A 窗独立复核）— 🔴 开关上线前置条件
+
+三路红队（计费正确性 / 防刷 / 合规+过度设计）各读线上真代码，A 窗独立复核了载重项，收敛为：
+
+- 🔴 **基线纠偏**：§0/§9 「前端 useGetAdds 写死 enabled:false、首页广告位从未做」**已过期失实**。首页推广条早已上线（commit `47849df`；`home/index.js:581` AdStrip，`useGetAdds` 活跃）。Slice C = 补计费接线 + 修已上线的问题，**非从零新建**。
+- 🔴 **合规红线（已在部署代码里）**：`home/index.js:2340`「精选好店」= 付费位 merit 标签，违唯一红线；+ `:2335`「商家推广」+ `:2266`「推广」角标违全不打标。当前 `approved_total=0` 故顾客未显示，但**一次广告审核即上线**（CPT 免费投放开着）。业主拍板：**保留推广条但全去标 + 接计费**；merit 标签**现在就修（C0）**。
+- 🔴 **后端防刷缺口（Slice C 非纯前端）**：`click`(api.php:73) 仅 `auth:api` 无 throttle；`impression`(:74) 无 auth 无 throttle（全 v1 仅 sign-up 有 throttle，已核）。dedup 是 15min 防双击非防刷（无按日/按账号上限 → ~96 计费点击/账号/日）；`trusted_min_orders=1` + 注册近免费 → **~20-100 小号可日日烧空对手预算并把其挤出广告位**。无 impression→click 绑定（可盲扣任意对手广告）。自点击未剔除（方案称「剔除自点击」实无对应代码）。
+- 🟠 **前端触发陷阱（未建）**：StrictMode 双发 / `useOnScreen` 滚动重入重发 / SPA 重挂载 + bfcache 重放 / 在详情页发（prefetch/刷新/自然访问误扣）/ dedup 桶边界双扣。需**手势触发非挂载 + 单发闩 + impression 每视图一次**。
+- ✅ **确凿稳固（勿再纠）**：钱不会超扣/错扣 —— 原子封顶 `WHERE ad_balance>=cost / spent_today+cost<=budget` + 并发双击 dedup 先插入回滚 + deposit 隔离 + 游客不计费 + 服务端重算价。**残余风险 = 预算烧空 + 合规，非平台资损。**
+
+**三工作流（拆分，替代原 §8 的"一块前端"）**：
+- **C0（现在 · 独立）**：首页推广条全去标（精选好店 / 商家推广 / 推广角标），保留条本身。前端改，走前端铁律（截图→点头→Playwright 三态）。
+- **C1（开关上线前 · 后端加固，可死亡测试）**：`click`+`impression` 加 throttle + 按日计费点击上限（per user×ad×day）+ 自点击剔除（clicking user 属该 ad 的 vendor 即拒）+ impression→click 单次 nonce 绑定（原 §5 推迟的 token，在防刷轴上是必需）。
+- **C2（开关上线前 · 前端触发）**：click 绑手势 + 具体 `advertisement_id` + 单发闩；impression 每（ad×元素实例）一次，滚动重入/重挂载/bfcache 不重发；detail 页永不发 click。
+
+🔴 **硬门槛**：`nezha_ad_auction_status` 在 **C1 + C2 完成 + 首页去 merit 标签** 三者齐备前**不得真上线开启**（开 = 按点击真扣费面对真实对抗流量，现缺 throttle/按日上限/nonce → 对手可烧空 + 可盲扣；且首页 merit 标签会随广告显示）。仅可短暂测试排序效果后立即关回。
