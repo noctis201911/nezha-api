@@ -1076,7 +1076,7 @@
                 var table = document.getElementById('datatable');
                 if (!table || window.innerWidth < 768) return;
                 var ths = Array.prototype.slice.call(table.querySelectorAll('thead th'));
-                if (!ths.length) return;
+                if (ths.length < 2) return;
                 var storeKey = 'nzOrderColumnWidths:' + location.pathname;
                 try {
                     var saved = JSON.parse(localStorage.getItem(storeKey) || '[]');
@@ -1084,7 +1084,9 @@
                         if (width && ths[i]) ths[i].style.width = width + 'px';
                     });
                 } catch (e) {}
-                ths.forEach(function(th, index){
+                // 拖动=「邻列让位」: 拖某列右缘只在本列与右邻列之间平移宽度, 总宽不变、其余列不动(自然, 不再整表回流"吸附")。末列无右邻不放手柄。
+                ths.forEach(function(th, colIndex){
+                    if (colIndex === ths.length - 1) return;
                     if (th.querySelector('.nz-col-resizer')) return;
                     var grip = document.createElement('span');
                     grip.className = 'nz-col-resizer';
@@ -1092,12 +1094,22 @@
                     th.appendChild(grip);
                     grip.addEventListener('pointerdown', function(e){
                         e.preventDefault();
+                        var neighbor = ths[colIndex + 1];
+                        var wAll = ths.map(function(it){ return it.offsetWidth; });   // 先读全部再统一写(避免边读边写逐次 reflow 漂移)
+                        ths.forEach(function(it, i){ it.style.width = wAll[i] + 'px'; });
                         var startX = e.clientX;
-                        var startWidth = th.offsetWidth;
+                        var startW = wAll[colIndex];
+                        var startNext = wAll[colIndex + 1];
+                        var pairTotal = startW + startNext;
                         document.body.classList.add('nz-col-resizing');
                         function onMove(ev){
-                            var next = Math.max(54, startWidth + ev.clientX - startX);
-                            th.style.width = next + 'px';
+                            var delta = ev.clientX - startX;
+                            var cur = startW + delta;
+                            var nxt = startNext - delta;
+                            if (cur < 54) { cur = 54; nxt = pairTotal - 54; }
+                            if (nxt < 54) { nxt = 54; cur = pairTotal - 54; }
+                            th.style.width = cur + 'px';
+                            neighbor.style.width = nxt + 'px';
                         }
                         function onUp(){
                             document.removeEventListener('pointermove', onMove);
