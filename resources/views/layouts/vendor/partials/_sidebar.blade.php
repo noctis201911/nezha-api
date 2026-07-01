@@ -1,3 +1,24 @@
+@once
+    <style>
+        .nz-customer-nudge-alert > .nav-link,
+        .nz-customer-nudge-alert .text-truncate {
+            color: #F04438 !important;
+            font-weight: 900;
+        }
+        .nz-customer-nudge-badge {
+            background: #F04438 !important;
+            color: #fff !important;
+            animation: nzNudgeBadgePulse 1s ease-in-out infinite;
+        }
+        @keyframes nzNudgeBadgePulse {
+            0%, 100% { transform: translateY(0) scale(1); box-shadow: 0 0 0 0 rgba(240, 68, 56, .42); }
+            45% { transform: translateY(-2px) scale(1.12); box-shadow: 0 0 0 5px rgba(240, 68, 56, 0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .nz-customer-nudge-badge { animation: none; }
+        }
+    </style>
+@endonce
 <div id="sidebarMain" class="d-none">
     <aside
         class="js-navbar-vertical-aside navbar navbar-vertical-aside navbar-vertical navbar-vertical-fixed navbar-expand-xl navbar-bordered">
@@ -140,6 +161,19 @@
                                                         });
                                                 })->Notpos()->HasSubscriptionToday()->NotDigitalOrder()
                                                 ->count()}}
+                                            </span>
+                                        </span>
+                                    </a>
+                                </li>
+                                @php($__customerNudgeCount = \App\CentralLogics\NezhaCustomerNudge::count(\App\CentralLogics\Helpers::get_restaurant_id()))
+                                {{-- 哪吒: 「客户催促」常驻入口。仅当仍有未处理催促单时红色提醒, 数字轻微跳动。 --}}
+                                <li class="nav-item {{Request::is('restaurant-panel/order/list/customer_nudged')?'active':'' }} {{ $__customerNudgeCount > 0 ? 'nz-customer-nudge-alert' : '' }} @yield('customer_nudged')">
+                                    <a class="nav-link " href="{{route('vendor.order.list',['customer_nudged'])}}" title="客户催促">
+                                        <span class="tio-circle nav-indicator-icon"></span>
+                                        <span class="text-truncate sidebar--badge-container">
+                                            客户催促
+                                            <span class="badge {{ $__customerNudgeCount > 0 ? 'nz-customer-nudge-badge' : 'badge-soft-info' }} badge-pill ml-1">
+                                                {{ $__customerNudgeCount }}
                                             </span>
                                         </span>
                                     </a>

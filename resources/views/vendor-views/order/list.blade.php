@@ -159,6 +159,7 @@
     $nzRawStatus = $st ?? 'all';
     $nzStatusMeta = [
         'all' => ['label' => '全部订单', 'hint' => '集中查看当前仍需履约或复核的订单，按下一步操作推进。', 'empty' => '当前没有需要处理的订单。', 'icon' => 'tio-shopping-cart'],
+        'customer_nudged' => ['label' => '客户催促', 'hint' => '集中处理顾客已催促、且商家还没完成对应动作的订单。', 'empty' => '暂无客户催促订单。', 'icon' => 'tio-notifications-alert'],
         'offline_pending' => ['label' => '待确认收款', 'hint' => '顾客已提交直付凭证，商家确认自己账户已到账后再出餐。', 'empty' => '暂无待确认收款订单。', 'icon' => 'tio-checkmark-circle'],
         'refund_pending' => ['label' => '待退款', 'hint' => '平台不经手货款；请商家按原路退还顾客后在此标记已退款。', 'empty' => '暂无待退款订单。', 'icon' => 'tio-receipt-outlined'],
         'pending' => ['label' => '待处理', 'hint' => '新订单在这里接单；直付待核验订单请优先到待确认收款处理。', 'empty' => '暂无待处理订单。', 'icon' => 'tio-timer'],
@@ -173,31 +174,21 @@
         'payment_failed' => ['label' => '支付失败', 'hint' => '支付失败订单已关闭，通常无需商家继续履约。', 'empty' => '暂无支付失败订单。', 'icon' => 'tio-warning-outlined'],
         'canceled' => ['label' => '已取消', 'hint' => '已取消订单用于核对取消原因和退款留痕。', 'empty' => '暂无已取消订单。', 'icon' => 'tio-clear-circle-outlined'],
     ];
-    $nzStatusTabs = ['all','offline_pending','refund_pending','pending','confirmed','cooking','ready_for_delivery','food_on_the_way','delivered','refunded','refund_requested','scheduled','payment_failed','canceled'];
+    $nzStatusTabs = ['all','customer_nudged','offline_pending','refund_pending','pending','confirmed','cooking','ready_for_delivery','food_on_the_way','delivered','refunded','refund_requested','scheduled','payment_failed','canceled'];
     $nzCurrentMeta = $nzStatusMeta[$nzRawStatus] ?? ['label' => str_replace('_', ' ', $nzRawStatus), 'hint' => '查看该状态下的订单。', 'empty' => '暂无该状态订单。', 'icon' => 'tio-shopping-cart'];
     $nzBaseCurrency = \App\CentralLogics\Helpers::currency_code();
-    $nzCurrencyRows = \App\Models\Currency::whereIn('currency_code', [$nzBaseCurrency, 'USD', 'CNY'])->get()->keyBy('currency_code');
-    $nzBaseRate = (float) optional($nzCurrencyRows->get($nzBaseCurrency))->exchange_rate;
-    $nzBaseRate = $nzBaseRate > 0 ? $nzBaseRate : 1;
-    $nzFxFallback = [
-        'USD' => ['multiplier' => 0.00272, 'symbol' => '$'],
-        'CNY' => ['multiplier' => 0.0185, 'symbol' => '¥'],
+    $nzBusinessRates = \Illuminate\Support\Facades\DB::table('business_settings')
+        ->whereIn('key', ['nezha_rate_cny_to_amd', 'nezha_rate_usd_to_amd'])
+        ->pluck('value', 'key');
+    $nzCnyToAmd = (float) ($nzBusinessRates['nezha_rate_cny_to_amd'] ?? 55);
+    $nzUsdToAmd = (float) ($nzBusinessRates['nezha_rate_usd_to_amd'] ?? 400);
+    $nzFxTargets = [
+        'CNY' => ['divisor' => $nzCnyToAmd, 'symbol' => '¥'],
+        'USD' => ['divisor' => $nzUsdToAmd, 'symbol' => '$'],
     ];
-    $nzFxTargets = [];
-    foreach (['USD', 'CNY'] as $__code) {
-        $__currency = $nzCurrencyRows->get($__code);
-        $__rate = (float) optional($__currency)->exchange_rate;
-        $__multiplier = $__rate > 0 ? ($__rate / $nzBaseRate) : null;
-        if ($nzBaseCurrency === 'AMD' && (!$__multiplier || abs($__multiplier - 1) < 0.000001)) {
-            $__multiplier = $nzFxFallback[$__code]['multiplier'];
-        }
-        if ($__code !== $nzBaseCurrency && $__multiplier > 0) {
-            $nzFxTargets[$__code] = [
-                'multiplier' => $__multiplier,
-                'symbol' => optional($__currency)->currency_symbol ?: ($nzFxFallback[$__code]['symbol'] ?? $__code),
-            ];
-        }
-    }
+    $nzFxTargets = array_filter($nzFxTargets, function ($fx) {
+        return ($fx['divisor'] ?? 0) > 0;
+    });
 @endphp
     <div class="content container-fluid">
         <!-- Page Header -->
@@ -425,7 +416,7 @@
                                     @if(!empty($nzFxTargets))
                                         <div class="nz-order-converted-amounts" data-nz-base-currency="{{ $nzBaseCurrency }}">
                                             @foreach($nzFxTargets as $__code => $__fx)
-                                                <span>≈ {{ $__fx['symbol'] }}{{ number_format(((float) $order['order_amount'] * $__fx['multiplier']), 2) }} {{ $__code }}</span>
+                                                <span>≈ {{ $__fx['symbol'] }}{{ number_format(((float) $order['order_amount'] / $__fx['divisor']), 2) }} {{ $__code }}</span>
                                             @endforeach
                                         </div>
                                     @endif

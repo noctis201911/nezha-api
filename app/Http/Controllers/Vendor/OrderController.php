@@ -9,6 +9,7 @@ use App\Exports\OrderExport;
 use App\Models\OrderPayment;
 use Illuminate\Http\Request;
 use App\CentralLogics\Helpers;
+use App\CentralLogics\NezhaCustomerNudge;
 use App\CentralLogics\OrderLogic;
 use App\Exports\OrderRefundExport;
 use Illuminate\Support\Facades\DB;
@@ -110,6 +111,12 @@ class OrderController extends Controller
                 );
                 return $query->whereIn('id', $ids ?: [0]);
             })
+            ->when($status == 'customer_nudged', function ($query) {
+                $ids = NezhaCustomerNudge::openOrderIds(
+                    \App\CentralLogics\Helpers::get_restaurant_id()
+                );
+                return $query->whereIn('id', $ids ?: [0]);
+            })
             // ->when($status == 'assinged', function($query){
             //     return $query->whereNotIn('order_status',['failed','canceled', 'refund_requested', 'refunded','delivered','refund_request_canceled'])->whereNotNull('delivery_man_id');
             // })
@@ -148,9 +155,9 @@ class OrderController extends Controller
                 });
             })
             ->Notpos()
-            // 哪吒: 「待确认收款」+「待退款」+「超时单」视图放开 NotDigitalOrder(它会隐藏 pending+offline 单); 其余视图行为不变。
+            // 哪吒: 「待确认收款」+「待退款」+「超时单」+「客户催促」视图放开 NotDigitalOrder(它会隐藏 pending+offline 单); 其余视图行为不变。
             // 超时集合含 pending+offline_payment 单, 漏放行会被 NotDigitalOrder 静默隐藏 → 列表数<卡数, 破坏数字同源。
-            ->when(!in_array($status, ['offline_pending', 'refund_pending', 'timeout'], true), function ($query) {
+            ->when(!in_array($status, ['offline_pending', 'refund_pending', 'timeout', 'customer_nudged'], true), function ($query) {
                 return $query->NotDigitalOrder();
             })
             ->hasSubscriptionToday()
@@ -159,11 +166,12 @@ class OrderController extends Controller
             ->paginate(config('default_pagination'));
 
         $st = $status;
-        // 哪吒: offline_pending / refund_pending / timeout 无翻译 key, 直接给中文标题避免显示英文键名(messages.timeout)。
+        // 哪吒: offline_pending / refund_pending / timeout / customer_nudged 无翻译 key, 直接给中文标题避免显示英文键名。
         $status = $status == 'offline_pending' ? '待确认收款'
             : ($status == 'refund_pending' ? '待退款'
             : ($status == 'timeout' ? '超时单'
-            : translate('messages.' . $status)));
+            : ($status == 'customer_nudged' ? '客户催促'
+            : translate('messages.' . $status))));
         return view('vendor-views.order.list', compact('orders', 'status', 'st', 'restaurant'));
     }
 
@@ -895,6 +903,12 @@ class OrderController extends Controller
                 ->when($status == 'dine_in', function ($query) {
                     return $query->where('order_type', 'dine_in');
                 })
+                ->when($status == 'customer_nudged', function ($query) {
+                    $ids = NezhaCustomerNudge::openOrderIds(
+                        \App\CentralLogics\Helpers::get_restaurant_id()
+                    );
+                    return $query->whereIn('id', $ids ?: [0]);
+                })
                 ->when($status == 'scheduled', function ($query) use ($data) {
                     return $query->Scheduled()->where(function ($q) use ($data) {
                         if (config('order_confirmation_model') == 'restaurant' || $data) {
@@ -929,7 +943,9 @@ class OrderController extends Controller
                     });
                 })
                 ->Notpos()
-                ->NotDigitalOrder()
+                ->when($status !== 'customer_nudged', function ($query) {
+                    return $query->NotDigitalOrder();
+                })
                 ->hasSubscriptionToday()
                 ->where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())
                 ->orderBy('schedule_at', 'desc')

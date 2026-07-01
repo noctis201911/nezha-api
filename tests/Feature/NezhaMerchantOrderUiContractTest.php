@@ -98,13 +98,28 @@ class NezhaMerchantOrderUiContractTest extends TestCase
     {
         $blade = file_get_contents(resource_path('views/vendor-views/order/list.blade.php'));
 
-        $this->assertStringContainsString('Currency::whereIn', $blade);
+        $this->assertStringContainsString("business_settings", $blade);
+        $this->assertStringContainsString("nezha_rate_cny_to_amd", $blade);
+        $this->assertStringContainsString("nezha_rate_usd_to_amd", $blade);
+        $this->assertStringNotContainsString('Currency::whereIn', $blade);
         $this->assertStringContainsString('nz-order-converted-amounts', $blade);
-        $this->assertStringContainsString("'USD'", $blade);
         $this->assertStringContainsString("'CNY'", $blade);
+        $this->assertStringContainsString("'USD'", $blade);
+        $this->assertLessThan(strpos($blade, "'USD'"), strpos($blade, "'CNY'"));
         $this->assertStringContainsString('offline_payment_formater', $blade);
         $this->assertStringContainsString('nz-payment-proof-thumb', $blade);
         $this->assertStringContainsString('nzProofModal', $blade);
+    }
+
+    public function testMerchantOrderListSupportsCustomerNudgeStatus(): void
+    {
+        $blade = file_get_contents(resource_path('views/vendor-views/order/list.blade.php'));
+        $controller = file_get_contents(app_path('Http/Controllers/Vendor/OrderController.php'));
+
+        $this->assertStringContainsString("'customer_nudged'", $blade);
+        $this->assertStringContainsString('客户催促', $blade);
+        $this->assertStringContainsString('NezhaCustomerNudge::openOrderIds', $controller);
+        $this->assertStringContainsString("'customer_nudged'", $controller);
     }
 
     public function testMerchantOrderSidebarShowsAllStatusesWithoutMoreFold(): void
@@ -124,6 +139,23 @@ class NezhaMerchantOrderUiContractTest extends TestCase
             $this->assertStringContainsString("restaurant-panel/order/list/{$status}", $blade);
             $this->assertStringContainsString("route('vendor.order.list',['{$status}'])", $blade);
         }
+    }
+
+    public function testMerchantOrderSidebarKeepsCustomerNudgeAboveOfflinePendingWithAlarmBadge(): void
+    {
+        $blade = file_get_contents(resource_path('views/layouts/vendor/partials/_sidebar.blade.php'));
+
+        $customerNudge = strpos($blade, "restaurant-panel/order/list/customer_nudged");
+        $offlinePending = strpos($blade, "restaurant-panel/order/list/offline_pending");
+
+        $this->assertNotFalse($customerNudge);
+        $this->assertNotFalse($offlinePending);
+        $this->assertLessThan($offlinePending, $customerNudge);
+        $this->assertStringContainsString('客户催促', $blade);
+        $this->assertStringContainsString('nz-customer-nudge-alert', $blade);
+        $this->assertStringContainsString('nz-customer-nudge-badge', $blade);
+        $this->assertStringContainsString('@keyframes nzNudgeBadgePulse', $blade);
+        $this->assertStringContainsString('NezhaCustomerNudge::count', $blade);
     }
 
     public function testRestaurantLoginLandsOnResponsiveOrderList(): void
