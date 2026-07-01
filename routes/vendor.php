@@ -101,6 +101,9 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
                 Route::put('update/{advertisement}', [AdvertisementController::class, 'update'])->name('update');
                 Route::delete('delete/{id}', [AdvertisementController::class, 'destroy'])->name('destroy');
                 Route::get('/status', [AdvertisementController::class, 'status'])->name('status');
+                // [哪吒广告竞价 Slice B] 商家竞价推广 3 旋钮面板
+                Route::get('/promotion', [AdvertisementController::class, 'promotion'])->name('promotion');
+                Route::post('/promotion', [AdvertisementController::class, 'savePromotion'])->name('promotion.save');
             });
 
             Route::group(['middleware' => ['module:new_ads']], function () {

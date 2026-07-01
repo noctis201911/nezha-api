@@ -629,6 +629,15 @@
                                         <span class="text-truncate">{{translate('messages.List')}}</span>
                                     </a>
                                 </li>
+                                @if ((int) (\App\Models\BusinessSetting::where('key', 'nezha_ad_auction_status')->value('value') ?? 0) === 1)
+                                <li class="nav-item @yield('advertisement_promotion')">
+                                    <a class="nav-link " href="{{ route('vendor.advertisement.promotion') }}"
+                                       title="竞价推广">
+                                        <span class="tio-circle nav-indicator-icon"></span>
+                                        <span class="text-truncate">竞价推广</span>
+                                    </a>
+                                </li>
+                                @endif
                             </ul>
                         </li>
                     @endif

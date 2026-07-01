@@ -14,17 +14,123 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use App\Http\Requests\AdvertisementStoreRequest;
 use App\Http\Requests\AdvertisementUpdateRequest;
+use Illuminate\Support\Facades\DB;
 
 class AdvertisementController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
+    /**
+     * [哪吒广告竞价 Slice B] 商家竞价推广 3 旋钮面板. 出价对商家隐藏, 只给低/中/高 + 日预算.
+     * IDOR: restaurant_id 一律服务端 Helpers::get_restaurant_id() 取, 不信客户端.
+     */
+    public function promotion()
+    {
+        $restaurantId = Helpers::get_restaurant_id();
+        $restaurant   = \App\Models\Restaurant::find($restaurantId);
+        $vendorId     = $restaurant?->vendor_id;
+
+        $ad = Advertisement::where('restaurant_id', $restaurantId)
+            ->where('pricing_model', 'cpc')->orderByDesc('id')->first();
+
+        $adBalance = (float) (\App\Models\RestaurantWallet::where('vendor_id', $vendorId)->value('ad_balance') ?? 0);
+
+        // 今日已花 + 今日点击: 从 ad_events(对账源)取已计费点击(charged_amount>0), 与扣费口径一致
+        $spentToday = 0.0;
+        $clicksToday = 0;
+        if ($ad) {
+            $agg = DB::table('ad_events')
+                ->where('advertisement_id', $ad->id)
+                ->where('event_type', 'click')
+                ->where('charged_amount', '>', 0)
+                ->where('created_at', '>=', \Carbon\Carbon::today('Asia/Yerevan'))
+                ->selectRaw('COUNT(*) as clicks, COALESCE(SUM(charged_amount),0) as spent')
+                ->first();
+            $clicksToday = (int) ($agg->clicks ?? 0);
+            $spentToday  = (float) ($agg->spent ?? 0);
+        }
+
+        [$low, $mid, $high] = $this->cpcTierBids();
+        $currentTier = 'mid';
+        if ($ad && $ad->bid_amount !== null) {
+            $bid = (float) $ad->bid_amount;
+            $currentTier = $bid <= $low ? 'low' : ($bid >= $high ? 'high' : 'mid');
+        }
+        $enabled  = $ad && $ad->status === 'approved';
+        $maxDaily = (float) (\App\Models\BusinessSetting::where('key', 'nezha_ad_max_daily_budget')->first()?->value ?? 50000);
+
+        return view('vendor-views.advertisement.promotion', compact('ad', 'adBalance', 'spentToday', 'clicksToday', 'currentTier', 'enabled', 'maxDaily'));
+    }
+
+    /**
+     * [哪吒广告竞价 Slice B] 保存竞价推广. 自助即时(status=approved), 关时 paused.
+     * 一店一条 cpc advertisements 行(upsert); tier→出价跟随后台 floor/max_per_click, 商家看不到数字.
+     */
+    public function savePromotion(Request $request)
+    {
+        $maxDaily = (float) (\App\Models\BusinessSetting::where('key', 'nezha_ad_max_daily_budget')->first()?->value ?? 50000);
+        $request->validate([
+            'enabled'      => 'required|in:0,1',
+            'tier'         => 'required|in:low,mid,high',
+            'daily_budget' => 'required|numeric|min:1|max:' . $maxDaily,
+        ], [
+            'daily_budget.max' => '每天最多花不能超过平台上限 ' . rtrim(rtrim(number_format($maxDaily, 2, '.', ''), '0'), '.') . ' ֏。',
+            'daily_budget.min' => '每天最多花必须 > 0。',
+        ]);
+
+        $restaurantId = Helpers::get_restaurant_id();
+        [$low, $mid, $high] = $this->cpcTierBids();
+        $bid = $request->tier === 'low' ? $low : ($request->tier === 'high' ? $high : $mid);
+
+        if (auth('vendor_employee')->check()) {
+            $loable_type = 'App\Models\VendorEmployee';
+            $logable_id  = auth('vendor_employee')->id();
+        } else {
+            $loable_type = 'App\Models\Vendor';
+            $logable_id  = auth('vendor')->id();
+        }
+
+        $today = \Carbon\Carbon::now('Asia/Yerevan');
+
+        $ad = Advertisement::where('restaurant_id', $restaurantId)->where('pricing_model', 'cpc')->orderByDesc('id')->first();
+        if (!$ad) {
+            $ad = new Advertisement();
+            $ad->restaurant_id   = $restaurantId;
+            $ad->add_type        = 'restaurant_promotion';
+            $ad->pricing_model   = 'cpc';
+            $ad->slot            = 'list_top';
+            $ad->created_by_id   = $logable_id;
+            $ad->created_by_type = $loable_type;
+            $ad->priority        = null;
+            $ad->is_paid         = 0;
+        }
+        $ad->bid_amount   = $bid;
+        $ad->daily_budget = (float) $request->daily_budget;
+        $ad->status       = $request->enabled == '1' ? 'approved' : 'paused';
+        $ad->start_date   = $today->copy()->startOfDay()->toDateString();
+        $ad->end_date     = $today->copy()->addYear()->endOfDay()->toDateString();
+        $ad->save();
+
+        Toastr::success($request->enabled == '1' ? '竞价推广已保存并开启' : '竞价推广已保存(当前关闭)');
+        return back();
+    }
+
+    /** [哪吒广告竞价 Slice B] 低/中/高 档位 → 出价, 跟随后台 floor/max_per_click 自动(商家不可见数字). */
+    private function cpcTierBids(): array
+    {
+        $floor  = (float) (\App\Models\BusinessSetting::where('key', 'nezha_ad_floor_price')->first()?->value ?? 50);
+        $maxPer = (float) (\App\Models\BusinessSetting::where('key', 'nezha_ad_max_per_click')->first()?->value ?? 500);
+        $floor  = max(1, $floor);
+        $maxPer = max($floor, $maxPer);
+        return [$floor, round(($floor + $maxPer) / 2), $maxPer];
+    }
+
     public function index(Request $request)
     {
-       $total_adds= Advertisement::where('restaurant_id',Helpers::get_restaurant_id())->count();
+       $total_adds= Advertisement::where('restaurant_id',Helpers::get_restaurant_id())->where('pricing_model','!=','cpc')->count();
 
-       $adds=Advertisement::where('restaurant_id',Helpers::get_restaurant_id())
+       $adds=Advertisement::where('restaurant_id',Helpers::get_restaurant_id())->where('pricing_model','!=','cpc')
 
         ->when($request?->type == 'pending'  || $request?->ads_type === 'pending',function($query){
             $query->where('status','pending');

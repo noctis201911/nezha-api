@@ -94,5 +94,5 @@
 ## 10. 第二期落地进度
 
 - **Slice A · 超管侧（2026-07-02 · 提交见 CHANGELOG）**：✅ 竞价参数页（`admin/advertisement/auction-settings`，9 键 + 守卫 floor>0/封顶≥floor/日预算≥floor + 总开关翻转写 AdminAuditLog）+ 广告余额充值页（`admin/advertisement/ad-recharge`，复用 `AdBalanceLogic::credit` 单一真相源，只充值不扣减 + 二次确认 + 审计）+ 侧栏两入口。开关仍默认关、纯超管 UI 零 live 影响。验证：进程内真渲染两页 22/22（字段齐 + 隔离证伪 deposit 纹丝不动 + 事务 rollback 零残留）+ route:list 四路由注册。§3/§4#9 的 CLI 充值逻辑已抽到 `App\CentralLogics\AdBalanceLogic::credit`，CLI 与后台按钮共用。
-- **Slice B · 商家三旋钮看板**：未做（日预算 / 想多靠前低中高 / 已花费+点击数）。碰 vendor 侧 `routes/vendor.php` + vendor 侧栏，需与"优惠券重做"窗口协调。
+- **Slice B · 商家三旋钮看板（2026-07-02 上线）**：✅ 商家后台「广告→竞价推广」3 旋钮（开关 / 低中高 / 日预算）+ 只读 广告余额·今日已花·今日点击；一店一条 cpc `advertisements` 行(upsert)、tier→出价跟随 floor/max_per_click 自动、出价对商家隐藏；自助即时(status=approved)、IDOR 服务端取 restaurant_id；CPT 广告列表已过滤 cpc 行；侧栏菜单跟随总开关(关时隐藏)。零 live 影响(开关默认关 + ad_balance=0 惰性)。验证进程内真渲染 + upsert 20/20 + 门控 4/4。
 - **Slice C · 顾客端广告位**（首页位 / 列表竞价位 / 去首页横滑卡「推广」角标 / 点击·曝光事件接线）：未做；因碰真金"每次有效点击=一笔扣费"，开工前先走 `/debate` 三路对抗核验（业主 2026-07-02 拍板）。重点核验：点击事件不重复触发 / 不在渲染滚动时误发 / 尊重后端 dedup / 全不打标。
