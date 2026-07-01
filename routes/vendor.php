@@ -300,6 +300,7 @@ Route::group(['prefix' => 'withdraw-method', 'as' => 'wallet-method.', 'middlewa
             Route::get('quick-view', [OrderController::class, 'quick_view'])->name('quick-view');
             Route::get('quick-view-cart-item', [OrderController::class, 'quick_view_cart_item'])->name('quick-view-cart-item');
             Route::get('generate-invoice/{id}', [OrderController::class, 'generate_invoice'])->name('generate-invoice')->withoutMiddleware(['module:regular_order']);
+                Route::get('generate-invoice-batch', [OrderController::class, 'generate_invoice_batch'])->name('generate-invoice-batch')->withoutMiddleware(['module:regular_order']);
             Route::post('add-payment-ref-code/{id}', [OrderController::class, 'add_payment_ref_code'])->name('add-payment-ref-code');
 
             Route::get('orders-export/{status}', [OrderController::class, 'orders_export'])->name('export');

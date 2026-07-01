@@ -27,6 +27,19 @@
         .nz-print-settings label { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 700; }
         .nz-print-settings input { accent-color: #C4193E; }
         .nz-print-settings .btn { border-radius: 7px; }
+        .nz-row-check { display:none; width:16px; height:16px; accent-color:#C4193E; vertical-align:middle; cursor:pointer; }
+        body.nz-batch-mode .nz-row-check { display:inline-block; }
+        body.nz-batch-mode .nz-sl-num { display:none; }
+        .nz-batch-bar { display:none; align-items:center; flex-wrap:wrap; gap:12px; padding:9px 16px; border-bottom:1px solid #EDF1F5; background:#FFF7F8; }
+        body.nz-batch-mode .nz-batch-bar { display:flex; }
+        .nz-batch-bar label { display:inline-flex; align-items:center; gap:6px; margin:0; font-size:13px; font-weight:700; color:#7c1228; cursor:pointer; }
+        .nz-batch-bar label input { width:16px; height:16px; accent-color:#C4193E; }
+        .nz-batch-bar .nz-batch-count { font-size:13px; color:#7c1228; font-weight:700; }
+        .nz-batch-spacer { flex:1; }
+        .nz-batch-cancel { border:1px solid #D8E0EA; background:#fff; color:#475467; border-radius:7px; padding:6px 12px; font-size:13px; font-weight:700; cursor:pointer; }
+        .nz-batch-go { border:0; background:#C4193E; color:#fff; border-radius:7px; padding:6px 14px; font-size:13px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+        .nz-batch-go:disabled { opacity:.5; cursor:not-allowed; }
+        @media print { .nz-batch-bar { display:none !important; } }
         .nz-order-id { font-size: 16px; font-weight: 800; color: #102A4C; }
         .nz-order-foods { font-size: 12px; color: #6B7280; max-width: 220px; white-space: normal; line-height: 1.4; margin-top: 4px; }
         .nz-order-time strong { display: block; font-size: 14px; color: #102A4C; }
@@ -384,7 +397,15 @@
                 <button type="button" class="btn btn-sm btn-outline-primary" id="nzTestPrintBtn">
                     <i class="tio-print mr-1"></i>测试打印
                 </button>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="nzBatchOpenBtn"><i class="tio-print mr-1"></i>批量打印</button>
                 <span class="text-muted" style="font-weight:600;">未确认接入时不会自动弹打印，避免误触。</span>
+            </div>
+            <div class="nz-batch-bar d-print-none" id="nzBatchBar">
+                <label><input type="checkbox" id="nzBatchAll">全选本页</label>
+                <span class="nz-batch-count" id="nzBatchCount">已选 0 单</span>
+                <span class="nz-batch-spacer"></span>
+                <button type="button" class="nz-batch-cancel" id="nzBatchCancel">取消</button>
+                <button type="button" class="nz-batch-go" id="nzBatchGo" disabled><i class="tio-print"></i>打印选中 (0)</button>
             </div>
             <!-- End Header -->
 
@@ -429,7 +450,7 @@
                                 }
                             @endphp
                             <td class="" data-label="{{translate('messages.sl')}}">
-                                {{$key+$orders->firstItem()}}
+                                <input type="checkbox" class="nz-row-check" aria-label="选择本单" data-nz-oid="{{$order['id']}}"><span class="nz-sl-num">{{$key+$orders->firstItem()}}</span>
                             </td>
                             <td class="table-column-pl-0" data-label="订单">
                                 <div class="nz-order-primary-line">
@@ -1071,6 +1092,38 @@
                 return false;
             };
 
+            function initBatchPrint(){
+                var openBtn = document.getElementById('nzBatchOpenBtn');
+                var bar = document.getElementById('nzBatchBar');
+                var allCb = document.getElementById('nzBatchAll');
+                var countEl = document.getElementById('nzBatchCount');
+                var goBtn = document.getElementById('nzBatchGo');
+                var cancelBtn = document.getElementById('nzBatchCancel');
+                if (!openBtn || !bar || !goBtn || !allCb) return;
+                function rowChecks(){ return Array.prototype.slice.call(document.querySelectorAll('.nz-row-check')); }
+                function selectedIds(){ return rowChecks().filter(function(c){ return c.checked; }).map(function(c){ return c.getAttribute('data-nz-oid'); }).filter(Boolean); }
+                function refresh(){
+                    var ids = selectedIds();
+                    var checks = rowChecks();
+                    countEl.textContent = '已选 ' + ids.length + ' 单';
+                    goBtn.disabled = ids.length === 0;
+                    goBtn.innerHTML = '<i class="tio-print"></i>打印选中 (' + ids.length + ')';
+                    allCb.checked = checks.length > 0 && ids.length === checks.length;
+                }
+                function enter(){ document.body.classList.add('nz-batch-mode'); refresh(); }
+                function exit(){ document.body.classList.remove('nz-batch-mode'); rowChecks().forEach(function(c){ c.checked = false; }); allCb.checked = false; refresh(); }
+                openBtn.addEventListener('click', function(){ if (document.body.classList.contains('nz-batch-mode')) { exit(); } else { enter(); } });
+                cancelBtn.addEventListener('click', exit);
+                allCb.addEventListener('change', function(){ rowChecks().forEach(function(c){ c.checked = allCb.checked; }); refresh(); });
+                document.addEventListener('change', function(e){ if (e.target && e.target.classList && e.target.classList.contains('nz-row-check')) refresh(); });
+                goBtn.addEventListener('click', function(){
+                    var ids = selectedIds();
+                    if (!ids.length) return;
+                    var url = "{{ route('vendor.order.generate-invoice-batch') }}" + '?ids=' + encodeURIComponent(ids.join(',')) + '&nz_auto_print=1';
+                    openInvoiceForPrint(url);
+                });
+            }
+
             function initPrepPrompt(){
                 document.addEventListener('click', function(e){
                     var t = e.target;
@@ -1141,6 +1194,7 @@
                 initTodayRev();
                 initRowMenu();
                 initPrepPrompt();
+                initBatchPrint();
 
                 var ready = $('nzPrintReady');
                 var auto = $('nzAutoPrintReady');

@@ -866,6 +866,29 @@ class OrderController extends Controller
         return back();
     }
 
+    public function generate_invoice_batch(Request $request)
+    {
+        // 哪吒 P2b: 批量打印 -- 一页多票, 只弹一次打印。仅本店订单(IDOR安全) + 与单票同权限校验 + 上限100单。
+        $ids = collect(explode(',', (string) $request->query('ids', '')))
+            ->map(fn ($v) => (int) trim($v))->filter()->unique()->take(100)->values()->all();
+        $invoiceSettings = DataSetting::invoiceSettings();
+        $regular = Helpers::employee_module_permission_check('regular_order');
+        $subscription = Helpers::employee_module_permission_check('subscription_order');
+        $orders = Order::whereIn('id', $ids)
+            ->where('restaurant_id', Helpers::get_restaurant_id())
+            ->with(['payments', 'details', 'customer', 'restaurant'])
+            ->orderByRaw('FIELD(id, ' . (count($ids) ? implode(',', $ids) : '0') . ')')
+            ->get()
+            ->filter(function ($order) use ($regular, $subscription) {
+                if ($regular && $subscription) return true;
+                if ($regular && !$order->subscription_id) return true;
+                if ($subscription && $order->subscription_id) return true;
+                return false;
+            })
+            ->values();
+        return view('nz_invoice_batch', compact('orders', 'invoiceSettings'));
+    }
+
     public function add_payment_ref_code(Request $request, $id)
     {
         Order::where(['id' => $id, 'restaurant_id' => Helpers::get_restaurant_id()])->update([
