@@ -17,6 +17,8 @@ class NezhaMerchantOrderUiContractTest extends TestCase
         $this->assertStringContainsString('nz-order-step-form', $blade);
         $this->assertStringContainsString('nzAutoPrintReady', $blade);
         $this->assertStringNotContainsString("translate('messages.delivery_type')</th>", $blade);
+        $this->assertStringNotContainsString('text-capitalze opacity-7', $blade);
+        $this->assertStringNotContainsString("translate('messages.delivery')}}</span>", $blade);
     }
 
     public function testMerchantOrderSubStatusPagesHaveCompleteOperatorGuidance(): void

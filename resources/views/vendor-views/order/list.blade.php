@@ -487,21 +487,6 @@
                                         ⏱ {{ \App\CentralLogics\NezhaOrderTimeout::humanDuration($nzTo['elapsed_minutes']) }}
                                     </span>
                                 @endif
-                                <div class="text-capitalze opacity-7">
-                                    @if($order['order_type']=='take_away')
-                                        <span>
-                                            {{translate('messages.take_away')}}
-                                        </span>
-                                        @elseif ($order['order_type'] == 'dine_in')
-                                            <span>
-                                                {{ translate('Dine_in') }}
-                                            </span>
-                                        @else
-                                        <span>
-                                            {{translate('messages.delivery')}}
-                                        </span>
-                                    @endif
-                                </div>
                             </td>
                             <td class="text-center nz-order-mobile-actions" data-label="下一步操作">
                                 @php
