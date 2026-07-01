@@ -144,10 +144,10 @@ class OrderLogic
                 $restaurant_d_amount=  $order->restaurant_discount_amount;
                 Helpers::expenseCreate( amount:$restaurant_d_amount,type:'discount_on_product',datetime:now(),order_id:  $order->id,created_by:  'vendor',restaurant_id:$order?->restaurant?->id);
             } else{
-                $amount_admin = $comission?($order->restaurant_discount_amount/ 100) * $comission:0;
+                $amount_admin = 0; // 哪吒[折扣账务定性·L1 2026-07-02] 商家自掏折扣(满减/POS)100%记vendor·平台0出资; 佣金已按减后额计(平台少收D×率=让利分摊·属"少收"非"支出"),不得再记admin_expense否则报表重复扣净利+虚显平台补贴,冲突L1"平台不出资"。见INVARIANTS+CHANGELOG 2026-07-02。
                 $restaurant_d_amount=  $order->restaurant_discount_amount- $amount_admin;
                 Helpers::expenseCreate( amount:$restaurant_d_amount,type:'discount_on_product',datetime:now(),order_id:  $order->id,created_by:  'vendor',restaurant_id:$order?->restaurant?->id);
-                Helpers::expenseCreate( amount:$amount_admin,type:'discount_on_product',datetime:now(),order_id:  $order->id,created_by:  'admin');
+                // 哪吒[L1 2026-07-02] admin 出资拆分已取消($amount_admin=0), 不再写 admin discount_on_product 行。
             }
         }
 

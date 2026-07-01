@@ -963,6 +963,7 @@ class Helpers
 
 
             $data['characteristics'] = $data->characteristics()->pluck('characteristic')->toArray();
+            $data['tiered_discount'] = self::get_tiered_discount_summary($data); // 哪吒[多级满减] 顾客端档位摘要(无活动=null)
             unset($data['rating']);
             unset($data['campaigns']);
             unset($data['pivot']);
@@ -5203,6 +5204,125 @@ class Helpers
         }
 
         return $discount ?? 0;
+    }
+
+    // 哪吒[多级满减] 自包含加载本店满减活动+档位: 不依赖 eager/validate() 关系(validate 的 whereDate 对 NULL 日期会排除、
+    //   whereTime 不处理跨午夜)。故这里自查活动, 时段/NULL 日期/跨午夜一律交 tieredActivityActive 在 PHP 判。
+    //   灰度关 / 无活动 / 时段外 / 无档 → null。order 计算与顾客端序列化共用, 保证两端一致。
+    public static function loadTieredActivity($restaurant)
+    {
+        if (!self::get_business_settings('nezha_tiered_discount_status')) {
+            return null;
+        }
+        $rid = is_object($restaurant) ? ($restaurant->id ?? null) : $restaurant;
+        if (!$rid) {
+            return null;
+        }
+        $activity = \App\Models\Discount::with(['tiers' => function ($q) { $q->orderBy('min_purchase'); }])
+            ->where('restaurant_id', $rid)->first();
+        if (!$activity || !self::tieredActivityActive($activity)) {
+            return null;
+        }
+        if (!$activity->tiers || $activity->tiers->isEmpty()) {
+            return null;
+        }
+        return $activity;
+    }
+
+    // 哪吒[多级满减] 顾客端序列化: 本店满减档位摘要(供前端渲染满减芯片/凑单助手/结算预览)。
+    //   无有效活动 → null(顾客端满减标签空态消失)。tiers 已按门槛升序。
+    public static function get_tiered_discount_summary($restaurant)
+    {
+        $activity = self::loadTieredActivity($restaurant);
+        if (!$activity) {
+            return null;
+        }
+        return [
+            'active' => true,
+            'tiers'  => $activity->tiers->map(function ($t) {
+                return [
+                    'min_purchase'  => (float) $t->min_purchase,
+                    'discount_type' => $t->discount_type,
+                    'discount'      => (float) $t->discount,
+                    'max_discount'  => (float) $t->max_discount,
+                ];
+            })->values(),
+        ];
+    }
+
+    // 哪吒[多级满减] 取该店满减活动中"订单额满足的、实得减额最大"的一档(商家自掏·不叠加)。
+    // $order_amount = 商品券前金额(product_price·不含加料/配送)。灰度关或无有效档返回 null。
+    public static function getTieredDiscount($restaurant, $order_amount)
+    {
+        $activity = self::loadTieredActivity($restaurant);
+        if (!$activity) {
+            return null;
+        }
+        $tiers = $activity->tiers;
+        $best = null;
+        $bestAmt = 0;
+        foreach ($tiers as $t) {
+            if ($order_amount < $t->min_purchase) {
+                continue;
+            }
+            if ($t->discount_type == 'percent') {
+                $amt = $order_amount * $t->discount / 100;
+                if ($t->max_discount > 0 && $amt > $t->max_discount) {
+                    $amt = $t->max_discount;
+                }
+            } else {
+                $amt = $t->discount;
+            }
+            if ($amt > $order_amount) {
+                $amt = $order_amount;
+            }
+            if ($amt > $bestAmt) {
+                $bestAmt = $amt;
+                $best = $t;
+            }
+        }
+        if (!$best || $bestAmt <= 0) {
+            return null;
+        }
+        return [
+            'discount_amount' => round($bestAmt, config('round_up_to_digit')),
+            'discount_type' => $best->discount_type,
+            'discount' => (float) $best->discount,
+            'min_purchase' => (float) $best->min_purchase,
+            'max_discount' => (float) $best->max_discount,
+            'tier_id' => $best->id,
+        ];
+    }
+
+    // 哪吒[多级满减] 活动时段有效性(日期+时段·时段支持跨午夜)。
+    public static function tieredActivityActive($activity)
+    {
+        // 哪吒[多级满减·本店总开关] 商家把本店满减关掉(status=0)→活动失效; status 缺省(null)/1 视为开。
+        if (isset($activity->status) && (int) $activity->status === 0) {
+            return false;
+        }
+        $today = date('Y-m-d');
+        $now = date('H:i:s');
+        if (!empty($activity->start_date) && $activity->start_date > $today) {
+            return false;
+        }
+        if (!empty($activity->end_date) && $activity->end_date < $today) {
+            return false;
+        }
+        $s = $activity->start_time;
+        $e = $activity->end_time;
+        if ($s && $e) {
+            if ($s <= $e) {
+                if ($now < $s || $now > $e) {
+                    return false;
+                }
+            } else {
+                if ($now < $s && $now > $e) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     public static function getFinalCalculatedTax($details_data, $additionalCharges, $totalDiscount, $price, $storeId, $storeData = true)

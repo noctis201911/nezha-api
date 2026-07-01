@@ -542,6 +542,17 @@
                         </li>
                     @endif
 
+                    @if ((int) (\App\Models\BusinessSetting::where('key', 'nezha_tiered_discount_status')->value('value') ?? 0) === 1)
+                        <li class="navbar-vertical-aside-has-menu {{ Request::is('restaurant-panel/nezha-discount*') ? 'active' : '' }}">
+                            <a class="js-navbar-vertical-aside-menu-link nav-link"
+                               href="{{ route('vendor.nezha-discount.index') }}"
+                               title="多级满减">
+                                <i class="tio-percent nav-icon"></i>
+                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">多级满减</span>
+                            </a>
+                        </li>
+                    @endif
+
                     <!-- End Promotion Management -->
 
                     <!-- Help & Support -->

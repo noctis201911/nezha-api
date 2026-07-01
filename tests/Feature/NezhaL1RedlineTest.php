@@ -138,4 +138,16 @@ class NezhaL1RedlineTest extends TestCase
         $this->assertNull(NezhaSanctionScreen::screen_address($cleanAddr),
             'L1-6 异常: 未入名单的地址被误命中(假阳性会误拒正常顾客)。');
     }
+
+    // ───────────────── L1-9 平台不出资促销(商家自掏折扣账务定性) ─────────────────
+
+    /** 商家自掏折扣(满减/POS·discount_on_product_by=vendor) 不得把 折扣×佣金率 记 admin_expense; 否则报表虚显平台补贴+重复扣净利, 违反 L1-9 / L1-1"平台不出资"。结构守卫: 禁止恢复 amount_admin 的 admin 拆分。 */
+    public function test_L1_9_vendor_funded_discount_charges_no_platform_subsidy(): void
+    {
+        $src = file_get_contents(base_path('app/CentralLogics/OrderLogic.php'));
+        $this->assertStringNotContainsString('$amount_admin = $comission?', $src,
+            'L1-9 违反: vendor 折扣的"折扣×佣金率"admin 拆分被恢复 → 商家自掏促销被误记为平台出资(账务定性红线, 见 INVARIANTS L1-9)。');
+        $this->assertStringContainsString('商家自掏折扣(满减/POS)100%记vendor', $src,
+            'L1-9 违反: vendor 折扣 100% 记 vendor 的账务定性实现/说明被移除。');
+    }
 }

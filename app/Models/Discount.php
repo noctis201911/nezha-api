@@ -10,7 +10,7 @@ class Discount extends Model
     use HasFactory;
 
     protected $fillable = [
-        'start_date','end_date','start_time','end_time','min_purchase','max_discount','discount','discount_type','restaurant_id',
+        'start_date','end_date','start_time','end_time','min_purchase','max_discount','discount','discount_type','restaurant_id','status',
     ];
     protected $casts = [
         'min_purchase' => 'float',
@@ -24,6 +24,12 @@ class Discount extends Model
     public function restaurant()
     {
         return $this->belongsTo(Restaurant::class);
+    }
+
+    // 哪吒[多级满减] 本店满减活动下的多档门槛(按门槛升序)。见 discount_tiers 表 / DiscountTier 模型。
+    public function tiers()
+    {
+        return $this->hasMany(DiscountTier::class)->orderBy('min_purchase');
     }
 
     public function scopeValidate($query)

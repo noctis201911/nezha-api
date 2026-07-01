@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Vendor\AddOnController;
 use App\Http\Controllers\Vendor\AdvertisementController;
+use App\Http\Controllers\Vendor\NezhaTieredDiscountController;
 use App\Http\Controllers\Vendor\BusinessSettingsController;
 use App\Http\Controllers\Vendor\CampaignController;
 use App\Http\Controllers\Vendor\CategoryController;
@@ -252,6 +253,12 @@ Route::group(['prefix' => 'withdraw-method', 'as' => 'wallet-method.', 'middlewa
             Route::get('check-code', [CouponController::class, 'checkCode'])->name('check.code');
             Route::get('view/{coupon}', [CouponController::class, 'view'])->name('view');
             Route::get('coupon-export', [CouponController::class, 'coupon_export'])->name('coupon_export');
+        });
+
+        // 哪吒[多级满减] 商家自助配置本店满额自动减(多档)。菜单侧栏按 nezha_tiered_discount_status 门控。
+        Route::group(['prefix' => 'nezha-discount', 'as' => 'nezha-discount.'], function () {
+            Route::get('/', [NezhaTieredDiscountController::class, 'index'])->name('index');
+            Route::post('save', [NezhaTieredDiscountController::class, 'save'])->name('save');
         });
 
         Route::group(['prefix' => 'addon', 'as' => 'addon.', 'middleware' => ['module:addon','subscription:addon']], function () {
