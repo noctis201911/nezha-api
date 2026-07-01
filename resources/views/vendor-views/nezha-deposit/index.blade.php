@@ -24,7 +24,13 @@
     $q30From    = \Carbon\Carbon::now($tzn)->subDays(29)->toDateString();
     $adFee = (float) ($byType['advertisement_fee'] ?? 0);
 @endphp
-<div class="content container-fluid">
+<style>
+    /* 对账中心: 把这页的次要小字抬到可读字号 + 加深浅灰(仅本页作用域) */
+    .nz-recon .small, .nz-recon small { font-size: 14px; }
+    .nz-recon .text-muted { color: #5b6472; }
+    .nz-recon .table td, .nz-recon .table th { font-size: 14px; }
+</style>
+<div class="content container-fluid nz-recon">
     <div class="page-header">
         <div class="row align-items-center">
             <div class="col-sm mb-2 mb-sm-0">
@@ -205,8 +211,8 @@
     {{-- 充值说明 --}}
     <div class="card mb-3">
         <div class="card-body">
-            <h6 class="mb-2">{{ translate('如何充值?') }}</h6>
-            <p class="text-muted small mb-0">{{ translate('请按平台告知的方式把预存佣金转给平台, 平台运营核实后会为您入账, 余额即时增加。预存佣金是您预付给平台的佣金(B2B), 与顾客货款无关。如需充值请联系平台客服。') }}</p>
+            <h5 class="mb-2">{{ translate('如何充值?') }}</h5>
+            <p class="mb-0" style="font-size: 16px; line-height: 1.75; color: #475569;">{{ translate('请按平台告知的方式把预存佣金转给平台, 平台运营核实后会为您入账, 余额即时增加。预存佣金是您预付给平台的佣金(B2B), 与顾客货款无关。如需充值请联系平台客服。') }}</p>
         </div>
     </div>
 
