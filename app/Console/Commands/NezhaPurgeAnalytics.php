@@ -62,6 +62,11 @@ class NezhaPurgeAnalytics extends Command
             $q = DB::table('nezha_search_misses')->where('last_seen_at', '<', $sCut);
             $delSearch = $dry ? (clone $q)->count() : $q->delete();
         }
+        if (Schema::hasTable('nezha_search_terms')) {
+            $sCut2 = Carbon::now()->subDays(180);
+            $q = DB::table('nezha_search_terms')->where('last_seen_at', '<', $sCut2);
+            $delSearch += $dry ? (clone $q)->count() : $q->delete();
+        }
 
         $msg = ($dry ? '[DRY] ' : '') . "回填转化 {$marked} 条; 清理加购事件(>{$days}天) {$delCart} 条; 清理冷搜索词(>180天) {$delSearch} 条。";
         $this->info($msg);

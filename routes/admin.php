@@ -143,6 +143,12 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('{id}', [NezhaConsolidationController::class, 'show'])->name('show');
         });
 
+        // 哪吒 方案C: 搜索需求(全量热门搜索 + 搜了没结果)
+        Route::group(['prefix' => 'nezha-search-demand', 'as' => 'nezha-search-demand.'], function () {
+            Route::get('/', [\App\Http\Controllers\Admin\NezhaSearchDemandController::class, 'index'])->name('index');
+            Route::get('export', [\App\Http\Controllers\Admin\NezhaSearchDemandController::class, 'export'])->name('export');
+        });
+
 Route::middleware('module:provide_dm_earning')->group(function () {
             Route::get('provide-deliveryman-earnings', [ProvideDMEarningController::class, 'index'])->name('provide-deliveryman-earnings.index');
             Route::post('provide-deliveryman-earnings', [ProvideDMEarningController::class, 'store'])->name('provide-deliveryman-earnings.store');

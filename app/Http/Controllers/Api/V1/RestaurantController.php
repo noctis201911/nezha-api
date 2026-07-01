@@ -157,6 +157,7 @@ class RestaurantController extends Controller
         rating_3_plus:$request->rating_3_plus,rating_4_plus:$request->rating_4_plus ,rating_5:$request->rating_5 ,
         discounted: $request->discounted ,sort_by: $request->sort_by , dine_in:  $request->dine_in , open:  $request->open,cuisine: $cuisine , additional_data:$additional_data);
         $restaurants['restaurants'] = Helpers::restaurant_data_formatting( data: $restaurants['restaurants'],multi_data: true);
+        if (!empty($request['name'])) { \App\CentralLogics\NezhaUsageLog::searchTerm($request['name'], 'restaurant', $zone_id, (int) ($restaurants['total_size'] ?? 0) === 0); } // 方案C 全量搜索埋点
         if ((int) ($restaurants['total_size'] ?? 0) === 0) { \App\CentralLogics\NezhaUsageLog::searchMiss($request['name'] ?? null, 'restaurant', $zone_id); } // 方案C 埋点(失败不影响)
         return response()->json($restaurants, 200);
     }

@@ -234,6 +234,7 @@ class ProductController extends Controller
         ];
 
         $data['products'] = Helpers::product_data_formatting(data:$data['products'],multi_data: true, trans:false,local: app()->getLocale());
+        if (!empty($request['name'])) { \App\CentralLogics\NezhaUsageLog::searchTerm($request['name'], 'product', $zone_id, (int) ($data['total_size'] ?? 0) === 0); } // 方案C 全量搜索埋点
         if ((int) ($data['total_size'] ?? 0) === 0) { \App\CentralLogics\NezhaUsageLog::searchMiss($request['name'] ?? null, 'product', $zone_id); } // 方案C 埋点(失败不影响)
         return response()->json($data, 200);
     }

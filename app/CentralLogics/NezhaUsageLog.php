@@ -52,6 +52,44 @@ class NezhaUsageLog
         }
     }
 
+    /**
+     * 哪吒 方案C: 全量搜索埋点 —— 记录「每一次」搜索(含搜到的), 聚合计数, 匿名(不存 user_id), 入库前脱敏。
+     * zero_result_count 累加该词此次是否 0 结果, 供后台看"热门词却常搜不到"= 强需求信号。
+     * 总开关 nezha_search_log_status(默认开, 仅显式 '0' 关; 走缓存设置不每搜查库)。失败绝不影响搜索主流程。
+     */
+    public static function searchTerm($keyword, string $type, $zoneId = null, bool $isZero = false): void
+    {
+        try {
+            if ((string) Helpers::get_business_settings('nezha_search_log_status') === '0') {
+                return; // 总开关关
+            }
+            if (!Schema::hasTable('nezha_search_terms')) {
+                return;
+            }
+            $kw = trim((string) $keyword);
+            if ($kw === '' || $kw === 'null' || mb_strlen($kw) > 60) {
+                return;
+            }
+            $kw = self::redactPii($kw);
+            $zid = is_array($zoneId) ? (int) ($zoneId[0] ?? 0) : (int) $zoneId;
+            if ($zid > 0 && Schema::hasTable('zones')) {
+                $valid = Cache::remember('nz_zone_exists_' . $zid, 600, function () use ($zid) {
+                    return DB::table('zones')->where('id', $zid)->exists();
+                });
+                if (!$valid) { $zid = 0; }
+            }
+            $now = now()->format('Y-m-d H:i:s');
+            $zeroInc = $isZero ? 1 : 0;
+            DB::statement(
+                'INSERT INTO nezha_search_terms (keyword, search_type, zone_id, hit_count, zero_result_count, last_seen_at, created_at, updated_at) '
+                . 'VALUES (?, ?, ?, 1, ?, ?, ?, ?) '
+                . 'ON DUPLICATE KEY UPDATE hit_count = hit_count + 1, zero_result_count = zero_result_count + VALUES(zero_result_count), last_seen_at = VALUES(last_seen_at), updated_at = VALUES(updated_at)',
+                [$kw, $type, $zid, $zeroInc, $now, $now, $now]
+            );
+        } catch (\Throwable $e) {
+        }
+    }
+
     public static function cartAdd($itemId, $restaurantId, $userId, $isGuest): void
     {
         try {
