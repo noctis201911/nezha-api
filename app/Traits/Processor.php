@@ -40,9 +40,12 @@ trait  Processor
             $lang_array = include(base_path('resources/lang/' . 'en' . '/lang.php'));
             $processed_key = ucfirst(str_replace('_', ' ', str_ireplace(['\'', '"', ',', ';', '<', '>', '?'], ' ', $key)));
             if (!array_key_exists($key, $lang_array)) {
-                $lang_array[$key] = $processed_key;
-                $str = "<?php return " . var_export($lang_array, true) . ";";
-                file_put_contents(base_path('resources/lang/' . 'en' . '/lang.php'), $str);
+                // 哪吒[复发根因修 2026-07-02]: 仅本地自动回写 en/lang.php; 生产/测试禁写(同 drift 根因); 缺失 key 仍返回 fallback
+                if (app()->environment('local')) {
+                    $lang_array[$key] = $processed_key;
+                    $str = "<?php return " . var_export($lang_array, true) . ";";
+                    file_put_contents(base_path('resources/lang/' . 'en' . '/lang.php'), $str);
+                }
                 $result = $processed_key;
             } else {
                 $result = __('lang.' . $key);

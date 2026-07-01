@@ -33,7 +33,10 @@ if (! function_exists('translate')) {
             if (!array_key_exists($key, $lang_array)) {
                 // 仅在英语 locale 时自动写入新 key；非英语 locale 只展示 fallback，
                 // 避免 zh/messages.php 被自动填满英文值导致无法区分"已翻译"和"未翻译"
-                if ($local === 'en') {
+                // 哪吒[复发根因修 2026-07-02]: 仅本地(APP_ENV=local)自动回写 lang; 生产/测试/staging 一律禁写——
+                // translate() 每遇缺失 key 就重写整个 messages.php, 在共享 worktree 持续制造未提交 drift(反复被 commit -am 卷入)+每请求重写9千行。
+                // 缺失 key 仍返回 humanized fallback(用户无感), 只去掉写盘副作用。
+                if ($local === 'en' && app()->environment('local')) {
                     $lang_array[$key] = $processed_key;
                     $str = "<?php return " . var_export($lang_array, true) . ";";
                     file_put_contents(base_path('resources/lang/' . $local . '/messages.php'), $str);
