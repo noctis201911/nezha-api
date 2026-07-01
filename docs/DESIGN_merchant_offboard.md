@@ -1,7 +1,7 @@
 # DESIGN — 商家退出结算/押金账户 实现设计（硬化 spec）
 
 > **配套**：政策/决策正本 = `docs/PLAN_merchant_offboard.md`（§8 红队结论 + L1 决策）。本文件把 §8.2 五阻断项 + §8.3 应修**落成贴真实代码的可实现设计**。
-> **状态**：设计草案（2026-07-01 硬化）。🔴 **仍不进代码**——本设计须先过一轮 `/debate` 核验 + 用户批准，才进实现。
+> **状态**：设计草案（2026-07-01 硬化）。**第二轮 /debate 已跑：三方 verdict 一致「需补后可实现」（见 §K）**。🔴 **仍不进代码**——待用户拍板 §K.5 三处 + 出 DESIGN v2 折叠 K.1/K.2 后才进实现。
 > **前置已定**：押金**法币-only、平台不持 USDT**（PLAN §4.3/§8.5）；L1-8 已记 `INVARIANTS.md`（commit 926d388）。
 > **代码锚（本会话已核实，非红队转述）**：扣佣 `OrderLogic.php:262-340`(DB::beginTransaction)+`:278`(lockForUpdate deposit_balance)；返佣 `:723-785`+`:739`；结算幂等先例 `settle_delivered :401`+`:416`(OrderTransaction::exists)；制裁引擎 `NezhaSanctionScreen::screen_address`(仅链上地址)+KYC 名筛 `screen_status`；对账二元三目 `Vendor/NezhaDepositController.php:108/:150`；退款 `OrderController::refund_request :1668`。
 
@@ -158,6 +158,30 @@ DB::transaction(function() use ($vendorId) {
 4. **罚款(penalty)** 从哪来：deduction 里"未结佣金"清楚(commission_deduction 累计)，"罚款"目前代码无此概念，需先定义来源/写入路径，否则 net 公式里的罚款项悬空。
 5. 门②"真实相关性甄别"的判定标准：谁、多快、被驳回举报的申诉回路（别把"防恶意举报"做成"商家可甩掉真实举报")。
 6. 非直付(网关)单若存在：其 refund_requested 是真实退款(合法阻断退出)非滥用——确认哪吒是否有非直付订单，无则 E 只剩举报/风控两门。
+
+---
+
+## K. 第二轮 /debate 结论（2026-07-01 · 三路独立核验 DESIGN 本身）
+> 三路红队(资金正确性/合规落地/实现可行性)独立核验本设计。**三方 verdict 一致：需补后可实现**(骨架被三队独立确认站得住,非推倒重做;下列 5🔴+9🟡 补齐后可进实装)。完整报告存本地 scratch debate2_1/2/3。
+
+### K.1 🔴 必修(写代码前解决)
+- **K-A 冻结接缝错+覆盖不全**(资金+实现双队·最强交叉):§C1 让 `nezha_commission_active` settling 返 false——但 `nezha_deposit_below_threshold:2308` 首行依赖它→ `nezha_store_paused` 返 false → **settling 店照样接单**(诉求反了);且真正污染净额的 `refund_reversal:740` 门是 `is_direct_pay` **压根不看** commission_active。全仓 6 条写 deposit_balance 只堵 2 条。→**修**:停接单在 `nezha_store_paused` 独立加 `||offboard_status==='settling'`;停扣佣在 `OrderLogic:276` 调用点独立加判断;补全漏的 4 条(refund_reversal/广告下架退费/admin手改/ChargeAdOnStart cron);**并加"paid 事务内重读真实余额 vs approved 快照,不一致就 abort 转人工"兜底**(漏没漏冻结都不错退=§C 核心防呆)。
+- **K-B net 公式悬空**(资金):`penalty` 概念代码中不存在,`未结佣金` 未定义(commission_deduction 下单即扣、已不在 deposit)。→**修**:本版删 penalty 项;`未结佣金` 定义为 settling 首步强制跑完在途 `settle_delivered` 后的确定值。
+- **K-C 制裁门读入驻旧快照**(合规):`screen_status` 入驻当刻写,OFAC 名单每日刷新却不重算它→入驻干净、后来上名单的商家退出照付(L1-6 退款时点空转)。→**修**:§D 用当前 `nezha_sanction_names` 实时 RE-run `NezhaKycScreen::screen_names`,不读 `screen_status` 旧列;possible/inconclusive 一律 fail-closed。
+- **K-D KYC 门卡死 100% 存量商家**(合规·线上数据):`vendor_kyc_profiles=0 行、restaurants=7 全 active`→§D 要 `kyc_status='approved'` 则 7/7 全被挡、连 KYC 行都没有。→**修**:补"退出申请时无 approved KYC 则先转 KYC 补录+审批子流程"前置;§I 写明这是存量店必经路径。
+- **K-E 跨 vendor 身份匹配撞加密列硬墙**(合规+实现双队):KYC 字段 encrypted cast 不能 SQL WHERE,§E1 跨行聚合物理做不到。§J1 的 HMAC 指纹**不是实装细节、是 D 能否成立的地基**。→**修**:先定 HMAC 方案(证件号确定性归一化+独立密钥进 .env+漏匹配>误匹配、指纹只做辅助红标);若否决 HMAC 则 §E1 降级"人工红标辅助"、删自动阻断承诺。
+
+### K.2 🟡 需补(实装期落地)
+UNIQUE(vendor_id) 挡 rejected/failed 重试→放宽"仅活跃一条唯一"(生成列) · partial 恢复腿级幂等(照抄 `ChargeAdOnStart:81`) · 户名核对仍人肉读 free-text(拆 `account_holder_name` 或审批页 enforce 勾选+审计) · `original_ref` 留存无显式豁免断言(INVARIANTS L1-8⑤+迁移注释+守卫测试) · §E1 漏第 3 条建店路径 `VendorController:148`(onboard_source 加显式 default 非 NULL+三路径都写) · §G 漏 8 处 `index.blade` `$account===` 二元分支(Tab/余额卡/汇总/流水标题/充值说明→全三态化或数据驱动) · 迁移锁窗+部署顺序(§I 明确随 `nzdeploy-api.sh` migrate、5.7 nullable+default 走 INPLACE) · 缴纳记账压成一句话(新增 §B' `store_guarantee` 完整设计) · balance_after=0 vs anchoredBounds 倒推偏差(退出时写对齐调整流水)。
+
+### K.3 🟢 设计的担忧被证伪(别过度改)
+§F 怕 ad_refund 撞断言:`NezhaL1RedlineTest` 无 ad 断言、`NezhaAdAuctionTest:test_9` 只 sum `ad_click_fee`,ad_refund 新 type 不撞(加正向断言别删 test_9) · §C4 怕每单多查 restaurants:`settle_delivered:411` 已 loadMissing restaurant,不产生额外查询。
+
+### K.4 ✅ 三队独立确认站得住(骨架别推翻)
+§0 直付 410 终态(三队实测) · UNIQUE 幂等根方向(资金+实现) · §C2 lockForUpdate 成熟范式(资金+实现) · §F 隔离守 INV-1(三队) · §D 制裁门查主体状态方向对(三队,读法要改) · §G controller 侧 match 修对(三队) · 迁移全 additive 可回滚 greenfield(实现) · §H 无定时任务避开 bootstrap 坑(实现)。
+
+### K.5 下一步:DESIGN v2(待用户拍板 3 处后修订)
+需用户定:① penalty 删还是先定义(建议删) ② 存量商家 KYC 门(强制补建 vs grandfather) ③ HMAC 指纹(做 vs D 降级人工)。定后出 DESIGN v2 折叠 K.1+K.2,再评估是否第三轮 debate。
 
 ---
 *相关：`docs/PLAN_merchant_offboard.md`（政策/§8 红队/L1 决策）· `INVARIANTS.md` L1-8 · `OrderLogic.php`(扣佣/返佣 lock+tx 模式) · `NezhaSanctionScreen.php`(制裁引擎) · `Vendor/NezhaDepositController.php`(对账) · memory `project_nezha-merchant-accounts-reconciliation-refund`。*
