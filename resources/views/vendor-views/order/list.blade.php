@@ -49,11 +49,16 @@
         .nz-order-status-hero { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; padding: 14px 16px; margin-bottom: 12px; border: 1px solid #E6EAF0; border-radius: 10px; background: #fff; box-shadow: 0 1px 4px rgba(16,24,40,.04); }
         .nz-order-status-hero h2 { margin: 0; font-size: 21px; line-height: 1.25; font-weight: 900; color: #102A4C; letter-spacing: 0; }
         .nz-order-status-hero p { margin: 5px 0 0; color: #667085; font-size: 13px; line-height: 1.45; max-width: 680px; }
-        .nz-status-count { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 24px; padding: 0 9px; margin-left: 7px; border-radius: 999px; background: #EFF6FF; color: #1D4ED8; font-size: 13px; font-weight: 900; }
+        .nz-status-count { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 24px; padding: 0 9px; margin-left: 7px; border-radius: 999px; background: #EEF0F3; color: #475467; font-size: 13px; font-weight: 900; }
         .nz-status-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
         .nz-status-tabs a { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 7px 11px; border: 1px solid #E6EAF0; border-radius: 8px; background: #fff; color: #344054; font-size: 12px; font-weight: 800; }
-        .nz-status-tabs a.active { border-color: #C4193E; background: #FFF1F3; color: #A41435; }
+        .nz-status-tabs a.active { border-color: #102A4C; background: #EEF0F3; color: #102A4C; }
         .nz-status-tabs i { font-size: 14px; }
+        .badge.nz-st-wait { background:#FFF1D6 !important; color:#8A5A06 !important; }
+        .badge.nz-st-progress { background:#EAF1FF !important; color:#1E4FBF !important; }
+        .badge.nz-st-done { background:#DCFAE6 !important; color:#0A6B1F !important; }
+        .badge.nz-st-cancel { background:#F0F0F0 !important; color:#4B5563 !important; }
+        .badge.nz-st-alert { background:#FEEBEE !important; color:#A3121B !important; }
         .nz-status-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
         .nz-status-empty-copy { color: #102A4C; font-weight: 900; }
         .nz-status-empty-help { color: #667085; font-size: 13px; margin-top: -4px; }
@@ -445,39 +450,43 @@
                                     @endphp
                                 @endif
                                     @if($order['order_status']=='pending')
-                                        <span class="badge badge-soft-info mb-1">
+                                        <span class="badge nz-st-wait mb-1">
                                             {{translate('messages.pending')}}
                                         </span>
                                     @elseif($order['order_status']=='confirmed')
-                                        <span class="badge badge-soft-info mb-1">
+                                        <span class="badge nz-st-progress mb-1">
                                         {{translate('messages.confirmed')}}
                                         </span>
                                     @elseif($order['order_status']=='processing')
-                                        <span class="badge badge-soft-warning mb-1">
+                                        <span class="badge nz-st-progress mb-1">
                                         {{translate('messages.processing')}}
                                         </span>
                                     @elseif($order['order_status']=='picked_up')
-                                        <span class="badge badge-soft-warning mb-1">
+                                        <span class="badge nz-st-progress mb-1">
                                         {{translate('messages.out_for_delivery')}}
                                         </span>
                                     @elseif($order['order_status']=='delivered')
-                                        <span class="badge badge-soft-success mb-1">
+                                        <span class="badge nz-st-done mb-1">
                                             {{$order?->order_type == 'dine_in' ? translate('messages.Completed') : translate('messages.delivered')}}
                                         </span>
                                     @elseif($order['order_status']=='handover')
-                                        <span class="badge badge-soft-warning mb-1">
+                                        <span class="badge nz-st-progress mb-1">
                                             {{translate('messages.handover')}}
                                         </span>
                                     @elseif($order['order_status']=='accepted')
-                                        <span class="badge badge-soft-info mb-1">
+                                        <span class="badge nz-st-progress mb-1">
                                             {{translate('messages.accepted')}}
                                         </span>
                                     @elseif($order['order_status']=='refund_request_canceled')
-                                        <span class="badge badge-soft-info mb-1">
+                                        <span class="badge nz-st-cancel mb-1">
                                             退款申请已撤销
                                         </span>
+                                    @elseif($order['order_status']=='canceled')
+                                        <span class="badge nz-st-cancel mb-1">
+                                            {{translate(str_replace('_',' ',$order['order_status']))}}
+                                        </span>
                                     @else
-                                        <span class="badge badge-soft-danger mb-1">
+                                        <span class="badge nz-st-alert mb-1">
                                             {{translate(str_replace('_',' ',$order['order_status']))}}
                                         </span>
                                     @endif
