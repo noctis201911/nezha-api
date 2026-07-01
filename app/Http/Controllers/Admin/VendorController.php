@@ -569,6 +569,14 @@ class VendorController extends Controller
 
             return back();
         }
+        // 哪吒[W1 外键防孤儿 配套 · 2026-07-01]: orders/food -> restaurants 加 RESTRICT 外键后,
+        //   裸 $restaurant->delete() 对有子行的店会撞 FK 异常, 这里优雅化:
+        //   ① 有订单历史的店依 L1-4 留存不可删 -> 友好提示不删; ② 无订单的店先清菜品(无留存需求)再删。
+        if (Order::withoutGlobalScopes()->where('restaurant_id', $restaurant->id)->exists()) {
+            Toastr::warning('该餐厅存在历史订单，依订单留存要求不可删除；如需下线请改用「停用」。');
+            return back();
+        }
+        Food::where('restaurant_id', $restaurant->id)->delete();
         Helpers::check_and_delete('restaurant/', $restaurant['logo']);
         $vendor = Vendor::findOrFail($restaurant?->vendor?->id);
         $restaurant?->delete();
