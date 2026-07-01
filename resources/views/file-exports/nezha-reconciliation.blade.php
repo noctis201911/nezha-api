@@ -6,6 +6,8 @@
         'advertisement_fee'    => translate('广告费(按天)'),
         'ad_recharge'          => translate('广告充值'),
         'ad_click_fee'         => translate('广告点击费'),
+        'guarantee_deposit'    => translate('押金缴纳'),
+        'guarantee_refund'     => translate('押金退还'),
     ];
     $rc = $data['rate_cny'] > 0 ? $data['rate_cny'] : 55;
     $ru = $data['rate_usd'] > 0 ? $data['rate_usd'] : 400;

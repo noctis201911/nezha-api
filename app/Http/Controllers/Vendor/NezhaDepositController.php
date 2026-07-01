@@ -27,8 +27,9 @@ class NezhaDepositController extends Controller
 {
     /** 账户 -> 归属该账户的流水 type(按每个 type 影响哪个余额划分) */
     private const ACCOUNTS = [
-        'deposit' => ['recharge', 'commission_deduction', 'refund_reversal', 'advertisement_fee'],
-        'ad'      => ['ad_recharge', 'ad_click_fee'],
+        'deposit'   => ['recharge', 'commission_deduction', 'refund_reversal', 'advertisement_fee'],
+        'ad'        => ['ad_recharge', 'ad_click_fee'],
+        'guarantee' => ['guarantee_deposit', 'guarantee_refund'],
     ];
 
     private function accountTypes(string $account): array
@@ -38,7 +39,7 @@ class NezhaDepositController extends Controller
 
     private function normalizeAccount($account): string
     {
-        return in_array($account, ['deposit', 'ad'], true) ? $account : 'deposit';
+        return in_array($account, ['deposit', 'ad', 'guarantee'], true) ? $account : 'deposit';
     }
 
     /** 解析日期范围(默认本月至今, 埃里温本地时区; 非法输入回退, from>to 自动对调) */
@@ -103,9 +104,14 @@ class NezhaDepositController extends Controller
         [$fromC, $toC] = $this->resolveRange($request);
         $types = $this->accountTypes($account);
 
-        $depositBalance = (float) ($wallet->deposit_balance ?? 0);
-        $adBalance      = (float) ($wallet->ad_balance ?? 0);
-        $currentBalance = $account === 'ad' ? $adBalance : $depositBalance;
+        $depositBalance   = (float) ($wallet->deposit_balance ?? 0);
+        $adBalance        = (float) ($wallet->ad_balance ?? 0);
+        $guaranteeBalance = (float) ($wallet->guarantee_balance ?? 0);
+        $currentBalance   = match ($account) {
+            'ad'        => $adBalance,
+            'guarantee' => $guaranteeBalance,
+            default     => $depositBalance,
+        };
 
         $byType  = $this->sumsByType($vendorId, $types, $fromC, $toC);
         [$opening, $closing] = $this->anchoredBounds($vendorId, $types, $currentBalance, $toC, array_sum($byType));
@@ -126,6 +132,7 @@ class NezhaDepositController extends Controller
             'account'        => $account,
             'depositBalance' => $depositBalance,
             'adBalance'      => $adBalance,
+            'guaranteeBalance' => $guaranteeBalance,
             'opening'        => $opening,
             'closing'        => $closing,
             'byType'         => $byType,
@@ -147,7 +154,11 @@ class NezhaDepositController extends Controller
         $account = $this->normalizeAccount($request->get('account'));
         [$fromC, $toC] = $this->resolveRange($request);
         $types = $this->accountTypes($account);
-        $currentBalance = $account === 'ad' ? (float) ($wallet->ad_balance ?? 0) : (float) ($wallet->deposit_balance ?? 0);
+        $currentBalance = match ($account) {
+            'ad'        => (float) ($wallet->ad_balance ?? 0),
+            'guarantee' => (float) ($wallet->guarantee_balance ?? 0),
+            default     => (float) ($wallet->deposit_balance ?? 0),
+        };
 
         $rows = RestaurantDepositTransaction::where('vendor_id', $vendorId)
             ->whereIn('type', $types)
@@ -161,7 +172,11 @@ class NezhaDepositController extends Controller
 
         $data = [
             'account'         => $account,
-            'account_label'   => $account === 'ad' ? translate('广告账户') : translate('预存佣金账户'),
+            'account_label'   => match ($account) {
+                'ad'        => translate('广告账户'),
+                'guarantee' => translate('押金账户'),
+                default     => translate('预存佣金账户'),
+            },
             'restaurant_name' => $restaurant->name ?? '',
             'from'            => $fromC->toDateString(),
             'to'             => $toC->toDateString(),
@@ -173,7 +188,11 @@ class NezhaDepositController extends Controller
         ];
 
         $type = $request->get('type') === 'csv' ? 'csv' : 'xlsx';
-        $slug = $account === 'ad' ? 'ad' : 'deposit';
+        $slug = match ($account) {
+            'ad'        => 'ad',
+            'guarantee' => 'guarantee',
+            default     => 'deposit',
+        };
         $fname = 'reconciliation_' . $slug . '_' . $fromC->toDateString() . '_' . $toC->toDateString() . '.' . $type;
 
         return Excel::download(new NezhaReconciliationExport($data), $fname);

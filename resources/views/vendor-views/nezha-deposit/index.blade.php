@@ -17,6 +17,8 @@
         'advertisement_fee'    => translate('广告费(按天)'),
         'ad_recharge'          => translate('广告充值'),
         'ad_click_fee'         => translate('广告点击费'),
+        'guarantee_deposit'    => translate('押金缴纳'),
+        'guarantee_refund'     => translate('押金退还'),
     ];
     $tzn = 'Asia/Yerevan';
     $qMonthFrom = \Carbon\Carbon::now($tzn)->startOfMonth()->toDateString();
@@ -67,11 +69,12 @@
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card h-100 bg-light" style="opacity:.65;">
+            <div class="card h-100 {{ $account === 'guarantee' ? 'border-primary' : '' }}">
                 <div class="card-body">
                     <h6 class="text-muted mb-1">{{ translate('押金') }}</h6>
-                    <h3 class="mb-1 text-muted">—</h3>
-                    <p class="text-muted small mb-0">{{ translate('可退质押账户') }}</p>
+                    <h3 class="mb-1">{{ \App\CentralLogics\Helpers::format_currency($guaranteeBalance ?? 0) }}</h3>
+                    <p class="text-muted small mb-0">{{ $nezhaConv($guaranteeBalance ?? 0) }}</p>
+                    <p class="text-muted small mb-0">{{ translate('可退质押账户(由平台按档设定)') }}</p>
                 </div>
             </div>
         </div>
@@ -86,7 +89,7 @@
             <a class="nav-link {{ $account === 'ad' ? 'active' : '' }}" href="{{ route('vendor.nezha-deposit.index', ['account' => 'ad', 'from' => $from, 'to' => $to]) }}">{{ translate('广告') }}</a>
         </li>
         <li class="nav-item">
-            <span class="nav-link disabled text-muted" style="cursor:not-allowed;">{{ translate('押金') }}</span>
+            <a class="nav-link {{ $account === 'guarantee' ? 'active' : '' }}" href="{{ route('vendor.nezha-deposit.index', ['account' => 'guarantee', 'from' => $from, 'to' => $to]) }}">{{ translate('押金') }}</a>
         </li>
     </ul>
 
@@ -147,7 +150,7 @@
                         <div class="font-weight-bold {{ $adFee < 0 ? 'text-danger' : 'text-success' }}">{{ \App\CentralLogics\Helpers::format_currency($adFee) }}</div>
                     </div>
                     @endif
-                @else
+                @elseif($account === 'ad')
                     <div class="col">
                         <div class="text-muted small">{{ translate('本期充值') }}</div>
                         <div class="font-weight-bold text-success">{{ \App\CentralLogics\Helpers::format_currency($byType['ad_recharge'] ?? 0) }}</div>
@@ -155,6 +158,15 @@
                     <div class="col">
                         <div class="text-muted small">{{ translate('本期点击费') }}</div>
                         <div class="font-weight-bold text-danger">{{ \App\CentralLogics\Helpers::format_currency($byType['ad_click_fee'] ?? 0) }}</div>
+                    </div>
+                @else
+                    <div class="col">
+                        <div class="text-muted small">{{ translate('本期缴纳') }}</div>
+                        <div class="font-weight-bold text-success">{{ \App\CentralLogics\Helpers::format_currency($byType['guarantee_deposit'] ?? 0) }}</div>
+                    </div>
+                    <div class="col">
+                        <div class="text-muted small">{{ translate('本期退还') }}</div>
+                        <div class="font-weight-bold text-danger">{{ \App\CentralLogics\Helpers::format_currency($byType['guarantee_refund'] ?? 0) }}</div>
                     </div>
                 @endif
                 <div class="col border-left">
@@ -167,7 +179,7 @@
 
     {{-- 流水 --}}
     <div class="card mb-3">
-        <div class="card-header"><h5 class="card-title mb-0">{{ $account === 'ad' ? translate('广告流水') : translate('预存佣金流水') }}</h5></div>
+        <div class="card-header"><h5 class="card-title mb-0">{{ $account === 'ad' ? translate('广告流水') : ($account === 'guarantee' ? translate('押金流水') : translate('预存佣金流水')) }}</h5></div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover table-borderless table-thead-bordered table-align-middle card-table">
@@ -263,6 +275,14 @@
             i.addEventListener('input', upd); upd();
         })();
     </script>
+    @elseif($account === 'guarantee')
+    {{-- 押金说明 --}}
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="mb-2">{{ translate('关于押金') }}</h5>
+            <p class="mb-0" style="font-size: 16px; line-height: 1.75; color: #475569;">{{ translate('押金是您向平台缴纳的可退质押金(B2B), 与顾客货款无关。缴纳档位由平台按您的经营情况设定, 缴纳与退还由平台运营办理并在此对账留痕。退出平台时按规结算、原路退回您本人的收款账户。') }}</p>
+        </div>
+    </div>
     @endif
 </div>
 @endsection
