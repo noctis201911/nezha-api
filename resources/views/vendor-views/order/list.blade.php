@@ -70,6 +70,22 @@
         .nz-done-days { width: 64px; height: 32px; text-align: center; border: 1px solid #D8E0EA; border-radius: 7px; font-size: 13px; padding: 0 6px; }
         .nz-done-days:disabled { background: #F7F8FA; color: #98A2B3; border-color: #EDF1F5; }
         .nz-done-hint { color: #667085; font-size: 12px; font-weight: 600; }
+        .nz-step-btn.nz-dispatch-open { background:#1F6FD0 !important; border-color:#1F6FD0 !important; color:#fff !important; }
+        .nz-step-btn.nz-dispatch-open:hover { background:#1A5FB4 !important; border-color:#1A5FB4 !important; }
+        body.nz-dispatch-lock { overflow: hidden; }
+        .nz-dispatch-drawer { position: fixed; inset: 0; z-index: 11050; display: none; }
+        .nz-dispatch-drawer.nz-open { display: block; }
+        .nz-dispatch-backdrop { position: absolute; inset: 0; background: rgba(16,24,40,.45); }
+        .nz-dispatch-sheet { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; border-radius: 16px 16px 0 0; max-height: 88vh; overflow-y: auto; box-shadow: 0 -4px 24px rgba(16,24,40,.18); }
+        .nz-dispatch-grip { width: 38px; height: 4px; border-radius: 99px; background: #D8DEE7; margin: 8px auto 2px; }
+        .nz-dispatch-head { position: sticky; top: 0; background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 6px 16px 12px; border-bottom: 1px solid #EEF0F3; z-index: 1; }
+        .nz-dispatch-title { font-weight: 800; font-size: 15px; color: #17191D; }
+        .nz-dispatch-x { border: 0; background: transparent; font-size: 24px; line-height: 1; color: #8A9099; cursor: pointer; padding: 0 4px; }
+        .nz-dispatch-body { padding: 4px 16px 20px; }
+        @media (min-width: 768px) {
+            .nz-dispatch-sheet { left: 50%; top: 50%; right: auto; bottom: auto; transform: translate(-50%, -50%); width: 460px; max-width: 92vw; border-radius: 16px; max-height: 84vh; }
+            .nz-dispatch-grip { display: none; }
+        }
         .nz-mobile-print-toggle, .nz-order-mobile-amount, .nz-mobile-action-label { display: none; }
         @media (max-width: 767.98px) {
             .content.container-fluid { padding-left: 10px; padding-right: 10px; }
@@ -549,9 +565,8 @@
                                                   'extra' => ['order_status'=>'processing','id'=>$order['id'],
                                                               'processing_time'=>explode('-',$restaurant->delivery_time ?? '30-60')[0]]];
                                     } elseif (in_array($__os, ['processing','handover'], true) && ($order['order_type'] ?? '') === 'delivery') {
-                                        $__qa = ['route' => route('vendor.order.mark-dispatched', $order['id']),
-                                                  'label' => '标记配送中', 'cls' => 'btn-warning', 'icon' => 'tio-send',
-                                                  'confirm' => '确认出餐完成、标记为配送中？'];
+                                        // 哪吒 P3: 配送单出餐环节改「叫车配送」→ 底部抽屉(叫车工具 + 贴链接 + 标记配送中), 不进详情页
+                                        $__qa = ['type' => 'dispatch', 'label' => '叫车配送', 'icon' => 'tio-send'];
                                     } elseif ($__os === 'picked_up' && ($order['order_type'] ?? '') === 'delivery') {
                                         $__qa = ['route' => route('vendor.order.mark-delivered', $order['id']),
                                                   'label' => '已送达', 'cls' => 'btn-success', 'icon' => 'tio-done-all',
@@ -574,7 +589,11 @@
                                         }
                                     }
                                 @endphp
-                                @if($__qa && (($__qa['type'] ?? 'form') === 'link'))
+                                @if($__qa && (($__qa['type'] ?? 'form') === 'dispatch'))
+                                    <button type="button" class="btn btn-sm nz-step-btn nz-dispatch-open text-nowrap" data-nz-dispatch="{{ $order['id'] }}">
+                                        <i class="{{ $__qa['icon'] }} mr-1"></i>{{ $__qa['label'] }}
+                                    </button>
+                                @elseif($__qa && (($__qa['type'] ?? 'form') === 'link'))
                                     <a class="btn btn-sm {{ $__qa['cls'] }} nz-step-btn text-nowrap text-white" href="{{ $__qa['route'] }}" title="{{ $__qa['title'] ?? $__qa['label'] }}">
                                         <i class="{{ $__qa['icon'] }} mr-1"></i>{{ $__qa['label'] }}
                                     </a>
@@ -657,6 +676,27 @@
                         <img id="nzProofModalImg" class="nz-proof-modal-img" src="" alt="客户付款截图">
                     </div>
                 </div>
+            </div>
+        </div>
+        {{-- 哪吒 P3(2026-07-01): 叫车底部抽屉(移动端全屏) + 每单叫车卡隐藏源。点行内「叫车配送」把对应源移入抽屉, 复用详情页同款 partial --}}
+        <div id="nzDispatchHolder" style="display:none">
+            @foreach($orders as $__do)
+                @if(($__do['order_type'] ?? '') === 'delivery' && in_array($__do['order_status'], ['processing','handover'], true))
+                    <div id="nzDispatchSrc-{{ $__do['id'] }}" data-nz-dispatch-src="{{ $__do['id'] }}">
+                        @include('vendor-views.order.partials._dispatch_tools', ['order' => $__do])
+                    </div>
+                @endif
+            @endforeach
+        </div>
+        <div class="nz-dispatch-drawer d-print-none" id="nzDispatchDrawer" aria-hidden="true">
+            <div class="nz-dispatch-backdrop" data-nz-dispatch-close></div>
+            <div class="nz-dispatch-sheet" role="dialog" aria-modal="true" aria-labelledby="nzDispatchTitle">
+                <div class="nz-dispatch-grip"></div>
+                <div class="nz-dispatch-head">
+                    <div class="nz-dispatch-title" id="nzDispatchTitle">🛵 Yandex Go 配送</div>
+                    <button type="button" class="nz-dispatch-x" data-nz-dispatch-close aria-label="关闭">&times;</button>
+                </div>
+                <div class="nz-dispatch-body" id="nzDispatchBody"></div>
             </div>
         </div>
     </div>
@@ -785,6 +825,53 @@
                 });
             }
 
+            function initDispatchDrawer(){
+                var drawer = document.getElementById('nzDispatchDrawer');
+                var body = document.getElementById('nzDispatchBody');
+                var holder = document.getElementById('nzDispatchHolder');
+                var title = document.getElementById('nzDispatchTitle');
+                if (!drawer || !body || !holder) return;
+                var openId = null;
+
+                function stow(){
+                    if (openId != null) {
+                        var s = document.getElementById('nzDispatchSrc-' + openId);
+                        if (s) { s.style.display = 'none'; holder.appendChild(s); }
+                        openId = null;
+                    }
+                }
+                function openDrawer(id){
+                    var src = document.getElementById('nzDispatchSrc-' + id);
+                    if (!src) return;
+                    stow();
+                    body.appendChild(src);
+                    src.style.display = 'block';
+                    body.scrollTop = 0;
+                    openId = id;
+                    if (title) title.textContent = '🛵 Yandex Go 配送 · 订单 #' + id;
+                    drawer.classList.add('nz-open');
+                    drawer.setAttribute('aria-hidden', 'false');
+                    document.body.classList.add('nz-dispatch-lock');
+                }
+                function closeDrawer(){
+                    stow();
+                    drawer.classList.remove('nz-open');
+                    drawer.setAttribute('aria-hidden', 'true');
+                    document.body.classList.remove('nz-dispatch-lock');
+                }
+
+                document.addEventListener('click', function(e){
+                    var t = e.target;
+                    if (!t || !t.closest) return;
+                    var opener = t.closest('.nz-dispatch-open');
+                    if (opener) { e.preventDefault(); openDrawer(opener.getAttribute('data-nz-dispatch')); return; }
+                    if (t.closest('[data-nz-dispatch-close]')) { e.preventDefault(); closeDrawer(); }
+                });
+                document.addEventListener('keydown', function(e){
+                    if (e.key === 'Escape' && openId != null) closeDrawer();
+                });
+            }
+
             function initColumnResize(){
                 var table = document.getElementById('datatable');
                 if (!table || window.innerWidth < 768) return;
@@ -862,6 +949,7 @@
                 initColumnResize();
                 initProofPreview();
                 initDoneFilter();
+                initDispatchDrawer();
 
                 var ready = $('nzPrintReady');
                 var auto = $('nzAutoPrintReady');
