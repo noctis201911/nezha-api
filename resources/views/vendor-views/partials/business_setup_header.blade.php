@@ -31,6 +31,8 @@
                         </a>
                     </li>
                 @endif
+                {{-- 哪吒 2026-07-01 隐藏「我的二维码」tab：StackFood 原生「到店扫码看菜单」功能。二维码指向商家自填的外部网站(非哪吒菜单页)，且哪吒只做配送、无到店场景，线上 0 家采用。如需恢复，删除本段注释即可。 --}}
+                {{--
                 @if(\App\CentralLogics\Helpers::employee_module_permission_check('my_qr_code'))
                     <li class="nav-item">
                         <a class="nav-link {{Request::is('restaurant-panel/restaurant/qr-view')?'active':''}}" href="{{route('vendor.shop.qr-view')}}"
@@ -38,6 +40,7 @@
                         </a>
                     </li>
                 @endif
+                --}}
                 @if(\App\CentralLogics\Helpers::employee_module_permission_check('notification_setup'))
                     <li class="nav-item">
                         <a class="nav-link {{Request::is('restaurant-panel/business-settings/notification-setup')?'active':''}}"
