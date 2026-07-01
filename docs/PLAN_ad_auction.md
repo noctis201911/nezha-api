@@ -109,8 +109,8 @@
 - ✅ **确凿稳固（勿再纠）**：钱不会超扣/错扣 —— 原子封顶 `WHERE ad_balance>=cost / spent_today+cost<=budget` + 并发双击 dedup 先插入回滚 + deposit 隔离 + 游客不计费 + 服务端重算价。**残余风险 = 预算烧空 + 合规，非平台资损。**
 
 **三工作流（拆分，替代原 §8 的"一块前端"）**：
-- **C0（现在 · 独立）**：首页推广条全去标（精选好店 / 商家推广 / 推广角标），保留条本身。前端改，走前端铁律（截图→点头→Playwright 三态）。
+- **C0（✅ 已完成上线 2026-07-01 · commit d658315 / BUILD xO5Zl7fg7rEyG1zxIU8RH）**：首页推广条全去标（精选好店 / 商家推广 / 推广角标 + 喇叭 CampaignRoundedIcon 图标），保留条本身与卡片。走前端铁律：本地 mock 广告 Playwright 三态验（标签全无 / 条与卡片正常 / 无横向溢出 / 头部删后 pt:1.2 未塌陷 / console 无本改错）+ 业主点头 + 部署后 served bundle grep「精选好店 / 商家推广 / 推广」串 = 0。仅改 home/index.js 呈现层，不碰 useGetAdds enabled / AdCard 导航 / 计费。〔留痕：全去标同时移除了原「推广」角标——它兼具"广告披露"作用（老注释载明），已向业主明示 merit 吹捧（必删）与中性广告披露（可选）为两事、业主确认全不打标；若后续目标市场广告法要求付费位可识别，再评估补中性「广告」标。〕
 - **C1（开关上线前 · 后端加固，可死亡测试）**：`click`+`impression` 加 throttle + 按日计费点击上限（per user×ad×day）+ 自点击剔除（clicking user 属该 ad 的 vendor 即拒）+ impression→click 单次 nonce 绑定（原 §5 推迟的 token，在防刷轴上是必需）。
 - **C2（开关上线前 · 前端触发）**：click 绑手势 + 具体 `advertisement_id` + 单发闩；impression 每（ad×元素实例）一次，滚动重入/重挂载/bfcache 不重发；detail 页永不发 click。
 
-🔴 **硬门槛**：`nezha_ad_auction_status` 在 **C1 + C2 完成 + 首页去 merit 标签** 三者齐备前**不得真上线开启**（开 = 按点击真扣费面对真实对抗流量，现缺 throttle/按日上限/nonce → 对手可烧空 + 可盲扣；且首页 merit 标签会随广告显示）。仅可短暂测试排序效果后立即关回。
+🔴 **硬门槛**：`nezha_ad_auction_status` 在 **C1 + C2 完成 + 首页去 merit 标签** 三者齐备前**不得真上线开启**（开 = 按点击真扣费面对真实对抗流量，现缺 throttle/按日上限/nonce → 对手可烧空 + 可盲扣；且首页 merit 标签会随广告显示）。仅可短暂测试排序效果后立即关回。〔进度 2026-07-01：**首页去 merit 标签 ✅ 已完成（C0 · commit d658315）**；仍缺 C1（后端防刷）+ C2（前端触发），开关保持 0=关。〕
