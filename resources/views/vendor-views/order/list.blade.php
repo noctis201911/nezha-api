@@ -38,6 +38,7 @@
         .nz-col-resizer::after { content: ""; position: absolute; top: 25%; bottom: 25%; left: 3px; width: 2px; border-radius: 2px; background: transparent; }
         .nz-col-resizer:hover::after, body.nz-col-resizing .nz-col-resizer::after { background: #9DBBE8; }
         .nz-payment-proof-list { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
+        .nz-payment-proof-list--status { justify-content: center; margin-top: 0; margin-bottom: 8px; }
         .nz-payment-proof-thumb { width: 42px; height: 42px; padding: 0; border: 1px solid #D8E0EA; border-radius: 7px; background: #fff; overflow: hidden; cursor: zoom-in; }
         .nz-payment-proof-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .nz-proof-modal-img { width: 100%; max-height: 76vh; object-fit: contain; background: #0F172A; border-radius: 8px; }
@@ -323,6 +324,19 @@
                     <tbody id="set-rows">
                     @foreach($orders as $key=>$order)
                         <tr class="status-{{$order['order_status']}} class-all">
+                            @php
+                                $__proofs = [];
+                                if ($order->offline_payments) {
+                                    $__offline = \App\CentralLogics\Helpers::offline_payment_formater($order->offline_payments);
+                                    foreach (($__offline['input'] ?? []) as $__input) {
+                                        $__url = $__input['file_url'] ?? null;
+                                        if (!empty($__input['is_file']) && $__url && preg_match('/\.(png|jpe?g|webp|gif)(\?|$)/i', $__url)) {
+                                            $__proofs[] = $__url;
+                                        }
+                                    }
+                                    $__proofs = array_values(array_unique($__proofs));
+                                }
+                            @endphp
                             <td class="" data-label="{{translate('messages.sl')}}">
                                 {{$key+$orders->firstItem()}}
                             </td>
@@ -384,27 +398,6 @@
                                     <label
                                         class="badge badge--pending">{{translate('messages.Walk_In_Customer')}}</label>
                                 @endif
-                                @php
-                                    $__proofs = [];
-                                    if ($order->offline_payments) {
-                                        $__offline = \App\CentralLogics\Helpers::offline_payment_formater($order->offline_payments);
-                                        foreach (($__offline['input'] ?? []) as $__input) {
-                                            $__url = $__input['file_url'] ?? null;
-                                            if (!empty($__input['is_file']) && $__url && preg_match('/\.(png|jpe?g|webp|gif)(\?|$)/i', $__url)) {
-                                                $__proofs[] = $__url;
-                                            }
-                                        }
-                                    }
-                                @endphp
-                                @if(!empty($__proofs))
-                                    <div class="nz-payment-proof-list">
-                                        @foreach(array_slice($__proofs, 0, 3) as $__proofUrl)
-                                            <button type="button" class="nz-payment-proof-thumb" data-nz-proof-src="{{ $__proofUrl }}" title="查看付款截图">
-                                                <img src="{{ $__proofUrl }}" alt="付款截图">
-                                            </button>
-                                        @endforeach
-                                    </div>
-                                @endif
                             </td>
                             <td class="nz-order-amount-cell" data-label="{{translate('messages.total_amount')}}">
 
@@ -437,6 +430,15 @@
 
                             </td>
                             <td class="text-capitalize text-center nz-order-status-cell" data-label="{{translate('messages.order_status')}}">
+                                @if(!empty($__proofs))
+                                    <div class="nz-payment-proof-list nz-payment-proof-list--status">
+                                        @foreach(array_slice($__proofs, 0, 3) as $__proofUrl)
+                                            <button type="button" class="nz-payment-proof-thumb" data-nz-proof-src="{{ $__proofUrl }}" title="查看付款截图" onclick="window.nzOpenPaymentProof && window.nzOpenPaymentProof(this.getAttribute('data-nz-proof-src')); return false;">
+                                                <img src="{{ $__proofUrl }}" alt="付款截图">
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                @endif
                                 @if (isset($order->subscription)  && $order->subscription->status != 'canceled' )
                                     @php
                                         $order->order_status = $order->subscription_log ? $order->subscription_log->order_status : $order->order_status;
@@ -715,23 +717,28 @@
                 document.addEventListener('click', function(e){
                     var btn = e.target && e.target.closest ? e.target.closest('.nz-payment-proof-thumb') : null;
                     if (!btn) return;
+                    e.preventDefault();
+                    e.stopPropagation();
                     var src = btn.getAttribute('data-nz-proof-src');
-                    var img = document.getElementById('nzProofModalImg');
-                    if (!src || !img) return;
-                    img.src = src;
-                    if (window.jQuery && window.jQuery.fn && window.jQuery.fn.modal) {
-                        window.jQuery('#nzProofModal').modal('show');
-                    } else {
-                        var modal = document.getElementById('nzProofModal');
-                        if (modal) {
-                            modal.classList.add('show');
-                            modal.style.display = 'block';
-                            modal.removeAttribute('aria-hidden');
-                            document.body.classList.add('modal-open');
-                        }
-                    }
+                    window.nzOpenPaymentProof(src);
                 });
             }
+
+            window.nzOpenPaymentProof = function(src){
+                var img = document.getElementById('nzProofModalImg');
+                var modal = document.getElementById('nzProofModal');
+                if (!src || !img || !modal) return false;
+                img.setAttribute('src', src);
+                if (window.jQuery && window.jQuery.fn && window.jQuery.fn.modal) {
+                    window.jQuery(modal).modal('show');
+                } else {
+                    modal.classList.add('show');
+                    modal.style.display = 'block';
+                    modal.removeAttribute('aria-hidden');
+                    document.body.classList.add('modal-open');
+                }
+                return false;
+            };
 
             window.nzMaybeAutoPrintAfterOrderAction = function(invoiceUrl){
                 if (!isAutoPrintReady() || !invoiceUrl) return;

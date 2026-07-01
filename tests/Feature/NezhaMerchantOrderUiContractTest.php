@@ -112,9 +112,21 @@ class NezhaMerchantOrderUiContractTest extends TestCase
         $this->assertLessThan(strpos($blade, "'USD'"), strpos($blade, "'CNY'"));
         $this->assertStringContainsString('offline_payment_formater', $blade);
         $this->assertStringContainsString('nz-payment-proof-thumb', $blade);
+        $this->assertStringContainsString('nz-payment-proof-list--status', $blade);
         $this->assertStringContainsString('nzProofModal', $blade);
-        $this->assertStringContainsString("window.jQuery('#nzProofModal').modal('show')", $blade);
+        $this->assertStringContainsString('window.nzOpenPaymentProof', $blade);
+        $this->assertStringContainsString("window.jQuery(modal).modal('show')", $blade);
         $this->assertStringNotContainsString("$('#nzProofModal').modal('show')", $blade);
+
+        $statusCell = strpos($blade, '<td class="text-capitalize text-center nz-order-status-cell"');
+        $proofList = strpos($blade, '<div class="nz-payment-proof-list nz-payment-proof-list--status">');
+        $statusBranch = strpos($blade, "@if(\$order['order_status']=='pending')", $statusCell);
+
+        $this->assertNotFalse($statusCell);
+        $this->assertNotFalse($proofList);
+        $this->assertNotFalse($statusBranch);
+        $this->assertLessThan($proofList, $statusCell);
+        $this->assertLessThan($statusBranch, $proofList);
     }
 
     public function testMerchantOrderListSupportsCustomerNudgeStatus(): void
