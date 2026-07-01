@@ -2366,6 +2366,10 @@ class OrderController extends Controller
         if (!$restaurant) {
             return false;
         }
+        // [哪吒 退出结算] 退出进行中(settling)视同停业, 停止接收新单(DESIGN §C1)。
+        if (\App\CentralLogics\NezhaOffboard::is_frozen($restaurant)) {
+            return true;
+        }
         $tempClosed = is_array($restaurant) ? ($restaurant['nezha_temp_closed'] ?? 0) : ($restaurant->nezha_temp_closed ?? 0);
         if ($tempClosed) {
             return true;

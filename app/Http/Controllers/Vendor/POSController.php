@@ -377,6 +377,12 @@ class POSController extends Controller
         }
         $restaurant = Helpers::get_restaurant_data();
 
+        // [哪吒 退出结算] 门店退出进行中(settling)停止 POS 建单(DESIGN §C1)。
+        if (\App\CentralLogics\NezhaOffboard::is_frozen($restaurant)) {
+            Toastr::error(translate('门店正在办理退出结算, 已停止接单'));
+            return back();
+        }
+
         $rest_sub = $restaurant?->restaurant_sub;
         if ($restaurant->restaurant_model == 'subscription' && isset($rest_sub)) {
             if ($rest_sub->max_order != "unlimited" && $rest_sub->max_order <= 0) {

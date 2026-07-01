@@ -36,6 +36,30 @@ class NezhaOffboard
             ->where('active_uniq', 1)->first();
     }
 
+    /**
+     * 是否处于退出冻结态(settling) —— 停一切新单/扣佣/退费(DESIGN §C)。
+     * 兼容数组/对象入参; 字段缺失(部分 select)按未冻结, 避免误伤线上下单。
+     */
+    public static function is_frozen($restaurant): bool
+    {
+        if (!$restaurant) {
+            return false;
+        }
+        $status = is_array($restaurant)
+            ? ($restaurant['offboard_status'] ?? null)
+            : ($restaurant->offboard_status ?? null);
+        return $status === 'settling';
+    }
+
+    /** 按 id 显式 fresh 查询是否冻结(扣佣门用, 避免调用点 lazy relation 读到 stale 'active')。 */
+    public static function is_frozen_id($restaurantId): bool
+    {
+        if (!$restaurantId) {
+            return false;
+        }
+        return Restaurant::where('id', $restaurantId)->value('offboard_status') === 'settling';
+    }
+
     /** 该店 KYC 是否已通过(决定 open 落 applied 还是 kyc_pending)。 */
     protected static function isKycApproved(int $restaurantId): bool
     {
