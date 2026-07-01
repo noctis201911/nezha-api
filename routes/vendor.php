@@ -218,6 +218,7 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
         Route::group(['prefix' => 'nezha-deposit', 'as' => 'nezha-deposit.', 'middleware' => ['module:nezha_deposit']], function () {
             Route::get('/', [NezhaDepositController::class, 'index'])->name('index');
             Route::post('update-alert', [NezhaDepositController::class, 'update_alert'])->name('update-alert');
+            Route::get('export', [NezhaDepositController::class, 'export'])->name('export');
         });
 
         // 哪吒 平台集运申报: 商家需求登记表

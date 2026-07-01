@@ -80,12 +80,12 @@
 
                     <!-- End Dashboards -->
 
-                    <!-- 哪吒 预存佣金 -->
+                    <!-- 哪吒 对账中心 -->
                     @if(\App\CentralLogics\Helpers::employee_module_permission_check('nezha_deposit'))
                     <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/nezha-deposit*')?'active':''}}">
-                        <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{route('vendor.nezha-deposit.index')}}" title="{{translate('预存佣金')}}">
+                        <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{route('vendor.nezha-deposit.index')}}" title="{{translate('对账中心')}}">
                             <i class="tio-wallet nav-icon"></i>
-                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{translate('预存佣金')}}</span>
+                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{translate('对账中心')}}</span>
                         </a>
                     </li>
                     @endif
