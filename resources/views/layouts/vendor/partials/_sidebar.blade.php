@@ -147,6 +147,9 @@
                             @endif
                             <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
                                 style="display:  {{Request::is('restaurant-panel/order*') && (Request::is('restaurant-panel/order/subscription*') == false )?'block':'none'}}">
+                                {{-- ⚠️ 哪吒P1b-A: 以下订单状态子项的计数口径已由 \App\CentralLogics\NezhaOrderCounts 统一接管(看板待办条 + 订单列表已接入)。
+                                     P1b-E 将整体删除这些子项 → 收敛为单条「订单」+ 需动作徽标(读同一 provider)。
+                                     期间请勿单独修改下面任何内联 count(与 provider 分叉会破坏"三处对账"断言)。 --}}
                                 <li class="nav-item {{Request::is('restaurant-panel/order/list/all')?'active':''}} @yield('all_order') ">
                                     <a class="nav-link" href="{{route('vendor.order.list',['all'])}}" title="{{translate('messages.all_order')}}">
                                         <span class="tio-circle nav-indicator-icon"></span>

@@ -294,86 +294,8 @@
         return ($fx['divisor'] ?? 0) > 0;
     });
     $nzRestaurantId = \App\CentralLogics\Helpers::get_restaurant_id();
-    $nzCountSelfDelivery = (($restaurant->restaurant_model == 'subscription' && $restaurant?->restaurant_sub?->self_delivery == 1)
-        || ($restaurant->restaurant_model == 'commission' && $restaurant->self_delivery_system == 1)) ? 1 : 0;
-    $nzCountBase = function () use ($nzRestaurantId) {
-        return \App\Models\Order::query()
-            ->where('restaurant_id', $nzRestaurantId)
-            ->Notpos()
-            ->hasSubscriptionToday();
-    };
-    $nzApplyStatusCount = function ($query, $key) use ($nzCountSelfDelivery, $nzRestaurantId) {
-        if ($key === 'confirmed') {
-            return $query->whereIn('order_status', ['confirmed', 'accepted'])->whereNotNull('confirmed')->OrderScheduledIn(30);
-        }
-        if ($key === 'pending') {
-            if (config('order_confirmation_model') == 'restaurant' || $nzCountSelfDelivery) {
-                return $query->where('order_status', 'pending')->OrderScheduledIn(30);
-            }
-            return $query->where('order_status', 'pending')->whereIn('order_type', ['take_away', 'dine_in'])->OrderScheduledIn(30);
-        }
-        if ($key === 'cooking') {
-            return $query->where('order_status', 'processing');
-        }
-        if ($key === 'food_on_the_way') {
-            return $query->where('order_status', 'picked_up');
-        }
-        if ($key === 'delivered') {
-            return $query->Delivered();
-        }
-        if ($key === 'ready_for_delivery') {
-            return $query->where('order_status', 'handover');
-        }
-        if ($key === 'refund_requested') {
-            return $query->Refund_requested();
-        }
-        if ($key === 'refunded') {
-            return $query->Refunded();
-        }
-        if ($key === 'payment_failed') {
-            return $query->where('order_status', 'failed');
-        }
-        if ($key === 'canceled') {
-            return $query->where('order_status', 'canceled');
-        }
-        if ($key === 'offline_pending') {
-            return $query->where('order_status', 'pending')
-                ->where('payment_method', 'offline_payment')
-                ->whereHas('offline_payments', function ($q) {
-                    $q->where('status', 'pending');
-                });
-        }
-        if ($key === 'refund_pending') {
-            return $query->whereIn('id', function ($sub) {
-                $sub->select('order_id')->from('nezha_refund_records')->where('status', 'pending_merchant_refund');
-            });
-        }
-        if ($key === 'customer_nudged') {
-            $ids = \App\CentralLogics\NezhaCustomerNudge::openOrderIds($nzRestaurantId);
-            return $query->whereIn('id', $ids ?: [0]);
-        }
-        if ($key === 'scheduled') {
-            return $query->Scheduled()->where(function ($q) use ($nzCountSelfDelivery) {
-                if (config('order_confirmation_model') == 'restaurant' || $nzCountSelfDelivery) {
-                    $q->whereNotIn('order_status', ['failed', 'canceled', 'refund_requested', 'refunded']);
-                } else {
-                    $q->whereNotIn('order_status', ['pending', 'failed', 'canceled', 'refund_requested', 'refunded'])
-                        ->orWhere(function ($query) {
-                            $query->where('order_status', 'pending')->whereIn('order_type', ['take_away', 'dine_in']);
-                        });
-                }
-            });
-        }
-        return $query;
-    };
-    $nzStatusCounts = [];
-    foreach ($nzStatusTabs as $__countStatus) {
-        $__countQuery = $nzApplyStatusCount($nzCountBase(), $__countStatus);
-        if (!in_array($__countStatus, ['all', 'offline_pending', 'refund_pending', 'customer_nudged'], true)) {
-            $__countQuery->NotDigitalOrder();
-        }
-        $nzStatusCounts[$__countStatus] = $__countQuery->count();
-    }
+    // 哪吒P1b-A: 订单计数收口到单一真相源 NezhaOrderCounts(与看板待办条同源, 修"看板待确认收款0 vs 列表1")。
+    $nzStatusCounts = \App\CentralLogics\NezhaOrderCounts::forRestaurant($nzRestaurantId);
 @endphp
     <div class="content container-fluid">
         <!-- Page Header -->

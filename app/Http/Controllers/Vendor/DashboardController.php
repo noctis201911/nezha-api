@@ -179,6 +179,9 @@ class DashboardController extends Controller
 
         // 哪吒 M-02: 超时卡落点已改为虚拟过滤 /list/timeout(同源), M-01 过渡 hack timeout_list_map/timeout_list_key 已删。
 
+        // 哪吒P1b-A: 待办条计数收口到单一真相源(与侧栏/列表组tab同源)。
+        $__nzCounts = \App\CentralLogics\NezhaOrderCounts::forRestaurant($rid);
+
         return [
             'new_pending_order'    => $new_pending_order,
             'new_confirmed_order'  => $new_confirmed_order,
@@ -192,7 +195,8 @@ class DashboardController extends Controller
             'timeout_target'       => $timeout_target,
             'deliv_link_total'     => $deliv_link_total,
             'deliv_link_order_ids' => $deliv_link_ids,
-            'refund_pending'       => $refund_pending,
+            'refund_pending'       => $__nzCounts['refund_pending'],
+            'offline_pending_display' => $__nzCounts['offline_pending'],
         ];
     }
 

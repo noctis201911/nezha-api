@@ -5,7 +5,7 @@
 @php
     $nz_todo = $nz_todo ?? [];
     $nz_today = $nz_today ?? [];
-    $nz_offline  = (int) ($nz_todo['new_offline_order'] ?? 0);
+    $nz_offline  = (int) ($nz_todo['offline_pending_display'] ?? $nz_todo['new_offline_order'] ?? 0); // 哪吒P1b-A: 持续待办徽标用全量'有凭证待核'(与侧栏/列表同源), checked=0 仅供新单响铃
     $nz_pending  = (int) ($nz_todo['new_pending_order'] ?? 0);
     $nz_refund   = (int) ($nz_todo['refund_pending'] ?? 0);
     $nz_timeout  = (int) ($nz_todo['timeout_total'] ?? 0);
