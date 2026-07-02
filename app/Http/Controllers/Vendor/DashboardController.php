@@ -140,10 +140,10 @@ class DashboardController extends Controller
 
         // 智能落点 + 计数对齐: 横幅一次只聚焦"最该先处理"的那个非空桶, 计数与未读id 都取该桶,
         // 保证横幅数字 == 点进去那个列表的单数(避免再现"横幅数 vs 列表数对不上")。优先级: 离线待收款(B方案主流) > 待处理 > 已确认。
-        $target = 'pending'; $target_label = '待处理'; $target_ids = collect([]);
+        $target = 'pending'; $target_label = '待接单'; $target_ids = collect([]); // 哪吒P1a[2026-07-03]: toast文案 待处理→待接单(业主批)
         if ($new_offline_order > 0)       { $target = 'offline_pending'; $target_label = '待收款'; $target_ids = $offline_ids; }
-        elseif ($new_pending_order > 0)   { $target = 'pending';         $target_label = '待处理'; $target_ids = $pending_ids; }
-        elseif ($new_confirmed_order > 0) { $target = 'confirmed';       $target_label = '待处理'; $target_ids = $confirmed_ids; }
+        elseif ($new_pending_order > 0)   { $target = 'pending';         $target_label = '待接单'; $target_ids = $pending_ids; }
+        elseif ($new_confirmed_order > 0) { $target = 'confirmed';       $target_label = '待接单'; $target_ids = $confirmed_ids; }
 
         // 哪吒 M-02: 超时提醒(系统/面板渠道)的计数与 ID 收口到 NezhaOrderTimeout::alertOrderIds()
         // ——只读聚合·单一口径, 与 OrderController::list('timeout') 过滤完全同源,

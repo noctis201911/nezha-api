@@ -81,6 +81,7 @@
         @include('vendor-views.partials._today-summary', ['nz_today' => $nz_today ?? []])
 
         <div class="restaurant-dashboard-wrapper d-flex flex-wrap gap-3 mb-3">
+            @if(false){{-- 哪吒P1a[2026-07-03]: 「订单统计」彩瓦与待办行动条/侧栏/列表chips四处重复读、且为StackFood遗留样式, 整卡封存(业主批复); 相关JS(order_stats_update)成死代码但空集合绑定无害, 留待P1b清理 --}}
             <div class="card restaurant-dashboard-wrapper-card">
                 <div class="card-header p-2">
                     <h4 class="card-header-title">
@@ -109,6 +110,7 @@
                     </div>
                 </div>
             </div>
+            @endif
             <div class="promo-card">
                 <div class="position-relative">
                     <img src="{{dynamicAsset('assets/admin/img/promo.png')}}" class="mw-100" alt="">

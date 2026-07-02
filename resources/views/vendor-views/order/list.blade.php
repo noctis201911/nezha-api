@@ -277,7 +277,8 @@
         'payment_failed' => ['label' => '支付失败', 'hint' => '支付失败订单已关闭，通常无需商家继续履约。', 'empty' => '暂无支付失败订单。', 'icon' => 'tio-warning-outlined'],
         'canceled' => ['label' => '已取消', 'hint' => '已取消订单用于核对取消原因和退款留痕。', 'empty' => '暂无已取消订单。', 'icon' => 'tio-clear-circle-outlined'],
     ];
-    $nzStatusTabs = ['all','customer_nudged','offline_pending','refund_pending','pending','confirmed','cooking','ready_for_delivery','food_on_the_way','delivered','refunded','refund_requested','scheduled','payment_failed','canceled'];
+    // 哪吒P1a[2026-07-03]: 移除'pending'(待处理)——对本店结构性永空(配送+线下单全走offline_pending), 与侧栏/待办条同批封存(业主批复)
+    $nzStatusTabs = ['all','customer_nudged','offline_pending','refund_pending','confirmed','cooking','ready_for_delivery','food_on_the_way','delivered','refunded','refund_requested','scheduled','payment_failed','canceled'];
     $nzCurrentMeta = $nzStatusMeta[$nzRawStatus] ?? ['label' => str_replace('_', ' ', $nzRawStatus), 'hint' => '查看该状态下的订单。', 'empty' => '暂无该状态订单。', 'icon' => 'tio-shopping-cart'];
     $nzBaseCurrency = \App\CentralLogics\Helpers::currency_code();
     $nzBusinessRates = \Illuminate\Support\Facades\DB::table('business_settings')

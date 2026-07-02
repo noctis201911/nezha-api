@@ -196,6 +196,7 @@
                                         </span>
                                     </a>
                                 </li>
+                                @if(false){{-- 哪吒P1a[2026-07-03]: 「待处理」对本店结构性永空(配送+线下单全部路由到「待确认收款」, 码 OrderController 233/973), 照堂食/accepted先例封存(业主批复) --}}
                                 <li class="nav-item {{Request::is('restaurant-panel/order/list/pending')?'active':'' }} @yield('pending')">
                                     <a class="nav-link " href="{{route('vendor.order.list',['pending'])}}" title="{{translate('messages.pending')}}">
                                         <span class="tio-circle nav-indicator-icon"></span>
@@ -212,6 +213,7 @@
                                     </a>
                                 </li>
 
+                                @endif
                                 <li class="nav-item {{Request::is('restaurant-panel/order/list/confirmed')?'active':''}} @yield('confirmed') ">
                                     <a class="nav-link " href="{{route('vendor.order.list',['confirmed'])}}" title="{{translate('messages.confirmed')}}">
                                         <span class="tio-circle nav-indicator-icon"></span>

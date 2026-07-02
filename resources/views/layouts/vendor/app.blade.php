@@ -122,7 +122,7 @@
         <div style="display:flex;align-items:flex-start;gap:10px;">
             <div style="font-size:22px;line-height:1;">&#128276;</div>
             <div style="flex:1;">
-                <div style="font-weight:600;color:#1f1f1f;font-size:15px;margin-bottom:2px;"><span id="nz-new-order-count">0</span> 个新订单<span id="nz-new-order-label">待处理</span></div>
+                <div style="font-weight:600;color:#1f1f1f;font-size:15px;margin-bottom:2px;"><span id="nz-new-order-count">0</span> 个新订单<span id="nz-new-order-label">待接单</span></div>
                 <div style="color:#8a8a8a;font-size:12px;">点「立即接单」直接进对应订单列表</div>
             </div>
             <button type="button" id="nz-new-order-close" aria-label="关闭" style="border:none;background:none;color:#bbb;font-size:20px;line-height:1;cursor:pointer;padding:0;">&times;</button>
@@ -1095,7 +1095,7 @@
 
                         if (total === 0) { hideToast(); dismissed = false; return; }
 
-                        var label = data.target_label || '待处理';
+                        var label = data.target_label || '待接单';
                         var seen = loadSeen();
                         var freshIds = ids.filter(function(id){ return !seen.has(id); });
 

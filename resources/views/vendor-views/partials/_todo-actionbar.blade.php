@@ -37,6 +37,7 @@
                 </a>
             </div>
 
+            @if(false){{-- 哪吒P1a[2026-07-03]: 「待处理」永空(同列表tabs/侧栏), 整卡封存(业主批复) --}}
             {{-- 待处理 --}}
             <div class="col-6 col-lg">
                 <a href="{{ route('vendor.order.list', ['pending']) }}"
@@ -50,6 +51,8 @@
                     </div>
                 </a>
             </div>
+
+            @endif
 
             {{-- 待退款 (B方案: 平台已取消/退款, 等商家原路退) --}}
             <div class="col-6 col-lg">
