@@ -188,6 +188,10 @@ class NezhaOrderQuoteController extends Controller
             }
         }
 
+        // 🔴🔴 PARITY 哨兵(Fable 满减触点终稿决议 rule10 · 四条件之②): 本取优段与 OrderController::place_order 券取优段
+        //   (搜 "券 vs 满减" / "coupon_if_win") 是【parity 测试锁定的平行实现】——tests/Feature/NezhaTieredCouponParityTest 挂 pre-push hook。
+        //   ▶ 改此处必须【同步对侧 place_order + 本机跑 parity 套件】(改取优没跑 parity 推不上去)。
+        //   ▶ ④ dry-run 只读边界: 本控制器永远只读(不建单/不落库/不改库存/不发通知), 这是它豁免"资金路径级谨慎"的前提——勿在此长出任何写副作用。
         // 券 vs 满减「取更优」不叠加。券基数=商品+加料(不含满减) · 满减基数=商品(不含加料), 非对称。同 place_order 券取优段。
         $winner = $tiered ? 'tiered' : 'none';
         if ($tiered && $coupon) {

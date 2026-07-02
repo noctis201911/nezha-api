@@ -480,6 +480,11 @@ class OrderController extends Controller
         // 哪吒[券 min_purchase 强制]: coupon_check 调 CouponLogic::is_valide 时只传3参(order_amount=null), 致最低消费门槛(409)被跳过。
         //   这里按券的购物车口径金额(商品+加料-商家折扣, 与下方 get_discount 同源)补强制门槛; 低于 min_purchase 则拒绝用券(不静默放行)。
         //   注: free_delivery 型券在 coupon_check 已置 $coupon=null, 此处覆盖不到(其 min_purchase 为独立残留, 待单独修)。
+        // 🔴🔴 PARITY 哨兵(Fable 满减触点终稿决议 rule10 · 四条件之②): 下面「券 vs 满减 取更优」块与
+        //   NezhaOrderQuoteController::quote() 的取优段是【parity 测试锁定的平行实现】——tests/Feature/NezhaTieredCouponParityTest 挂 pre-push hook。
+        //   ▶ 改此处任何口径(取优比较 / 基数[券=商品+加料·满减=商品] / 让位归零 / min_purchase 预判) 必须【同步对侧 quote() + 本机跑 parity 套件】,
+        //     否则结算报价(顾客看到的减免)与 place_order 落库(真实收款)漂移。收钱权威永远是本方法, 但显示漂移=顾客不信任。
+        //   ▶ 下次因业务须动此块(如加新档型) 先抽共享函数再改(见后端 AGENTS.md 待办), 不再各写一份平行实现。
         // 哪吒[多级满减·券取优] 决策A(2026-07-02 用户定=取更优): 满减与折扣券不叠加, 取顾客实得更大的一方, 另一方此单让位。
         //   两者均为"商品额优惠"(满减商家自掏 / 券可 admin 或 vendor 出资), 不叠加=安全底线; 取优=顾客永看最低价。
         //   券若胜出按"无满减"完整商品基数重算(此单撤满减·各 item 归零); 满减胜出则券作废。券 min_purchase 在此按完整基数预判(与下方门槛同源)。
