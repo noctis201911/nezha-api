@@ -20,6 +20,7 @@ use App\Models\AddOn;
 //     - 复用 place_order 完全相同的口径与原语(getTieredDiscount/CouponLogic::get_discount/coupon_check/
 //       calculate_addon_price/get_varient/food_discount_calculate), 取优规则与 place_order 券取优段同源,
 //       由 tests/Feature 的 parity 脚本锁死等价。
+//   车来源: 前端 body 传 redux 车(游客+登录统一·价格后端按 DB 重算·校验同店/≤99/≤50), 缺省回落服务端 Cart 表。
 //   ⛔ 只读: 不建单/不落库/不增库存/不发通知。灰度 nezha_tiered_discount_status 关时 loadTieredActivity 返回
 //   null → has_tiered=false·ladder 空 → 前端整条不渲染(prod 不可见, 与下单路径一致)。
 class NezhaOrderQuoteController extends Controller
@@ -43,31 +44,57 @@ class NezhaOrderQuoteController extends Controller
         $is_guest = $request->user ? 0 : 1;
         $digits = config('round_up_to_digit');
 
-        // 与 place_order 同一车口径: 只取本店车项(多店购物车不混算)
-        $carts = Cart::where('user_id', $owner_id)->where('is_guest', $is_guest)
-            ->where('restaurant_id', $request['restaurant_id'])
-            ->get()->map(function ($data) {
-                $data->add_on_ids = (is_string($data->add_on_ids) ? json_decode($data->add_on_ids, true) : $data->add_on_ids) ?? [];
-                $data->add_on_qtys = (is_string($data->add_on_qtys) ? json_decode($data->add_on_qtys, true) : $data->add_on_qtys) ?? [];
-                $data->variations = is_string($data->variations) ? json_decode($data->variations, true) : $data->variations;
-                return $data;
+        // 车来源(FABLE 终稿决议 rule7 · 5条件): 前端 body 传 redux 车(游客+登录统一走 body); 缺省回落服务端 Cart 表。
+        //   ⛔ 只信商品/规格 id + 数量, 价格一律后端按 DB 重算(客户端价一个字不信)。
+        $bodyCart = $request->input('cart');
+        $fromBody = is_array($bodyCart) && count($bodyCart) > 0;
+        if ($fromBody && count($bodyCart) > 50) {
+            return response()->json(['errors' => [['code' => 'cart', 'message' => '购物车行数超限']]], 422);
+        }
+        if ($fromBody) {
+            $items = collect($bodyCart)->map(function ($it) {
+                return [
+                    'item_id'     => data_get($it, 'item_id', data_get($it, 'id')),
+                    'item_type'   => data_get($it, 'item_type', 'App\\Models\\Food'),
+                    'quantity'    => data_get($it, 'quantity', 1),
+                    'add_on_ids'  => data_get($it, 'add_on_ids', []) ?? [],
+                    'add_on_qtys' => data_get($it, 'add_on_qtys', []) ?? [],
+                    'variations'  => data_get($it, 'variations', []) ?? [],
+                ];
             });
+        } else {
+            // 与 place_order 同一服务端车口径: 只取本店车项(多店购物车不混算)
+            $items = Cart::where('user_id', $owner_id)->where('is_guest', $is_guest)
+                ->where('restaurant_id', $request['restaurant_id'])
+                ->get()->map(function ($data) {
+                    $data->add_on_ids = (is_string($data->add_on_ids) ? json_decode($data->add_on_ids, true) : $data->add_on_ids) ?? [];
+                    $data->add_on_qtys = (is_string($data->add_on_qtys) ? json_decode($data->add_on_qtys, true) : $data->add_on_qtys) ?? [];
+                    $data->variations = is_string($data->variations) ? json_decode($data->variations, true) : $data->variations;
+                    return $data;
+                });
+        }
 
         $product_price = 0;
         $total_addon_price = 0;
         $food_discount_sum = 0;
 
-        foreach ($carts as $c) {
+        foreach ($items as $c) {
             if ($c['item_type'] === 'App\Models\ItemCampaign' || $c['item_type'] === 'AppModelsItemCampaign') {
                 $product = ItemCampaign::active()->find($c['item_id']);
             } else {
                 $product = Food::active()->find($c['item_id']);
             }
             if (!$product || $product->restaurant_id != $request['restaurant_id']) {
+                if ($fromBody) {
+                    return response()->json(['errors' => [['code' => 'cart', 'message' => '购物车含非本店或失效商品']]], 422);
+                }
                 continue;
             }
 
             $qty = (int) data_get($c, 'quantity', 1);
+            if ($fromBody && ($qty < 1 || $qty > 99)) {
+                return response()->json(['errors' => [['code' => 'cart', 'message' => '商品数量不合法']]], 422);
+            }
             if ($qty < 1) {
                 $qty = 1;
             }
