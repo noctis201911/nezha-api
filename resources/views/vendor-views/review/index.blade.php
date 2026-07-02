@@ -24,6 +24,26 @@
             </div>
         </div>
         <!-- End Page Header -->
+
+        {{-- 哪吒[差评预警]: 评价页顶部横幅, 与看板卡/侧栏角标同源(NezhaBadReview 单一真相源)。常显: 0=灰提示/>0=红警;
+             点「只看这些」跳到已预筛(未回复+≤3星+近N天)的差评列表, 与卡/角标点击落点一致。 --}}
+        @php($__nzBadCount = \App\CentralLogics\NezhaBadReview::count(\App\CentralLogics\Helpers::get_restaurant_id()))
+        @php($__nzBadWin = \App\CentralLogics\NezhaBadReview::window())
+        @if($__nzBadCount > 0)
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3 p-3 rounded border border-danger bg-soft-danger">
+            <span class="d-flex align-items-center text-danger fz--14">
+                <i class="tio-warning mr-2 fz-20px"></i>
+                <span>差评预警：近 {{ \App\CentralLogics\NezhaBadReview::WINDOW_DAYS }} 天有 <b>{{ $__nzBadCount }}</b> 条 ≤3 星未回复差评，建议尽快回复</span>
+            </span>
+            <a href="{{ route('vendor.reviews', ['rating_max'=>3,'reply_status'=>['no_reply'],'start_date'=>$__nzBadWin[0],'end_date'=>$__nzBadWin[1]]) }}"
+               class="btn btn-sm btn-outline-danger h-35 px-3 text-nowrap">只看这些 →</a>
+        </div>
+        @else
+        <div class="d-flex align-items-center mb-3 p-3 rounded border global-bg-box">
+            <i class="tio-star-outlined mr-2 text-muted fz-18px"></i>
+            <span class="text-muted fz--14">差评预警：近 {{ \App\CentralLogics\NezhaBadReview::WINDOW_DAYS }} 天暂无未回复差评</span>
+        </div>
+        @endif
         <!-- Card -->
         <div class="card">
             <!-- Header -->

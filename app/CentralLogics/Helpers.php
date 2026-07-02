@@ -4253,7 +4253,8 @@ class Helpers
 
     public static function date_format($data)
     {
-        return Carbon::parse($data)->locale(app()->getLocale())->translatedFormat('d M Y');
+        // 哪吒[2026-07-02]: 全站日期统一年月日 2026-06-19(原 'd M Y' = 19 6月 2026 日月年易混); 用户拍板全站统一。
+        return Carbon::parse($data)->locale(app()->getLocale())->translatedFormat('Y-m-d');
     }
 
     public static function human_time_format($data)
