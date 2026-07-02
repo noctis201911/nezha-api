@@ -4,6 +4,33 @@
 
 @push('css_or_js')
     <style>
+        .nz-bulk-import-page .page-header { margin-bottom: 14px; }
+        .nz-bulk-import-page .page-header-title { font-size: 22px; font-weight: 900; color: #102a4c; letter-spacing: 0; }
+        .nz-import-card { border: 1px solid #e6eaf0; border-radius: 10px; box-shadow: 0 1px 4px rgba(16,24,40,.04); overflow: hidden; }
+        .nz-import-card .card-body { padding: 20px; }
+        .nz-import-steps { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+        .nz-import-steps .export-steps-item { width: 100% !important; margin: 0 !important; border: 1px solid #edf1f5; border-radius: 8px; background: #f8fafc; }
+        .nz-import-steps .inner { width: 100%; min-height: 70px; padding: 13px 14px !important; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        .nz-import-steps h5 { margin-bottom: 4px; color: #102a4c; font-size: 14px; font-weight: 900; }
+        .nz-import-steps p { margin: 0; color: #667085; font-size: 12.5px; line-height: 1.35; font-weight: 700; }
+        .nz-import-guide-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(300px, .8fr); gap: 18px; align-items: stretch; }
+        .nz-import-instructions { padding: 18px 20px; border: 1px solid #edf1f5; border-radius: 10px; background: #fff; }
+        .nz-import-instructions h2 { margin-bottom: 14px; font-size: 18px; line-height: 1.25; font-weight: 900; color: #1262a8; }
+        .nz-import-instructions p { margin-bottom: 10px; color: #667085; font-size: 13px; line-height: 1.55; font-weight: 700; }
+        .nz-import-template-panel { display: flex; flex-direction: column; justify-content: center; padding: 18px; border: 1px solid #edf1f5; border-radius: 10px; background: #f8fafc; }
+        .nz-import-template-panel h3 { margin-bottom: 14px; color: #102a4c; font-size: 17px; font-weight: 900; text-align: center; }
+        .nz-import-template-panel .btn--container { gap: 10px; }
+        .nz-import-template-panel .btn { min-height: 42px; border-radius: 7px; font-weight: 800; }
+        .nz-import-upload-card .card-body { padding: 18px 20px; }
+        .nz-import-upload-row { display: grid; grid-template-columns: minmax(260px, 420px) minmax(260px, 1fr); align-items: end; gap: 16px; }
+        .nz-import-upload-row h4 { margin: 0 0 10px; color: #102a4c; font-size: 16px; font-weight: 900; }
+        .nz-import-upload-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+        .nz-import-upload-actions .btn { min-width: 118px; min-height: 42px; border-radius: 7px; font-weight: 900; }
+        .nz-variation-card .card-header { padding: 15px 18px; background: #fff; border-bottom: 1px solid #edf1f5; }
+        .nz-variation-card .card-body { padding: 18px; }
+        .nz-variation-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+        .nz-variation-toolbar .btn { border-radius: 7px; font-weight: 800; }
+        .nz-variation-card textarea { min-height: 104px; border-radius: 8px; background: #fbfcfe; }
         .nz-file-clean {
             position: relative;
             height: 42px;
@@ -45,11 +72,22 @@
         .nz-file-clean .custom-file-label::after {
             display: none;
         }
+        @media (max-width: 991.98px) {
+            .nz-import-guide-grid,
+            .nz-import-upload-row { grid-template-columns: 1fr; }
+            .nz-import-upload-actions { justify-content: flex-start; }
+        }
+        @media (max-width: 767.98px) {
+            .nz-import-steps { grid-template-columns: 1fr; }
+            .nz-import-card .card-body { padding: 14px; }
+            .nz-import-instructions, .nz-import-template-panel { padding: 14px; }
+            .nz-import-upload-actions .btn { flex: 1 1 120px; }
+        }
     </style>
 @endpush
 
 @section('content')
-    <div class="content container-fluid">
+    <div class="content container-fluid nz-bulk-import-page">
         <div class="page-header">
             <h1 class="page-header-title mb-2 text-capitalize">
                 <div class="card-header-icon d-inline-flex mr-2 img">
@@ -58,9 +96,9 @@
                 {{translate('messages.foods_bulk_import')}}
             </h1>
         </div>
-        <div class="card mb-2">
+        <div class="card mb-3 nz-import-card">
             <div class="card-body">
-                <div class="export-steps style-2">
+                <div class="export-steps style-2 nz-import-steps">
                     <div class="export-steps-item">
                         <div class="inner">
                             <h5>{{ translate('STEP_1') }}</h5>
@@ -86,29 +124,30 @@
                         </div>
                     </div>
                 </div>
-                <div class="jumbotron pt-1 pb-4 mb-0 bg-white">
-                    <h2 class="mb-3 text-primary">{{ translate('Instructions') }}</h2>
-                    <p>{{ translate('1._Download_the_format_file_and_fill_it_with_proper_data.') }}</p>
+                <div class="nz-import-guide-grid">
+                    <div class="nz-import-instructions">
+                        <h2>{{ translate('Instructions') }}</h2>
+                        <p>{{ translate('1._Download_the_format_file_and_fill_it_with_proper_data.') }}</p>
 
-                    <p>{{ translate('2._You_can_download_the_example_file_to_understand_how_the_data_must_be_filled.') }}</p>
+                        <p>{{ translate('2._You_can_download_the_example_file_to_understand_how_the_data_must_be_filled.') }}</p>
 
-                    <p>{{ translate('3._Once_you_have_downloaded_and_filled_the_format_file,_upload_it_in_the_form_below_and_submit.') }}</p>
+                        <p>{{ translate('3._Once_you_have_downloaded_and_filled_the_format_file,_upload_it_in_the_form_below_and_submit.') }}</p>
 
-                    <p> {{ translate('4._After_uploading_foods_you_need_to_edit_them_and_set_image_and_variations.') }}</p>
+                        <p> {{ translate('4._After_uploading_foods_you_need_to_edit_them_and_set_image_and_variations.') }}</p>
 
-                    <p> {{ translate('5._You_can_get_category_id_from_their_list,_please_input_the_right_ids.') }}</p>
+                        <p> {{ translate('5._You_can_get_category_id_from_their_list,_please_input_the_right_ids.') }}</p>
 
-                    <p> {{ translate('6._Don`t_forget_to_fill_all_the_fields') }} </p>
+                        <p> {{ translate('6._Don`t_forget_to_fill_all_the_fields') }} </p>
 
-                    <p>{{ translate('7._For_veg_food_enter_1_and_for_non-veg_enter_0_on_veg_field.') }}</p>
-                    <p>{{ translate('8._Image_file_name_must_be_in_30_character.') }}</p>
-
-                </div>
-                <div class="text-center pb-4">
-                    <h3 class="mb-3 export--template-title">{{ translate('Download Spreadsheet Template') }}</h3>
-                    <div class="btn--container justify-content-center export--template-btns">
-                        <a href="{{dynamicAsset('assets/restaurant_panel/foods_bulk_format.xlsx')}}" download="" class="btn btn-dark">{{ translate('Template_with_Existing_Data') }}</a>
-                        <a href="{{dynamicAsset('assets/restaurant_panel/foods_bulk_format_nodata.xlsx')}}" download="" class="btn btn-dark">{{ translate('Template_without_Data') }}</a>
+                        <p>{{ translate('7._For_veg_food_enter_1_and_for_non-veg_enter_0_on_veg_field.') }}</p>
+                        <p class="mb-0">{{ translate('8._Image_file_name_must_be_in_30_character.') }}</p>
+                    </div>
+                    <div class="nz-import-template-panel">
+                        <h3>{{ translate('Download Spreadsheet Template') }}</h3>
+                        <div class="btn--container justify-content-center export--template-btns">
+                            <a href="{{dynamicAsset('assets/restaurant_panel/foods_bulk_format.xlsx')}}" download="" class="btn btn-dark">{{ translate('Template_with_Existing_Data') }}</a>
+                            <a href="{{dynamicAsset('assets/restaurant_panel/foods_bulk_format_nodata.xlsx')}}" download="" class="btn btn-dark">{{ translate('Template_without_Data') }}</a>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -117,17 +156,21 @@
                 enctype="multipart/form-data">
             @csrf
             <input type="hidden" name="button" id="btn_value">
-            <div class="card rest-part">
+            <div class="card rest-part nz-import-card nz-import-upload-card mb-3">
                 <div class="card-body">
-                    <h4 class="mb-3 mt-2">{{ translate('Import Foods') }}</h4>
-                    <div class="custom-file custom--file nz-file-clean">
-                        <input type="file" name="products_file" class="custom-file-input" id="bulk__import">
-                        <label class="custom-file-label" for="bulk__import" data-label="{{ translate('Choose File') }}">{{ translate('Choose File') }}</label>
-                    </div>
-                    <div class="btn--container justify-content-end mt-3">
+                    <div class="nz-import-upload-row">
+                        <div>
+                            <h4>{{ translate('Import Foods') }}</h4>
+                            <div class="custom-file custom--file nz-file-clean">
+                                <input type="file" name="products_file" class="custom-file-input" id="bulk__import">
+                                <label class="custom-file-label" for="bulk__import" data-label="{{ translate('Choose File') }}">{{ translate('Choose File') }}</label>
+                            </div>
+                        </div>
+                        <div class="nz-import-upload-actions">
                         <button id="reset_btn" type="reset" class="btn btn--reset">{{translate('messages.reset')}}</button>
                         <button type="submit" name="button" value="update" class="btn btn--warning submit_btn">{{translate('messages.update')}}</button>
                         <button type="submit" name="button" value="import" class="btn btn--primary submit_btn">{{translate('messages.Import')}}</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -138,7 +181,7 @@
         <form action="javascript:" method="post" id="item_form" enctype="multipart/form-data">
             @csrf
             <div id="food_variation_section" >
-                <div class="card mt-2 rest-part">
+                <div class="card rest-part nz-import-card nz-variation-card">
                     <div class="card-header">
                         <h5 class="card-title">
                             <span class="card-header-icon">
@@ -151,15 +194,12 @@
                             <div class="col-md-12">
                                 <div id="add_new_option">
                                 </div>
-                                <br>
-                                <div class="mt-2">
+                                <div class="nz-variation-toolbar">
                                     <a class="btn btn-outline-success"
                                         id="add_new_option_button">{{ translate('add_new_variation') }}</a>
-                                </div> <br><br>
+                                    <button type="submit" class="btn btn--primary">{{translate('generate')}}</button>
+                                </div>
                             </div>
-                        </div>
-                        <div class="btn--container justify-content-end mb-3">
-                            <button type="submit" class="btn btn--primary">{{translate('generate')}}</button>
                         </div>
                         <textarea name="" id="food_variation_outpot" class="form-control" rows="5" readonly></textarea>
                     </div>
