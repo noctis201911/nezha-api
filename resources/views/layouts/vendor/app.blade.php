@@ -103,6 +103,9 @@
     </div>
     {{-- 哪吒#4: 商家面板提示浮层移动端响应式——窄屏改顶部锚定+全宽细条, 绝不遮挡底部操作按钮(确认收款/接单/出餐) --}}
     <style>
+    /* 哪吒[2026-07-02]: 后端弹窗默认垂直居中——原 Bootstrap 默认贴顶(margin 1.75rem auto)显得"太高", 商家反馈全后端弹窗都偏高。
+       用 Bootstrap modal-dialog-centered 同款机制统一居中; 已显式带 .modal-dialog-centered 的不重复处理。短弹窗居中, 超高弹窗仍可随 .modal 滚动。 */
+    .modal-dialog:not(.modal-dialog-centered){ display:flex; align-items:center; min-height:calc(100% - 3.5rem); }
     @media (max-width: 600px) {
         #nz-new-order-toast, #nz-timeout-toast, #nz-deliv-toast {
             left: 10px !important; right: 10px !important;

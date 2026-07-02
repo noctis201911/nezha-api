@@ -151,7 +151,8 @@
                                     <h5 class="d-block text-hover-primary mb-1">{{Str::limit($review->customer['f_name']." ".$review->customer['l_name'])}} <i
                                             class="tio-verified text-primary" data-toggle="tooltip" data-placement="top"
                                             title="{{ translate('messages.Verified Customer') }}"></i></h5>
-                                    <span class="d-block font-size-sm gray-dark">{{Str::limit($review->customer->phone)}}</span>
+                                    {{-- 哪吒[PII脱敏]: 顾客手机号列表必脱敏(CLAUDE.md红线), 复用 mask_phone 与订单列表同源(+374****0001) --}}
+                                    <span class="d-block font-size-sm gray-dark">{{\App\CentralLogics\Helpers::mask_phone($review->customer->phone)}}</span>
                                 </div>
                                 @else
                                 {{translate('messages.customer_not_found')}}
