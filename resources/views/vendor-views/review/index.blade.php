@@ -113,7 +113,11 @@
                                     <div class="media-body">
                                         <h5 class="important--link max-w-260px line--limit-1 min-w-160 mb-0 text-hover-primary text-wrap">{{Str::limit($review->food['name'],10)}}</h5>
                                         <!-- Static -->
+                                        {{-- 哪吒[修复评价页500]: order_id 为 null 的历史/演示评价会让 route() 抛「缺 id 参数」→ 整页500;
+                                             加守卫: 有 order_id 才给订单详情链接, 否则不显示该行(评价本身照常展示)。 --}}
+                                        @if($review->order_id)
                                         <a href="{{route('vendor.order.details',['id'=>$review->order_id])}}"  class="fz--12 text-body important--link">{{ translate('Order ID') }} #{{$review->order_id}}</a>
+                                        @endif
                                         <!-- Static -->
                                     </div>
                                 </div>
