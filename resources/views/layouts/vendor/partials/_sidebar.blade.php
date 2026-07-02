@@ -488,10 +488,10 @@
                         @php($__nzBadReview = \App\CentralLogics\NezhaBadReview::count(\App\CentralLogics\Helpers::get_restaurant_id()))
                         <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/reviews')?'active':''}}">
                             <a class="js-navbar-vertical-aside-menu-link nav-link"
-                               href="{{route('vendor.reviews')}}" title="{{translate('messages.reviews')}}">
+                               href="{{route('vendor.reviews')}}" title="{{translate('messages.Review')}}">
                                 <i class="tio-star-outlined nav-icon"></i>
                                 <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate sidebar--badge-container">
-                                {{translate('messages.reviews')}}
+                                {{translate('messages.Review')}}
                                 @if($__nzBadReview > 0)
                                     <span class="badge badge-soft-danger badge-pill ml-1">{{ $__nzBadReview }}</span>
                                 @endif
