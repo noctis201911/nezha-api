@@ -43,14 +43,15 @@
         .nz-batch-go:disabled { opacity:.5; cursor:not-allowed; }
         @media print { .nz-batch-bar { display:none !important; } }
         .nz-order-id { font-size: 16px; font-weight: 800; color: #102A4C; }
-        .nz-order-foods { font-size: 12px; color: #6B7280; max-width: 220px; white-space: normal; line-height: 1.4; margin-top: 4px; }
+        .nz-order-foods { font-size: 13.5px; color: #475467; max-width: 220px; white-space: normal; line-height: 1.42; margin-top: 4px; font-weight: 700; }
         .nz-order-time strong { display: block; font-size: 14px; color: #102A4C; }
         .nz-order-money { font-size: 15px; font-weight: 800; color: #102A4C; }
         .nz-order-converted-amounts { margin-top: 3px; color: #667085; font-size: 11px; line-height: 1.35; font-weight: 700; }
         .nz-order-converted-amounts span { display: block; white-space: nowrap; }
         .nz-resizable-table th { position: relative; }
-        .nz-col-resizer { position: absolute; top: 0; right: -3px; width: 8px; height: 100%; cursor: col-resize; user-select: none; z-index: 3; }
-        .nz-col-resizer::after { content: ""; position: absolute; top: 25%; bottom: 25%; left: 3px; width: 2px; border-radius: 2px; background: #C3CDDB; }
+        .nz-resizable-table thead th { border-right: 0 !important; }
+        .nz-col-resizer { position: absolute; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; user-select: none; z-index: 3; }
+        .nz-col-resizer::after { content: ""; position: absolute; top: 50%; left: 3px; width: 2px; height: 28px; max-height: calc(100% - 14px); transform: translateY(-50%); border-radius: 2px; background: #C3CDDB; }
         .nz-col-resizer:hover::after, body.nz-col-resizing .nz-col-resizer::after { background: #94A0AF; }
         /* 哪吒 P7: 列设置(列显隐 + 工具按钮显隐, localStorage 本机记住) */
         .nz-col-settings-wrap { position: relative; margin-left: auto; }
@@ -91,6 +92,10 @@
         .nz-status-tabs a { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 7px 11px; border: 1px solid #E6EAF0; border-radius: 8px; background: #fff; color: #344054; font-size: 12px; font-weight: 800; }
         .nz-status-tabs a.active { border-color: #102A4C; background: #EEF0F3; color: #102A4C; }
         .nz-status-tabs i { font-size: 14px; }
+        .nz-status-tabs .nz-tab-count { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 7px; margin-left: 1px; border-radius: 999px; background: #EEF2F6; color: #475467; font-size: 11.5px; line-height: 1; font-weight: 900; box-shadow: inset 0 0 0 1px rgba(16,24,40,.04); }
+        .nz-status-tabs a.active .nz-tab-count { background: #1F6FD0; color: #fff; box-shadow: 0 2px 6px rgba(31,111,208,.22); }
+        .nz-status-tabs .nz-tab-count.is-zero { color: #98A2B3; background: #F4F6F9; }
+        .nz-status-tabs a.active .nz-tab-count.is-zero { color: #EAF1FF; background: #5A8FDB; }
         .badge.nz-st-wait { background:#FFF1D6 !important; color:#8A5A06 !important; }
         .badge.nz-st-progress { background:#EAF1FF !important; color:#1E4FBF !important; }
         .badge.nz-st-done { background:#DCFAE6 !important; color:#0A6B1F !important; }
@@ -287,6 +292,87 @@
     $nzFxTargets = array_filter($nzFxTargets, function ($fx) {
         return ($fx['divisor'] ?? 0) > 0;
     });
+    $nzRestaurantId = \App\CentralLogics\Helpers::get_restaurant_id();
+    $nzCountSelfDelivery = (($restaurant->restaurant_model == 'subscription' && $restaurant?->restaurant_sub?->self_delivery == 1)
+        || ($restaurant->restaurant_model == 'commission' && $restaurant->self_delivery_system == 1)) ? 1 : 0;
+    $nzCountBase = function () use ($nzRestaurantId) {
+        return \App\Models\Order::query()
+            ->where('restaurant_id', $nzRestaurantId)
+            ->Notpos()
+            ->hasSubscriptionToday();
+    };
+    $nzApplyStatusCount = function ($query, $key) use ($nzCountSelfDelivery, $nzRestaurantId) {
+        if ($key === 'confirmed') {
+            return $query->whereIn('order_status', ['confirmed', 'accepted'])->whereNotNull('confirmed')->OrderScheduledIn(30);
+        }
+        if ($key === 'pending') {
+            if (config('order_confirmation_model') == 'restaurant' || $nzCountSelfDelivery) {
+                return $query->where('order_status', 'pending')->OrderScheduledIn(30);
+            }
+            return $query->where('order_status', 'pending')->whereIn('order_type', ['take_away', 'dine_in'])->OrderScheduledIn(30);
+        }
+        if ($key === 'cooking') {
+            return $query->where('order_status', 'processing');
+        }
+        if ($key === 'food_on_the_way') {
+            return $query->where('order_status', 'picked_up');
+        }
+        if ($key === 'delivered') {
+            return $query->Delivered();
+        }
+        if ($key === 'ready_for_delivery') {
+            return $query->where('order_status', 'handover');
+        }
+        if ($key === 'refund_requested') {
+            return $query->Refund_requested();
+        }
+        if ($key === 'refunded') {
+            return $query->Refunded();
+        }
+        if ($key === 'payment_failed') {
+            return $query->where('order_status', 'failed');
+        }
+        if ($key === 'canceled') {
+            return $query->where('order_status', 'canceled');
+        }
+        if ($key === 'offline_pending') {
+            return $query->where('order_status', 'pending')
+                ->where('payment_method', 'offline_payment')
+                ->whereHas('offline_payments', function ($q) {
+                    $q->where('status', 'pending');
+                });
+        }
+        if ($key === 'refund_pending') {
+            return $query->whereIn('id', function ($sub) {
+                $sub->select('order_id')->from('nezha_refund_records')->where('status', 'pending_merchant_refund');
+            });
+        }
+        if ($key === 'customer_nudged') {
+            $ids = \App\CentralLogics\NezhaCustomerNudge::openOrderIds($nzRestaurantId);
+            return $query->whereIn('id', $ids ?: [0]);
+        }
+        if ($key === 'scheduled') {
+            return $query->Scheduled()->where(function ($q) use ($nzCountSelfDelivery) {
+                if (config('order_confirmation_model') == 'restaurant' || $nzCountSelfDelivery) {
+                    $q->whereNotIn('order_status', ['failed', 'canceled', 'refund_requested', 'refunded']);
+                } else {
+                    $q->whereNotIn('order_status', ['pending', 'failed', 'canceled', 'refund_requested', 'refunded'])
+                        ->orWhere(function ($query) {
+                            $query->where('order_status', 'pending')->whereIn('order_type', ['take_away', 'dine_in']);
+                        });
+                }
+            });
+        }
+        return $query;
+    };
+    $nzStatusCounts = [];
+    foreach ($nzStatusTabs as $__countStatus) {
+        $__countQuery = $nzApplyStatusCount($nzCountBase(), $__countStatus);
+        if (!in_array($__countStatus, ['all', 'offline_pending', 'refund_pending', 'customer_nudged'], true)) {
+            $__countQuery->NotDigitalOrder();
+        }
+        $nzStatusCounts[$__countStatus] = $__countQuery->count();
+    }
 @endphp
     <div class="content container-fluid">
         <!-- Page Header -->
@@ -313,6 +399,7 @@
                     <a href="{{route('vendor.order.list',[$__statusKey])}}" class="{{ $nzRawStatus === $__statusKey ? 'active' : '' }}">
                         <i class="{{ $nzStatusMeta[$__statusKey]['icon'] ?? 'tio-circle' }}"></i>
                         <span>{{ $nzStatusMeta[$__statusKey]['label'] ?? $__statusKey }}</span>
+                        <span class="nz-tab-count {{ ($nzStatusCounts[$__statusKey] ?? 0) == 0 ? 'is-zero' : '' }}">{{ $nzStatusCounts[$__statusKey] ?? 0 }}</span>
                     </a>
                 @endforeach
             </div>
