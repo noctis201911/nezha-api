@@ -496,7 +496,12 @@ class OrderController extends Controller
             if ($coupon_if_win > $tiered['discount_amount']) {
                 $tiered = null;
                 $restaurant_discount_amount = 0;
-                $order->discount_on_product_by = null;
+                // 券胜出→本单无商品级折扣(restaurant_discount_amount=0)。orders.discount_on_product_by 是 NOT NULL(default 'vendor'),
+                //   显式写 null 会 SQLSTATE[23000] 建单失败(灰度开后「券赢满减」单全炸)。保持 'vendor'(=普通只用券单同态·
+                //   生产已有 coupon_created_by=admin + discount_on_product_by=vendor 常态行):金额=0 时账本所有读者对 vendor/admin/null 无差别
+                //   (全 gated on restaurant_discount_amount>0 或 =='admin'),券出资由 coupon_created_by 单独记账,L1-9 中性。
+                //   (/debate 双实例核验 2026-07-02·order_details.discount_on_product_by 是 nullable 故下行 null 无碍。)
+                $order->discount_on_product_by = 'vendor';
                 foreach ($order_details as $key => $detail_data) {
                     $order_details[$key]['discount_on_product_by'] = null;
                     $order_details[$key]['discount_type'] = 'amount';
