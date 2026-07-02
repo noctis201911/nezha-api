@@ -267,7 +267,7 @@
                                         $customer_details = json_decode($order['delivery_address'],true);
                                     ?>
                                             <strong>{{$customer_details['contact_person_name']}}</strong>
-                                            <div>{{$customer_details['contact_person_number']}}</div>
+                                            <div>{{\App\CentralLogics\Helpers::mask_phone($customer_details['contact_person_number'] ?? '')}}</div>
                                         @else
                                             <label class="badge badge-danger">{{ translate('messages.invalid_customer_data') }}</label>
                                         @endif

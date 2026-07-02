@@ -21,7 +21,7 @@
                             {{ Carbon\Carbon::parse($conv->last_message?->created_at)->diffForHumans() }}
                                 </small>
                 </h5>
-                <span>{{ $user['phone'] }}</span>
+                <span>{{ \App\CentralLogics\Helpers::mask_phone($user['phone'] ?? '') }}</span>
                 <div class="text-title line--limit-1 text-gray1 fs-12">{{ $conv->last_message?->message ? Str::limit($conv->last_message?->message ??'', 35, '...') : (count($conv->last_message->file_full_url) > 0 ?  count($conv->last_message->file_full_url) .' '. translate('messages.Attachments') :'' )}}</div>
             </div>
         </div>
