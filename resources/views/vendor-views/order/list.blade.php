@@ -12,6 +12,7 @@
         .nz-order-table-card #datatable { table-layout: fixed; min-width: 1180px; }
         .nz-order-toolbar { display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%; }
         .nz-export-area { flex: 0 0 auto; }
+        .nz-export-area .nz-export-dropdown { left: 12px !important; right: auto !important; }
         .nz-search-area { flex: 0 1 360px; margin-left: 0; }
         .nz-search-area .input--group { width: 360px; max-width: 100%; }
         /* 哪吒 P7: 8 列宽度(此前为 9 列旧值套在现 8 列上, P2 合并两图标列为⋯后残留, 已校正) */
@@ -368,7 +369,7 @@
                             </a>
 
                             <div id="usersExportDropdown"
-                                    class="hs-unfold-content dropdown-unfold dropdown-menu dropdown-menu-sm-right">
+                                    class="hs-unfold-content dropdown-unfold dropdown-menu dropdown-menu-sm-right nz-export-dropdown">
 
                                 <span
                                     class="dropdown-header">{{translate('messages.download_options')}}</span>
