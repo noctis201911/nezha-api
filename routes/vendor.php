@@ -229,6 +229,9 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
             Route::get('/', [NezhaDepositController::class, 'index'])->name('index');
             Route::post('update-alert', [NezhaDepositController::class, 'update_alert'])->name('update-alert');
             Route::get('export', [NezhaDepositController::class, 'export'])->name('export');
+            // 哪吒 退出平台(step4-4): 商家申请/撤回退出(服务端强制开关 nezha_offboard_status)
+            Route::post('offboard-apply', [NezhaDepositController::class, 'offboardApply'])->name('offboard-apply');
+            Route::post('offboard-withdraw', [NezhaDepositController::class, 'offboardWithdraw'])->name('offboard-withdraw');
         });
 
         // 哪吒 平台集运申报: 商家需求登记表

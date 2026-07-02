@@ -127,9 +127,21 @@ class NezhaDepositController extends Controller
         $rateCny = (float) (DB::table('business_settings')->where('key', 'nezha_rate_cny_to_amd')->value('value') ?: 55);
         $rateUsd = (float) (DB::table('business_settings')->where('key', 'nezha_rate_usd_to_amd')->value('value') ?: 400);
 
+        // 退出平台(offboard) 展示数据: 开关 + 当前状态 + 活跃工单 + 前置门(仅 active 时算)
+        $offboardEnabled  = \App\CentralLogics\NezhaOffboard::offboardEnabled();
+        $offboardStatus   = $restaurant->offboard_status ?? 'active';
+        $activeSettlement = $restaurant ? \App\CentralLogics\NezhaOffboard::activeSettlement((int) $vendorId) : null;
+        $offboardEligibility = ($offboardEnabled && $restaurant && $offboardStatus === 'active')
+            ? \App\CentralLogics\NezhaOffboard::eligibilityCheck($restaurant)
+            : null;
+
         return view('vendor-views.nezha-deposit.index', [
             'restaurant'     => $restaurant,
             'account'        => $account,
+            'offboardEnabled'     => $offboardEnabled,
+            'offboardStatus'      => $offboardStatus,
+            'activeSettlement'    => $activeSettlement,
+            'offboardEligibility' => $offboardEligibility,
             'depositBalance' => $depositBalance,
             'adBalance'      => $adBalance,
             'guaranteeBalance' => $guaranteeBalance,
@@ -231,6 +243,49 @@ class NezhaDepositController extends Controller
         $restaurant->save();
 
         Toastr::success(translate('告警设置已保存'));
+        return back();
+    }
+
+    /**
+     * 商家申请退出平台(对账中心底部入口)。DESIGN §E3 + step4-4。
+     * 服务端强制开关(前端隐藏不算数) → 前置门 eligibilityCheck → NezhaOffboard::open()。
+     * open() 幂等; KYC 未过落 kyc_pending, 已过落 applied(冷静期锚定 + offboard_status=settling 冻结)。
+     */
+    public function offboardApply(Request $request)
+    {
+        if (!\App\CentralLogics\NezhaOffboard::offboardEnabled()) {
+            Toastr::error(translate('退出功能暂未开放, 如需退出请联系平台客服'));
+            return back();
+        }
+        $vendorId   = Helpers::get_vendor_id();
+        $restaurant = Restaurant::where('vendor_id', $vendorId)->firstOrFail();
+
+        $check = \App\CentralLogics\NezhaOffboard::eligibilityCheck($restaurant);
+        if (!$check['ok']) {
+            Toastr::error(implode(' ', $check['blockers']) ?: translate('当前无法申请退出'));
+            return back();
+        }
+
+        $s = \App\CentralLogics\NezhaOffboard::open($restaurant);
+        if (($s->status ?? '') === 'kyc_pending') {
+            Toastr::success(translate('已收到您的退出申请。平台需先完成您的身份核验后再结算, 稍后会联系您。'));
+        } else {
+            Toastr::success(translate('已收到您的退出申请, 已进入冷静期与结算流程。冷静期内可随时撤回。'));
+        }
+        return back();
+    }
+
+    /** 商家撤回退出申请(仅 applied/kyc_pending 可撤, 恢复营业)。回流边① 治误点永久停业。 */
+    public function offboardWithdraw(Request $request)
+    {
+        $vendorId   = Helpers::get_vendor_id();
+        $restaurant = Restaurant::where('vendor_id', $vendorId)->firstOrFail();
+
+        if (\App\CentralLogics\NezhaOffboard::withdraw($restaurant)) {
+            Toastr::success(translate('已撤回退出申请, 店铺恢复正常营业。'));
+        } else {
+            Toastr::warning(translate('当前状态无法撤回(可能已进入审批或已结算), 如有疑问请联系平台客服。'));
+        }
         return back();
     }
 }

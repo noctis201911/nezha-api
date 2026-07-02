@@ -33,10 +33,21 @@ class NezhaKycController extends Controller
     {
         $search = trim((string) $request->get('search', ''));
         $status = (string) $request->get('status', '');
+        $queue  = (string) $request->get('queue', ''); // 'offboard' = 待退出核验队列(D2)
+
+        // D2: 退出中 kyc_pending 的活跃工单(offboard 前置身份核验) —— 队列筛选 + 超期红旗数据源。
+        $offboardKyc = \App\Models\RestaurantOffboardSettlement::where('active_uniq', 1)
+            ->where('status', 'kyc_pending')->get()->keyBy('restaurant_id');
+        $offboardPendingCount = $offboardKyc->count();
+        $offboardSlaDays = 3; // 核验 SLA(工作日近似); 超期在列表红旗(被动查询, 无 cron)
 
         $query = Restaurant::query()
             ->select('id', 'name', 'phone', 'email', 'status', 'created_at')
             ->orderByDesc('id');
+
+        if ($queue === 'offboard') {
+            $query->whereIn('id', $offboardKyc->keys()->all() ?: [0]);
+        }
 
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
@@ -54,8 +65,10 @@ class NezhaKycController extends Controller
             ->get(['restaurant_id', 'kyc_status', 'screen_status', 'reviewed_at'])
             ->keyBy('restaurant_id');
 
-        // 按状态筛选(在当前页结果上过滤; KYC 状态不在 restaurants 表, 故不做 DB 级分页过滤)
-        return view('admin-views.nezha-kyc.index', compact('restaurants', 'profiles', 'search', 'status'));
+        return view('admin-views.nezha-kyc.index', compact(
+            'restaurants', 'profiles', 'search', 'status',
+            'queue', 'offboardKyc', 'offboardPendingCount', 'offboardSlaDays'
+        ));
     }
 
     public function edit($restaurant_id)
@@ -156,6 +169,16 @@ class NezhaKycController extends Controller
         $profile->reviewer    = $reviewer;
         $profile->reviewed_at = now();
         $profile->save();
+
+        // [offboard D2] KYC 结论回流退出状态机(仅影响退出中 kyc_pending 的店; onKyc* 内幂等守卫, 勿删此块)
+        $restaurant = Restaurant::find($restaurant_id);
+        if ($restaurant) {
+            if ($request->decision === 'approved') {
+                \App\CentralLogics\NezhaOffboard::onKycApproved($restaurant);
+            } else {
+                \App\CentralLogics\NezhaOffboard::onKycRejected($restaurant);
+            }
+        }
 
         return back();
     }

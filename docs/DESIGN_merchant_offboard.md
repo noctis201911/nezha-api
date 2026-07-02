@@ -2,7 +2,7 @@
 
 > **版本**：v3（2026-07-01）。经三轮 /debate（政策/设计/v2）核验，本版折叠全部 4+5+4 🔴 + 应修。**核心骨架三轮验证站得住**（资金账目/隔离/幂等根/接缝/制裁实时/直付 410），v3 主要补 v2 缺的**状态机回流边 + 全建单入口冻结 + 并发底座依赖**。debate 历史见 §K。
 > **配套**：政策正本 `docs/PLAN_merchant_offboard.md`（§8）；红线 `INVARIANTS.md` L1-8。
-> 🔴 **仍不进代码**：这是**最后一版设计**；建议按 §I 灰度直接实装，**staging 下单 harness 作资金正确性唯一验收**（CI 断言测不了资金闭环）。不再跑第四轮 debate（边际递减）。
+> ✅ **实装完成（2026-07-02 · 未部署 dormant）**：step0–5 全部落地——迁移/对账三态/缴纳/KYC 指纹/状态机+全入口冻结+净额结算/**制裁实时 re-screen(§D1)+审批闸 H(§H)+暴露层(商家申请·撤回 + 超管审批/放款 + KYC 回流)**。总开关 `nezha_offboard_status` 默认关（服务端强制，部署≠启用）。验收: staging 下单 harness P2 70/70 + P3 52/52（资金正确性）· 进程内渲染 15/15（商家/超管页非 500）· `NezhaL1RedlineTest` 9/9（结构守卫）。L1-8③ 已按 L1 变更流程改为"审批时实时 RE-run screen_names"（业主批准 + CHANGELOG）。**随 offboard 批次由业主协调 `nzdeploy-api.sh` 上线；step4-4 暴露/上线风险经 /debate 三路对抗核验（E3 门不武器化/审批闸 H/KYC 卡存量/开关默认关）。**
 > 🔗 **前置依赖**：`order_transactions.order_id` 唯一约束（既有 LIVE 双扣佣 bug，独立任务 `task_fb41eea8`）须先修——C5 的并发结算安全依赖它。
 > **代码锚（三轮核实）**：扣佣 `OrderLogic::create_transaction:83`(订单完成时,:276 gate,:278 lockForUpdate,:284 commission_deduction 流水,:416 exists 幂等**无锁**) · `settle_delivered:401`(:412 前置只推 `handover`/`picked_up`、对已 delivered return false) · 接单闸 `nezha_store_paused:2318` · **POS 独立建单 `POSController:357`(不经 store_paused)** · 制裁 `NezhaKycScreen::screen_names:142`/`normalize_name:42` · KYC `NezhaKycController::save:69`(→pending)/`review:124`(→approved/rejected) · 对账 `Vendor/NezhaDepositController:108/:150`+`anchoredBounds:71` · 漏 deposit 写 `refund_reversal:740`/`AdvertisementController:288`/`ChargeAdOnStart:90` · `order_transactions` 无 order_id 唯一键(实测 SHOW INDEX)。
 

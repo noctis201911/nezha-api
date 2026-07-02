@@ -286,5 +286,76 @@
         </div>
     </div>
     @endif
+
+    {{-- ============ 退出平台(对账中心底部·step4-4) ============ --}}
+    @php $ost = $offboardStatus ?? 'active'; $sett = $activeSettlement ?? null; @endphp
+    @if(($offboardEnabled ?? false) || $ost !== 'active')
+    <div class="card mb-3 border">
+        <div class="card-header"><h5 class="card-title mb-0">{{ translate('退出平台') }}</h5></div>
+        <div class="card-body">
+            @if($ost === 'active')
+                <p class="text-muted mb-3" style="font-size:15px;line-height:1.75;">{{ translate('若您决定不再在平台经营, 可在此申请退出。申请后店铺将停止接单并进入冷静期; 平台核对无未完成订单与纠纷、完成身份核验后, 会把您的押金与预存佣金余额按规结清、原路退回您本人的收款账户。') }}</p>
+                @if($offboardEligibility && !($offboardEligibility['ok'] ?? true))
+                    <div class="alert alert-soft-warning" role="alert">
+                        <div class="mb-1"><strong>{{ translate('暂不能申请退出:') }}</strong></div>
+                        <ul class="mb-0 pl-3">
+                            @foreach(($offboardEligibility['blockers'] ?? []) as $b)
+                                <li>{{ $b }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @else
+                    @if($offboardEligibility && !empty($offboardEligibility['warnings']))
+                        <div class="alert alert-soft-info" role="alert">
+                            @foreach($offboardEligibility['warnings'] as $w)
+                                <div>{{ $w }}</div>
+                            @endforeach
+                        </div>
+                    @endif
+                    <form action="{{ route('vendor.nezha-deposit.offboard-apply') }}" method="POST" onsubmit="return confirm('{{ translate('确认申请退出平台? 申请后店铺将停止接单并进入冷静期(冷静期内可撤回)。') }}');">
+                        @csrf
+                        <button type="submit" class="btn btn-outline-danger">{{ translate('申请退出平台') }}</button>
+                    </form>
+                @endif
+
+            @elseif($ost === 'settling')
+                @if($sett && $sett->status === 'kyc_pending')
+                    <div class="alert alert-soft-info mb-3">
+                        <div class="mb-1"><strong>{{ translate('已收到您的退出申请') }}</strong></div>
+                        <div>{{ translate('平台需先完成您的身份核验后再结算退款, 预计需要几个工作日, 届时会联系您核验。核验通过后即进入结算。') }}</div>
+                    </div>
+                @else
+                    <div class="alert alert-soft-warning mb-3">
+                        <div class="mb-1"><strong>{{ translate('退出申请处理中') }}</strong></div>
+                        <div>{{ translate('您的退出申请已进入结算流程, 店铺当前已停止接单。平台核对与冷静期结束后, 会把余额按规结清、退回您本人收款账户。') }}</div>
+                        @if($sett && $sett->cooldown_until)
+                            <div class="small text-muted mt-1">{{ translate('冷静期至') }}: {{ \Carbon\Carbon::parse($sett->cooldown_until)->format('Y-m-d') }}</div>
+                        @endif
+                    </div>
+                @endif
+                @if($sett && in_array($sett->status, ['applied', 'kyc_pending']))
+                    <form action="{{ route('vendor.nezha-deposit.offboard-withdraw') }}" method="POST" onsubmit="return confirm('{{ translate('确认撤回退出申请? 店铺将恢复正常营业。') }}');">
+                        @csrf
+                        <button type="submit" class="btn btn-outline-secondary">{{ translate('撤回退出申请, 恢复营业') }}</button>
+                    </form>
+                @else
+                    <p class="text-muted small mb-0">{{ translate('已进入审批或放款阶段, 如需变更请联系平台客服。') }}</p>
+                @endif
+
+            @elseif($ost === 'owing')
+                <div class="alert alert-soft-danger mb-0">
+                    <div class="mb-1"><strong>{{ translate('结算后仍有欠款') }}</strong></div>
+                    <div>{{ translate('您的账户结算后为负(未结佣金超过押金与预存余额), 需先补齐欠款平台才能完成退出。请联系平台客服处理。') }}</div>
+                </div>
+
+            @elseif($ost === 'offboarded')
+                <div class="alert alert-soft-secondary mb-0">
+                    <div><strong>{{ translate('本店已退出平台') }}</strong></div>
+                    <div class="small text-muted">{{ translate('结算已完成。如需重新入驻请联系平台。') }}</div>
+                </div>
+            @endif
+        </div>
+    </div>
+    @endif
 </div>
 @endsection

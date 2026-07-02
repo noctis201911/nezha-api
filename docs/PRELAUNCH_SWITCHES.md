@@ -52,6 +52,7 @@
 | `nezha_ad_billing_status` | 0 | 广告 CPT 按天计费。广告变现未启动，现广告免费。想收费再开（确认单价/商家知情/有充值通道）。 | L2 |
 | `nezha_deposit_mode_status` | 0 | 预存佣金/扣佣模式。一阶段免佣免押。何时开始收佣是商业决策（开=商家要充保证金才能接单）。`nezha_min_deposit_threshold` 现 0。 | L2 |
 | `nezha_notif_async_status` | 0 | 订单通知(SMS/TG/推送)异步化灰度。代码已上线但激活待 /debate + staging 下单 QA + 你签字（关键路径，异步化搞错会漏通知）。见 memory `project_nezha-capacity-queue-redis-staging-isolation`。 | L3-性能 |
+| `nezha_offboard_status` | 0 | 商家退出结算(step4-4/step5 已实装·dormant)。开=商家端「对账中心」底部出现「申请退出平台」入口 + 服务端 `open()` 放行；关=入口不渲染且服务端拒。资金流出路径，审批闸 H(高额净额≥`nezha_offboard_high_amount_amd` 默认 500000֏ 强制审批后 T+1)+制裁实时 re-screen+户名三方核对齐备。**灰度：存量 7 店(6 测试+1 朋友)KYC 未录→退出必落 kyc_pending，无真实退出需求前保持关**；真开前先 staging 单店试跑。超管侧审批队列(`admin/nezha-offboard`)不受本开关限、始终可见。 | 🔴L1-8 |
 
 ---
 

@@ -1600,6 +1600,13 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                                 <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('佣金充值管理') }}</span>
                             </a>
                         </li>
+                        {{-- 哪吒 商家退出结算 审批/放款(step4-4) --}}
+                        <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-offboard*') ? 'active' : '' }}">
+                            <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{ route('admin.nezha-offboard.index') }}" title="{{ translate('商家退出结算') }}">
+                                <i class="tio-logout nav-icon"></i>
+                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('商家退出结算') }}</span>
+                            </a>
+                        </li>
                     @endif
                     <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-consolidation*') ? 'active' : '' }}">
                         <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{ route('admin.nezha-consolidation.index') }}" title="{{ translate('平台集运申报') }}">

@@ -189,4 +189,41 @@ class NezhaL1RedlineTest extends TestCase
         $this->assertStringContainsString('recordFrozenReversalOwed', $src,
             'L1-8 违反: 冻结期 refund_reversal 未记 frozen_reversal_owed(§C3 非回充需留痕待人工核算)。');
     }
+
+    // ───────────────── L1-8③ step5 制裁实时 re-screen + approve 4 门 + 退出开关默认关 ─────────────────
+
+    /**
+     * step5 §D1/§D3/§H 结构守卫: 制裁实时 re-screen(screen_names 而非读入驻旧 screen_status·fail-closed)
+     * + approve() 4 道 fail-closed 放款门 + 退出开关默认关。这些是资金流出闸(INVARIANTS L1-8③)。
+     * 【源码守卫层: 保证调用点/放款门存在与开关默认态, 不替代资金闭环 staging 下单 harness(DESIGN §I 断言分层)】。
+     */
+    public function test_L1_8_step5_sanction_rescreen_and_approve_gates_present(): void
+    {
+        $src = file_get_contents(base_path('app/CentralLogics/NezhaOffboard.php'));
+
+        // §D1: 审批放款前用【当前】名单实时 RE-run screen_names(实时制裁核验方法在)
+        $this->assertStringContainsString('function rescreenSanctions(', $src,
+            'L1-8③ 违反: rescreenSanctions(step5 制裁实时 re-screen)被移除。');
+        $this->assertStringContainsString('NezhaKycScreen::screen_names(', $src,
+            'L1-8③ 违反: rescreenSanctions 未实时 RE-run screen_names(制裁实时核验被移除 → 退款可能放行给受制裁主体)。');
+        // fail-closed: 仅 clear 才置 sanction_rescreen_at(possible/hit 不置 → approve 拒放行)
+        $this->assertStringContainsString("if (\$st === 'clear')", $src,
+            'L1-8③ 违反: 制裁 re-screen 的 clear 分支被改(fail-closed 结构破坏)。');
+        $this->assertStringContainsString('$s->sanction_rescreen_at = Carbon::now();', $src,
+            'L1-8③ 违反: clear 时置 sanction_rescreen_at 被移除/外提(possible/hit 可能被误放行)。');
+
+        // approve() 4 道 fail-closed 放款门(状态/冷静期/制裁 re-screen/户名核对)缺一即资金流出无门
+        $this->assertStringContainsString("\$s->status !== 'applied'", $src,
+            'L1-8 违反: approve 状态门(applied)被删。');
+        $this->assertStringContainsString('Carbon::now()->lt($s->cooldown_until)', $src,
+            'L1-8 违反: approve 冷静期门被删。');
+        $this->assertStringContainsString('$s->sanction_rescreen_at === null', $src,
+            'L1-8 违反: approve 制裁 re-screen 门被删(未 re-screen 即可放款)。');
+        $this->assertStringContainsString('!$s->holder_verified', $src,
+            'L1-8 违反: approve 户名核对门(holder_verified)被删。');
+
+        // 退出功能开关默认关(灰度·服务端强制); 默认改为 '1' = 部署即暴露资金流出路径
+        $this->assertStringContainsString("self::cfg('nezha_offboard_status', '0')", $src,
+            'L1-8 违反: 退出开关 nezha_offboard_status 默认态被改(应默认 0 关, 上线灰度由用户开)。');
+    }
 }

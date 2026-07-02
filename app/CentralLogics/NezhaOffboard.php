@@ -20,9 +20,11 @@ use Illuminate\Support\Facades\DB;
  * 幂等根: uq_active(vendor_id, active_uniq) —— 同 vendor 至多一条 active(active_uniq=1),
  *   关闭态置 NULL 可并存(可重申)。并发撞 1062 当幂等、勿 500。
  *
- * ⚠️ 后续子片: 冻结(§C nezha_offboard_frozen 全建单入口) / 净额结算放款(§F) / 审批闸(§H)
- *    / 制裁 re-screen(§D1) / 入口暴露(商家申请+超管审批 UI) / 退出前置门(§E3 订单终态·无纠纷·冷静期)。
- * ⚠️ 本服务**尚未接线上任何路径、未暴露入口** —— 生产无 store 会进 settling; 由 staging harness 直接驱动验证。
+ * step4-4/step5(本次): 退出前置门 eligibilityCheck(§E3) / 功能开关 offboardEnabled / 制裁实时
+ *   re-screen rescreenSanctions(§D1·fail-closed) / 审批闸 H 时序 canPayNow(§H)。
+ * 暴露层: 商家端 Vendor/NezhaDepositController(申请/撤回) + 超管 Admin/NezhaOffboardController(审批/放款)
+ *   + KYC 联动 Admin/NezhaKycController::review。开关 nezha_offboard_status 默认关(服务端强制)。
+ * ⚠️ 未部署前生产无 store 会进 settling; staging 下单 harness 作资金正确性唯一验收。
  */
 class NezhaOffboard
 {
@@ -166,6 +168,85 @@ class NezhaOffboard
         });
     }
 
+    // ==================== step4-4 暴露层前置 + 开关 (DESIGN §E3) ====================
+
+    /** 商家退出功能总开关 nezha_offboard_status(默认 0 关 —— 上线灰度开关, 暴露层服务端强制)。 */
+    public static function offboardEnabled(): bool
+    {
+        return (string) self::cfg('nezha_offboard_status', '0') === '1';
+    }
+
+    protected static function cfg(string $key, $default = null)
+    {
+        $v = \App\Models\BusinessSetting::where('key', $key)->value('value');
+        return ($v === null || $v === '') ? $default : $v;
+    }
+
+    /** offboard_status 中文标签(商家端/后台展示)。 */
+    public static function statusLabel(?string $st): string
+    {
+        return [
+            'active'     => '正常营业',
+            'settling'   => '退出结算中',
+            'owing'      => '欠款待清缴',
+            'offboarded' => '已退出',
+        ][$st] ?? ($st ?: '正常营业');
+    }
+
+    /**
+     * §E3 退出前置门 —— 商家「申请退出」暴露层在 open() 前调用。
+     * 只挡「申请」(低风险: 仅起冷静期+冻结, 可 withdraw 撤回)。真实纠纷【不硬挡申请】(防举报武器化,
+     * /debate 定): 待核实举报只作 warnings 提示, 其实质判断放到超管「审批放款」时人工把关(§H 红旗)。
+     *   门①: 有非终态活跃单(自家订单, 外部无法武器化) → 挡。
+     *   门②: 待核实举报/风控 → warning(不挡), 供商家知情。
+     *   门③: 冷静期在 open() 锚定、approve() 强制, 此处不重复。
+     * @return array{ok:bool, blockers:array<int,string>, warnings:array<int,string>, pending_orders:int, pending_reports:int}
+     */
+    public static function eligibilityCheck(Restaurant $restaurant): array
+    {
+        $rid = (int) $restaurant->id;
+        $blockers = [];
+        $warnings = [];
+
+        $status = $restaurant->offboard_status ?? 'active';
+        if ($status !== 'active') {
+            $blockers[] = '当前退出状态为「' . self::statusLabel($status) . '」, 无法重复申请';
+        }
+
+        $pendingOrders = \App\Models\Order::where('restaurant_id', $rid)
+            ->whereIn('order_status', self::BLOCKING_STATES)->count();
+        if ($pendingOrders > 0) {
+            $blockers[] = "有 {$pendingOrders} 笔进行中订单未完成, 请先处理完所有订单再申请退出";
+        }
+
+        $pendingReports = self::pendingDisputeCount($rid);
+        if ($pendingReports > 0) {
+            $warnings[] = "平台有 {$pendingReports} 条关于本店的待核实反馈, 退出结算前平台会先核实处理";
+        }
+
+        return [
+            'ok'              => empty($blockers),
+            'blockers'        => $blockers,
+            'warnings'        => $warnings,
+            'pending_orders'  => $pendingOrders,
+            'pending_reports' => $pendingReports,
+        ];
+    }
+
+    /** §E3 门②/§H 红旗: 待核实真实纠纷数 = 待处理举报(status=0) + 风控 review pending。 */
+    public static function pendingDisputeCount($restaurantId): int
+    {
+        $rid = (int) $restaurantId;
+        if ($rid <= 0) {
+            return 0;
+        }
+        $reports = \App\Models\RestaurantReport::where('restaurant_id', $rid)
+            ->where('status', \App\Models\RestaurantReport::STATUS_PENDING)->count();
+        $risk = \App\Models\NezhaRiskRecord::where('restaurant_id', $rid)
+            ->where('status', 'pending')->count();
+        return (int) ($reports + $risk);
+    }
+
     // ==================== step4-3 净额结算 (DESIGN §F/§C4/§C5/§C6) ====================
 
     /** C4 快照连续 abort 上限: 超过则熔断转人工(防 DoS 无限重算)。 */
@@ -173,8 +254,8 @@ class NezhaOffboard
 
     /** 在途(handover/picked_up 且未 delivered)= 结算首步可推进收尾的单。 */
     protected const INFLIGHT_STATES = ['handover', 'picked_up'];
-    /** 非终态活跃单: 存在即挡结算(应由退出前置门 §E3 拦在 applied 之前, 本层 fail-closed 兜底)。 */
-    protected const BLOCKING_STATES = ['pending', 'accepted', 'confirmed', 'processing', 'refund_requested'];
+    /** 非终态活跃单: 存在即挡结算(§E3 门① + 结算 fail-closed 兜底)。public: 暴露层 eligibilityCheck 单一真相源。 */
+    public const BLOCKING_STATES = ['pending', 'accepted', 'confirmed', 'processing', 'refund_requested'];
 
     /**
      * 退款回充冻结判断(§C3): offboard_status != active(settling/owing/offboarded)时,
@@ -507,5 +588,105 @@ class NezhaOffboard
         $s->save();
         self::auditLog($s->restaurant_id, 'offboard_c4_abort', ['aborts' => $count, 'net' => $net, 'settlement_id' => $s->id]);
         return 'aborted';
+    }
+
+    // ==================== step5 制裁实时 re-screen(§D1) + 审批闸 H 时序(§H) ====================
+
+    /** 高额退款阈值(净额≥此值→审批闸 H 强制次日转)。L2 可调 business_setting nezha_offboard_high_amount_amd。 */
+    public const H_HIGH_AMOUNT_DEFAULT_AMD = 500000;
+    /** 高额放款须与审批间隔小时数(单超管「双人复核」等价替身之次日转, §H/§D3)。 */
+    public const H_HIGH_AMOUNT_DELAY_HOURS = 24;
+
+    public static function highAmountThreshold(): float
+    {
+        return (float) self::cfg('nezha_offboard_high_amount_amd', self::H_HIGH_AMOUNT_DEFAULT_AMD);
+    }
+
+    /**
+     * §D1 制裁实时 re-screen(step5): 审批放款前用【当前】OFAC SDN 名单实时 RE-run screen_names,
+     * 【不读入驻旧 screen_status 列】(名单每日刷新、旧列会空转; L1-6 / INVARIANTS L1-8③)。
+     *   clear    → 置 sanction_rescreen_at(供 approve() 放行) + 写回 profile.screen_*, ok=true。
+     *   possible → 不置标志位(fail-closed), 转人工 AML(record_risk review/pending), ok=false。
+     *   hit      → 不置标志位; 工单 rejected + 恢复营业(不给退款) + record_risk(reject/auto), ok=false。
+     *   无 KYC / 无姓名 → fail-closed(不置位), ok=false。
+     * @return array{ok:bool, status:string, detail:string}
+     */
+    public static function rescreenSanctions(RestaurantOffboardSettlement $settlement): array
+    {
+        $profile = VendorKycProfile::where('restaurant_id', $settlement->restaurant_id)->first();
+        if (!$profile) {
+            return ['ok' => false, 'status' => 'no_kyc', 'detail' => '无 KYC 资料, 无法制裁核验(fail-closed)'];
+        }
+        $names = array_values(array_filter(
+            [$profile->legal_name, $profile->beneficial_owner_name],
+            fn ($n) => trim((string) $n) !== ''
+        ));
+        if (empty($names)) {
+            return ['ok' => false, 'status' => 'no_name', 'detail' => 'KYC 无法人/受益人姓名, 无法制裁核验(fail-closed)'];
+        }
+
+        $screen = \App\CentralLogics\NezhaKycScreen::screen_names($names);
+        $st = $screen['status'] ?? 'possible';
+        \App\CentralLogics\NezhaKycScreen::apply_to_profile($profile, $screen); // 留痕(复用 screen_* 列)
+
+        if ($st === 'clear') {
+            DB::transaction(function () use ($settlement) {
+                $s = RestaurantOffboardSettlement::where('id', $settlement->id)->lockForUpdate()->first();
+                if ($s) {
+                    $s->sanction_rescreen_at = Carbon::now();
+                    $s->save();
+                }
+            });
+            self::auditLog($settlement->restaurant_id, 'offboard_sanction_rescreen_clear', [
+                'settlement_id' => $settlement->id,
+            ]);
+            return ['ok' => true, 'status' => 'clear', 'detail' => (string) ($screen['detail'] ?? '')];
+        }
+
+        // possible / hit → fail-closed(绝不置 sanction_rescreen_at → approve() 拒放行)
+        \App\CentralLogics\NezhaKycScreen::record_risk($settlement->restaurant_id, null, $screen, 'offboard_rescreen');
+        if ($st === 'hit') {
+            DB::transaction(function () use ($settlement) {
+                $s = RestaurantOffboardSettlement::where('id', $settlement->id)->lockForUpdate()->first();
+                if ($s && in_array($s->status, ['applied', 'kyc_pending'], true)) {
+                    $s->status = 'rejected';
+                    $s->active_uniq = null;
+                    $s->note = trim((string) $s->note . ' | 制裁名单命中(L1-6): 拒绝退出放款, 转人工 AML');
+                    $s->save();
+                    $r = Restaurant::find($s->restaurant_id);
+                    if ($r) {
+                        $r->offboard_status = 'active'; // 恢复营业(不给退款; 受制裁主体的经营处置走单独 AML 流程)
+                        $r->save();
+                    }
+                }
+            });
+        }
+        self::auditLog($settlement->restaurant_id, 'offboard_sanction_' . $st, [
+            'settlement_id' => $settlement->id,
+            'detail'        => mb_substr((string) ($screen['detail'] ?? ''), 0, 500),
+        ]);
+        return ['ok' => false, 'status' => $st, 'detail' => (string) ($screen['detail'] ?? '')];
+    }
+
+    /**
+     * §H 审批闸时序: 放款前校验。高额(net≥阈值)强制 approved 后满 H_HIGH_AMOUNT_DELAY_HOURS(次日转)
+     * 才可放款 —— 单超管无第二人时以「异步二次确认 + 时间窗」当双人复核等价替身。
+     * partial 续付不再卡时序(首腿放款时已过闸)。
+     * @return array{ok:bool, reason:string}
+     */
+    public static function canPayNow(RestaurantOffboardSettlement $s): array
+    {
+        if (!in_array($s->status, ['approved', 'paying', 'partial'], true)) {
+            return ['ok' => false, 'reason' => '工单状态非可放款态'];
+        }
+        if ($s->status === 'approved' && (float) $s->net_amount >= self::highAmountThreshold()) {
+            $approvedAt = $s->approved_at ? Carbon::parse($s->approved_at) : null;
+            $readyAt = $approvedAt ? $approvedAt->copy()->addHours(self::H_HIGH_AMOUNT_DELAY_HOURS) : null;
+            if ($readyAt && Carbon::now()->lt($readyAt)) {
+                return ['ok' => false, 'reason' => '高额退款(净额≥' . (int) self::highAmountThreshold() . '֏)须审批满 '
+                    . self::H_HIGH_AMOUNT_DELAY_HOURS . ' 小时后放款; 可放款时间 ' . $readyAt->format('Y-m-d H:i')];
+            }
+        }
+        return ['ok' => true, 'reason' => ''];
     }
 }

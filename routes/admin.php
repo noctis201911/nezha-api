@@ -137,6 +137,14 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::post('set-guarantee-tier', [NezhaDepositController::class, 'set_tier'])->name('set-tier');
         });
 
+        // 哪吒 商家退出结算 审批/放款(step4-4 §H) — 复用 module:deposit 权限位, 不新增权限
+        Route::group(['prefix' => 'nezha-offboard', 'as' => 'nezha-offboard.', 'middleware' => ['module:deposit']], function () {
+            Route::get('/', [\App\Http\Controllers\Admin\NezhaOffboardController::class, 'index'])->name('index');
+            Route::get('show/{id}', [\App\Http\Controllers\Admin\NezhaOffboardController::class, 'show'])->name('show');
+            Route::post('approve/{id}', [\App\Http\Controllers\Admin\NezhaOffboardController::class, 'approve'])->name('approve');
+            Route::post('pay/{id}', [\App\Http\Controllers\Admin\NezhaOffboardController::class, 'pay'])->name('pay');
+        });
+
         // Route::resource('provide-deliveryman-earnings', ProvideDMEarningController::class)->middleware('module:provide_dm_earning');
         // 哪吒 平台集运申报: 需求汇总
         Route::group(['prefix' => 'nezha-consolidation', 'as' => 'nezha-consolidation.'], function () {

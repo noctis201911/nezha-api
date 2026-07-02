@@ -11,6 +11,25 @@
             {{ translate('轻量 KYC(方案B): 运营当面/视频核验商家法人身份后,在此录入【核验结论】(默认不上传证件扫描件,降低 PII 负债)。法人姓名、证件号、收款账户等为敏感信息,已加密存储。') }}
         </div>
 
+        {{-- D2: 待退出核验队列 tab(退出中 kyc_pending 的店) --}}
+        <ul class="nav nav-tabs mb-3">
+            <li class="nav-item">
+                <a class="nav-link {{ ($queue ?? '') !== 'offboard' ? 'active' : '' }}" href="{{ route('admin.nezha-kyc.index') }}">{{ translate('全部商家') }}</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {{ ($queue ?? '') === 'offboard' ? 'active' : '' }}" href="{{ route('admin.nezha-kyc.index', ['queue' => 'offboard']) }}">
+                    {{ translate('待退出核验') }}
+                    @if(($offboardPendingCount ?? 0) > 0)<span class="badge badge-danger ml-1">{{ $offboardPendingCount }}</span>@endif
+                </a>
+            </li>
+        </ul>
+        @if(($queue ?? '') === 'offboard')
+            <div class="alert alert-soft-warning" role="alert">
+                <i class="tio-shield-outlined"></i>
+                {{ translate('这些商家已申请退出平台, 需先完成身份核验(KYC)才能进入结算退款。请当面/视频核验后在下方录入并审核; 超过 SLA 天数的会标红提醒。') }}
+            </div>
+        @endif
+
         <div class="card">
             <div class="card-header">
                 <form action="{{ route('admin.nezha-kyc.index') }}" method="get" class="row g-2 align-items-center w-100">
@@ -42,7 +61,17 @@
                                 @php($ks = $p->kyc_status ?? 'none')
                                 <tr>
                                     <td>{{ $r->id }}</td>
-                                    <td>{{ $r->name }}</td>
+                                    <td>
+                                        {{ $r->name }}
+                                        @if(($queue ?? '') === 'offboard' && isset($offboardKyc[$r->id]))
+                                            @php($os = $offboardKyc[$r->id])
+                                            @php($appliedAt = $os->applied_at ? \Carbon\Carbon::parse($os->applied_at) : null)
+                                            @php($overdue = $appliedAt && $appliedAt->diffInDays(now()) >= ($offboardSlaDays ?? 3))
+                                            <div class="small {{ $overdue ? 'text-danger font-weight-bold' : 'text-muted' }}">
+                                                {{ translate('退出申请') }}: {{ $appliedAt ? $appliedAt->format('Y-m-d') : '—' }}@if($overdue) · {{ translate('已超期, 请尽快核验') }}@endif
+                                            </div>
+                                        @endif
+                                    </td>
                                     <td><small class="text-muted">{{ $r->email }}<br>{{ $r->phone }}</small></td>
                                     <td>
                                         @if ($ks === 'approved')
