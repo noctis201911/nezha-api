@@ -3,7 +3,49 @@
 @section('title',translate('messages.foods_bulk_import'))
 
 @push('css_or_js')
-
+    <style>
+        .nz-file-clean {
+            position: relative;
+            height: 42px;
+        }
+        .nz-file-clean input[type="file"] {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+            z-index: 2;
+        }
+        .nz-file-clean .custom-file-label {
+            display: flex;
+            align-items: center;
+            height: 42px;
+            padding: 0 14px;
+            border: 1px solid #d8e0ea;
+            border-radius: 7px;
+            color: transparent;
+            background: #fff;
+            overflow: hidden;
+        }
+        .nz-file-clean .custom-file-label::before {
+            content: attr(data-label);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 94px;
+            height: 30px;
+            padding: 0 14px;
+            border-radius: 6px;
+            background: #f4f6f9;
+            color: #344054;
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .nz-file-clean .custom-file-label::after {
+            display: none;
+        }
+    </style>
 @endpush
 
 @section('content')
@@ -78,9 +120,9 @@
             <div class="card rest-part">
                 <div class="card-body">
                     <h4 class="mb-3 mt-2">{{ translate('Import Foods') }}</h4>
-                    <div class="custom-file custom--file">
-                        <input type="file" name="products_file" class="form-control" id="bulk__import">
-                        <label class="custom-file-label" for="bulk__import">{{ translate('Choose File') }}</label>
+                    <div class="custom-file custom--file nz-file-clean">
+                        <input type="file" name="products_file" class="custom-file-input" id="bulk__import">
+                        <label class="custom-file-label" for="bulk__import" data-label="{{ translate('Choose File') }}">{{ translate('Choose File') }}</label>
                     </div>
                     <div class="btn--container justify-content-end mt-3">
                         <button id="reset_btn" type="reset" class="btn btn--reset">{{translate('messages.reset')}}</button>
