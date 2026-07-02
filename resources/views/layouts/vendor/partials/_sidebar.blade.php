@@ -484,12 +484,17 @@
                     @endif
 
                     @if(\App\CentralLogics\Helpers::employee_module_permission_check('reviews'))
+                        {{-- 哪吒[差评预警]: 未回复差评数红角标 —— 全站每页可见, 解决"数据看板不常看→功能难发现"。计数收口 NezhaBadReview 单一真相源(与看板卡/深链同源), 0 时不显。 --}}
+                        @php($__nzBadReview = \App\CentralLogics\NezhaBadReview::count(\App\CentralLogics\Helpers::get_restaurant_id()))
                         <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/reviews')?'active':''}}">
                             <a class="js-navbar-vertical-aside-menu-link nav-link"
                                href="{{route('vendor.reviews')}}" title="{{translate('messages.reviews')}}">
                                 <i class="tio-star-outlined nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
+                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate sidebar--badge-container">
                                 {{translate('messages.reviews')}}
+                                @if($__nzBadReview > 0)
+                                    <span class="badge badge-soft-danger badge-pill ml-1">{{ $__nzBadReview }}</span>
+                                @endif
                             </span>
                             </a>
                         </li>

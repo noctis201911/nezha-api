@@ -241,23 +241,14 @@ class DashboardController extends Controller
         $rateCny = (float) (DB::table('business_settings')->where('key', 'nezha_rate_cny_to_amd')->value('value') ?: 55);
         $rateUsd = (float) (DB::table('business_settings')->where('key', 'nezha_rate_usd_to_amd')->value('value') ?: 400);
 
-        // 哪吒[差评预警 2026-07-02]: 最近7天 rating<=3 且未回复的新差评数(纯 L3 只读聚合, 首屏推到眼前)。
-        // 作用域与商家评价页 ReviewController@index 完全同源(whereHas food.restaurant_id + reply 空 + rating<=3 + 同一日期窗),
-        // 保证「预警数字」==「点进去评价列表条数」(反 drift 铁律, 参考 M-01/M-02 计数收口)。
-        // 单条 COUNT(*)+EXISTS 子查询无 N+1; 仅首屏一次, 不进轮询端点 restaurant_data()(避免每 6s 多打一次库)。
-        $bad_review_days = 7;
-        $bad_review_from = Carbon::today()->subDays($bad_review_days - 1)->format('Y-m-d'); // 含今天共7个自然日
-        $bad_review_to   = Carbon::today()->format('Y-m-d');
-        $bad_review_count = \App\Models\Review::whereHas('food', function ($q) use ($rid) {
-                $q->where('restaurant_id', $rid);
-            })
-            ->where('rating', '<=', 3)
-            ->where(function ($q) { $q->whereNull('reply')->orWhere('reply', '=', ''); })
-            ->whereBetween('created_at', [
-                Carbon::createFromFormat('Y-m-d', $bad_review_from)->startOfDay(),
-                Carbon::createFromFormat('Y-m-d', $bad_review_to)->endOfDay(),
-            ])
-            ->count();
+        // 哪吒[差评预警]: 计数收口到单一真相源 NezhaBadReview —— 看板卡/侧栏「评价」角标/评价页深链三处同源,
+        // 杜绝"看板数 vs 侧栏数 vs 列表数"三套口径漂移(参考 M-01/M-02、NezhaDepositHealth 收口套路)。
+        // 纯 L3 只读聚合; 仅首屏一次, 不进轮询端点 restaurant_data()(避免每 6s 多打一次库)。
+        $bad = \App\CentralLogics\NezhaBadReview::summary($rid);
+        $bad_review_count = $bad['bad_review_count'];
+        $bad_review_days  = $bad['bad_review_days'];
+        $bad_review_from  = $bad['bad_review_from'];
+        $bad_review_to    = $bad['bad_review_to'];
 
         return [
             'today_orders'    => $today_orders,
