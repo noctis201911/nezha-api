@@ -151,6 +151,12 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('export', [\App\Http\Controllers\Admin\NezhaSearchDemandController::class, 'export'])->name('export');
         });
 
+        // 哪吒: 顾客取消理由分析(只读, 数据源 orders 表)
+        Route::group(['prefix' => 'nezha-order-cancel-demand', 'as' => 'nezha-order-cancel-demand.'], function () {
+            Route::get('/', [\App\Http\Controllers\Admin\NezhaOrderCancelDemandController::class, 'index'])->name('index');
+            Route::get('export', [\App\Http\Controllers\Admin\NezhaOrderCancelDemandController::class, 'export'])->name('export');
+        });
+
 Route::middleware('module:provide_dm_earning')->group(function () {
             Route::get('provide-deliveryman-earnings', [ProvideDMEarningController::class, 'index'])->name('provide-deliveryman-earnings.index');
             Route::post('provide-deliveryman-earnings', [ProvideDMEarningController::class, 'store'])->name('provide-deliveryman-earnings.store');
