@@ -1,5 +1,5 @@
 <div class="row">
-    <div class="col-lg-12 text-center "><h1 > {{ translate('messages.Order_Refund_List') }}</h1></div>
+    <div class="col-lg-12 text-center "><h1 > 退款订单列表</h1></div>
     <div class="col-lg-12">
 
 
@@ -11,14 +11,14 @@
                 <th></th>
                 <th></th>
                 <th>
-                    {{ translate('Refund_status' )}} : {{ translate($data['refund_status'] ?? $data['status']) }}
+                    退款状态 : {{ translate($data['refund_status'] ?? $data['status']) }}
                     @if ($data['search'])
                     <br>
                     {{ translate('search_bar_content' )}} : {{ $data['search'] }}
                     @endif
                     @if ($data['zones'])
                     <br>
-                    {{ translate('zones' )}} : {{ $data['zones'] }}
+                    区域 : {{ $data['zones'] }}
                     @endif
                     @if ($data['restaurant'])
                     <br>
@@ -30,11 +30,11 @@
                     @endif
                     @if ($data['from'])
                     <br>
-                    {{ translate('from' )}} : {{ $data['from']?Carbon\Carbon::parse($data['from'])->format('d M Y'):'' }}
+                    起始日期 : {{ $data['from']?Carbon\Carbon::parse($data['from'])->format('Y-m-d'):'' }}
                     @endif
                     @if ($data['to'])
                     <br>
-                    {{ translate('to' )}} : {{ $data['to']?Carbon\Carbon::parse($data['to'])->format('d M Y'):'' }}
+                    截止日期 : {{ $data['to']?Carbon\Carbon::parse($data['to'])->format('Y-m-d'):'' }}
                     @endif
 
                 </th>
@@ -57,8 +57,10 @@
                 <th>{{ translate('messages.Refund_Status') }}</th>
                 <th>{{ translate('messages.Customer_Note') }}</th>
                 <th>{{ translate('messages.Admin_Note') }}</th>
+                <th>支付方式</th>
                 <th>{{ translate('messages.Payment_Satus') }}</th>
                 <th>{{ translate('messages.Order_Type') }}</th>
+                <th>菜品明细</th>
             </tr>
         </thead>
         <tbody>
@@ -97,8 +99,31 @@
                 <td>
                     {{ $order?->refund?->admin_note ?? translate('messages.N/A') }}
                 </td>
+                <td>
+                    @php
+                        $__pm = $order['payment_method'] ?? null;
+                        $__m = null;
+                        if ($__pm === 'offline_payment' && $order->offline_payments) {
+                            $__pi = json_decode($order->offline_payments->payment_info, true) ?: [];
+                            $__m = $__pi['method_name'] ?? null;
+                        } elseif ($__pm === 'cash_on_delivery') { $__m = translate('messages.cash_on_delivery'); }
+                        elseif ($__pm === 'digital_payment') { $__m = translate('messages.digital_payment'); }
+                    @endphp
+                    {{ $__m ?: '—' }}
+                </td>
                 <td>{{ translate($order->payment_status) }}</td>
                 <td>{{ translate($order->order_type) }}</td>
+                <td>
+                    @php
+                        $__items = [];
+                        foreach ($order->details as $__d) {
+                            $__fd = is_string($__d->food_details) ? json_decode($__d->food_details, true) : $__d->food_details;
+                            $__nm = $__fd['name'] ?? '—';
+                            $__items[] = $__nm . ($__d->quantity > 1 ? ' ×' . $__d->quantity : '');
+                        }
+                    @endphp
+                    {{ implode('、', $__items) }}
+                </td>
             </tr>
         @endforeach
         </tbody>

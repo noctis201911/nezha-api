@@ -1,5 +1,5 @@
 <div class="row">
-    <div class="col-lg-12 text-center "><h1 >{{ translate($data['status'] ?? 'messages.All') }} {{ translate('messages.Order_List') }}</h1></div>
+    <div class="col-lg-12 text-center "><h1 >{{ translate($data['status'] ?? 'messages.All') }} 订单列表</h1></div>
     <div class="col-lg-12">
 
 
@@ -18,7 +18,7 @@
                     @endif
                     @if ($data['zones'])
                     <br>
-                    {{ translate('zones' )}} : {{ $data['zones'] }}
+                    区域 : {{ $data['zones'] }}
                     @endif
                     @if ($data['restaurant'])
                     <br>
@@ -30,11 +30,11 @@
                     @endif
                     @if ($data['from'])
                     <br>
-                    {{ translate('from' )}} : {{ $data['from']?Carbon\Carbon::parse($data['from'])->format('d M Y'):'' }}
+                    起始日期 : {{ $data['from']?Carbon\Carbon::parse($data['from'])->format('Y-m-d'):'' }}
                     @endif
                     @if ($data['to'])
                     <br>
-                    {{ translate('to' )}} : {{ $data['to']?Carbon\Carbon::parse($data['to'])->format('d M Y'):'' }}
+                    截止日期 : {{ $data['to']?Carbon\Carbon::parse($data['to'])->format('Y-m-d'):'' }}
                     @endif
 
                 </th>
@@ -56,9 +56,11 @@
                 <th>{{ translate('messages.Discounted_Amount') }}</th>
                 <th>{{ translate('messages.Tax') }}</th>
                 <th>{{ translate('messages.Total_Amount') }}</th>
+                <th>支付方式</th>
                 <th>{{ translate('messages.Payment_Status') }}</th>
                 <th>{{ translate('messages.Order_Status') }}</th>
                 <th>{{ translate('messages.Order_Type') }}</th>
+                <th>菜品明细</th>
             </tr>
         </thead>
         <tbody>
@@ -89,9 +91,32 @@
                 <td>{{ \App\CentralLogics\Helpers::number_format_short($order['coupon_discount_amount'] + $order['restaurant_discount_amount'] + $order['ref_bonus_amount']) }}</td>
                 <td>{{ \App\CentralLogics\Helpers::number_format_short($order['total_tax_amount']) }}</td>
                 <td>{{ \App\CentralLogics\Helpers::number_format_short($order['order_amount']) }}</td>
+                <td>
+                    @php
+                        $__pm = $order['payment_method'] ?? null;
+                        $__m = null;
+                        if ($__pm === 'offline_payment' && $order->offline_payments) {
+                            $__pi = json_decode($order->offline_payments->payment_info, true) ?: [];
+                            $__m = $__pi['method_name'] ?? null;
+                        } elseif ($__pm === 'cash_on_delivery') { $__m = translate('messages.cash_on_delivery'); }
+                        elseif ($__pm === 'digital_payment') { $__m = translate('messages.digital_payment'); }
+                    @endphp
+                    {{ $__m ?: '—' }}
+                </td>
                 <td>{{ translate($order->payment_status) }}</td>
                 <td>{{ translate($order->order_status) }}</td>
                 <td>{{ translate($order->order_type) }}</td>
+                <td>
+                    @php
+                        $__items = [];
+                        foreach ($order->details as $__d) {
+                            $__fd = is_string($__d->food_details) ? json_decode($__d->food_details, true) : $__d->food_details;
+                            $__nm = $__fd['name'] ?? '—';
+                            $__items[] = $__nm . ($__d->quantity > 1 ? ' ×' . $__d->quantity : '');
+                        }
+                    @endphp
+                    {{ implode('、', $__items) }}
+                </td>
             </tr>
         @endforeach
         </tbody>

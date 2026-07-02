@@ -913,7 +913,7 @@ class OrderController extends Controller
 
             Order::where(['checked' => 0])->where('restaurant_id', Helpers::get_restaurant_id())->update(['checked' => 1]);
 
-            $orders = Order::with(['customer'])
+            $orders = Order::with(['customer', 'offline_payments', 'details'])
                 ->when($status == 'searching_for_deliverymen', function ($query) {
                     return $query->SearchingForDeliveryman();
                 })

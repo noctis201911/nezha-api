@@ -17,13 +17,14 @@
         .nz-search-area .input--group { width: 360px; max-width: 100%; }
         /* 哪吒 P7: 8 列宽度(此前为 9 列旧值套在现 8 列上, P2 合并两图标列为⋯后残留, 已校正) */
         .nz-order-table-card #datatable th:nth-child(1), .nz-order-table-card #datatable td:nth-child(1) { width: 5%; }
-        .nz-order-table-card #datatable th:nth-child(2), .nz-order-table-card #datatable td:nth-child(2) { width: 20%; }
-        .nz-order-table-card #datatable th:nth-child(3), .nz-order-table-card #datatable td:nth-child(3) { width: 14%; }
-        .nz-order-table-card #datatable th:nth-child(4), .nz-order-table-card #datatable td:nth-child(4) { width: 16%; }
-        .nz-order-table-card #datatable th:nth-child(5), .nz-order-table-card #datatable td:nth-child(5) { width: 12%; }
-        .nz-order-table-card #datatable th:nth-child(6), .nz-order-table-card #datatable td:nth-child(6) { width: 12%; }
-        .nz-order-table-card #datatable th:nth-child(7), .nz-order-table-card #datatable td:nth-child(7) { width: 14%; }
-        .nz-order-table-card #datatable th:nth-child(8), .nz-order-table-card #datatable td:nth-child(8) { width: 7%; }
+        .nz-order-table-card #datatable th:nth-child(2), .nz-order-table-card #datatable td:nth-child(2) { width: 18%; }
+        .nz-order-table-card #datatable th:nth-child(3), .nz-order-table-card #datatable td:nth-child(3) { width: 12%; }
+        .nz-order-table-card #datatable th:nth-child(4), .nz-order-table-card #datatable td:nth-child(4) { width: 15%; }
+        .nz-order-table-card #datatable th:nth-child(5), .nz-order-table-card #datatable td:nth-child(5) { width: 11%; }
+        .nz-order-table-card #datatable th:nth-child(6), .nz-order-table-card #datatable td:nth-child(6) { width: 10%; }
+        .nz-order-table-card #datatable th:nth-child(7), .nz-order-table-card #datatable td:nth-child(7) { width: 11%; }
+        .nz-order-table-card #datatable th:nth-child(8), .nz-order-table-card #datatable td:nth-child(8) { width: 12%; }
+        .nz-order-table-card #datatable th:nth-child(9), .nz-order-table-card #datatable td:nth-child(9) { width: 6%; }
         .nz-print-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid #EDF1F5; background: #FFF7F8; color: #7c1228; font-size: 13px; }
         .nz-print-settings label { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 700; }
         .nz-print-settings input { accent-color: #C4193E; }
@@ -79,6 +80,7 @@
         .nz-proof-modal-img { width: 100%; max-height: 76vh; object-fit: contain; background: #0F172A; border-radius: 8px; }
         .nz-order-status-muted { color: #8A94A6; font-size: 12px; font-weight: 600; }
         .nz-step-empty { color: #98A2B3; font-size: 12px; font-weight: 700; }
+        .nz-pay-method { display:inline-block; padding:2px 9px; border-radius:8px; background:#F1F3F6; color:#344054; font-size:12.5px; font-weight:600; white-space:nowrap; }
         .nz-step-btn { border-radius: 7px !important; font-size: 12px !important; padding: 6px 12px !important; min-width: 86px; font-weight: 800 !important; }
         .nz-action-icon { width: 38px; height: 36px; border-radius: 7px !important; display: inline-flex; align-items: center; justify-content: center; }
         .nz-order-status-hero { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; padding: 14px 16px; margin-bottom: 12px; border: 1px solid #E6EAF0; border-radius: 10px; background: #fff; box-shadow: 0 1px 4px rgba(16,24,40,.04); }
@@ -412,6 +414,7 @@
                             <label class="nz-col-opt"><input type="checkbox" data-nz-col="date" checked><span>日期</span></label>
                             <label class="nz-col-opt"><input type="checkbox" data-nz-col="customer" checked><span>顾客</span></label>
                             <label class="nz-col-opt"><input type="checkbox" data-nz-col="total" checked><span>金额</span></label>
+                            <label class="nz-col-opt"><input type="checkbox" data-nz-col="payment" checked><span>支付方式</span></label>
                             <label class="nz-col-opt nz-col-locked"><input type="checkbox" checked disabled><span>订单状态</span><i class="tio-lock"></i></label>
                             <label class="nz-col-opt nz-col-locked"><input type="checkbox" checked disabled><span>下一步操作</span><i class="tio-lock"></i></label>
                             <label class="nz-col-opt"><input type="checkbox" data-nz-col="more" checked><span>更多（⋯ 菜单）</span></label>
@@ -475,6 +478,7 @@
                         <th class="w-140px">{{translate('messages.order_date')}}</th>
                         <th class="w-160px">{{translate('messages.customer_information')}}</th>
                         <th class="w-110px">{{translate('messages.total_amount')}}</th>
+                        <th class="w-120px text-center">支付方式</th>
                         <th class="w-110px text-center">{{translate('messages.order_status')}}</th>
                         <th class="w-130px text-center">下一步操作</th>
                         <th class="w-56px text-center">更多</th>
@@ -594,6 +598,26 @@
                                     @endif
                                 </div>
 
+                            </td>
+                            <td class="text-center nz-order-pay-cell" data-label="支付方式">
+                                @php
+                                    $__pm = $order['payment_method'] ?? null;
+                                    $__payLabel = null;
+                                    if ($__pm === 'offline_payment' && $order->offline_payments) {
+                                        $__pinfo = json_decode($order->offline_payments->payment_info, true) ?: [];
+                                        $__payLabel = $__pinfo['method_name'] ?? null;
+                                    }
+                                    elseif ($__pm === 'cash_on_delivery') {
+                                        $__payLabel = translate('messages.cash_on_delivery');
+                                    } elseif ($__pm === 'digital_payment') {
+                                        $__payLabel = translate('messages.digital_payment');
+                                    }
+                                @endphp
+                                @if($__payLabel)
+                                    <span class="nz-pay-method">{{ $__payLabel }}</span>
+                                @else
+                                    <span class="text-muted">—</span>
+                                @endif
                             </td>
                             <td class="text-capitalize text-center nz-order-status-cell" data-label="{{translate('messages.order_status')}}">
                                 @if(!empty($__proofs))
@@ -1144,8 +1168,8 @@
                 var table = document.getElementById('datatable');
                 if (!menu || !table) return;
                 var STORE_KEY = 'nzOrderColPrefs';
-                // 可隐列 → 表头 1-based 列序(锁死列 订单号2/状态6/下一步7 不在此表, 不可隐)
-                var COL_POS = { sl: 1, date: 3, customer: 4, total: 5, more: 8 };
+                // 可隐列 → 表头 1-based 列序(锁死列 订单号2/状态7/下一步8 不在此表, 不可隐)
+                var COL_POS = { sl: 1, date: 3, customer: 4, total: 5, payment: 6, more: 9 };
                 var styleEl = document.getElementById('nzColHideStyle');
                 if (!styleEl){ styleEl = document.createElement('style'); styleEl.id = 'nzColHideStyle'; document.head.appendChild(styleEl); }
                 var prefs = {};
