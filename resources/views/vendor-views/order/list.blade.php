@@ -513,6 +513,8 @@
                                             <small class="text-success">{{translate('messages.paid')}}</small>
                                         @elseif($order->payment_status=='partially_paid')
                                             <small class="text-success">{{translate('messages.partially_paid')}}</small>
+                                        @elseif($order->payment_status=='refunded')
+                                            <small class="text-muted">{{translate('messages.refunded')}}</small>
                                         @else
                                             <small class="text-danger">{{translate('messages.unpaid')}}</small>
                                         @endif
@@ -581,6 +583,10 @@
                                         <strong class="text-success">
                                             {{translate('messages.partially_paid')}}
                                         </strong>
+                                    @elseif($order->payment_status=='refunded')
+                                        <strong class="text-muted">
+                                            {{translate('messages.refunded')}}
+                                        </strong>
                                     @else
                                         <strong class="text-danger">
                                             {{translate('messages.unpaid')}}
@@ -637,6 +643,10 @@
                                             退款申请已撤销
                                         </span>
                                     @elseif($order['order_status']=='canceled')
+                                        <span class="badge nz-st-cancel mb-1">
+                                            {{translate(str_replace('_',' ',$order['order_status']))}}
+                                        </span>
+                                    @elseif($order['order_status']=='refunded')
                                         <span class="badge nz-st-cancel mb-1">
                                             {{translate(str_replace('_',' ',$order['order_status']))}}
                                         </span>
