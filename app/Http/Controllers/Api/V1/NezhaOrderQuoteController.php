@@ -13,14 +13,15 @@ use App\Models\ItemCampaign;
 use App\Models\Restaurant;
 use App\Models\AddOn;
 
-// 哪吒[多级满减·Phase4] 结算「满减/券 取更优」只读预览端点。
-//   触点3 结算满减单列要显"本单最终减多少 / 满减 vs 券谁赢"——这是 place_order 用【非对称基数】(券含加料·满减不含加料)
-//   现算的决策, 前端无法可靠复现。本端点复用 place_order 完全相同的口径与原语(getTieredDiscount / CouponLogic::get_discount /
-//   coupon_check / calculate_addon_price / get_varient / food_discount_calculate)只读现算返回, 前端只渲染不复算金钱逻辑。
-//   取优规则与 OrderController::place_order 券取优段同源, 由 tests/Feature/NezhaTieredQuoteParityTest 锁死等价
-//   (place_order 改取优而不同步本端点 → 测试红)。
-//   ⛔ 只读: 不建单 / 不落库 / 不增库存 / 不发通知。灰度 nezha_tiered_discount_status 关时 getTieredDiscount 返回 null
-//   → tiered 恒 inert(prod 不可见, 与下单路径一致)。
+// 哪吒[多级满减·Phase4] 结算「满减/券 取更优」+ 满减档位阶梯 只读预览端点(单一真相源)。
+//   前端所有满减注解(芯片条 已减/还差/共减 · 购物车条小注 · 凑单助手进度 · 结算满减行 · 券取优赢家)
+//   一律取自本端点, 前端不复算金钱(¥47/¥48 双轨教训)。ladder 让触点1/2 纯渲染:
+//     - 券 vs 满减取优 = place_order 用【非对称基数】(券含加料·满减不含加料)现算的决策, 前端无法可靠复现;
+//     - 复用 place_order 完全相同的口径与原语(getTieredDiscount/CouponLogic::get_discount/coupon_check/
+//       calculate_addon_price/get_varient/food_discount_calculate), 取优规则与 place_order 券取优段同源,
+//       由 tests/Feature 的 parity 脚本锁死等价。
+//   ⛔ 只读: 不建单/不落库/不增库存/不发通知。灰度 nezha_tiered_discount_status 关时 loadTieredActivity 返回
+//   null → has_tiered=false·ladder 空 → 前端整条不渲染(prod 不可见, 与下单路径一致)。
 class NezhaOrderQuoteController extends Controller
 {
     public function quote(Request $request)
@@ -40,6 +41,7 @@ class NezhaOrderQuoteController extends Controller
 
         $owner_id = $request->user ? $request->user->id : $request->guest_id;
         $is_guest = $request->user ? 0 : 1;
+        $digits = config('round_up_to_digit');
 
         // 与 place_order 同一车口径: 只取本店车项(多店购物车不混算)
         $carts = Cart::where('user_id', $owner_id)->where('is_guest', $is_guest)
@@ -50,8 +52,6 @@ class NezhaOrderQuoteController extends Controller
                 $data->variations = is_string($data->variations) ? json_decode($data->variations, true) : $data->variations;
                 return $data;
             });
-
-        $digits = config('round_up_to_digit');
 
         $product_price = 0;
         $total_addon_price = 0;
@@ -85,7 +85,6 @@ class NezhaOrderQuoteController extends Controller
                 $price = $product['price'];
             }
 
-            // food 自身折扣(单品·与满减独立)。与 place_order 同一算法, 供无满减命中时的商品级折扣基线。
             $fmt = Helpers::product_data_formatting(data: $product, multi_data: false, trans: false, local: app()->getLocale(), maxDiscount: false);
             $pd = Helpers::food_discount_calculate($fmt, $price, $restaurant, false);
 
@@ -94,8 +93,49 @@ class NezhaOrderQuoteController extends Controller
             $food_discount_sum += (data_get($pd, 'discount_amount', 0)) * $qty;
         }
 
+        // ---- 满减档位阶梯(供触点1 芯片条 / 触点2 凑单助手 纯渲染) ----
+        // 满减基数 = product_price(不含加料·不减 food 折扣, 与后端门槛同口径)。
+        $tiered = Helpers::getTieredDiscount($restaurant, $product_price);
+        $activity = Helpers::loadTieredActivity($restaurant); // 灰度关/无活动 → null
+        $has_tiered = (bool) $activity;
+        $current_tier_id = data_get($tiered, 'tier_id');
+        $ladder = [];
+        $next_tier = null;
+        if ($activity) {
+            foreach ($activity->tiers as $t) {
+                $reached = $product_price >= $t->min_purchase;
+                // 共减总额: amount 档 = 固定减额; percent 档 = null(前端显「享N折(封顶W)」, 不冻结数字)
+                $total_off = $t->discount_type === 'amount' ? round((float) $t->discount, $digits) : null;
+                $ladder[] = [
+                    'min_purchase'  => (float) $t->min_purchase,
+                    'discount_type' => $t->discount_type,
+                    'discount'      => (float) $t->discount,
+                    'max_discount'  => (float) $t->max_discount,
+                    'reached'       => $reached,
+                    'is_current'    => $current_tier_id && (int) $t->id === (int) $current_tier_id,
+                    'total_off'     => $total_off,
+                ];
+                if (!$reached && $next_tier === null) {
+                    $next_tier = [
+                        'min_purchase'  => (float) $t->min_purchase,
+                        'shortfall'     => round($t->min_purchase - $product_price, $digits),
+                        'discount_type' => $t->discount_type,
+                        'discount'      => (float) $t->discount,
+                        'max_discount'  => (float) $t->max_discount,
+                        'total_off'     => $total_off,
+                    ];
+                }
+            }
+        }
+        $current_tier = $tiered ? [
+            'min_purchase'   => (float) $tiered['min_purchase'],
+            'discount_type'  => $tiered['discount_type'],
+            'applied_amount' => round($tiered['discount_amount'], $digits), // 已减(当前生效档)
+        ] : null;
+        $all_reached = $has_tiered && $next_tier === null;
+
         if ($product_price <= 0) {
-            return response()->json($this->emptyQuote());
+            return response()->json($this->emptyQuote($has_tiered, $ladder));
         }
 
         // 券(可选): 复用 place_order 同一 coupon_check(过期/归属/限领/门槛)。无效则软标记, 不 403。
@@ -111,8 +151,6 @@ class NezhaOrderQuoteController extends Controller
         }
 
         // 商品级折扣: 满减(vendor·灰度门内)覆盖单品 food 折扣; 无满减走 legacy admin(生产空)或 food 折扣。同 place_order:431-485
-        $tiered = Helpers::getTieredDiscount($restaurant, $product_price);
-        $tiered_would_be = $tiered ? $tiered['discount_amount'] : 0;
         $product_discount = $food_discount_sum;
         if ($tiered) {
             $product_discount = $tiered['discount_amount'];
@@ -131,7 +169,6 @@ class NezhaOrderQuoteController extends Controller
                 ? 0
                 : CouponLogic::get_discount(coupon: $coupon, order_amount: $coupon_basis_no_tiered);
             if ($coupon_if_win > $tiered['discount_amount']) {
-                $tiered = null;
                 $product_discount = 0; // 满减让位; food 折扣此前已被满减覆盖 → 同 place_order 一并归零
                 $winner = 'coupon';
             } else {
@@ -162,11 +199,18 @@ class NezhaOrderQuoteController extends Controller
         }
 
         return response()->json([
+            'has_tiered'    => $has_tiered,
+            'product_price' => round($product_price, $digits),
+            'addon_price'   => round($total_addon_price, $digits),
+            'ladder'        => $ladder,
+            'current_tier'  => $current_tier,   // 已减(当前生效档) · null=未达任何档
+            'next_tier'     => $next_tier,       // 还差/共减(下一未达档) · null=已满最高档
+            'all_reached'   => $all_reached,
             'tiered' => [
-                'active'        => $tiered_would_be > 0,
+                'active'        => $current_tier !== null,
                 'won'           => $winner === 'tiered',
                 'amount'        => $winner === 'tiered' ? round($product_discount, $digits) : 0,
-                'would_be'      => round($tiered_would_be, $digits),
+                'would_be'      => $current_tier ? $current_tier['applied_amount'] : 0,
                 'discount_type' => data_get($tiered, 'discount_type'),
                 'min_purchase'  => data_get($tiered, 'min_purchase'),
             ],
@@ -180,21 +224,24 @@ class NezhaOrderQuoteController extends Controller
             'winner'           => $winner,
             'product_discount' => round($product_discount, $digits),
             'coupon_discount'  => round($coupon_discount, $digits),
-            'product_price'    => round($product_price, $digits),
-            'addon_price'      => round($total_addon_price, $digits),
         ]);
     }
 
-    private function emptyQuote()
+    private function emptyQuote($has_tiered = false, $ladder = [])
     {
         return [
+            'has_tiered'    => $has_tiered,
+            'product_price' => 0,
+            'addon_price'   => 0,
+            'ladder'        => $ladder,
+            'current_tier'  => null,
+            'next_tier'     => null,
+            'all_reached'   => false,
             'tiered' => ['active' => false, 'won' => false, 'amount' => 0, 'would_be' => 0, 'discount_type' => null, 'min_purchase' => null],
             'coupon' => ['code' => null, 'won' => false, 'amount' => 0, 'below_min' => false, 'invalid' => null],
             'winner' => 'none',
             'product_discount' => 0,
             'coupon_discount' => 0,
-            'product_price' => 0,
-            'addon_price' => 0,
         ];
     }
 }
