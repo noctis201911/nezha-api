@@ -214,6 +214,12 @@ class OrderController extends Controller
         $original_delivery_charge = data_get($claculate_original_delivery_fee,'original_delivery_charge');
         $delivery_charge = data_get($claculate_original_delivery_fee,'delivery_charge');
 
+        // 哪吒[配送区闸]: claculate_original_delivery_fee 对越区(坐标不在餐厅 zone 多边形)会返回 status_code 403 out_of_coverage,
+        // 此前 place_order 只取 delivery_charge、吞掉了这个 403 -> 越区单照建。补拦: 非配送区不建单(对齐 order_validation_check 的 403 处理)。
+        if (data_get($claculate_original_delivery_fee, 'status_code') === 403) {
+            return response()->json(['errors' => [['code' => data_get($claculate_original_delivery_fee, 'code'), 'message' => data_get($claculate_original_delivery_fee, 'message')]]], 403);
+        }
+
         $address = [
             'contact_person_name' => $request->contact_person_name ? $request->contact_person_name : ($request->user?$request->user->f_name . ' ' . $request->user->f_name:''),
             'contact_person_number' => $request->contact_person_number ?  $request->contact_person_number: $request->user?->phone,
