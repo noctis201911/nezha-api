@@ -199,7 +199,9 @@
             </div>
         @endif
 
-        <div class="row g-1" id="printableArea">
+        @include('vendor-views.order.partials._detail_modes')
+
+        <div class="row g-1 nz-order-legacy-print collapse" id="printableArea">
             <div class="col-lg-8 order-print-area-left">
                 <!-- Card -->
                 <div class="card mb-3 mb-lg-5">
