@@ -382,7 +382,16 @@ class FoodController extends Controller
             }
             $groups[$key]['foods'][] = $food;
         }
-        $groups = collect($groups)->sortBy('name')->values();
+        // 哪吒[分类排序] 分类块按本店保存的 nezha_category_order 排(未列入的按名称稳定兜底), 与顾客端菜单分区口径一致。
+        $nzCatOrder = json_decode(Helpers::get_restaurant_data()->nezha_category_order ?? '[]', true) ?: [];
+        $nzCatOrder = array_map('intval', $nzCatOrder);
+        $groups = collect($groups)
+            ->sortBy('name')
+            ->sortBy(function ($g) use ($nzCatOrder) {
+                $i = array_search((int) $g['id'], $nzCatOrder, true);
+                return $i === false ? PHP_INT_MAX : $i;
+            })
+            ->values();
 
         return view('vendor-views.product.sort', compact('groups'));
     }
@@ -414,6 +423,28 @@ class FoodController extends Controller
 
             return response()->json(['status' => false, 'message' => '保存失败'], 500);
         }
+
+        return response()->json(['status' => true, 'message' => '已保存']);
+    }
+
+
+    // 哪吒[分类排序] 保存本店「分类顺序」: order=[categoryId,...] -> restaurants.nezha_category_order。顾客菜单分区+导航按此序。
+    public function categorySortSave(Request $request)
+    {
+        if (! Helpers::get_restaurant_data()->food_section) {
+            return response()->json(['status' => false, 'message' => translate('messages.permission_denied')], 403);
+        }
+
+        $order = $request->input('order', []);
+        if (! is_array($order)) {
+            return response()->json(['status' => false, 'message' => '顺序无效'], 422);
+        }
+        $order = array_values(array_map('intval', $order));
+
+        // 只存本店(get_restaurant_data 已按登录商家限定; 店id 非用户输入决定 -> 防越权)。
+        $restaurant = Helpers::get_restaurant_data();
+        $restaurant->nezha_category_order = json_encode($order);
+        $restaurant->save();
 
         return response()->json(['status' => true, 'message' => '已保存']);
     }

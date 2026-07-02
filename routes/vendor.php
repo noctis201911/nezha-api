@@ -177,6 +177,7 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
             Route::get('sold-out/{id}/{flag}', [FoodController::class, 'soldOut'])->name('sold-out');
             Route::get('sort', [FoodController::class, 'sortIndex'])->name('sort');
             Route::post('sort-save', [FoodController::class, 'sortSave'])->name('sort-save');
+            Route::post('category-sort-save', [FoodController::class, 'categorySortSave'])->name('category-sort-save');
             Route::post('search', [FoodController::class, 'search'])->name('search');
             Route::get('view/{id}', [FoodController::class, 'view'])->name('view');
             Route::get('get-categories', [FoodController::class, 'get_categories'])->name('get-categories');

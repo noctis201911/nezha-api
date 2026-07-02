@@ -125,8 +125,10 @@ class RestaurantController extends Controller
             ->where('categories.status',1)
             ->groupBy('categories')
             ->get();
+            $nzCatOrder = json_decode($restaurant->nezha_category_order ?? '[]', true) ?: []; // 哪吒[分类排序] 读原始模型(须在 formatting 前)
             $restaurant = Helpers::restaurant_data_formatting(data: $restaurant);
             $restaurant['category_ids'] = array_map('intval', $category_ids->pluck('categories')->toArray());
+            $restaurant['nezha_category_order'] = array_values(array_map('intval', $nzCatOrder)); // 商家自定义分类先后; 空=前端用默认序(零影响)
 
             // 哪吒[2026-07-02 修看过的餐厅]: details/{id} 路由无 apiGuestCheck 中间件, $request->user 恒 null 致浏览从不入库(visit_count 全0);
             // 改用 auth('api')->user() 按需解析 Bearer token(游客无 token→null, 不触发中间件401, 浏览照常).
