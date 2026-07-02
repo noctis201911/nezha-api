@@ -6110,4 +6110,12 @@ class Helpers
         if ($L <= 6) return mb_substr($p, 0, 1) . str_repeat('*', max(1, $L - 1));
         return mb_substr($p, 0, 4) . str_repeat('*', max(1, $L - 8)) . mb_substr($p, -4);
     }
+
+    // 哪吒[PII脱敏]: 顾客姓名部分遮盖(首字+**), 用于报表/评价区等浏览类界面(与订单履约页保留完整正交)。
+    public static function mask_name($name)
+    {
+        $n = trim((string) $name);
+        if ($n === '') return $n;
+        return mb_substr($n, 0, 1) . '**';
+    }
 }

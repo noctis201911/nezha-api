@@ -185,7 +185,7 @@
                                         </p>
                                         @elseif($ot->order->is_guest)
                                         @php($customer_details = json_decode($ot->order['delivery_address'],true))
-                                        <strong>{{$customer_details['contact_person_name']}}</strong>
+                                        <strong>{{\App\CentralLogics\Helpers::mask_name($customer_details['contact_person_name'] ?? '')}}</strong>
                                     @else
                                         <label class="badge badge-danger">{{ translate('messages.invalid_customer_data') }}</label>
                                     @endif

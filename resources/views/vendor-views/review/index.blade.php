@@ -148,7 +148,7 @@
                             <td>
                                 @if($review->customer)
                                 <div>
-                                    <h5 class="d-block text-hover-primary mb-1">{{Str::limit($review->customer['f_name']." ".$review->customer['l_name'])}} <i
+                                    <h5 class="d-block text-hover-primary mb-1">{{\App\CentralLogics\Helpers::mask_name($review->customer['f_name']." ".$review->customer['l_name'])}} <i
                                             class="tio-verified text-primary" data-toggle="tooltip" data-placement="top"
                                             title="{{ translate('messages.Verified Customer') }}"></i></h5>
                                     {{-- 哪吒[PII脱敏]: 顾客手机号列表必脱敏(CLAUDE.md红线), 复用 mask_phone 与订单列表同源(+374****0001) --}}
@@ -304,7 +304,7 @@
                                             <div class="mt-2">
                                                 @if($review->customer)
                                                     <div class="min-w-160">
-                                                        <h5 class="d-block text-hover-primary mb-1">{{Str::limit($review->customer['f_name']." ".$review->customer['l_name'])}} <i
+                                                        <h5 class="d-block text-hover-primary mb-1">{{\App\CentralLogics\Helpers::mask_name($review->customer['f_name']." ".$review->customer['l_name'])}} <i
                                                                 class="tio-verified text-primary" data-toggle="tooltip" data-placement="top"
                                                                 title="{{ translate('messages.Verified Customer') }}"></i></h5>
                                                         <span class="d-block font-size-sm gray-dark">{{Str::limit($review->comment)}}</span>

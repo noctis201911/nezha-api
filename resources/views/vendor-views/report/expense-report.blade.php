@@ -160,7 +160,7 @@
                                     {{ $exp->order->customer->f_name.' '.$exp->order->customer->l_name }}
                                     @elseif(isset($exp->order->guest))
                                     @php($customer_details = json_decode($exp->order['delivery_address'],true))
-                                    <strong>{{$customer_details['contact_person_name']}}</strong>
+                                    <strong>{{\App\CentralLogics\Helpers::mask_name($customer_details['contact_person_name'] ?? '')}}</strong>
                                     <div class="fs-12">{{\App\CentralLogics\Helpers::mask_phone($customer_details['contact_person_number'] ?? '')}}</div>
                                 @else
                                     <label class="badge badge-danger">{{translate('messages.invalid_customer_data')}}</label>
