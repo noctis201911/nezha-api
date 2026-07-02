@@ -510,13 +510,13 @@
                                     <span class="nz-order-mobile-amount">
                                         {{\App\CentralLogics\Helpers::format_currency($order['order_amount'])}}
                                         @if($order->payment_status=='paid')
-                                            <small class="text-success">{{translate('messages.paid')}}</small>
+                                            <small class="text-success">已收款</small>
                                         @elseif($order->payment_status=='partially_paid')
-                                            <small class="text-success">{{translate('messages.partially_paid')}}</small>
+                                            <small class="text-success">部分收款</small>
                                         @elseif($order->payment_status=='refunded')
                                             <small class="text-muted">{{translate('messages.refunded')}}</small>
                                         @else
-                                            <small class="text-danger">{{translate('messages.unpaid')}}</small>
+                                            <small class="text-muted">未确认收款</small>
                                         @endif
                                     </span>
                                 </div>
@@ -577,19 +577,19 @@
                                     @endif
                                     @if($order->payment_status=='paid')
                                     <strong class="text-success">
-                                        {{translate('messages.paid')}}
+                                        已收款
                                     </strong>
                                     @elseif($order->payment_status=='partially_paid')
                                         <strong class="text-success">
-                                            {{translate('messages.partially_paid')}}
+                                            部分收款
                                         </strong>
                                     @elseif($order->payment_status=='refunded')
                                         <strong class="text-muted">
                                             {{translate('messages.refunded')}}
                                         </strong>
                                     @else
-                                        <strong class="text-danger">
-                                            {{translate('messages.unpaid')}}
+                                        <strong class="text-muted">
+                                            未确认收款
                                         </strong>
                                     @endif
                                 </div>
