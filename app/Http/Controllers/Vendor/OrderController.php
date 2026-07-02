@@ -546,16 +546,19 @@ class OrderController extends Controller
         $order->delivery_link_reminded_at = null;
         // 哪吒 B方案: 商家填入配送链接 = 配送真实出发, 状态推进到「配送中」(picked_up)。
         // processing/handover 都推进到 picked_up(并补记 handover 承重墙时间戳); 已是 picked_up 只更新链接。
+        $nz_advanced_to_dispatch = false;
         if (in_array($order->order_status, ['processing', 'handover'], true)) {
             if (empty($order->handover)) {
                 $order->handover = now();
             }
             $order->order_status = 'picked_up';
             $order->picked_up = now();
+            $nz_advanced_to_dispatch = true;
         }
         $order->save();
 
-        if (!Helpers::send_order_notification($order)) {
+        // 哪吒 D2: 仅当本次真把状态推进到"配送中"才通知顾客; 已是 picked_up(仅更新/重贴链接)不再发, 防重复"配送中"。
+        if ($nz_advanced_to_dispatch && !Helpers::send_order_notification($order)) {
             Toastr::warning(translate('messages.push_notification_faild'));
         }
 

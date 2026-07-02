@@ -348,6 +348,7 @@ class OrderTimeoutSweep extends Command
             Helpers::send_push_notif_to_device($token, $data);
         }
         Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id);
+        Helpers::markCancelNotified($order->id);
     }
 
     private function waited(Order $order): int

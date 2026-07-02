@@ -1082,6 +1082,10 @@ class OrderController extends Controller
             $order->save();
 
             Helpers::decreaseSellCount(order_details:$order->details);
+            // 哪吒 D1: 已付直付单下方会发专用"联系商家原路退款"通知, 先登记以跳过通用 canceled 站内信(防双通知)。
+            if ($order->payment_method == 'offline_payment' && \App\Models\OfflinePayments::where('order_id', $order->id)->whereIn('status', ['pending', 'verified', 'denied'])->exists()) {
+                Helpers::markCancelNotified($order->id);
+            }
             Helpers::send_order_notification($order);
             Helpers::increment_order_count($order->restaurant); //for subscription package order increase
 

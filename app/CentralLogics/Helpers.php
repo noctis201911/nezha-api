@@ -2428,8 +2428,24 @@ class Helpers
         return true;
     }
 
+    /**
+     * 哪吒 D1: 请求级"顾客取消通知已单独发过"登记表(按 order_id)。取消/退款类路径给顾客发过
+     * 定制通知(含原路退款指引)后调 markCancelNotified, sentUserNotification 便跳过通用 canceled
+     * 站内信, 防同一次取消双通知(顾客侧)。瞬态数组, 不入库、不跨请求。
+     */
+    protected static array $nezhaCancelNotified = [];
+
+    public static function markCancelNotified($orderId): void
+    {
+        if ($orderId) { self::$nezhaCancelNotified[$orderId] = true; }
+    }
+
     public static function sentUserNotification($order)
     {
+        // 哪吒 D1: 已单独发过取消/退款定制通知的单, 跳过通用 canceled 站内信(防双通知)。
+        if (($order->order_status ?? null) === 'canceled' && isset(self::$nezhaCancelNotified[$order->id])) {
+            return true;
+        }
         $status = ($order->order_status == 'delivered' && $order->delivery_man) ? 'delivery_boy_delivered' : $order->order_status;
         $user_fcm = $order->is_guest ? $order?->guest?->fcm_token : $order?->customer?->cm_firebase_token;
         $lang = $order->customer ? ($order?->customer?->current_language_key ?: 'en') : 'en';
