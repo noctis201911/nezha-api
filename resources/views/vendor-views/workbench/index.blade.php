@@ -119,14 +119,11 @@ body.nz-dispatch-lock { overflow: hidden; }
 .nz-dispatch-drawer { position: fixed; inset: 0; z-index: 11050; display: none; }
 .nz-dispatch-drawer.nz-open { display: block; }
 .nz-dispatch-backdrop { position: absolute; inset: 0; background: rgba(16,24,40,.45); }
-.nz-dispatch-sheet { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; border-radius: 16px 16px 0 0; max-height: 88vh; overflow-y: auto; box-shadow: 0 -4px 24px rgba(16,24,40,.18); }
-.nz-dispatch-grip { width: 38px; height: 4px; border-radius: 99px; background: #D8DEE7; margin: 8px auto 2px; }
-.nz-dispatch-head { position: sticky; top: 0; background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 6px 16px 12px; border-bottom: 1px solid #EEF0F3; z-index: 1; }
-.nz-dispatch-title { font-weight: 800; font-size: 15px; color: #17191D; }
-.nz-dispatch-x { border: 0; background: transparent; font-size: 24px; line-height: 1; color: #8A9099; cursor: pointer; padding: 0 4px; }
-.nz-dispatch-body { padding: 4px 16px 20px; }
+.nz-dispatch-sheet { position: absolute; left: 0; right: 0; bottom: 0; top: auto; background: #fff; border-radius: 16px 16px 0 0; height: 88vh; max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 -8px 40px rgba(10,25,47,.4); }
+.nz-dispatch-grip { flex: 0 0 auto; width: 44px; height: 4px; border-radius: 99px; background: #D6DBE1; margin: 8px auto 2px; }
+.nz-dispatch-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 @media (min-width: 768px) {
-    .nz-dispatch-sheet { left: 50%; top: 50%; right: auto; bottom: auto; transform: translate(-50%, -50%); width: 460px; max-width: 92vw; border-radius: 16px; max-height: 84vh; }
+    .nz-dispatch-sheet { left: auto; right: 0; top: 0; bottom: 0; transform: none; width: 440px; max-width: 92vw; height: 100vh; max-height: 100vh; border-radius: 0; box-shadow: -12px 0 40px rgba(10,25,47,.35); }
     .nz-dispatch-grip { display: none; }
 }
 </style>
@@ -151,12 +148,8 @@ body.nz-dispatch-lock { overflow: hidden; }
     {{-- 叫车抽屉外壳(静态·在 #nzwbRefresh 刷新区之外; 仅 #nzDispatchBody 内容由 JS 换入·6s 刷新不误抹开着的抽屉) --}}
     <div class="nz-dispatch-drawer d-print-none" id="nzDispatchDrawer" aria-hidden="true">
         <div class="nz-dispatch-backdrop" data-nz-dispatch-close></div>
-        <div class="nz-dispatch-sheet" role="dialog" aria-modal="true" aria-labelledby="nzDispatchTitle">
+        <div class="nz-dispatch-sheet" role="dialog" aria-modal="true" aria-label="Yandex Go 配送">
             <div class="nz-dispatch-grip"></div>
-            <div class="nz-dispatch-head">
-                <div class="nz-dispatch-title" id="nzDispatchTitle">🛵 Yandex Go 配送</div>
-                <button type="button" class="nz-dispatch-x" data-nz-dispatch-close aria-label="关闭">&times;</button>
-            </div>
             <div class="nz-dispatch-body" id="nzDispatchBody"></div>
         </div>
     </div>
@@ -191,9 +184,8 @@ body.nz-dispatch-lock { overflow: hidden; }
             body.appendChild(src);
             src.style.display = 'block';
             body.scrollTop = 0;
+            var sc = src.querySelector('.nzyx-scroll'); if (sc) sc.scrollTop = 0;
             openId = id;
-            var title = el('nzDispatchTitle');
-            if (title) title.textContent = '🛵 Yandex Go 配送 · 订单 #' + id;
             drawer.classList.add('nz-open');
             drawer.setAttribute('aria-hidden', 'false');
             document.body.classList.add('nz-dispatch-lock');

@@ -84,7 +84,7 @@ class WorkbenchController extends Controller
         );
 
         return $dispatchIds
-            ? Order::with('restaurant')->whereIn('id', $dispatchIds)->get()
+            ? Order::with(['restaurant', 'details'])->whereIn('id', $dispatchIds)->get()
             : collect();
     }
 

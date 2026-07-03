@@ -227,7 +227,7 @@
     <div id="nzDispatchHolder" style="display:none">
         @foreach(($dispatchOrders ?? collect()) as $__do)
             <div id="nzDispatchSrc-{{ $__do->id }}" data-nz-dispatch-src="{{ $__do->id }}">
-                @include('vendor-views.order.partials._dispatch_tools', ['order' => $__do])
+                @include('vendor-views.order.partials._dispatch_tools', ['order' => $__do, 'nzDrawer' => true])
             </div>
         @endforeach
     </div>
