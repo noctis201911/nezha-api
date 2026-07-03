@@ -52,11 +52,11 @@
             align-items: center; justify-content: center; gap: 36px;
         }
 
-        .brand-col { width: 100%; max-width: 540px; text-align: center; justify-self: center; }
+        .brand-col { width: 100%; max-width: 432px; text-align: center; justify-self: center; }
         .brand-logo { display: inline-block; line-height: 0; }
         .brand-logo img { height: clamp(78px, 7vw, 104px); width: auto; display: inline-block; }
         .brand-title { font-size: clamp(30px, 3vw, 38px); line-height: 1.18; font-weight: 700; color: #1C1917; margin: 18px 0 14px; }
-        .brand-desc { font-size: 16px; color: #78716C; max-width: 520px; margin: 0 auto 32px; line-height: 1.75; }
+        .brand-desc { font-size: 16px; color: #78716C; max-width: 432px; margin: 0 auto 32px; line-height: 1.75; }
         .features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; max-width: 432px; margin: 0 auto; }
         .feature-card { min-height: 118px; padding: 18px 12px; background: rgba(255,255,255,0.92); border-radius: 14px; border: 1px solid var(--border); transition: all 0.3s ease; text-align: center; }
         .feature-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(196,25,62,0.06); border-color: rgba(196,25,62,0.2); }
@@ -66,8 +66,8 @@
 
         @media (min-width: 992px) {
             .login-columns { grid-template-columns: minmax(420px, 540px) minmax(380px, 440px); gap: clamp(64px, 8vw, 120px); }
-            .brand-col { justify-self: start; text-align: left; }
-            .brand-col .brand-desc, .brand-col .features { margin-left: 0; margin-right: 0; }
+            .brand-col { justify-self: start; text-align: center; }
+            .brand-col .brand-desc, .brand-col .features { margin-left: auto; margin-right: auto; }
             .card-col { justify-self: end; }
         }
 
