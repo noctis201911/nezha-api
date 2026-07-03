@@ -170,6 +170,11 @@ class OrderController extends Controller
             })
             ->hasSubscriptionToday()
             ->where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())
+            ->when($status == 'refund_pending', function ($q) {
+                // 哪吒P1b-D: 待退款两段式 —— 段A(payment_status=paid·真欠退)置顶, 各段按退款记录龄(挂起最久优先)
+                $q->orderByRaw("(payment_status = 'paid') DESC")
+                  ->orderByRaw("(SELECT MIN(nrr.created_at) FROM nezha_refund_records nrr WHERE nrr.order_id = orders.id AND nrr.status = 'pending_merchant_refund') ASC");
+            })
             ->orderBy('schedule_at', 'desc')
             ->paginate(config('default_pagination'))
             ->withQueryString(); // 哪吒 P5: 分页链接保留 nz_done/nz_done_days/search 等参数, 防翻页丢筛选

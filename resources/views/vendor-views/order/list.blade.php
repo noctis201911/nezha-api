@@ -25,6 +25,12 @@
         .nz-order-table-card #datatable th:nth-child(7), .nz-order-table-card #datatable td:nth-child(7) { width: 11%; }
         .nz-order-table-card #datatable th:nth-child(8), .nz-order-table-card #datatable td:nth-child(8) { width: 12%; }
         .nz-order-table-card #datatable th:nth-child(9), .nz-order-table-card #datatable td:nth-child(9) { width: 6%; }
+        /* 哪吒P1b-D 待退款两段分隔行 */
+        #datatable tr.nz-refund-seg td { display: table-cell !important; width: auto !important; text-align: left !important; border-bottom: 0 !important; padding: 9px 14px !important; font-weight: 700; }
+        #datatable tr.nz-refund-seg td::before { content: none !important; display: none !important; }
+        #datatable tr.nz-refund-seg.segA td { background: #FEECEC; border-left: 3px solid #E5484D; color: #A3121B; }
+        #datatable tr.nz-refund-seg.segB td { background: #F1F3F5; border-left: 3px solid #98A2B3; color: #344054; }
+        @media (max-width: 767px) { #datatable tr.nz-refund-seg { display: block; } #datatable tr.nz-refund-seg td { display: block; width: 100% !important; } }
         .nz-print-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid #EDF1F5; background: #FFF7F8; color: #7c1228; font-size: 13px; }
         .nz-print-settings label { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 700; }
         .nz-print-settings input { accent-color: #C4193E; }
@@ -496,7 +502,23 @@
                     </thead>
 
                     <tbody id="set-rows">
+                    @php $__nzSeg = null; @endphp
                     @foreach($orders as $key=>$order)
+                        @if($nzRawStatus === 'refund_pending')
+                            @php $__rowSeg = ($order->payment_status == 'paid') ? 'A' : 'B'; @endphp
+                            @if($__rowSeg !== $__nzSeg)
+                                @php $__nzSeg = $__rowSeg; @endphp
+                                <tr class="nz-refund-seg seg{{ $__rowSeg }}">
+                                    <td colspan="10">
+                                        @if($__rowSeg === 'A')
+                                            <strong>段A · 已确认收款 · 须退</strong><span style="font-weight:400;font-size:12px;margin-left:8px;">顾客款项已确认收款，请按原路退还给顾客。</span>
+                                        @else
+                                            <strong>段B · 凭证在案 · 先核后退</strong><span style="font-weight:400;font-size:12px;margin-left:8px;">顾客有付款凭证在案，请先核对您的收款账户，确认到账后再退。</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endif
+                        @endif
                         <tr class="status-{{$order['order_status']}} class-all">
                             @php
                                 $__proofs = [];
@@ -736,9 +758,17 @@
                                             ->where('status', 'pending_merchant_refund')
                                             ->exists();
                                         if ($__refundPending) {
-                                            $__qa = ['route' => route('vendor.order.mark-refunded', ['id' => $order['id']]),
-                                                      'label' => '标记已退款', 'cls' => 'btn-warning', 'icon' => 'tio-receipt-outlined',
-                                                      'confirm' => '请确认：您已在自己的账户按原路退还本单顾客的付款？'];
+                                            if ($order->payment_status == 'paid') {
+                                                // 哪吒P1b-D 段A: 已确认收款·真欠退 → 标记已退款(原 L1 强确认 endpoint 不变)
+                                                $__qa = ['route' => route('vendor.order.mark-refunded', ['id' => $order['id']]),
+                                                          'label' => '标记已退款', 'cls' => 'btn-warning', 'icon' => 'tio-receipt-outlined',
+                                                          'confirm' => '请确认：您已在自己的账户按原路退还本单顾客的付款？'];
+                                            } else {
+                                                // 哪吒P1b-D 段B: 凭证在案·先核后退 → 进详情页退款核对卡(先核对收款账户再退·不留一键出口)
+                                                $__qa = ['type' => 'link', 'route' => route('vendor.order.details', ['id' => $order['id']]),
+                                                          'label' => '去核对退款', 'title' => '凭证在案·请先核对您的收款账户，确认到账后再按原路退还',
+                                                          'cls' => 'btn-warning', 'icon' => 'tio-open-in-new'];
+                                            }
                                         } elseif ($__os === 'refund_requested') {
                                             $__qa = ['type' => 'link', 'route' => route('vendor.order.details',['id'=>$order['id']]),
                                                       'label' => '处理退款申请', 'title' => '查看详情处理退款申请',
