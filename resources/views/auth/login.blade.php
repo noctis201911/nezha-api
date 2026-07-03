@@ -56,7 +56,7 @@
         .brand-logo { display: inline-block; line-height: 0; }
         .brand-logo img { height: clamp(78px, 7vw, 104px); width: auto; display: inline-block; }
         .brand-title { font-size: clamp(30px, 3vw, 38px); line-height: 1.18; font-weight: 700; color: #1C1917; margin: 18px 0 14px; }
-        .brand-desc { font-size: 16px; color: #78716C; max-width: 432px; margin: 0 auto 32px; line-height: 1.75; }
+        .brand-desc { font-size: 16px; color: #78716C; max-width: 432px; margin: 0 auto 32px; line-height: 1.75; text-align: left; text-indent: 2em; }
         .features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; max-width: 432px; margin: 0 auto; }
         .feature-card { min-height: 118px; padding: 18px 12px; background: rgba(255,255,255,0.92); border-radius: 14px; border: 1px solid var(--border); transition: all 0.3s ease; text-align: center; }
         .feature-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(196,25,62,0.06); border-color: rgba(196,25,62,0.2); }
