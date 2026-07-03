@@ -102,6 +102,17 @@
         .nz-status-tabs a.active .nz-tab-count { background: #1F6FD0; color: #fff; box-shadow: 0 2px 6px rgba(31,111,208,.22); }
         .nz-status-tabs .nz-tab-count.is-zero { color: #98A2B3; background: #F4F6F9; }
         .nz-status-tabs a.active .nz-tab-count.is-zero { color: #EAF1FF; background: #5A8FDB; }
+        /* 哪吒P1b-C: 需动作组高亮(有单时告警红=V2 #E5484D/#FEECEC 系, 同段A退款头, 非顾客端洋红遗留) + 二级 chip 行 */
+        .nz-group-tabs .nz-group-tab.nz-group-action-hot { border-color: #F3C1C4; background: #FEECEC; color: #A3121B; }
+        .nz-group-tabs .nz-group-tab.nz-group-action-hot .nz-tab-count { background: #E5484D; color: #fff; box-shadow: none; }
+        .nz-group-tabs .nz-group-tab.nz-group-action-hot.active { border-color: #E5484D; background: #FCDCDE; color: #8F1019; }
+        .nz-status-chips { display: flex; flex-wrap: wrap; gap: 7px; margin: -3px 0 12px; padding-left: 2px; }
+        .nz-status-chips .nz-chip { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 5px 11px; border: 1px solid #E9EDF2; border-radius: 999px; background: #F7F9FB; color: #475467; font-size: 12px; font-weight: 700; }
+        .nz-status-chips .nz-chip.active { border-color: #102A4C; background: #102A4C; color: #fff; }
+        .nz-status-chips .nz-chip-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 6px; border-radius: 999px; background: #E7ECF2; color: #667085; font-size: 11px; font-weight: 800; line-height: 1; }
+        .nz-status-chips .nz-chip.active .nz-chip-count { background: rgba(255,255,255,.22); color: #fff; }
+        .nz-status-chips .nz-chip-count.is-zero { color: #A9B2C0; background: #F0F3F7; }
+        .nz-status-chips .nz-chip.active .nz-chip-count.is-zero { background: rgba(255,255,255,.16); color: #D9E2F0; }
         .badge.nz-st-wait { background:#FFF1D6 !important; color:#8A5A06 !important; }
         .badge.nz-st-progress { background:#EAF1FF !important; color:#1E4FBF !important; }
         .badge.nz-st-done { background:#DCFAE6 !important; color:#0A6B1F !important; }
@@ -178,6 +189,9 @@
             .nz-mobile-status-strip { flex-wrap: nowrap; overflow-x: auto; padding: 0 1px 6px; margin: 0 -1px 8px; scrollbar-width: none; }
             .nz-mobile-status-strip::-webkit-scrollbar { display: none; }
             .nz-mobile-status-strip a { flex: 0 0 auto; min-height: 36px; padding: 8px 11px; border-radius: 7px; }
+            .nz-status-chips { flex-wrap: nowrap; overflow-x: auto; padding: 0 1px 4px; margin: 0 -1px 8px; scrollbar-width: none; }
+            .nz-status-chips::-webkit-scrollbar { display: none; }
+            .nz-status-chips .nz-chip { flex: 0 0 auto; min-height: 34px; border-radius: 999px; }
             .nz-order-table-card { border-radius: 9px; overflow: visible; }
             .nz-mobile-toolbar { padding: 10px 10px 8px !important; }
             .nz-mobile-toolbar .search--button-wrapper, .nz-mobile-toolbar .nz-order-toolbar { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: start; width: 100%; }
@@ -283,9 +297,44 @@
         'payment_failed' => ['label' => '支付失败', 'hint' => '支付失败订单已关闭，通常无需商家继续履约。', 'empty' => '暂无支付失败订单。', 'icon' => 'tio-warning-outlined'],
         'canceled' => ['label' => '已取消', 'hint' => '已取消订单用于核对取消原因和退款留痕。', 'empty' => '暂无已取消订单。', 'icon' => 'tio-clear-circle-outlined'],
     ];
-    // 哪吒P1a[2026-07-03]: 移除'pending'(待处理)——对本店结构性永空(配送+线下单全走offline_pending), 与侧栏/待办条同批封存(业主批复)
-    $nzStatusTabs = ['all','customer_nudged','offline_pending','refund_pending','confirmed','cooking','ready_for_delivery','food_on_the_way','delivered','refunded','refund_requested','scheduled','payment_failed','canceled'];
-    $nzCurrentMeta = $nzStatusMeta[$nzRawStatus] ?? ['label' => str_replace('_', ' ', $nzRawStatus), 'hint' => '查看该状态下的订单。', 'empty' => '暂无该状态订单。', 'icon' => 'tio-shopping-cart'];
+    // 超时(timeout)是虚拟过滤视图, 补一条 meta 供 chip / hero 使用。
+    $nzStatusMeta['timeout'] = ['label' => '超时', 'hint' => '已超过处理时限、仍未推进的订单，请尽快处理。', 'empty' => '暂无超时订单。', 'icon' => 'tio-time'];
+    // done_canceled = 已完结组的「已取消」(无未结退款), 与全部平铺的 canceled(含待退款) 区分。
+    $nzStatusMeta['done_canceled'] = ['label' => '已取消', 'hint' => '已取消且无未结退款的订单；带未结退款的取消单请在「售后」处理。', 'empty' => '暂无已取消（无未结退款）的订单。', 'icon' => 'tio-clear-circle-outlined'];
+    // 哪吒P1b-C: 订单页一级 tab 由 14 平铺收敛为 4+1 组; 组内二级 chip 懒展开(仅当前组)。
+    // 组过滤/计数走单一真相源 NezhaOrderCounts(applyGroupFilter + grp_* rollup), 与控制器 list($status) 同源。
+    $nzGroups = [
+        'grp_action' => ['label' => '需动作', 'icon' => 'tio-notifications-active', 'count_key' => 'grp_action',
+            'hint' => '需要你现在处理的订单：确认收款、回应催促、超时、退款申请与待退款集中在这里。', 'empty' => '太好了，暂时没有需要处理的订单。',
+            'chips' => ['offline_pending', 'customer_nudged', 'timeout', 'refund_requested', 'refund_pending']],
+        'grp_ongoing' => ['label' => '进行中', 'icon' => 'tio-restaurant', 'count_key' => 'grp_ongoing',
+            'hint' => '正在履约的订单：从确认收款到配送送达的完整流程。', 'empty' => '暂无进行中的订单。',
+            'chips' => ['offline_pending', 'confirmed', 'cooking', 'ready_for_delivery', 'food_on_the_way', 'scheduled']],
+        'grp_aftersale' => ['label' => '售后', 'icon' => 'tio-receipt-outlined', 'count_key' => 'grp_aftersale',
+            'hint' => '退款相关的订单集中一处，便于核对与原路退款。', 'empty' => '暂无售后订单。',
+            'chips' => ['refund_requested', 'refund_pending', 'refunded']],
+        'grp_done' => ['label' => '已完结', 'icon' => 'tio-done-all', 'count_key' => 'grp_done',
+            'hint' => '已送达、已取消（无未结退款）与支付失败的历史订单。', 'empty' => '暂无已完结的订单。',
+            'chips' => ['delivered', 'done_canceled', 'payment_failed']],
+        'all' => ['label' => '全部', 'icon' => 'tio-folder-bookmarked', 'count_key' => 'all',
+            'hint' => '全部订单，可搜索、导出，并用「显示已完成·近N天」筛选历史单。', 'empty' => '当前还没有订单。',
+            'chips' => []],
+    ];
+    // chip → 归属的默认组(高亮哪个组 tab; offline_pending / refund_pending 挂两组, 默认落需动作, ?g= 可覆盖)
+    $nzChipHome = [
+        'offline_pending' => 'grp_action', 'customer_nudged' => 'grp_action', 'timeout' => 'grp_action', 'refund_pending' => 'grp_action',
+        'confirmed' => 'grp_ongoing', 'cooking' => 'grp_ongoing', 'ready_for_delivery' => 'grp_ongoing', 'food_on_the_way' => 'grp_ongoing', 'scheduled' => 'grp_ongoing',
+        'refund_requested' => 'grp_aftersale', 'refunded' => 'grp_aftersale',
+        'delivered' => 'grp_done', 'canceled' => 'grp_done', 'done_canceled' => 'grp_done', 'payment_failed' => 'grp_done',
+    ];
+    // 当前激活组: ?g= 优先(点 chip 时带上, 保持所在组高亮); 否则组落地取自身, chip 落地取其主组, 兜底全部。
+    $nzReqGroup = request('g');
+    $nzActiveGroup = isset($nzGroups[$nzReqGroup]) ? $nzReqGroup
+        : (isset($nzGroups[$nzRawStatus]) ? $nzRawStatus
+        : ($nzChipHome[$nzRawStatus] ?? 'all'));
+    // hero / 空态 meta: 组落地用组 meta; chip 落地用该状态 meta。
+    $nzCurrentMeta = $nzGroups[$nzRawStatus]
+        ?? ($nzStatusMeta[$nzRawStatus] ?? ['label' => str_replace('_', ' ', $nzRawStatus), 'hint' => '查看该状态下的订单。', 'empty' => '暂无该状态订单。', 'icon' => 'tio-shopping-cart']);
     $nzBaseCurrency = \App\CentralLogics\Helpers::currency_code();
     $nzBusinessRates = \Illuminate\Support\Facades\DB::table('business_settings')
         ->whereIn('key', ['nezha_rate_cny_to_amd', 'nezha_rate_usd_to_amd'])
@@ -323,15 +372,38 @@
                     </a>
                 </div>
             </div>
-            <div class="nz-status-tabs nz-mobile-status-strip d-print-none">
-                @foreach($nzStatusTabs as $__statusKey)
-                    <a href="{{route('vendor.order.list',[$__statusKey])}}" class="{{ $nzRawStatus === $__statusKey ? 'active' : '' }}">
-                        <i class="{{ $nzStatusMeta[$__statusKey]['icon'] ?? 'tio-circle' }}"></i>
-                        <span>{{ $nzStatusMeta[$__statusKey]['label'] ?? $__statusKey }}</span>
-                        <span class="nz-tab-count {{ ($nzStatusCounts[$__statusKey] ?? 0) == 0 ? 'is-zero' : '' }}">{{ $nzStatusCounts[$__statusKey] ?? 0 }}</span>
+            {{-- 哪吒P1b-C: 一级=4+1 组 tab(计数走 grp_* rollup); 二级=当前组 chip 行(懒展开, 全部组无 chip) --}}
+            <div class="nz-status-tabs nz-group-tabs nz-mobile-status-strip d-print-none">
+                @foreach($nzGroups as $__gKey => $__g)
+                    @php
+                        $__gStatus = $__gKey === 'all' ? 'all' : $__gKey;
+                        $__gCount = $nzStatusCounts[$__g['count_key']] ?? 0;
+                        $__gActive = $nzActiveGroup === $__gKey;
+                    @endphp
+                    <a href="{{ route('vendor.order.list', [$__gStatus]) }}"
+                       class="nz-group-tab {{ $__gActive ? 'active' : '' }} {{ $__gKey === 'grp_action' && $__gCount > 0 ? 'nz-group-action-hot' : '' }}">
+                        <i class="{{ $__g['icon'] }}"></i>
+                        <span>{{ $__g['label'] }}</span>
+                        <span class="nz-tab-count {{ $__gCount == 0 ? 'is-zero' : '' }}">{{ $__gCount }}</span>
                     </a>
                 @endforeach
             </div>
+            @if($nzActiveGroup !== 'all' && !empty($nzGroups[$nzActiveGroup]['chips']))
+            <div class="nz-status-chips nz-mobile-status-strip d-print-none">
+                @foreach($nzGroups[$nzActiveGroup]['chips'] as $__chip)
+                    @php
+                        $__cMeta = $nzStatusMeta[$__chip] ?? ['label' => $__chip];
+                        $__cCount = $nzStatusCounts[$__chip] ?? 0;
+                        $__cActive = $nzRawStatus === $__chip;
+                    @endphp
+                    <a href="{{ route('vendor.order.list', [$__chip]) }}?g={{ $nzActiveGroup }}"
+                       class="nz-chip {{ $__cActive ? 'active' : '' }}">
+                        <span>{{ $__cMeta['label'] ?? $__chip }}</span>
+                        <span class="nz-chip-count {{ $__cCount == 0 ? 'is-zero' : '' }}">{{ $__cCount }}</span>
+                    </a>
+                @endforeach
+            </div>
+            @endif
         </div>
         <!-- End Page Header -->
 

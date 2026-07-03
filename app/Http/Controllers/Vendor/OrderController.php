@@ -84,6 +84,12 @@ class OrderController extends Controller
             ->when($status == 'canceled', function ($query) {
                 return $query->where('order_status', 'canceled');
             })
+            // 哪吒P1b-C: 已完结组的「已取消」chip = 已取消且无未结退款(带未结退款的取消单归售后, 与 grp_done 同口径)
+            ->when($status == 'done_canceled', function ($query) {
+                return $query->where('order_status', 'canceled')->whereNotIn('id', function ($sub) {
+                    $sub->select('order_id')->from('nezha_refund_records')->where('status', 'pending_merchant_refund');
+                });
+            })
             ->when($status == 'dine_in', function ($query) {
                 return $query->where('order_type', 'dine_in');
             })
@@ -132,6 +138,16 @@ class OrderController extends Controller
                     }
                 });
             })
+            // 哪吒P1b-C: 订单页 4+1 组 tab —— grp_action/grp_ongoing/grp_aftersale/grp_done 走计数单一真相源
+            // 的同一组过滤器(applyGroupFilter), 保证「组 tab 计数 = 列表 total」数字同源; grp_ 均在下方 NotDigitalOrder 豁免名单。
+            ->when(str_starts_with($status, 'grp_'), function ($query) use ($status) {
+                \App\CentralLogics\NezhaOrderCounts::applyGroupFilter(
+                    $query,
+                    substr($status, 4),
+                    \App\CentralLogics\Helpers::get_restaurant_id()
+                );
+                return $query;
+            })
             // 哪吒[2026-07-01 P5]: 「全部」= 真正的全部(默认不排除任何状态, 名副其实且≥任何子类)。
             // 商家可用列表「显示已完成·近N天」控件收起老的已关闭单: nz_done=0 隐藏全部已关闭单(只留进行中);
             // nz_done_days=N 进行中单始终显示 + 已关闭单只保留近N天(按下单时间)。默认(无参)= return $query 原样, 与改动前完全一致。
@@ -165,7 +181,7 @@ class OrderController extends Controller
             ->Notpos()
             // 哪吒: 「待确认收款」+「待退款」+「超时单」+「客户催促」视图放开 NotDigitalOrder(它会隐藏 pending+offline 单); 其余视图行为不变。
             // 超时集合含 pending+offline_payment 单, 漏放行会被 NotDigitalOrder 静默隐藏 → 列表数<卡数, 破坏数字同源。
-            ->when(!in_array($status, ['all', 'offline_pending', 'refund_pending', 'timeout', 'customer_nudged'], true), function ($query) {
+            ->when(!in_array($status, ['all', 'offline_pending', 'refund_pending', 'timeout', 'customer_nudged', 'grp_action', 'grp_ongoing', 'grp_aftersale', 'grp_done'], true), function ($query) {
                 return $query->NotDigitalOrder();
             })
             ->hasSubscriptionToday()
@@ -184,12 +200,15 @@ class OrderController extends Controller
         $nzToday = $st === 'all'
             ? \App\Http\Controllers\Vendor\DashboardController::nezha_today_sales(Helpers::get_restaurant_id())
             : null;
-        // 哪吒: offline_pending / refund_pending / timeout / customer_nudged 无翻译 key, 直接给中文标题避免显示英文键名。
-        $status = $status == 'offline_pending' ? '待确认收款'
+        // 哪吒: 组 tab(grp_*) 与 offline_pending / refund_pending / timeout / customer_nudged 无翻译 key, 直接给中文标题避免英文键名。
+        $nzGroupTitle = ['grp_action' => '需动作', 'grp_ongoing' => '进行中', 'grp_aftersale' => '售后', 'grp_done' => '已完结'];
+        $status = $nzGroupTitle[$status]
+            ?? ($status == 'offline_pending' ? '待确认收款'
             : ($status == 'refund_pending' ? '待退款'
             : ($status == 'timeout' ? '超时单'
             : ($status == 'customer_nudged' ? '客户催促'
-            : translate('messages.' . $status))));
+            : ($status == 'done_canceled' ? '已取消'
+            : translate('messages.' . $status))))));
         return view('vendor-views.order.list', compact('orders', 'status', 'st', 'restaurant', 'nzToday'));
     }
 
