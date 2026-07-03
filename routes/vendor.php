@@ -29,6 +29,7 @@ use App\Http\Controllers\Vendor\SubscriptionController;
 use App\Http\Controllers\Vendor\VendorTaxReportController;
 use App\Http\Controllers\Vendor\WalletController;
 use App\Http\Controllers\Vendor\NezhaDepositController;
+use App\Http\Controllers\Vendor\NezhaTopupController;
 use App\Http\Controllers\Vendor\NezhaConsolidationController;
 use App\Http\Controllers\Vendor\WalletMethodController;
 
@@ -242,6 +243,9 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
             // 哪吒 退出平台(step4-4): 商家申请/撤回退出(服务端强制开关 nezha_offboard_status)
             Route::post('offboard-apply', [NezhaDepositController::class, 'offboardApply'])->name('offboard-apply');
             Route::post('offboard-withdraw', [NezhaDepositController::class, 'offboardWithdraw'])->name('offboard-withdraw');
+            // 哪吒 自助充值申请(A3 dormant·nezha_topup_status 默认关)
+            Route::post('topup-apply', [NezhaTopupController::class, 'topupApply'])->name('topup-apply');
+            Route::post('topup-cancel', [NezhaTopupController::class, 'topupCancel'])->name('topup-cancel');
         });
 
         // 哪吒 平台集运申报: 商家需求登记表
