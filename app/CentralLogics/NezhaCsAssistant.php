@@ -588,6 +588,7 @@ class NezhaCsAssistant
         $message->conversation_id = $conversation->id;
         $message->sender_id = $adminSender->id;
         $message->message = $text;
+        $message->cs_source = 'ai'; // 归因: AI 客服小哪自动回复(§6.8/§8)
         $message->save();
 
         $conversation->unread_message_count = $conversation->unread_message_count ? $conversation->unread_message_count + 1 : 1;
@@ -676,6 +677,8 @@ class NezhaCsAssistant
             $message->conversation_id = $conv->id;
             $message->sender_id = $sender->id;
             $message->message = $text;
+            // 归因(§6.8/§8): admin scope=超管人工转接→human; vendor scope=商家本人→null(非客服, 前端不显客服 chip)。
+            $message->cs_source = ($scope === 'vendor') ? null : 'human';
             $message->save();
 
             $conv->unread_message_count = $conv->unread_message_count ? $conv->unread_message_count + 1 : 1;
@@ -1348,6 +1351,7 @@ SYS;
             $msg->conversation_id = $conv->id;
             $msg->sender_id = $adminSender->id;
             $msg->message = $welcome;
+            $msg->cs_source = 'ai'; // 归因: 开场欢迎语来自 AI 客服小哪(§6.8/§8)
             $msg->save();
             $conv->unread_message_count = 1;
             $conv->last_message_id = $msg->id;
