@@ -1614,6 +1614,13 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                                 <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('充值申请') }}</span>
                             </a>
                         </li>
+                        {{-- 哪吒 押金退款审核(A3·S3-B·dormant) --}}
+                        <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-topup/refunds*') ? 'active' : '' }}">
+                            <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{ route('admin.nezha-topup.refunds') }}" title="{{ translate('押金退款') }}">
+                                <i class="tio-undo nav-icon"></i>
+                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('押金退款') }}</span>
+                            </a>
+                        </li>
                     @endif
                     <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-consolidation*') ? 'active' : '' }}">
                         <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{ route('admin.nezha-consolidation.index') }}" title="{{ translate('平台集运申报') }}">

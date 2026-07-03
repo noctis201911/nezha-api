@@ -7,6 +7,8 @@ use App\CentralLogics\Helpers;
 use App\CentralLogics\NezhaOffboard;
 use App\Models\Restaurant;
 use App\Models\NezhaTopupRequest;
+use App\Models\VendorKycProfile;
+use App\CentralLogics\NezhaGuaranteeRefund;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Brian2694\Toastr\Facades\Toastr;
@@ -124,6 +126,44 @@ class NezhaTopupController extends Controller
         $req->save();
 
         Toastr::success(translate('已撤回充值申请'));
+        return back();
+    }
+
+    /** 押金中途退款 申请(S3-B·运营核算制)。只落 pending 申请, 不碰余额; 放款走超管审核 NezhaGuaranteeRefund。 */
+    public function refundApply(Request $request)
+    {
+        if (!NezhaGuaranteeRefund::refundEnabled()) {
+            Toastr::error(translate('押金退款暂未开放'));
+            return back();
+        }
+        $request->validate(['amount' => 'required|numeric|min:0.01', 'note' => 'nullable|string|max:255']);
+        $vendorId = Helpers::get_vendor_id();
+        $restaurant = Restaurant::where('vendor_id', $vendorId)->firstOrFail();
+        if (NezhaOffboard::is_deposit_credit_frozen($restaurant->id)) {
+            Toastr::error(translate('店铺处于退出结算/欠款态, 不可中途退押金'));
+            return back();
+        }
+        $fp = NezhaGuaranteeRefund::kycFingerprint(VendorKycProfile::where('restaurant_id', $restaurant->id)->first());
+        if ($fp === null) {
+            Toastr::error(translate('请先完善 KYC 收款账户资料(法人姓名/收款户名/收款账户)后再申请退款'));
+            return back();
+        }
+        try {
+            NezhaTopupRequest::create([
+                'vendor_id' => $vendorId, 'restaurant_id' => $restaurant->id,
+                'account_type' => 'guarantee', 'direction' => 'refund',
+                'amount_claimed' => (float) $request->amount, 'currency' => 'AMD',
+                'note' => $request->note ?: null, 'status' => 'pending',
+                'active_refund_uniq' => 1, 'kyc_apply_fp' => $fp,
+            ]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            if ((int) ($e->errorInfo[1] ?? 0) === 1062) {
+                Toastr::warning(translate('您有一笔押金退款正在处理, 请勿重复提交'));
+                return back();
+            }
+            throw $e;
+        }
+        Toastr::success(translate('押金退款申请已提交, 平台核实后为您退回 KYC 账户'));
         return back();
     }
 }

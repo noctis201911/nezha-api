@@ -198,3 +198,12 @@
 - 前端独立抽屉 `ReportRestaurantDrawer.jsx`（理由单选+说明+提交，真机 iPhone12 三态 + 真接口 200 + console0 验过），未接线、由餐厅页/订单页「···」菜单窗口接入。
 - 验证：建表 + ENCRYPTION 实测；live API curl 7 场景（落库/去重/404/422×3/401）+ 登录态 Passport token 各通过；测试数据已清零。提交后端 1eff888 部署 release 20260627-165737-1eff888；前端 6bd55b0（inert 未部署）。
 - 注：现有两个举报端点（local-life 帖 / 评价）为 `auth:api 禁匿名`，本端点 2026-06-28 用户拍板改为**仅登录可举报**，已由 apiGuestCheck 切到 auth:api，与上述口径一致。
+
+
+### 2026-07-03 中途退回押金(营业中·A3 S3-B)— L1-8 押金退还的营业中实现(dormant)
+- 定级 L1-8(押金持有+退还)。区别于 NezhaOffboard(完整离场全退), 本项做商家【仍营业】时退回部分/超额押金。开关 `nezha_topup_refund_status` 默认 0 服务端强制 dormant。业主 2026-07-03 批准设计 v1。
+- 🔴 **/debate 三路红队(资金安全/合规L1-8/防薅内控)一致阻断 v0**, 核心: 押金运行时是"死抵押"(仅 offboard 离场用·无 clawback), v0 让商家营业中掏空兜底无追偿; offboard 的门抄了但其"settling全冻结/全额置零/uq_active/离场settleInflight"四前提中途退统统不成立。9 类阻断存 `docs/topup_refund_debate_archive.md`。
+- 硬化 v1(运营核算制·不做自助快退): `CentralLogics/NezhaGuaranteeRefund`(approve/pay 两段) 逐门 —— G0 开关+互斥(is_deposit_credit_frozen 覆盖 settling+owing+offboarded) / G1 欠款 deposit<0 挡 + 抽佣开须人工核敞口 / G2 tier=NULL fail-closed·exempt 引 offboard·floor 锁内算 / G3 每笔制裁实时复筛四态 fail-closed(approve+pay 各一次) / G4 户名核对**代码强制**(normHolder CJK-safe + 身份指纹 kyc_apply_fp·收款账户锁定 KYC 不给现填·变更即挡无 override) / G5 钱包行锁+C4 快照+uq_active_refund 结构墙 / G6 频率+高额次日转。放款主体=平台线下法币转到 KYC 锁定账户, 不接网关/不自动扣款。
+- 🔴 实施中 verification 逮到真 bug: `NezhaKycScreen::normalize_name` 用 `[^A-Z0-9 ]` 剥中文 → 两个不同中文名都归一化成空串"相等" → 中文商户户名核对形同虚设 → 改 CJK-safe normHolder + 身份指纹(免疫制裁复筛写回)。
+- 迁移 2026_07_03_140000+140100(topup_requests 补退款列); 逐门反例 harness **26/0 PASS**(四处对账 + 每门造反例被挡 + 事务 rollback 零残留)。经 /debate 多实例对抗核验后实施。
+- 遗留: 缴纳付款人第三锚点(缴纳侧补捕获)、clawback 活兜底(抽佣上线的 B 期再单独 /debate)。开关顺序待进 PRELAUNCH_SWITCHES(offboard 未开→refund 不得开)。

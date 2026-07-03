@@ -226,4 +226,28 @@ class NezhaL1RedlineTest extends TestCase
         $this->assertStringContainsString("self::cfg('nezha_offboard_status', '0')", $src,
             'L1-8 违反: 退出开关 nezha_offboard_status 默认态被改(应默认 0 关, 上线灰度由用户开)。');
     }
+
+    /** L1-8 中途退回押金(S3-B·NezhaGuaranteeRefund) 逐门结构守卫 —— /debate 硬化的门被删即红。 */
+    public function test_L1_8_guarantee_refund_gates_present(): void
+    {
+        $src = file_get_contents(base_path('app/CentralLogics/NezhaGuaranteeRefund.php'));
+        $this->assertStringContainsString("self::cfg('nezha_topup_refund_status', 0)", $src,
+            'L1-8 违反: 中途退款开关默认态被改(应默认 0 关 dormant)。');
+        $this->assertStringContainsString('is_deposit_credit_frozen', $src,
+            'L1-8 违反: 退款互斥门被降级(应用 is_deposit_credit_frozen 覆盖 owing, 非仅 settling)。');
+        $this->assertStringContainsString('NezhaKycScreen::screen_names(', $src,
+            'L1-8③ 违反: 退款制裁实时复筛被移除。');
+        $this->assertStringContainsString('NezhaKycScreen::record_risk(', $src,
+            'L1-8③ 违反: 制裁 possible/hit 的 fail-closed 转人工留痕被移除。');
+        $this->assertStringContainsString('normHolder', $src,
+            'L1-8② 违反: CJK-safe 户名归一化被移除(中文商户户名核对会失效)。');
+        $this->assertStringContainsString('hash_equals((string) $req->kyc_apply_fp', $src,
+            'L1-8② 违反: 身份指纹对比被移除(申请后改第三方账户可绕过)。');
+        $this->assertStringContainsString('lockForUpdate()', $src,
+            'L1-8 违反: 放款钱包行锁被移除(并发可超额抽干)。');
+        $this->assertStringContainsString('$req->guarantee_snapshot', $src,
+            'L1-8 违反: C4 审批快照校验被移除(放款竞态防线破坏)。');
+        $this->assertStringContainsString('押金应缴档未设', $src,
+            'L1-8 违反: tier=NULL 的 fail-closed 挡退被移除。');
+    }
 }

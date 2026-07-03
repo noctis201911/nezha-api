@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\CentralLogics\NezhaOffboard;
 use App\CentralLogics\NezhaDepositLedger;
+use App\CentralLogics\NezhaGuaranteeRefund;
+use App\Models\VendorKycProfile;
 use App\Models\Restaurant;
 use App\Models\NezhaTopupRequest;
 use Illuminate\Http\Request;
@@ -149,6 +151,68 @@ class NezhaTopupController extends Controller
         $req->save();
 
         Toastr::success(translate('已打回该充值申请'));
+        return back();
+    }
+
+    // ==================== 押金退款审核(S3-B · direction=refund·guarantee) ====================
+
+    /** 押金退款 审核队列。 */
+    public function refunds(Request $request)
+    {
+        $status = in_array($request->get('status'), ['pending', 'approved', 'paid', 'rejected'], true) ? $request->get('status') : 'pending';
+        $base = fn () => NezhaTopupRequest::where('direction', 'refund')->where('account_type', 'guarantee');
+        $list = $base()->with('restaurant')->where('status', $status)->orderByDesc('id')->paginate(20)->appends($request->all());
+        $counts = [
+            'pending'  => $base()->where('status', 'pending')->count(),
+            'approved' => $base()->where('status', 'approved')->count(),
+            'paid'     => $base()->where('status', 'paid')->count(),
+            'rejected' => $base()->where('status', 'rejected')->count(),
+        ];
+        return view('admin-views.nezha-topup.refunds', compact('list', 'status', 'counts'));
+    }
+
+    /** 押金退款 审核详情(逐门核算 + 两段审批放款)。 */
+    public function refundShow($id)
+    {
+        $req = NezhaTopupRequest::with('restaurant')->where('id', $id)->where('direction', 'refund')->firstOrFail();
+        $r = Restaurant::where('vendor_id', $req->vendor_id)->firstOrFail();
+        $ctx = NezhaGuaranteeRefund::computeContext($r);
+        $kyc = VendorKycProfile::where('restaurant_id', $req->restaurant_id)->first();
+        $hv = NezhaGuaranteeRefund::verifyHolder($req);
+        return view('admin-views.nezha-topup.refund-show', compact('req', 'r', 'ctx', 'kyc', 'hv'));
+    }
+
+    public function refundApprove(Request $request, $id)
+    {
+        $request->validate(['amount' => 'required|numeric|min:0.01', 'manual_exposure_confirmed' => 'nullable']);
+        $req = NezhaTopupRequest::where('id', $id)->where('direction', 'refund')->firstOrFail();
+        $res = NezhaGuaranteeRefund::approve($req, (float) $request->amount, auth('admin')->id(), (bool) $request->manual_exposure_confirmed);
+        if ($res['ok']) {
+            Toastr::success($res['scheduled'] ? translate('已审批; 高额/超日额须于 ' . $res['pay_at'] . ' 后放款') : translate('已审批, 可放款'));
+        } else {
+            Toastr::error($res['reason']);
+        }
+        return back();
+    }
+
+    public function refundPay($id)
+    {
+        $req = NezhaTopupRequest::where('id', $id)->where('direction', 'refund')->firstOrFail();
+        $res = NezhaGuaranteeRefund::pay($req);
+        if ($res['status'] === 'paid') {
+            Toastr::success(translate('已登记放款, 押金余额已冲减'));
+        } else {
+            Toastr::warning($res['reason'] ?: translate('放款未完成'));
+        }
+        return back();
+    }
+
+    public function refundReject(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:255']);
+        $req = NezhaTopupRequest::where('id', $id)->where('direction', 'refund')->firstOrFail();
+        NezhaGuaranteeRefund::reject($req, $request->reason, auth('admin')->id());
+        Toastr::success(translate('已打回该退款申请'));
         return back();
     }
 }

@@ -246,6 +246,7 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
             // 哪吒 自助充值申请(A3 dormant·nezha_topup_status 默认关)
             Route::post('topup-apply', [NezhaTopupController::class, 'topupApply'])->name('topup-apply');
             Route::post('topup-cancel', [NezhaTopupController::class, 'topupCancel'])->name('topup-cancel');
+            Route::post('refund-apply', [NezhaTopupController::class, 'refundApply'])->name('refund-apply'); // 押金中途退款申请(S3-B dormant)
         });
 
         // 哪吒 平台集运申报: 商家需求登记表

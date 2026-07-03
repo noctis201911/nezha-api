@@ -150,6 +150,12 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('/', [\App\Http\Controllers\Admin\NezhaTopupController::class, 'index'])->name('index');
             Route::post('approve/{id}', [\App\Http\Controllers\Admin\NezhaTopupController::class, 'approve'])->name('approve');
             Route::post('reject/{id}', [\App\Http\Controllers\Admin\NezhaTopupController::class, 'reject'])->name('reject');
+            // 押金退款审核(S3-B)
+            Route::get('refunds', [\App\Http\Controllers\Admin\NezhaTopupController::class, 'refunds'])->name('refunds');
+            Route::get('refunds/{id}', [\App\Http\Controllers\Admin\NezhaTopupController::class, 'refundShow'])->name('refund-show');
+            Route::post('refunds/{id}/approve', [\App\Http\Controllers\Admin\NezhaTopupController::class, 'refundApprove'])->name('refund-approve');
+            Route::post('refunds/{id}/pay', [\App\Http\Controllers\Admin\NezhaTopupController::class, 'refundPay'])->name('refund-pay');
+            Route::post('refunds/{id}/reject', [\App\Http\Controllers\Admin\NezhaTopupController::class, 'refundReject'])->name('refund-reject');
         });
 
         // Route::resource('provide-deliveryman-earnings', ProvideDMEarningController::class)->middleware('module:provide_dm_earning');

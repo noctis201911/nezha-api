@@ -17,6 +17,10 @@ class NezhaTopupRequest extends Model
         'amount_claimed', 'amount_credited', 'currency',
         'original_amount', 'original_ref', 'proof_path', 'note',
         'status', 'reason', 'operator_id', 'transaction_id', 'reviewed_at',
+        // S3-B 中途退押金列
+        'sanction_rescreen_at', 'holder_verified', 'approved_at',
+        'scheduled_pay_at', 'guarantee_snapshot', 'payout_ref', 'active_refund_uniq',
+        'kyc_apply_fp',
     ];
 
     protected $casts = [
@@ -25,6 +29,11 @@ class NezhaTopupRequest extends Model
         'original_amount' => 'float',
         'original_ref'    => 'encrypted',
         'reviewed_at'     => 'datetime',
+        'holder_verified'      => 'boolean',
+        'guarantee_snapshot'   => 'float',
+        'sanction_rescreen_at' => 'datetime',
+        'approved_at'          => 'datetime',
+        'scheduled_pay_at'     => 'datetime',
     ];
 
     public function restaurant()
