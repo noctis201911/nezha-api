@@ -30,7 +30,17 @@
                         <p style="font-size:14px;color:#555;margin:0 0 16px;">{{ translate('余额不足时店铺会暂停接单, 建议及时充值。') }}</p>
                     @endif
 
-                    <p style="font-size:13px;color:#999;margin:16px 0 0;">{{ translate('预存佣金是您预付给平台的佣金(B2B), 与顾客货款无关。如需充值请联系平台客服。') }}</p>
+                    @if(!empty($topup_open) && !empty($topup_url))
+                        {{-- 哪吒 S4②: 自助充值已开 → 去充值直链(对账中心充值卡)。--}}
+                        <table role="presentation" cellpadding="0" cellspacing="0" style="margin:4px 0 14px;">
+                            <tr><td style="background:#C4193E;border-radius:8px;">
+                                <a href="{{ $topup_url }}" style="display:inline-block;padding:11px 30px;color:#ffffff;font-size:15px;font-weight:bold;text-decoration:none;">{{ translate('去充值') }}</a>
+                            </td></tr>
+                        </table>
+                        <p style="font-size:13px;color:#999;margin:0;">{{ translate('预存佣金是您预付给平台的佣金(B2B), 与顾客货款无关。点击上方「去充值」在商家后台上传转账凭证, 平台核对到账后为您入账。') }}</p>
+                    @else
+                        <p style="font-size:13px;color:#999;margin:16px 0 0;">{{ translate('预存佣金是您预付给平台的佣金(B2B), 与顾客货款无关。如需充值请联系平台客服。') }}</p>
+                    @endif
                     <p style="font-size:13px;color:#999;margin:8px 0 0;">{{ translate('您可在商家后台「预存佣金」页面随时关闭或调整本提醒。') }}</p>
                 </td></tr>
                 <tr><td style="background:#F7F8FA;padding:16px 24px;text-align:center;">

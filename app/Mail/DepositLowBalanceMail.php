@@ -33,11 +33,21 @@ class DepositLowBalanceMail extends Mailable
             ? translate('哪吒外卖 · 预存佣金已欠款, 请尽快充值')
             : translate('哪吒外卖 · 预存佣金余额不足提醒');
 
+        // 哪吒 A3·S4②: 自助充值(预存佣金)已开时, 邮件给「去充值」直链到对账中心充值卡;
+        // 未开(dormant)则不给死链, 保持原「联系客服」文案(见模板 @if($topup_open))。
+        $topupOpen = \App\CentralLogics\NezhaTopup::accountOpen('deposit');
+        // 邮件必须绝对 URL; APP_URL 现为 http, 强制 https 免去收件人点击时的 http→https 跳转(APP_URL 若改 https 则此替换为 no-op)。
+        $topupUrl  = $topupOpen
+            ? \Illuminate\Support\Str::replaceFirst('http://', 'https://', route('vendor.nezha-deposit.index', ['account' => 'deposit'])) . '#nz-topup-card'
+            : null;
+
         return $this->subject($subject)->view('email-templates.deposit-low-balance', [
             'restaurant_name' => $this->restaurant_name,
             'balance'         => $this->balance,
             'threshold'       => $this->threshold,
             'is_negative'     => $this->is_negative,
+            'topup_open'      => $topupOpen,
+            'topup_url'       => $topupUrl,
         ]);
     }
 }
