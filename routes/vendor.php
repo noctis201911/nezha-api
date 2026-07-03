@@ -122,6 +122,7 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
         // 哪吒作业台(今天): W1 summary 惰性只读接口(未接线, 上线零行为变化)。
         // 复用 NezhaOrderCounts / NezhaOrderNextAction / NezhaBadReview 单一真相源; 仅父级 vendor 鉴权(与 dashboard 同级, 不加 module 闸, 防作为落地首页时误挡员工)。
         Route::group(['prefix' => 'workbench', 'as' => 'workbench.'], function () {
+            Route::get('/', [WorkbenchController::class, 'index'])->name('index');
             Route::get('summary', [WorkbenchController::class, 'summary'])->name('summary');
         });
 

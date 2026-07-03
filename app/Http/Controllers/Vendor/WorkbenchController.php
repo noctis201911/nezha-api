@@ -45,6 +45,18 @@ class WorkbenchController extends Controller
     }
 
     /**
+     * W2: 作业台首屏页面。默认落点暂不切(dashboard 保留), 经侧栏「今天」入口进入(§6.1 裁决: 并存试用)。
+     * 与 summary 接口共用 buildSummary() 同一数据契约, 防两处口径 drift。
+     */
+    public function index(Request $request)
+    {
+        $rid = (int) Helpers::get_restaurant_id();
+        $wb = self::buildSummary($rid);
+
+        return view('vendor-views.workbench.index', compact('wb'));
+    }
+
+    /**
      * 作业台数据契约单一构造器(summary 接口 + 未来 W2 首屏 blade 共用同一函数, 防两处口径 drift)。
      * 只读: 不写 checked / 不改任何订单状态 / 不产生任何副作用。
      */

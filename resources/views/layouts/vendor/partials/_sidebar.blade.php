@@ -68,6 +68,14 @@
             <!-- Content -->
             <div class="navbar-vertical-content text-capitalize bg-334257">
                 <ul class="navbar-nav navbar-nav-lg nav-tabs mt-3">
+                    {{-- 哪吒作业台: 「今天」入口置顶(§6.1 并存试用·登录默认落点暂不切)。指向 vendor.workbench.index。 --}}
+                    <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/workbench*')?'active':''}}">
+                        <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{route('vendor.workbench.index')}}" title="今天">
+                            <i class="tio-home nav-icon"></i>
+                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">今天</span>
+                        </a>
+                    </li>
+
                     <!-- Dashboards -->
 
                     <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel')?'active':''}}">
