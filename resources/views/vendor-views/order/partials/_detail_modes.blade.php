@@ -290,6 +290,9 @@
             @else
                 @if ($nzOffPending)
                     <div class="nzo-card nzo-sec" data-tab-in="wb fin"><div class="nzo-cb"><div class="nzo-warn"><i class="tio-wallet"></i> 顾客选择线下支付。请在自己的账户核对已收到货款后，点上方「{{ $nzPrimary['label'] ?? '确认收款' }}」再出餐。</div></div></div>
+                @elseif ((($nzPrimary['kind'] ?? null) == 'wait'))
+                    {{-- 哪吒P1b-B 裁决①: 无凭证离线单——无主CTA·灰条等凭证 --}}
+                    <div class="nzo-card nzo-sec" data-tab-in="wb fin"><div class="nzo-cb"><div style="background:#F1F3F5;border:1px solid #E4E8EC;border-radius:10px;padding:12px 14px;"><div style="font-weight:700;color:#344054;margin-bottom:4px;"><i class="tio-time"></i> 顾客尚未上传付款凭证</div><div style="font-size:12.5px;line-height:1.6;color:#5A6472;">等顾客提交凭证后，这里会出现「确认收款」按钮；若超时未传，系统会自动取消本单，无需您操作。</div></div></div></div>
                 @endif
                 <div class="nzo-sec" data-tab-in="wb dis">@include('vendor-views.order.partials._nzo_items', ['nzoItems' => $nzoItems])</div>
                 <div class="nzo-sec" data-tab-in="wb fin">@include('vendor-views.order.partials._nzo_fees')</div>

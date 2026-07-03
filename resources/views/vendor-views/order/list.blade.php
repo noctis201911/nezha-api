@@ -708,6 +708,9 @@
                                                   'label' => '确认收款', 'cls' => 'btn-success', 'icon' => 'tio-checkmark-circle',
                                                   'confirm' => '确认：您已在自己的账户收到本单顾客的付款？',
                                                   'auto_print' => true, 'prep_prompt' => true, 'prep_title' => '确认收款', 'prep_ok' => '确认收款', 'prep_color' => '#1FA463', 'prep_note' => '确认后将通知顾客并开始备餐。', 'prep_default' => (int) (\App\CentralLogics\Helpers::get_business_settings('nezha_default_prep_min') ?: 30)];
+                                    } elseif ($__os === 'pending' && $order->payment_method === 'offline_payment') {
+                                        // 哪吒P1b-B 裁决①: 无凭证离线单(顾客未传凭证) → 无按钮·灰字等凭证(与详情页wait态同源语义)
+                                        $__qa = ['type' => 'wait', 'label' => '等顾客传凭证'];
                                     } elseif ($__os === 'pending') {
                                         $__qa = ['route' => route('vendor.order.status-update', $order['id']),
                                                   'label' => '接单', 'cls' => 'btn-success', 'icon' => 'tio-checkmark-circle',
@@ -749,6 +752,9 @@
                                     <button type="button" class="btn btn-sm nz-step-btn nz-dispatch-open text-nowrap" data-nz-dispatch="{{ $order['id'] }}">
                                         <i class="{{ $__qa['icon'] }} mr-1"></i>{{ $__qa['label'] }}
                                     </button>
+                                @elseif($__qa && (($__qa['type'] ?? 'form') === 'wait'))
+                                    {{-- 哪吒P1b-B 裁决①: 无凭证离线单·灰字无按钮(与详情页wait态语义一致) --}}
+                                    <span class="text-muted text-nowrap" style="font-size:12px;" title="顾客尚未上传付款凭证，等顾客提交凭证后再确认收款"><i class="tio-time mr-1"></i>{{ $__qa['label'] }}</span>
                                 @elseif($__qa && (($__qa['type'] ?? 'form') === 'link'))
                                     <a class="btn btn-sm {{ $__qa['cls'] }} nz-step-btn text-nowrap text-white" href="{{ $__qa['route'] }}" title="{{ $__qa['title'] ?? $__qa['label'] }}">
                                         <i class="{{ $__qa['icon'] }} mr-1"></i>{{ $__qa['label'] }}
