@@ -15,6 +15,7 @@ use App\Http\Controllers\Vendor\EmployeeController;
 use App\Http\Controllers\Vendor\FoodController;
 use App\Http\Controllers\Vendor\LanguageController;
 use App\Http\Controllers\Vendor\OrderController;
+use App\Http\Controllers\Vendor\WorkbenchController;
 use App\Http\Controllers\Vendor\OrderSubscriptionController;
 use App\Http\Controllers\Vendor\POSController;
 use App\Http\Controllers\Vendor\ProfileController;
@@ -117,6 +118,12 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
         });
 
 
+
+        // 哪吒作业台(今天): W1 summary 惰性只读接口(未接线, 上线零行为变化)。
+        // 复用 NezhaOrderCounts / NezhaOrderNextAction / NezhaBadReview 单一真相源; 仅父级 vendor 鉴权(与 dashboard 同级, 不加 module 闸, 防作为落地首页时误挡员工)。
+        Route::group(['prefix' => 'workbench', 'as' => 'workbench.'], function () {
+            Route::get('summary', [WorkbenchController::class, 'summary'])->name('summary');
+        });
 
         Route::group(['prefix' => 'dashboard', 'as' => 'dashboard.'], function () {
             Route::post('order-stats', [DashboardController::class, 'order_stats'])->name('order-stats');
