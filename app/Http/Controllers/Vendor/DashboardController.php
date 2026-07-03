@@ -197,6 +197,8 @@ class DashboardController extends Controller
             'deliv_link_order_ids' => $deliv_link_ids,
             'refund_pending'       => $__nzCounts['refund_pending'],
             'offline_pending_display' => $__nzCounts['offline_pending'],
+            // 哪吒 A3·S4: 充值/退款审核结果站内信(喂顶栏 nzBell)。自助充值总闸关(dormant)时直接空=热轮询零开销。
+            'topup_results'        => \App\CentralLogics\NezhaTopupNotify::pollResults((int) ($restaurant->vendor_id ?? 0)),
         ];
     }
 

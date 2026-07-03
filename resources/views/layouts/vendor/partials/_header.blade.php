@@ -102,6 +102,8 @@
                                 #nzBellPop .nz-bell-dot{width:8px;height:8px;border-radius:50%;flex:none;}
                                 #nzBellPop .nz-bell-dot.red{background:#E5484D;}
                                 #nzBellPop .nz-bell-dot.blue{background:#1f6fd0;}
+                                #nzBellPop .nz-bell-dot.green{background:#2F9E44;}
+                                #nzBellPop .nz-bell-dot.amber{background:#F3A429;}
                                 #nzBellPop .nz-bell-go{margin-left:auto;color:#98A2B3;}
                                 #nzBellPop .nz-bell-empty{padding:20px 16px;color:#9aa0a6;font-size:13px;text-align:center;}
                                 </style>

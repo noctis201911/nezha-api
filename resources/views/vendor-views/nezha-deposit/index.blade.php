@@ -229,7 +229,7 @@
         $tpVid = $restaurant->vendor_id ?? \App\CentralLogics\Helpers::get_vendor_id();
         $tpLast = \App\CentralLogics\NezhaTopup::latestRequest((int) $tpVid, $account);
     @endphp
-    <div class="card mb-3">
+    <div class="card mb-3" id="nz-topup-card">
         <div class="card-header"><h5 class="card-title mb-0">{{ translate('申请充值') }}</h5></div>
         <div class="card-body">
             @if($tpLast && $tpLast->status === 'pending')

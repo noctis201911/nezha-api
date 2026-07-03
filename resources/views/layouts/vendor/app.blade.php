@@ -652,13 +652,13 @@
     // 哪吒 C3(W4): 顶栏铃铛栈 —— 超时/催配送告警的被动收集器(徽标 + 可展开列表·直连订单)。
     // 徽标=当前活动告警数(只反映真实计数·非响铃口径); 响铃仍由 poll 分类去重独立驱动(解耦)。
     window.nzBell = (function () {
-        var timeoutIds = [], delivIds = [];
+        var timeoutIds = [], delivIds = [], topupItems = [];
         var detailsBase = '{{ url('/') }}/restaurant-panel/order/details/';
         function esc(s){ return String(s).replace(/[<>&]/g, function(c){ return c === '<' ? '&lt;' : (c === '>' ? '&gt;' : '&amp;'); }); }
         function render() {
             var badge = document.getElementById('nzBellBadge');
             var body = document.getElementById('nzBellBody');
-            var total = timeoutIds.length + delivIds.length;
+            var total = timeoutIds.length + delivIds.length + topupItems.length;
             if (badge) {
                 if (total > 0) { badge.textContent = total > 99 ? '99+' : total; badge.style.display = 'block'; }
                 else { badge.style.display = 'none'; }
@@ -677,11 +677,20 @@
                     html += '<a class="nz-bell-item" href="' + detailsBase + encodeURIComponent(id) + '"><span class="nz-bell-dot blue"></span>订单 #' + esc(id) + ' 顾客在催 · 去贴链接 <span class="nz-bell-go">&rarr;</span></a>';
                 });
             }
+            // 哪吒 A3·S4: 充值/退款审核结果(入账/打回/退款放款)。绿点=成功·琥珀点=被打回。
+            if (topupItems.length) {
+                html += '<div class="nz-bell-grp">充值/退款结果 · ' + topupItems.length + '</div>';
+                topupItems.forEach(function (it) {
+                    var dot = (it && it.status === 'rejected') ? 'amber' : 'green';
+                    html += '<a class="nz-bell-item" href="' + ((it && it.href) || '#') + '"><span class="nz-bell-dot ' + dot + '"></span>' + esc(it && it.label ? it.label : '') + ' <span class="nz-bell-go">&rarr;</span></a>';
+                });
+            }
             body.innerHTML = html || '<div class="nz-bell-empty">暂无待办提醒</div>';
         }
         return {
             setTimeouts: function (ids) { timeoutIds = (ids || []).map(String); render(); },
             setDelivs: function (ids) { delivIds = (ids || []).map(String); render(); },
+            setTopups: function (items) { topupItems = (items || []); render(); },
             render: render
         };
     })();
@@ -1086,6 +1095,28 @@
                 if (!dvSounded && window.nzAudioUnlocked && !viewingThisOrder) { dvPlay(); dvSounded = true; }
             }
 
+            // 哪吒 A3·S4: 充值/退款审核结果站内信 —— 复用顶栏 nzBell(不造第二套·不响铃只亮徽标)。
+            // 在场感知: 商家正看对账中心页 → 状态卡已呈现结果 → 静默标记已读、铃铛不亮不弹;
+            //           页外 → 未读进铃铛徽标(持续到商家进对账中心看过为止, 或 7 天后服务端自然移出)。
+            var TOPUP_SEEN_KEY = 'nz_seen_topup_ids_v1';
+            function tpLoadSeen(){ try { return new Set(JSON.parse(localStorage.getItem(TOPUP_SEEN_KEY) || '[]')); } catch(e){ return new Set(); } }
+            function tpSaveSeen(set){ try { var arr = Array.from(set); if (arr.length > 200) { arr = arr.slice(arr.length - 200); } localStorage.setItem(TOPUP_SEEN_KEY, JSON.stringify(arr)); } catch(e){} }
+            function nzOnReconciliation(){ return location.pathname.indexOf('/nezha-deposit') !== -1; }
+            function updateTopupBell(data){
+                if (!window.nzBell) { return; }
+                var results = data.topup_results || [];
+                var seen = tpLoadSeen();
+                if (nzOnReconciliation()) {
+                    var changed = false;
+                    results.forEach(function (r) { if (r && !seen.has(String(r.id))) { seen.add(String(r.id)); changed = true; } });
+                    if (changed) { tpSaveSeen(seen); }
+                    window.nzBell.setTopups([]);
+                    return;
+                }
+                var unseen = results.filter(function (r) { return r && !seen.has(String(r.id)); });
+                window.nzBell.setTopups(unseen);
+            }
+
             function loadSeen(){
                 try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); }
                 catch(e){ return memSeen; }
@@ -1121,6 +1152,7 @@
                         var data = response.data || {};
                         updateTimeoutToast(data);
                         updateDelivToast(data);
+                        updateTopupBell(data);   // 哪吒 A3·S4: 充值/退款结果喂 nzBell(在场感知内建)
                         if (window.nzHeartbeat) { window.nzHeartbeat.fire(data); }   // 哪吒 W4: 每次心跳驱动作业台等订阅者刷新(不另开轮询·先于新单早返回, 保证队列态每 6s 都更新)
                         var ids = (data.new_order_ids || []).map(String);
                         var total = data.new_total || 0;

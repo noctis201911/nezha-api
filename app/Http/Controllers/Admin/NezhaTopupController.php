@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\CentralLogics\NezhaOffboard;
 use App\CentralLogics\NezhaDepositLedger;
 use App\CentralLogics\NezhaGuaranteeRefund;
+use App\CentralLogics\NezhaTopupNotify;
 use App\Models\VendorKycProfile;
 use App\Models\Restaurant;
 use App\Models\NezhaTopupRequest;
@@ -118,6 +119,11 @@ class NezhaTopupController extends Controller
                 $req->reviewed_at     = now();
                 $req->save();
             });
+            // 哪吒 S4: 入账落库后通知商家(TG·未绑定=no-op·失败静默). 事务外调, 状态门保证一次不重发.
+            $done = NezhaTopupRequest::where('id', $id)->where('direction', 'topup')->first();
+            if ($done && $done->status === 'approved') {
+                NezhaTopupNotify::tgReviewResult($done, 'topup_approved');
+            }
             Toastr::success(translate('已确认入账, 商家余额已增加'));
         } catch (\RuntimeException $e) {
             Toastr::error($e->getMessage());
@@ -149,6 +155,9 @@ class NezhaTopupController extends Controller
         $req->operator_id = auth('admin')->id();
         $req->reviewed_at = now();
         $req->save();
+
+        // 哪吒 S4: 打回后通知商家(TG·未绑定=no-op).
+        NezhaTopupNotify::tgReviewResult($req, 'topup_rejected');
 
         Toastr::success(translate('已打回该充值申请'));
         return back();
@@ -188,6 +197,11 @@ class NezhaTopupController extends Controller
         $req = NezhaTopupRequest::where('id', $id)->where('direction', 'refund')->firstOrFail();
         $res = NezhaGuaranteeRefund::approve($req, (float) $request->amount, auth('admin')->id(), (bool) $request->manual_exposure_confirmed);
         if ($res['ok']) {
+            // 哪吒 S4: 审批通过后通知商家(refresh 拿 approved 态+金额+放款时点).
+            $fresh = NezhaTopupRequest::find($req->id);
+            if ($fresh && $fresh->status === 'approved') {
+                NezhaTopupNotify::tgReviewResult($fresh, 'refund_approved');
+            }
             Toastr::success($res['scheduled'] ? translate('已审批; 高额/超日额须于 ' . $res['pay_at'] . ' 后放款') : translate('已审批, 可放款'));
         } else {
             Toastr::error($res['reason']);
@@ -200,6 +214,11 @@ class NezhaTopupController extends Controller
         $req = NezhaTopupRequest::where('id', $id)->where('direction', 'refund')->firstOrFail();
         $res = NezhaGuaranteeRefund::pay($req);
         if ($res['status'] === 'paid') {
+            // 哪吒 S4: 放款登记后通知商家(押金已退回 KYC 账户).
+            $fresh = NezhaTopupRequest::find($req->id);
+            if ($fresh && $fresh->status === 'paid') {
+                NezhaTopupNotify::tgReviewResult($fresh, 'refund_paid');
+            }
             Toastr::success(translate('已登记放款, 押金余额已冲减'));
         } else {
             Toastr::warning($res['reason'] ?: translate('放款未完成'));
@@ -211,7 +230,13 @@ class NezhaTopupController extends Controller
     {
         $request->validate(['reason' => 'required|string|max:255']);
         $req = NezhaTopupRequest::where('id', $id)->where('direction', 'refund')->firstOrFail();
-        NezhaGuaranteeRefund::reject($req, $request->reason, auth('admin')->id());
+        if (NezhaGuaranteeRefund::reject($req, $request->reason, auth('admin')->id())) {
+            // 哪吒 S4: 打回后通知商家(refresh 拿落库的理由).
+            $fresh = NezhaTopupRequest::find($req->id);
+            if ($fresh) {
+                NezhaTopupNotify::tgReviewResult($fresh, 'refund_rejected');
+            }
+        }
         Toastr::success(translate('已打回该退款申请'));
         return back();
     }
