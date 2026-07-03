@@ -11,6 +11,11 @@
     $qd = $queues['delivery'] ?? []; $qn = $queues['nudge_timeout'] ?? []; $qr = $queues['refund'] ?? [];
     $today = $rail['today'] ?? []; $bad = $rail['bad_review'] ?? [];
     $store = $wb['store'] ?? []; $tempClosed = (bool)($store['temp_closed'] ?? false);   // W5 店态
+    // W6 移动分段: 五队列计数 + 默认落第一个非空队列。桌面(>600px)不生效(全展示)。
+    $qCounts = ['confirm' => ($qc['total'] ?? 0) + ($qc['no_proof_total'] ?? 0), 'cooking' => $qk['total'] ?? 0, 'delivery' => $qd['total'] ?? 0, 'nudge' => $qn['total'] ?? 0, 'refund' => $qr['total'] ?? 0];
+    $segFirst = 'confirm'; foreach ($qCounts as $k => $n) { if ($n > 0) { $segFirst = $k; break; } }
+    $segCls = fn($k) => $k === $segFirst ? ' nzwb-seg-active' : '';   // 卡显隐(移动)
+    $segOn  = fn($k) => $k === $segFirst ? ' on' : '';                 // segbar 选中态
     $detail = fn($id) => route('vendor.order.details', ['id' => $id]);
     $detailFin = fn($id) => route('vendor.order.details', ['id' => $id]) . '?tab=fin';
     $listUrl = fn($st) => route('vendor.order.list', [$st]);
@@ -46,12 +51,21 @@
     <div class="nzwb-cols">
         <section class="nzwb-maincol">
 
+            {{-- W6 移动端: 五队列横滑分段控件(默认落第一个非空队列·仅 ≤600px 显示; 桌面全展示不受影响) --}}
+            <div class="nzwb-segbar" role="tablist" aria-label="队列分段">
+                <button type="button" class="nzwb-seg{{ $segOn('confirm') }}" data-nzwb-seg="confirm" role="tab">待确认收款@if($qCounts['confirm'] > 0)<b>{{ $qCounts['confirm'] }}</b>@endif</button>
+                <button type="button" class="nzwb-seg{{ $segOn('cooking') }}" data-nzwb-seg="cooking" role="tab">备餐@if($qCounts['cooking'] > 0)<b>{{ $qCounts['cooking'] }}</b>@endif</button>
+                <button type="button" class="nzwb-seg{{ $segOn('delivery') }}" data-nzwb-seg="delivery" role="tab">配送@if($qCounts['delivery'] > 0)<b>{{ $qCounts['delivery'] }}</b>@endif</button>
+                <button type="button" class="nzwb-seg{{ $segOn('nudge') }}" data-nzwb-seg="nudge" role="tab">催促·超时@if($qCounts['nudge'] > 0)<b>{{ $qCounts['nudge'] }}</b>@endif</button>
+                <button type="button" class="nzwb-seg{{ $segOn('refund') }}" data-nzwb-seg="refund" role="tab">退款@if($qCounts['refund'] > 0)<b>{{ $qCounts['refund'] }}</b>@endif</button>
+            </div>
+
             @if($isEmpty)
                 <div class="nzwb-banner-empty"><span class="zzz">◔</span>今天还没有新订单。顾客下单后会第一时间出现在这里并响铃提醒。</div>
             @endif
 
             {{-- ① 待确认收款 --}}
-            <div class="nzwb-qcard">
+            <div class="nzwb-qcard{{ $segCls('confirm') }}" data-nzwb-q="confirm">
                 <div class="nzwb-qhead"><span class="qdot"></span><b>待确认收款</b><span class="cnt">{{ (int)($qc['total'] ?? 0) }}</span>
                     @if(($qc['no_proof_total'] ?? 0) > 0)<span class="sub">另有 {{ $qc['no_proof_total'] }} 单等顾客传凭证（不计需动作）</span>@endif
                     <a class="all" href="{{ $listUrl('offline_pending') }}">查看全部 →</a></div>
@@ -83,7 +97,7 @@
             </div>
 
             {{-- ② 备餐中 --}}
-            <div class="nzwb-qcard">
+            <div class="nzwb-qcard{{ $segCls('cooking') }}" data-nzwb-q="cooking">
                 <div class="nzwb-qhead"><span class="qdot"></span><b>备餐中</b><span class="cnt">{{ (int)($qk['total'] ?? 0) }}</span><a class="all" href="{{ $listUrl('cooking') }}">查看全部 →</a></div>
                 @forelse(($qk['rows'] ?? []) as $r)
                     <div class="nzwb-row">
@@ -100,7 +114,7 @@
             </div>
 
             {{-- ③ 配送(待叫车/配送中) --}}
-            <div class="nzwb-qcard">
+            <div class="nzwb-qcard{{ $segCls('delivery') }}" data-nzwb-q="delivery">
                 <div class="nzwb-qhead"><span class="qdot"></span><b>配送</b><span class="cnt">{{ (int)($qd['total'] ?? 0) }}</span>
                     @if(($qd['total'] ?? 0) > 0)<span class="sub">待叫车 {{ (int)($qd['wait_car'] ?? 0) }} · 配送中 {{ (int)($qd['on_the_way'] ?? 0) }}</span>@endif
                     <a class="all" href="{{ $listUrl('grp_ongoing') }}">查看全部 →</a></div>
@@ -131,7 +145,7 @@
             </div>
 
             {{-- ④ 催促 · 超时(横切告警·轻量跳转行) --}}
-            <div class="nzwb-qcard warncard">
+            <div class="nzwb-qcard warncard{{ $segCls('nudge') }}" data-nzwb-q="nudge">
                 <div class="nzwb-qhead"><span class="qdot"></span><b>催促 · 超时</b><span class="cnt">{{ (int)($qn['total'] ?? 0) }}</span>
                     @if(($qn['total'] ?? 0) > 0)<span class="sub">与其他队列按单去重，不重复计数</span>@endif
                     <a class="all" href="{{ $listUrl('grp_action') }}">查看全部 →</a></div>
@@ -148,7 +162,7 @@
             </div>
 
             {{-- ⑤ 退款处理(两段式) --}}
-            <div class="nzwb-qcard">
+            <div class="nzwb-qcard{{ $segCls('refund') }}" data-nzwb-q="refund">
                 <div class="nzwb-qhead"><span class="qdot" style="background:var(--red)"></span><b>退款处理</b><span class="cnt">{{ (int)($qr['total'] ?? 0) }}</span><a class="all" href="{{ $listUrl('refund_pending') }}">查看全部 →</a></div>
                 @php $segA = collect($qr['rows'] ?? [])->where('segment','A'); $segB = collect($qr['rows'] ?? [])->where('segment','B'); @endphp
                 @if($segA->count())

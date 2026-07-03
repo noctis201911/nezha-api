@@ -25,6 +25,24 @@
 .nzwb-cap.nzwb-store:hover{border-color:var(--navy)}
 .nzwb-cap.paused{color:var(--red);border-color:var(--red)}
 .nzwb-cap.paused .dot{background:var(--red)}
+
+/* W6 移动端: 五队列横滑分段控件(桌面隐藏·全展示; ≤600px 只显选中队列 + 全宽 CTA) */
+.nzwb-segbar{display:none}
+@media (max-width:600px){
+  .nzwb-segbar{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 0 10px;margin:0 0 2px;scrollbar-width:none}
+  .nzwb-segbar::-webkit-scrollbar{display:none}
+  .nzwb-seg{flex:0 0 auto;border:1px solid var(--line);background:#fff;color:var(--body);border-radius:999px;padding:7px 13px;font-size:13px;font-weight:600;font-family:inherit;white-space:nowrap;cursor:pointer}
+  .nzwb-seg b{margin-left:5px;background:var(--chipBg);border-radius:7px;padding:0 6px;font-size:11.5px}
+  .nzwb-seg.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .nzwb-seg.on b{background:rgba(255,255,255,.22);color:#fff}
+  .nzwb-maincol .nzwb-qcard{display:none}
+  .nzwb-maincol .nzwb-qcard.nzwb-seg-active{display:block}
+  .nzwb-row{flex-wrap:wrap}
+  .nzwb-row .nzwb-act{width:100%;margin-top:10px}
+  .nzwb-row .nzwb-act > .nzwb-btn:not(.more){flex:1}
+  .nzwb-row .nzwb-act form{flex:1}
+  .nzwb-row .nzwb-act form .nzwb-btn{width:100%}
+}
 .nzwb-today{color:var(--body);font-size:13.5px;background:var(--bg2);border:1px solid var(--line);border-radius:999px;padding:7px 14px}
 .nzwb-today b{color:var(--ink)}
 
@@ -225,6 +243,7 @@ body.nz-dispatch-lock { overflow: hidden; }
                         var o = row.querySelector('.oid');
                         if (o && !prev[o.textContent.trim()]) row.classList.add('nzwb-new');   // 新出现的行高亮
                     });
+                    if (window.nzwbApplySeg) window.nzwbApplySeg();   // W6: 换入后重放移动端分段态(选中队列跨刷新保持)
                 })
                 .catch(function(){})
                 .then(function(){ inFlight = false; });
@@ -262,6 +281,54 @@ body.nz-dispatch-lock { overflow: hidden; }
                 busy = false; cap.style.opacity = '';
             });
         });
+    })();
+
+    (function () {
+        // W6 移动端: 五队列横滑分段。选中态存 JS(跨 6s 心跳刷新保持); 事件委托(卡/segbar 每次刷新是新节点)。
+        var SEGS = ['confirm', 'cooking', 'delivery', 'nudge', 'refund'];
+        var active = null;   // null = 采用服务器渲染的默认(第一个非空)
+        function isMobile(){ return window.matchMedia && window.matchMedia('(max-width:600px)').matches; }
+        function apply(){
+            var zone = document.getElementById('nzwbRefresh'); if (!zone) return;
+            var cards = zone.querySelectorAll('.nzwb-qcard[data-nzwb-q]'); if (!cards.length) return;
+            if (active === null) {
+                var pre = zone.querySelector('.nzwb-qcard.nzwb-seg-active[data-nzwb-q]');
+                active = pre ? pre.getAttribute('data-nzwb-q') : 'confirm';
+            }
+            if (!zone.querySelector('.nzwb-qcard[data-nzwb-q="' + active + '"]')) { active = cards[0].getAttribute('data-nzwb-q'); }
+            cards.forEach(function (c) { c.classList.toggle('nzwb-seg-active', c.getAttribute('data-nzwb-q') === active); });
+            zone.querySelectorAll('.nzwb-seg[data-nzwb-seg]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-nzwb-seg') === active); });
+        }
+        window.nzwbApplySeg = apply;   // 供 W4 刷新在换入后重放分段态
+        document.addEventListener('click', function (e) {
+            var b = (e.target && e.target.closest) ? e.target.closest('.nzwb-seg[data-nzwb-seg]') : null;
+            if (!b) return;
+            active = b.getAttribute('data-nzwb-seg'); apply();
+            if (b.scrollIntoView) b.scrollIntoView({ inline: 'center', block: 'nearest' });
+        });
+        // 横滑切换(仅移动·仅队列区明显水平滑·不拦 segbar 横滚/交互元素/抽屉)
+        var tsx = null, tsy = null;
+        document.addEventListener('touchstart', function (e) {
+            tsx = null;
+            if (!isMobile()) return;
+            var t0 = e.target;
+            if (!t0 || !t0.closest || !t0.closest('.nzwb-maincol')) return;
+            if (t0.closest('.nzwb-segbar') || t0.closest('a,button,form,input,textarea,.nzwb-proof')) return;
+            var t = e.touches[0]; tsx = t.clientX; tsy = t.clientY;
+        }, { passive: true });
+        document.addEventListener('touchend', function (e) {
+            if (tsx === null) return;
+            var t = e.changedTouches[0], dx = t.clientX - tsx, dy = t.clientY - tsy; tsx = null;
+            if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.4) return;   // 需明显水平滑
+            var i = SEGS.indexOf(active); if (i < 0) i = 0;
+            var ni = dx < 0 ? Math.min(SEGS.length - 1, i + 1) : Math.max(0, i - 1);
+            if (ni !== i) {
+                active = SEGS[ni]; apply();
+                var sb = document.querySelector('.nzwb-seg[data-nzwb-seg="' + active + '"]');
+                if (sb && sb.scrollIntoView) sb.scrollIntoView({ inline: 'center', block: 'nearest' });
+            }
+        }, { passive: true });
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply); else apply();
     })();
 </script>
 @endpush
