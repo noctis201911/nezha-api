@@ -221,7 +221,103 @@
         </div>
     </div>
 
+    @php $tpOpen = \App\CentralLogics\NezhaTopup::accountOpen($account); @endphp
+    @if($tpOpen)
+    @php
+        $tpPay = \App\CentralLogics\NezhaTopup::payInfo();
+        [$tpMin, $tpMax] = \App\CentralLogics\NezhaTopup::bounds();
+        $tpVid = $restaurant->vendor_id ?? \App\CentralLogics\Helpers::get_vendor_id();
+        $tpLast = \App\CentralLogics\NezhaTopup::latestRequest((int) $tpVid, $account);
+    @endphp
+    <div class="card mb-3">
+        <div class="card-header"><h5 class="card-title mb-0">{{ translate('申请充值') }}</h5></div>
+        <div class="card-body">
+            @if($tpLast && $tpLast->status === 'pending')
+                <div class="alert alert-soft-warning d-flex justify-content-between align-items-center flex-wrap">
+                    <div class="mr-2 mb-2 mb-sm-0">
+                        <strong>{{ translate('审核中') }}</strong> · {{ translate('提交于') }} {{ \Carbon\Carbon::parse($tpLast->created_at)->format('m-d H:i') }} · {{ \App\CentralLogics\Helpers::format_currency($tpLast->amount_claimed) }}
+                        <div class="small text-muted mb-0">{{ translate('平台核对到账后为您入账。') }}</div>
+                    </div>
+                    <form action="{{ route('vendor.nezha-deposit.topup-cancel') }}" method="POST" onsubmit="return confirm('{{ translate('确认撤回这笔充值申请?') }}');">
+                        @csrf
+                        <input type="hidden" name="id" value="{{ $tpLast->id }}">
+                        <button type="submit" class="btn btn-sm btn-white">{{ translate('撤回') }}</button>
+                    </form>
+                </div>
+            @elseif($tpLast && $tpLast->status === 'approved' && $tpLast->reviewed_at && \Carbon\Carbon::parse($tpLast->reviewed_at)->gt(\Carbon\Carbon::now()->subDays(2)))
+                <div class="alert alert-soft-success mb-3">
+                    <strong>{{ translate('已入账') }}</strong> {{ \App\CentralLogics\Helpers::format_currency($tpLast->amount_credited ?? $tpLast->amount_claimed) }} · {{ translate('余额已更新') }}
+                </div>
+            @elseif($tpLast && $tpLast->status === 'rejected')
+                <div class="alert alert-soft-danger mb-3">
+                    <strong>{{ translate('已打回') }}</strong>@if($tpLast->reason) · {{ $tpLast->reason }}@endif
+                    <div class="small text-muted mb-0">{{ translate('请核对后重新提交。') }}</div>
+                </div>
+            @endif
+            <div class="row">
+                <div class="col-md-5 mb-3 mb-md-0 text-center">
+                    @if($tpPay['qr'])
+                        <img src="{{ asset('storage/' . $tpPay['qr']) }}?v={{ \Carbon\Carbon::now()->format('ymd') }}" alt="{{ translate('收款码') }}" style="width:200px;max-width:100%;height:auto;border:1px solid #e5e7eb;border-radius:10px;">
+                    @else
+                        <div class="d-inline-flex align-items-center justify-content-center text-muted mx-auto" style="width:200px;height:200px;border:1px dashed #cbd5e1;border-radius:10px;">{{ translate('收款码待配置') }}</div>
+                    @endif
+                    <div class="mt-2"><strong>{{ translate('收款方') }}: {{ $tpPay['name'] }}</strong></div>
+                    @if($tpPay['account'])
+                        <div class="mt-1">{{ translate('支付宝账号') }}: <span>{{ $tpPay['account'] }}</span>
+                            <button type="button" class="btn btn-xs btn-white ml-1" id="tp_copy" data-acct="{{ $tpPay['account'] }}">{{ translate('复制') }}</button>
+                        </div>
+                    @endif
+                    @if($tpPay['holder'])
+                        <div class="small text-muted mt-1">{{ translate('支付宝账户名') }}: {{ $tpPay['holder'] }}</div>
+                    @endif
+                </div>
+                <div class="col-md-7">
+                    <p class="text-muted small mb-2">{{ translate('请用左侧支付宝收款码或账号把款项转给平台, 然后在此填写转账金额并上传转账凭证。平台运营核对到账后为您入账, 余额即时增加。此为您与平台的 B2B 往来, 与顾客货款无关。') }}</p>
+                    <form action="{{ route('vendor.nezha-deposit.topup-apply') }}" method="POST" enctype="multipart/form-data">
+                        @csrf
+                        <input type="hidden" name="account_type" value="{{ $account }}">
+                        <div class="form-group">
+                            <label class="input-label">{{ translate('转账金额') }}</label>
+                            <div class="input-group">
+                                <div class="input-group-prepend"><span class="input-group-text">֏</span></div>
+                                <input type="number" step="0.01" min="{{ $tpMin }}" max="{{ $tpMax }}" name="amount" id="tp_amount" class="form-control" required>
+                            </div>
+                            <small class="text-muted d-block">{{ translate('单笔范围') }}: ֏{{ number_format($tpMin) }} ~ ֏{{ number_format($tpMax) }} <span id="tp_conv" class="text-primary"></span></small>
+                        </div>
+                        <div class="form-group">
+                            <label class="input-label">{{ translate('转账凭证') }} <span class="text-danger">*</span></label>
+                            <input type="file" name="proof" accept="image/*" class="form-control-file" required>
+                            <small class="text-muted d-block">{{ translate('上传支付宝转账成功截图, 便于平台核对到账。') }}</small>
+                        </div>
+                        <div class="form-group">
+                            <label class="input-label">{{ translate('备注') }}</label>
+                            <input type="text" name="note" maxlength="255" class="form-control" placeholder="{{ translate('选填') }}">
+                        </div>
+                        <button type="submit" class="btn btn-primary" {{ ($tpLast && $tpLast->status === 'pending') ? 'disabled' : '' }}>{{ translate('提交充值申请') }}</button>
+                        @if($tpLast && $tpLast->status === 'pending')
+                            <small class="text-muted d-block mt-1">{{ translate('您有一笔申请正在审核, 处理后可再次提交。') }}</small>
+                        @endif
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        (function () {
+            var i = document.getElementById('tp_amount'), o = document.getElementById('tp_conv');
+            var rc = {{ $rateCny > 0 ? $rateCny : 55 }}, ru = {{ $rateUsd > 0 ? $rateUsd : 400 }};
+            if (i && o) {
+                var u = function () { var v = parseFloat(i.value) || 0; o.textContent = v > 0 ? ('≈ ¥' + (rc > 0 ? (v / rc) : 0).toFixed(2) + '  ·  ≈ $' + (ru > 0 ? (v / ru) : 0).toFixed(2)) : ''; };
+                i.addEventListener('input', u); u();
+            }
+            var cp = document.getElementById('tp_copy');
+            if (cp) { cp.addEventListener('click', function () { var a = cp.getAttribute('data-acct'); if (navigator.clipboard) { navigator.clipboard.writeText(a).then(function () { cp.textContent = '{{ translate('已复制') }}'; setTimeout(function () { cp.textContent = '{{ translate('复制') }}'; }, 1500); }); } }); }
+        })();
+    </script>
+    @endif
+
     @if($account === 'deposit')
+    @unless($tpOpen)
     {{-- 充值说明 --}}
     <div class="card mb-3">
         <div class="card-body">
@@ -229,6 +325,8 @@
             <p class="mb-0" style="font-size: 16px; line-height: 1.75; color: #475569;">{{ translate('请按平台告知的方式把预存佣金转给平台, 平台运营核实后会为您入账, 余额即时增加。预存佣金是您预付给平台的佣金(B2B), 与顾客货款无关。如需充值请联系平台客服。') }}</p>
         </div>
     </div>
+
+    @endunless
 
     {{-- 低额告警设置(仅预存佣金账户) --}}
     <div class="card mb-3">
@@ -278,6 +376,7 @@
         })();
     </script>
     @elseif($account === 'guarantee')
+    @unless($tpOpen)
     {{-- 押金说明 --}}
     <div class="card mb-3">
         <div class="card-body">
@@ -285,6 +384,7 @@
             <p class="mb-0" style="font-size: 16px; line-height: 1.75; color: #475569;">{{ translate('押金是您向平台缴纳的可退质押金(B2B), 与顾客货款无关。缴纳档位由平台按您的经营情况设定, 缴纳与退还由平台运营办理并在此对账留痕。退出平台时按规结算、原路退回您本人的收款账户。') }}</p>
         </div>
     </div>
+    @endunless
     @endif
 
     {{-- ============ 退出平台(对账中心底部·step4-4) ============ --}}
