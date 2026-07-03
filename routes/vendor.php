@@ -124,6 +124,8 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
         Route::group(['prefix' => 'workbench', 'as' => 'workbench.'], function () {
             Route::get('/', [WorkbenchController::class, 'index'])->name('index');
             Route::get('summary', [WorkbenchController::class, 'summary'])->name('summary');
+            // W4: 可刷新分区 HTML 片段(并入全局 6s 心跳, 不另开轮询)。只读, 与 index/summary 同 buildSummary 契约。
+            Route::get('refresh', [WorkbenchController::class, 'refresh'])->name('refresh');
         });
 
         Route::group(['prefix' => 'dashboard', 'as' => 'dashboard.'], function () {

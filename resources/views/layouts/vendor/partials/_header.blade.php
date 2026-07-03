@@ -85,6 +85,35 @@
                         </div>
                     </li>
 
+                    {{-- 哪吒 C3(W4): 待办提醒铃铛栈 —— 超时/催配送告警收进这里(徽标+可展开·直连订单)。由 app.blade window.nzBell 驱动。 --}}
+                    <li class="nav-item mr-3" style="position:relative;">
+                        <div class="hs-unfold" style="position:relative;">
+                            <a id="nzBellBtn" class="btn btn-icon btn-soft-secondary rounded-circle" href="javascript:;" data-toggle="tooltip" title="待办提醒" aria-label="待办提醒" style="position:relative;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                                <span id="nzBellBadge" style="display:none;position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;padding:0 4px;background:#E5484D;color:#fff;border-radius:9px;font-size:10px;line-height:16px;text-align:center;font-weight:700;box-shadow:0 0 0 2px #fff;">0</span>
+                            </a>
+                            <div id="nzBellPop" style="display:none;position:absolute;right:0;top:calc(100% + 8px);width:320px;max-width:88vw;background:#fff;border:1px solid #ededed;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.16);z-index:100001;font-family:'PingFang SC','Microsoft YaHei',sans-serif;text-align:left;">
+                                <style>
+                                #nzBellPop .nz-bell-hd{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #f0f0f0;font-weight:600;font-size:15px;color:#1f1f1f;}
+                                #nzBellPop .nz-bell-body{max-height:62vh;overflow-y:auto;}
+                                #nzBellPop .nz-bell-grp{font-size:12px;color:#9aa0a6;padding:10px 14px 4px;}
+                                #nzBellPop .nz-bell-item{display:flex;align-items:center;gap:8px;padding:9px 14px;font-size:13px;color:#42505F;text-decoration:none;border-top:1px solid #f6f6f6;}
+                                #nzBellPop .nz-bell-item:hover{background:#f7f8fa;}
+                                #nzBellPop .nz-bell-dot{width:8px;height:8px;border-radius:50%;flex:none;}
+                                #nzBellPop .nz-bell-dot.red{background:#E5484D;}
+                                #nzBellPop .nz-bell-dot.blue{background:#1f6fd0;}
+                                #nzBellPop .nz-bell-go{margin-left:auto;color:#98A2B3;}
+                                #nzBellPop .nz-bell-empty{padding:20px 16px;color:#9aa0a6;font-size:13px;text-align:center;}
+                                </style>
+                                <div class="nz-bell-hd">
+                                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#E5484D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                                    待办提醒
+                                </div>
+                                <div class="nz-bell-body" id="nzBellBody"><div class="nz-bell-empty">暂无待办提醒</div></div>
+                            </div>
+                        </div>
+                    </li>
+
                     {{-- nz: 提示音设置(分类音量+总开关, 存本机) --}}
                     <li class="nav-item mr-3" style="position:relative;">
                         <div class="hs-unfold" style="position:relative;">

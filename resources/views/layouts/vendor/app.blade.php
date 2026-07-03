@@ -107,14 +107,13 @@
        用 Bootstrap modal-dialog-centered 同款机制统一居中; 已显式带 .modal-dialog-centered 的不重复处理。短弹窗居中, 超高弹窗仍可随 .modal 滚动。 */
     .modal-dialog:not(.modal-dialog-centered){ display:flex; align-items:center; min-height:calc(100% - 3.5rem); }
     @media (max-width: 600px) {
-        #nz-new-order-toast, #nz-timeout-toast, #nz-deliv-toast {
+        #nz-new-order-toast, #nz-timeout-toast {
             left: 10px !important; right: 10px !important;
             min-width: 0 !important; max-width: none !important; width: auto !important;
             bottom: auto !important; padding: 10px 12px !important;
         }
         #nz-new-order-toast { top: 66px !important; }
         #nz-timeout-toast   { top: 142px !important; }
-        #nz-deliv-toast     { top: 218px !important; }
     }
     </style>
     <!-- 哪吒: 新订单非阻塞提示条 (响一次不反复弹窗) -->
@@ -129,6 +128,7 @@
         </div>
         <button type="button" id="nz-new-order-go" style="margin-top:10px;width:100%;background:#C4193E;color:#fff;border:none;border-radius:8px;padding:9px 0;font-size:14px;font-weight:600;cursor:pointer;">立即接单</button>
     </div>
+    {{-- 哪吒 C3(W4·告警分级): 超时=不可逆倒计时→保留右下抢占式浮层(仅非作业台页弹); 催配送=辅助类→收进顶栏铃铛栈(_header #nzBellBtn + window.nzBell)。新订单浮层保留(核心唤起)。 --}}
     <!-- 哪吒: 订单超时紧急提示条 (系统/面板渠道, 红色高优先, 独立于新订单提示) -->
     <div id="nz-timeout-toast" style="display:none;position:fixed;right:20px;bottom:96px;z-index:100001;background:#fff;border:1px solid #f3c2c2;border-left:4px solid #d32029;border-radius:12px;box-shadow:0 6px 24px rgba(211,32,41,.2);padding:14px 16px;min-width:248px;max-width:320px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">
         <div style="display:flex;align-items:flex-start;gap:10px;">
@@ -140,18 +140,6 @@
             <button type="button" id="nz-timeout-close" aria-label="关闭" style="border:none;background:none;color:#bbb;font-size:20px;line-height:1;cursor:pointer;padding:0;">&times;</button>
         </div>
         <button type="button" id="nz-timeout-go" style="margin-top:10px;width:100%;background:#d32029;color:#fff;border:none;border-radius:8px;padding:9px 0;font-size:14px;font-weight:600;cursor:pointer;">立即处理</button>
-    </div>
-    <!-- 哪吒: 顾客催「分享配送进度」提示条(系统/面板渠道, 蓝色, 独立于新单/超时; 商家贴 Yandex 链接即消) -->
-    <div id="nz-deliv-toast" style="display:none;position:fixed;right:20px;bottom:172px;z-index:100002;background:#fff;border:1px solid #c9def3;border-left:4px solid #1f6fd0;border-radius:12px;box-shadow:0 6px 24px rgba(31,111,208,.2);padding:14px 16px;min-width:248px;max-width:320px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">
-        <div style="display:flex;align-items:flex-start;gap:10px;">
-            <div style="font-size:22px;line-height:1;">&#128276;</div>
-            <div style="flex:1;">
-                <div style="font-weight:600;color:#1f6fd0;font-size:15px;margin-bottom:2px;"><span id="nz-deliv-count">0</span> 单顾客在催配送进度</div>
-                <div style="color:#8a8a8a;font-size:12px;">顾客想实时看配送，请在 Yandex Go 点「分享」复制追踪链接，贴到订单里</div>
-            </div>
-            <button type="button" id="nz-deliv-close" aria-label="关闭" style="border:none;background:none;color:#bbb;font-size:20px;line-height:1;cursor:pointer;padding:0;">&times;</button>
-        </div>
-        <button type="button" id="nz-deliv-go" style="margin-top:10px;width:100%;background:#1f6fd0;color:#fff;border:none;border-radius:8px;padding:9px 0;font-size:14px;font-weight:600;cursor:pointer;">去贴链接</button>
     </div>
     <div class="modal fade" id="popup-modal-msg">
         <div class="modal-dialog modal-dialog-centered" role="document">
@@ -572,6 +560,8 @@
 @stack('script_2')
     <script src="{{dynamicAsset('assets/admin/js/view-pages/common.js')}}"></script>
     <script src="{{dynamicAsset('assets/admin/js/keyword-highlighted.js')}}"></script>
+    {{-- 哪吒 W4: 心跳纯函数(真新单去重)——被 Node 单测覆盖的单一真相源, poll() 调它算 freshIds(未加载则内联回退)。 --}}
+    <script src="{{dynamicAsset('assets/admin/js/nz-heartbeat-core.js')}}?v=1"></script>
 
 <audio id="myAudio">
     <source src="{{dynamicAsset('assets/admin/sound/new-order-voice.mp3')}}" type="audio/mpeg">
@@ -648,6 +638,62 @@
         if (document.hidden) return false;
         return location.pathname.indexOf('/restaurant-panel/order/list/') !== -1;
     }
+    // 哪吒作业台 W4: 是否正停在作业台页(在场感知——页面可见且路径命中)。新单在此页只队列高亮+响铃, 不弹 toast。
+    function nzOnWorkbench() {
+        if (document.hidden) return false;
+        return location.pathname.indexOf('/restaurant-panel/workbench') !== -1;
+    }
+    // 哪吒作业台 W4: 全局 6s 心跳订阅点。poll() 成功后 fire(data); 作业台页订阅它刷新可刷新分区(不另开轮询)。
+    window.nzHeartbeat = window.nzHeartbeat || {
+        subs: [],
+        on: function (fn) { if (typeof fn === 'function') { this.subs.push(fn); } },
+        fire: function (data) { for (var i = 0; i < this.subs.length; i++) { try { this.subs[i](data); } catch (e) {} } }
+    };
+    // 哪吒 C3(W4): 顶栏铃铛栈 —— 超时/催配送告警的被动收集器(徽标 + 可展开列表·直连订单)。
+    // 徽标=当前活动告警数(只反映真实计数·非响铃口径); 响铃仍由 poll 分类去重独立驱动(解耦)。
+    window.nzBell = (function () {
+        var timeoutIds = [], delivIds = [];
+        var detailsBase = '{{ url('/') }}/restaurant-panel/order/details/';
+        function esc(s){ return String(s).replace(/[<>&]/g, function(c){ return c === '<' ? '&lt;' : (c === '>' ? '&gt;' : '&amp;'); }); }
+        function render() {
+            var badge = document.getElementById('nzBellBadge');
+            var body = document.getElementById('nzBellBody');
+            var total = timeoutIds.length + delivIds.length;
+            if (badge) {
+                if (total > 0) { badge.textContent = total > 99 ? '99+' : total; badge.style.display = 'block'; }
+                else { badge.style.display = 'none'; }
+            }
+            if (!body) { return; }
+            var html = '';
+            if (timeoutIds.length) {
+                html += '<div class="nz-bell-grp">超时未处理 · ' + timeoutIds.length + '</div>';
+                timeoutIds.forEach(function (id) {
+                    html += '<a class="nz-bell-item" href="' + detailsBase + encodeURIComponent(id) + '"><span class="nz-bell-dot red"></span>订单 #' + esc(id) + ' 已超时 · 请尽快处理 <span class="nz-bell-go">&rarr;</span></a>';
+                });
+            }
+            if (delivIds.length) {
+                html += '<div class="nz-bell-grp">顾客催配送 · ' + delivIds.length + '</div>';
+                delivIds.forEach(function (id) {
+                    html += '<a class="nz-bell-item" href="' + detailsBase + encodeURIComponent(id) + '"><span class="nz-bell-dot blue"></span>订单 #' + esc(id) + ' 顾客在催 · 去贴链接 <span class="nz-bell-go">&rarr;</span></a>';
+                });
+            }
+            body.innerHTML = html || '<div class="nz-bell-empty">暂无待办提醒</div>';
+        }
+        return {
+            setTimeouts: function (ids) { timeoutIds = (ids || []).map(String); render(); },
+            setDelivs: function (ids) { delivIds = (ids || []).map(String); render(); },
+            render: render
+        };
+    })();
+    // 铃铛开合(与提示音面板同款: 点击切换, 点外面收起)。
+    document.addEventListener('DOMContentLoaded', function () {
+        var btn = document.getElementById('nzBellBtn');
+        var pop = document.getElementById('nzBellPop');
+        if (window.nzBell) { window.nzBell.render(); }
+        if (!btn || !pop) { return; }
+        btn.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); pop.style.display = (pop.style.display === 'block') ? 'none' : 'block'; });
+        document.addEventListener('click', function (e) { if (pop.style.display === 'block' && !pop.contains(e.target) && e.target !== btn && !btn.contains(e.target)) { pop.style.display = 'none'; } });
+    });
 </script>
 
 <script>
@@ -1001,6 +1047,8 @@
             function toHide(){ if (toToast) { toToast.style.display = 'none'; } }
             if (toGoBtn) { toGoBtn.addEventListener('click', function(){ location.href = listBase + toTarget; }); }
             if (toCloseBtn) { toCloseBtn.addEventListener('click', function(){ toDismissed = true; toHide(); }); }
+            // 哪吒 C3(W4·告警分级): 超时=不可逆倒计时→保留右下抢占式浮层; 作业台页内(队列④+总览条兜底)与正看该单详情时抑制浮层(套新单同款)。
+            // 超时不进铃铛栈(铃铛留辅助类·催配送); 响铃仅"正看该单"时抑制(作业台仍响·与新单一致·分类音量)。
             function updateTimeoutToast(data){
                 var ids = (data.timeout_order_ids || []).map(String);
                 var total = data.timeout_total || 0;
@@ -1008,51 +1056,34 @@
                 if (total === 0) { toHide(); toDismissed = false; return; }
                 var seen = toLoadSeen();
                 var freshIds = ids.filter(function(id){ return !seen.has(id); });
-                // 在场感知: 商家正看着超时单的详情页时, 不弹浮窗不响铃(已在处理了)
                 var viewingId = nzViewingOrderDetail();
                 var viewingThisOrder = viewingId && ids.indexOf(viewingId) !== -1;
+                var hideToastHere = viewingThisOrder || nzOnWorkbench();   // 作业台/正看该单 → 不弹浮层
                 if (freshIds.length > 0) {
-                    if (!viewingThisOrder) { playAudio('timeout'); }
+                    if (!viewingThisOrder) { playAudio('timeout'); }       // 作业台仍响铃(套新单)
                     toDismissed = false;
                     freshIds.forEach(function(id){ seen.add(id); });
                     toSaveSeen(seen);
-                    if (!viewingThisOrder) { toShow(total); }
-                } else if (!toDismissed && !viewingThisOrder) {
+                    if (!hideToastHere) { toShow(total); }
+                } else if (!toDismissed && !hideToastHere) {
                     toShow(total);
                 }
             }
 
-            // 哪吒: 顾客催「分享配送进度」提示(系统渠道)——独立 seen-set, 与新单/超时互不干扰; 点「去贴链接」直达该单详情页
-            var DELIV_SEEN_KEY = 'nz_seen_deliv_ids_v1';
-            var dvToast    = document.getElementById('nz-deliv-toast');
-            var dvCountEl  = document.getElementById('nz-deliv-count');
-            var dvGoBtn    = document.getElementById('nz-deliv-go');
-            var dvCloseBtn = document.getElementById('nz-deliv-close');
-            var detailsBase = '{{url('/')}}/restaurant-panel/order/details/';
-            var dvFirstId  = null;
-            var dvDismissed = false;
-            var dvMemSeen  = new Set();
+            // 哪吒: 顾客催「分享配送进度」告警。C3(W4): 收进顶栏铃铛栈(window.nzBell·直连订单), 不再弹右下浮层; 响铃逻辑(活动告警只响一次)照旧。
             var dvAudioEl  = document.getElementById('nzDelivAudio');
             var dvSounded  = false;
             function dvPlay(){ try { if (dvAudioEl) { var _v=(window.nzSound?window.nzSound.getVol('deliv'):1); if(_v<=0)return; dvAudioEl.volume=_v; dvAudioEl.currentTime = 0; var p = dvAudioEl.play(); if (p && p.catch) { p.catch(function(){}); } } } catch(e){} }
-            function dvLoadSeen(){ try { return new Set(JSON.parse(localStorage.getItem(DELIV_SEEN_KEY) || '[]')); } catch(e){ return dvMemSeen; } }
-            function dvSaveSeen(set){ dvMemSeen = set; try { var arr = Array.from(set); if (arr.length > 200) { arr = arr.slice(arr.length - 200); } localStorage.setItem(DELIV_SEEN_KEY, JSON.stringify(arr)); } catch(e){} }
-            function dvShow(count){ if (dvCountEl) { dvCountEl.textContent = count; } if (dvToast) { dvToast.style.display = 'block'; } }
-            function dvHide(){ if (dvToast) { dvToast.style.display = 'none'; } }
-            if (dvGoBtn) { dvGoBtn.addEventListener('click', function(){ if (dvFirstId) { location.href = detailsBase + dvFirstId; } }); }
-            if (dvCloseBtn) { dvCloseBtn.addEventListener('click', function(){ dvDismissed = true; dvHide(); }); }
             function updateDelivToast(data){
                 var ids = (data.deliv_link_order_ids || []).map(String);
                 var total = data.deliv_link_total || 0;
-                dvFirstId = ids.length > 0 ? ids[0] : null;
-                if (total === 0) { dvHide(); dvDismissed = false; dvSounded = false; return; }
-                // 哪吒: 声音独立于「已看」去重——只要音频已解锁就把当前还挂着的催单补响一次(解决冷启动时 poll 早于解锁的竞争);
-                // 一个活动告警只响一次, 告警清零(贴链接/无催单)后重置, 下次新催单再响。
-                // 在场感知: 商家正看着催配送的那单详情页时, 不弹浮窗不响铃(已在贴链接的页面了)
+                if (window.nzBell) { window.nzBell.setDelivs(ids); }
+                if (total === 0) { dvSounded = false; return; }
+                // 声音独立于「已看」去重: 音频解锁后把当前还挂着的催单补响一次; 活动告警只响一次, 清零后重置, 下次新催单再响。
+                // 在场感知: 商家正看着该催配送单的详情页时, 不响铃(已在贴链接的页面了)。
                 var viewingId = nzViewingOrderDetail();
                 var viewingThisOrder = viewingId && ids.indexOf(viewingId) !== -1;
                 if (!dvSounded && window.nzAudioUnlocked && !viewingThisOrder) { dvPlay(); dvSounded = true; }
-                if (!dvDismissed && !viewingThisOrder) { dvShow(total); }
             }
 
             function loadSeen(){
@@ -1071,6 +1102,7 @@
                 // 哪吒#4: 订单详情页/列表页不弹「新订单」浮层(商家已在看订单, 该提示冗余且遮挡操作)
                 if (location.pathname.indexOf('/restaurant-panel/order/details/') !== -1) { hideToast(); return; }
                 if (nzOnOrderList()) { hideToast(); return; }
+                if (nzOnWorkbench()) { hideToast(); return; }   // 哪吒作业台 W4: 作业台内新单只队列高亮+响铃, 不弹浮层(在场感知)
                 if (countEl) { countEl.textContent = count; }
                 if (labelEl && label) { labelEl.textContent = label; }
                 if (toast) { toast.style.display = 'block'; }
@@ -1089,6 +1121,7 @@
                         var data = response.data || {};
                         updateTimeoutToast(data);
                         updateDelivToast(data);
+                        if (window.nzHeartbeat) { window.nzHeartbeat.fire(data); }   // 哪吒 W4: 每次心跳驱动作业台等订阅者刷新(不另开轮询·先于新单早返回, 保证队列态每 6s 都更新)
                         var ids = (data.new_order_ids || []).map(String);
                         var total = data.new_total || 0;
                         currentTarget = data.target || 'pending';
@@ -1097,7 +1130,8 @@
 
                         var label = data.target_label || '待接单';
                         var seen = loadSeen();
-                        var freshIds = ids.filter(function(id){ return !seen.has(id); });
+                        // 哪吒 W4: 用被单测覆盖的纯函数算「真新单」(nz-heartbeat-core.js), 回退内联同逻辑; 响铃/去重口径不变(绝不漏单/防双响)。
+                        var freshIds = (window.nzHeartbeatCore ? window.nzHeartbeatCore.nzFreshIds(ids, seen) : ids.filter(function(id){ return !seen.has(id); }));
 
                         if (freshIds.length > 0) {
                             playAudio('new_order');

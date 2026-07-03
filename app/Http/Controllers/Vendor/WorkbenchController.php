@@ -52,18 +52,40 @@ class WorkbenchController extends Controller
     {
         $rid = (int) Helpers::get_restaurant_id();
         $wb = self::buildSummary($rid);
+        $dispatchOrders = self::dispatchOrdersFor($wb);
 
-        // W3: 叫车抽屉源 —— ②备餐(processing) + ③待叫车(handover) 行对应订单模型, 供 _dispatch_tools 渲染
-        // (复用订单列表页同款「叫车底部抽屉」·同一 partial, 不造第二套写路径)。只取本页已显行的 id, 逐一有源。
+        return view('vendor-views.workbench.index', compact('wb', 'dispatchOrders'));
+    }
+
+    /**
+     * W4: 作业台可刷新分区(_body)的 HTML 片段。并入全局 6s 心跳(app.blade poll)刷新, 不另开轮询。
+     * 与 index() 共用 buildSummary() + dispatchOrdersFor() 同一契约; 返回无 layout 的 _body partial(供 JS 换入 #nzwbRefresh)。
+     * 纯只读: 与 summary/index 同源, 不写 checked / 不改状态 / 无副作用。
+     */
+    public function refresh(Request $request)
+    {
+        $rid = (int) Helpers::get_restaurant_id();
+        $wb = self::buildSummary($rid);
+        $dispatchOrders = self::dispatchOrdersFor($wb);
+
+        return view('vendor-views.workbench._body', compact('wb', 'dispatchOrders'));
+    }
+
+    /**
+     * 叫车抽屉源 —— ②备餐(processing) + ③待叫车(handover) 行对应订单模型, 供 _dispatch_tools 渲染
+     * (复用订单列表页同款「叫车底部抽屉」·同一 partial, 不造第二套写路径)。只取本页已显行的 id, 逐一有源。
+     * index() + refresh() 共用, 防两处 drift。
+     */
+    protected static function dispatchOrdersFor(array $wb)
+    {
         $dispatchIds = array_merge(
             array_column($wb['queues']['cooking']['rows'] ?? [], 'id'),
             array_column(array_filter($wb['queues']['delivery']['rows'] ?? [], fn ($r) => ($r['stage'] ?? '') === 'handover'), 'id')
         );
-        $dispatchOrders = $dispatchIds
+
+        return $dispatchIds
             ? Order::with('restaurant')->whereIn('id', $dispatchIds)->get()
             : collect();
-
-        return view('vendor-views.workbench.index', compact('wb', 'dispatchOrders'));
     }
 
     /**
