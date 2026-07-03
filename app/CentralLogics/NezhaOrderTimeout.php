@@ -278,11 +278,23 @@ class NezhaOrderTimeout
             $deadline = $start ? $start->copy()->addMinutes($cfg['unpaid_cancel'])->toDateTimeString() : null;
             $refundMethod = '未完成付款，无需退款';
             $refundEta    = null;
-            $autoNote = "若 {$cfg['unpaid_cancel']} 分钟内仍未完成付款，系统将自动取消本单。";
+            // 时间自适应(2026-07-03): 过阈值老单不谎称"将自动取消"未来事件。
+            $autoNote = $elapsed >= $cfg['unpaid_cancel']
+                ? "本单已超过 {$cfg['unpaid_cancel']} 分钟未完成付款的时限，系统正在处理；如未自动取消，请稍候或联系客服。"
+                : "若 {$cfg['unpaid_cancel']} 分钟内仍未完成付款，系统将自动取消本单。";
         } else {
             // 已付款/钱已确认：超时自动取消 + 通知商家原路退款
             $deadline = $start ? $start->copy()->addMinutes($cfg['cancel'])->toDateTimeString() : null;
-            $autoNote = "系统将在第 {$cfg['email_merchant']} 分钟提醒商家、第 {$cfg['cancel']} 分钟自动取消并通知商家联系你原路退款。";
+            // 时间自适应文案(2026-07-03): 不对早已过阈值的老单谎称"将在第X分钟"未来事件。
+            // 前端 OrderDetails 已用「安心时间轴」替代此句; 但游客/旧追踪页 TrackingPage 仍直接
+            // 渲染 next_step, 故 next_step 本身也须时间诚实。纯展示文案, 阈值/自动取消机制不变。
+            if ($elapsed >= $cfg['cancel']) {
+                $autoNote = "本单已超过第 {$cfg['cancel']} 分钟的自动处理时限，系统正在跟进处理；如订单状态未及时更新，请联系商家或客服。";
+            } elseif ($elapsed >= $cfg['email_merchant']) {
+                $autoNote = "系统已提醒商家尽快处理；第 {$cfg['cancel']} 分钟仍未推进将自动取消并通知商家联系你原路退款。";
+            } else {
+                $autoNote = "系统将在第 {$cfg['email_merchant']} 分钟提醒商家、第 {$cfg['cancel']} 分钟自动取消并通知商家联系你原路退款。";
+            }
         }
 
         // 阶段 B（confirmed）：钱已确认、商家已接单，等待开始备餐。
