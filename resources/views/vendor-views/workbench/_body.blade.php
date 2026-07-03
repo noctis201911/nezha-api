@@ -10,6 +10,7 @@
     $qc = $queues['confirm_payment'] ?? []; $qk = $queues['cooking'] ?? [];
     $qd = $queues['delivery'] ?? []; $qn = $queues['nudge_timeout'] ?? []; $qr = $queues['refund'] ?? [];
     $today = $rail['today'] ?? []; $bad = $rail['bad_review'] ?? [];
+    $store = $wb['store'] ?? []; $tempClosed = (bool)($store['temp_closed'] ?? false);   // W5 店态
     $detail = fn($id) => route('vendor.order.details', ['id' => $id]);
     $detailFin = fn($id) => route('vendor.order.details', ['id' => $id]) . '?tab=fin';
     $listUrl = fn($st) => route('vendor.order.list', [$st]);
@@ -25,7 +26,7 @@
     {{-- 顶部: 店态胶囊(W5 变交互·W2 静态) + 今日单量 --}}
     <div class="nzwb-top">
         <span class="nzwb-title">今天 · 作业台</span>
-        <span class="nzwb-cap" title="店态(暂停接单将在 W5 接入)"><span class="dot"></span>营业中</span>
+        <button type="button" class="nzwb-cap nzwb-store{{ $tempClosed ? ' paused' : '' }}" data-nz-store="{{ $tempClosed ? 'paused' : 'open' }}" title="点击切换 营业中 / 暂停接单"><span class="dot"></span>{{ $tempClosed ? '暂停接单' : '营业中' }}</button>
         <span class="nzwb-today">今日 <b class="num">{{ (int)($today['orders'] ?? 0) }}</b> 单 · 自收款 <b class="num">֏{{ number_format((float)($today['collected'] ?? 0)) }}</b></span>
     </div>
 

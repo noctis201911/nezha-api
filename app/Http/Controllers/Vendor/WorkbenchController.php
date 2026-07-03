@@ -141,6 +141,8 @@ class WorkbenchController extends Controller
             'action'       => $action,
             'queues'       => $queues,
             'rail'         => $rail,
+            // W5: 店态胶囊两档(营业/暂停接单)。暂停=nezha_temp_closed(店可见+休息中+拦单), 与门店页 update-active-status 同源。
+            'store'        => ['temp_closed' => (bool) DB::table('restaurants')->where('id', $rid)->value('nezha_temp_closed')],
             'rates'        => ['cny' => $rateCny, 'usd' => $rateUsd],
             'generated_at' => now()->toIso8601String(),
         ];

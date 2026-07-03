@@ -21,6 +21,10 @@
 .nzwb-title{color:var(--navy);font-size:17px;font-weight:700}
 .nzwb-cap{display:inline-flex;align-items:center;gap:8px;border:1.5px solid var(--line);border-radius:999px;padding:7px 14px;font-weight:600;color:var(--navy);background:#fff}
 .nzwb-cap .dot{width:9px;height:9px;border-radius:50%;background:var(--greenCta)}
+.nzwb-cap.nzwb-store{cursor:pointer;font-family:inherit;font-size:14px;transition:border-color .15s,color .15s}
+.nzwb-cap.nzwb-store:hover{border-color:var(--navy)}
+.nzwb-cap.paused{color:var(--red);border-color:var(--red)}
+.nzwb-cap.paused .dot{background:var(--red)}
 .nzwb-today{color:var(--body);font-size:13.5px;background:var(--bg2);border:1px solid var(--line);border-radius:999px;padding:7px 14px}
 .nzwb-today b{color:var(--ink)}
 
@@ -226,8 +230,38 @@ body.nz-dispatch-lock { overflow: hidden; }
                 .then(function(){ inFlight = false; });
         }
         function el2(){ return document.getElementById('nzwbRefresh'); }
+        window.nzwbRefreshNow = refresh;                                      // W5: 店态切换成功后立即从服务器 re-sync(与心跳同一函数)
         if (window.nzHeartbeat) window.nzHeartbeat.on(refresh);              // 订阅全局 6s 心跳
         document.addEventListener('visibilitychange', function(){ if (!document.hidden) refresh(); });  // 回到标签页即刷一次
+    })();
+
+    (function () {
+        // W5: 店态胶囊 —— 点击切换 营业中/暂停接单(复用 update-active-status·翻转 nezha_temp_closed·同门店页写路径)+二次确认+后端留痕。
+        // 胶囊在 #nzwbRefresh 内(每 6s 心跳重渲染), 故事件委托; 成功后乐观翻转 + 立即刷新从服务器 re-sync(单一真相源)。
+        var TOGGLE_URL = '{{ route('vendor.business-settings.update-active-status') }}';
+        var busy = false;
+        document.addEventListener('click', function (e) {
+            var cap = (e.target && e.target.closest) ? e.target.closest('.nzwb-store') : null;
+            if (!cap || busy) return;
+            e.preventDefault();
+            var paused = cap.getAttribute('data-nz-store') === 'paused';
+            var msg = paused
+                ? '恢复营业？顾客将可以重新对本店下单。'
+                : '暂停接单？暂停后顾客无法对本店下单（店铺仍显示、标「休息中」），进行中的订单不受影响。';
+            if (!window.confirm(msg)) return;
+            busy = true; cap.style.opacity = '.6';
+            $.get(TOGGLE_URL).done(function () {
+                var nowPaused = !paused;
+                cap.setAttribute('data-nz-store', nowPaused ? 'paused' : 'open');       // 乐观翻转(即时反馈)
+                cap.classList.toggle('paused', nowPaused);
+                cap.innerHTML = '<span class="dot"></span>' + (nowPaused ? '暂停接单' : '营业中');
+                if (window.nzwbRefreshNow) window.nzwbRefreshNow();                      // 立即从服务器 re-sync
+            }).fail(function () {
+                window.alert('切换失败，请重试');
+            }).always(function () {
+                busy = false; cap.style.opacity = '';
+            });
+        });
     })();
 </script>
 @endpush

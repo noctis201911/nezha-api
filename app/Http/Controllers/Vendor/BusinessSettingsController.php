@@ -395,6 +395,14 @@ class BusinessSettingsController extends Controller
             $restaurant->active = 1; // 防御: 打烊时确保店铺仍可见(休息中), 不消失
         }
         $restaurant->save();
+        // 哪吒 W5: 店态切换操作留痕(作业台胶囊 / 门店页共用此端点)——记谁、何店、切到哪态, 供事后追溯。
+        \Illuminate\Support\Facades\Log::info('nezha_store_status_toggle', [
+            'restaurant_id'     => $restaurant->id,
+            'by'                => optional(auth('vendor')->user())->id,
+            'nezha_temp_closed' => (int) $restaurant->nezha_temp_closed,
+            'action'            => $restaurant->nezha_temp_closed ? 'pause' : 'open',
+            'at'                => now()->toIso8601String(),
+        ]);
         return response()->json(['message' => $restaurant->nezha_temp_closed?translate('messages.restaurant_temporarily_closed'):translate('messages.restaurant_opened')], 200);
     }
 
