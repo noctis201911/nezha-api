@@ -35,6 +35,7 @@
 ---
 ## 认领区（动手前登记，干完划掉）
 <!-- 格式： - [ ] 窗口X 正在改 <文件/页面>（YYYY-MM-DD HH:MM） -->
+- [ ] Claude(P1b-C订单页4+1组tab窗口) 正在改 vendor order/list.blade.php + Vendor/OrderController.php(list) + CentralLogics/NezhaOrderCounts.php —— 14平铺tab收敛为「需动作/进行中/售后/已完结/全部」5组+组内二级chip; 组过滤/计数走 NezhaOrderCounts 单一真相源(applyGroupFilter+grp_* rollup+actionOrderIds按单去重), 与控制器 list($status) 同源; 补 timeout/done_canceled 计数(修chip 0/10误显)。改动在工作树【未提交】, 待业主截图点头后 nzcommit 精确入库(防别窗 deploy 连带上线)。回滚点 .bak.p1bc0703。未碰他窗WIP。（2026-07-03）
 - [x] Claude(搜索需求+押金列窗口) ✅已完成上线(提交 c56f866 押金 + 5558cf5 搜索): ①全量搜索埋点 nezha_search_terms 表 + NezhaUsageLog::searchTerm(埋 Api/V1 RestaurantController+ProductController 各1行, 端到端 curl 实测采集通) + NezhaPurgeAnalytics 扩展 ②后台「搜索需求」页(新 Admin/NezhaSearchDemandController + admin-views/nezha-search-demand/index.blade + routes/admin.php 路由组 + _sidebar.blade 菜单项, 热门/没结果双视图+过滤+导出CSV) ③商家列表押金状态列(新 NezhaDepositHealth 四档单一真相源, Vendor/DashboardController 收口对拍64/64零回归, Admin/VendorController::list + admin-views/vendor/list.blade 加押金列+补全别窗漏的抽佣开关td修表头错位bug) + ADMIN_GUIDE §10/§23.3。**未碰他窗 WIP(resources/lang/en/messages.php · _image-uploader.blade)**。（2026-07-01）
 - [x] 窗口(F-4) 已完成(提交 6a94cab) 改过 OrderLogic.php / Admin·Vendor OrderController / vendor order-view·_sidebar / routes·docs —— 直付单退款通知商家+留痕（2026-06-17）
 - [x] Codex 已完成(提交 e2d5134) OrderLogic.php / Helpers.php —— 顾客确认收款通知去重及 Yandex 状态文案（2026-06-19 07:37→07:45）
