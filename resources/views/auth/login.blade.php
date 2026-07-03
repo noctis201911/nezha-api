@@ -56,8 +56,13 @@
         .brand-logo { display: inline-block; line-height: 0; }
         .brand-logo img { height: clamp(78px, 7vw, 104px); width: auto; display: inline-block; }
         .brand-title { font-size: clamp(30px, 3vw, 38px); line-height: 1.18; font-weight: 700; color: #1C1917; margin: 18px 0 14px; }
-        .brand-desc { font-size: 16px; color: #78716C; max-width: 432px; margin: 0 auto 32px; line-height: 1.75; text-align: left; text-indent: 2em; }
-        .brand-desc .brand-term { white-space: nowrap; }
+        .brand-desc {
+            display: flex; flex-direction: column; align-items: center; gap: 3px;
+            font-size: 16px; color: #78716C; max-width: 432px; margin: 0 auto 32px;
+            line-height: 1.7; text-align: center;
+        }
+        .brand-desc .desc-main { color: #57534E; font-weight: 500; }
+        .brand-desc .desc-sub { color: #78716C; font-size: 15px; }
         .features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; max-width: 432px; margin: 0 auto; }
         .feature-card { min-height: 118px; padding: 18px 12px; background: rgba(255,255,255,0.92); border-radius: 14px; border: 1px solid var(--border); transition: all 0.3s ease; text-align: center; }
         .feature-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(196,25,62,0.06); border-color: rgba(196,25,62,0.2); }
@@ -185,7 +190,8 @@
                 <h1 class="font-display brand-title fade-up stagger-2">{{ $isVendor ? '商家管理后台' : '管理后台' }}</h1>
                 <p class="brand-desc fade-up stagger-3">
                     @if ($isVendor)
-                        专为华人餐厅打造，一站式订单管理、菜品运营、<span class="brand-term">数据分析平台</span>。让您的餐厅轻松触达每一位食客。
+                        <span class="desc-main">专为华人餐厅打造的一站式经营后台</span>
+                        <span class="desc-sub">订单、菜品、数据与营销，轻松触达每一位食客</span>
                     @else
                         {{ translate('Manage_your_app_&_website_easily') }}
                     @endif
