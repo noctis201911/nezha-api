@@ -17,6 +17,8 @@
         @media (prefers-reduced-motion: reduce) {
             .nz-customer-nudge-badge { animation: none; }
         }
+        /* 哪吒P1b-E: 「订单」需动作徽标 —— 稳态 V2 红(#E5484D·同订单页需动作tab/段A退款头), 持续积压计数不脉冲 */
+        .nz-order-action-badge { background: #E5484D !important; color: #fff !important; font-weight: 800; }
     </style>
 @endonce
 <div id="sidebarMain" class="d-none">
@@ -132,246 +134,20 @@
                     @endif
 
                     @if(\App\CentralLogics\Helpers::employee_module_permission_check('regular_order'))
-                        <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/order*') && (Request::is('restaurant-panel/order/subscription*') == false ) ?'active':''}}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
-                               title="{{translate('messages.regular_orders')}}">
+                        {{-- 哪吒P1b-E: 「普通订单」下 17 状态子项(全部/客户催促/待确认收款/待退款/…)收敛为单条「订单」+ 需动作徽标。
+                             各状态改由订单页顶部 4+1 组 tab + 组内 chip 进入(P1b-C)。徽标=需动作(grp_action·按单去重), 读单一真相源
+                             NezhaOrderCounts, 与订单页组 tab / 看板待办条同一 provider(消除侧栏内联 count 分叉→根治三处对账漂移)。 --}}
+                        @php($__nzActionCount = (\App\CentralLogics\NezhaOrderCounts::forRestaurant(\App\CentralLogics\Helpers::get_restaurant_id())['grp_action'] ?? 0))
+                        <li class="nav-item {{ Request::is('restaurant-panel/order/list*') ? 'active' : '' }}">
+                            <a class="nav-link" href="{{ route('vendor.order.list', ['grp_action']) }}" title="订单">
                                 <i class="tio-shopping-cart nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                    {{translate('messages.regular_orders')}}
+                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate sidebar--badge-container">
+                                    订单
+                                    @if($__nzActionCount > 0)
+                                    <span class="badge nz-order-action-badge badge-pill ml-1">{{ $__nzActionCount }}</span>
+                                    @endif
                                 </span>
                             </a>
-                            @php($data =0)
-                            @php($restaurant =\App\CentralLogics\Helpers::get_restaurant_data())
-                            @if (($restaurant->restaurant_model == 'subscription' && isset($restaurant->restaurant_sub) && $restaurant->restaurant_sub->self_delivery == 1)  || ($restaurant->restaurant_model == 'commission' && $restaurant->self_delivery_system == 1) )
-                                @php($data =1)
-                            @endif
-                            <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                                style="display:  {{Request::is('restaurant-panel/order*') && (Request::is('restaurant-panel/order/subscription*') == false )?'block':'none'}}">
-                                {{-- ⚠️ 哪吒P1b-A: 以下订单状态子项的计数口径已由 \App\CentralLogics\NezhaOrderCounts 统一接管(看板待办条 + 订单列表已接入)。
-                                     P1b-E 将整体删除这些子项 → 收敛为单条「订单」+ 需动作徽标(读同一 provider)。
-                                     期间请勿单独修改下面任何内联 count(与 provider 分叉会破坏"三处对账"断言)。 --}}
-                                <li class="nav-item {{Request::is('restaurant-panel/order/list/all')?'active':''}} @yield('all_order') ">
-                                    <a class="nav-link" href="{{route('vendor.order.list',['all'])}}" title="{{translate('messages.all_order')}}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{translate('messages.all')}}
-                                            <span class="badge badge-soft-info badge-pill ml-1">
-                                                {{-- 哪吒[2026-07-01 P5]: 全部=真全部, 与列表'all'同口径(Notpos, 不排除状态, 不NotDigitalOrder) --}}
-                                                {{\App\Models\Order::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->Notpos()->HasSubscriptionToday()->count()}}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                @php($__customerNudgeCount = \App\CentralLogics\NezhaCustomerNudge::count(\App\CentralLogics\Helpers::get_restaurant_id()))
-                                {{-- 哪吒: 「客户催促」常驻入口。仅当仍有未处理催促单时红色提醒, 数字轻微跳动。 --}}
-                                <li class="nav-item {{Request::is('restaurant-panel/order/list/customer_nudged')?'active':'' }} {{ $__customerNudgeCount > 0 ? 'nz-customer-nudge-alert' : '' }} @yield('customer_nudged')">
-                                    <a class="nav-link " href="{{route('vendor.order.list',['customer_nudged'])}}" title="客户催促">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            客户催促
-                                            <span class="badge {{ $__customerNudgeCount > 0 ? 'nz-customer-nudge-badge' : 'badge-soft-info' }} badge-pill ml-1">
-                                                {{ $__customerNudgeCount }}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                {{-- 哪吒 B方案: 「待确认收款」—— 顾客已下单+上传付款凭证、等商家确认收款的离线单。补掉单根因。 --}}
-                                <li class="nav-item {{Request::is('restaurant-panel/order/list/offline_pending')?'active':'' }} @yield('offline_pending')">
-                                    <a class="nav-link " href="{{route('vendor.order.list',['offline_pending'])}}" title="待确认收款">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            待确认收款
-                                            <span class="badge badge-soft-danger badge-pill ml-1">
-                                                {{\App\Models\Order::where(['order_status'=>'pending','payment_method'=>'offline_payment','restaurant_id'=>\App\CentralLogics\Helpers::get_restaurant_id()])->whereHas('offline_payments', function($q){$q->where('status','pending');})->Notpos()->HasSubscriptionToday()->count()}}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                {{-- 哪吒 F-4: 「待退款」—— 平台已取消/退款的直付单, 等商家原路退还顾客。 --}}
-                                <li class="nav-item {{Request::is('restaurant-panel/order/list/refund_pending')?'active':'' }} @yield('refund_pending')">
-                                    <a class="nav-link " href="{{route('vendor.order.list',['refund_pending'])}}" title="待退款">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            待退款
-                                            <span class="badge badge-soft-warning badge-pill ml-1">
-                                                {{\App\Models\Order::where('restaurant_id',\App\CentralLogics\Helpers::get_restaurant_id())->whereIn('id', \App\Models\NezhaRefundRecord::where('status','pending_merchant_refund')->pluck('order_id'))->count()}}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                @if(false){{-- 哪吒P1a[2026-07-03]: 「待处理」对本店结构性永空(配送+线下单全部路由到「待确认收款」, 码 OrderController 233/973), 照堂食/accepted先例封存(业主批复) --}}
-                                <li class="nav-item {{Request::is('restaurant-panel/order/list/pending')?'active':'' }} @yield('pending')">
-                                    <a class="nav-link " href="{{route('vendor.order.list',['pending'])}}" title="{{translate('messages.pending')}}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{translate('messages.pending')}}
-                                                <span class="badge badge-soft-success badge-pill ml-1">
-                                                @if(config('order_confirmation_model') == 'restaurant' || $data)
-                                                        {{\App\Models\Order::where(['order_status'=>'pending','restaurant_id'=>\App\CentralLogics\Helpers::get_restaurant_id()])->Notpos()->NotDigitalOrder()->HasSubscriptionToday()->OrderScheduledIn(30)->count()}}
-                                                    @else
-                                                        {{\App\Models\Order::where(['order_status'=>'pending','restaurant_id'=>\App\CentralLogics\Helpers::get_restaurant_id()])->whereIn('order_type',['take_away','dine_in'])->NotDigitalOrder()->Notpos()->HasSubscriptionToday()->OrderScheduledIn(30)->count()}}
-                                                    @endif
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-
-                                @endif
-                                <li class="nav-item {{Request::is('restaurant-panel/order/list/confirmed')?'active':''}} @yield('confirmed') ">
-                                    <a class="nav-link " href="{{route('vendor.order.list',['confirmed'])}}" title="{{translate('messages.confirmed')}}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            已接单
-                                                <span class="badge badge-soft-success badge-pill ml-1">
-                                                {{\App\Models\Order::whereIn('order_status',['confirmed','accepted'])->NotDigitalOrder()->Notpos()->whereNotNull('confirmed')->where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->HasSubscriptionToday()->OrderScheduledIn(30)->count()}}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                @if(false){{-- 哪吒:已接单合并到confirmed,不再单独显示 --}}
-                                <li class="nav-item {{Request::is('restaurant-panel/order/list/accepted')?'active':''}} @yield('accepted')">
-                                    <a class="nav-link " href="{{route('vendor.order.list',['accepted'])}}"  title="{{translate('accepted')}}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{translate('messages.accepted')}}
-                                                <span class="badge badge-soft-success badge-pill ml-1">
-                                                {{\App\Models\Order::whereIn('order_status',['accepted'])->NotDigitalOrder()->hasSubscriptionToday()->where(['restaurant_id'=>\App\CentralLogics\Helpers::get_restaurant_id()])->Notpos()->count()}}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                @endif
-
-                                <li class="nav-item {{Request::is('restaurant-panel/order/list/cooking')?'active':''}} @yield('processing')">
-                                    <a class="nav-link" href="{{route('vendor.order.list',['cooking'])}}" title="{{translate('messages.cooking')}}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{translate('messages.cooking')}}
-                                            <span class="badge badge-soft-info badge-pill ml-1">
-                                                {{\App\Models\Order::where(['order_status'=>'processing', 'restaurant_id'=>\App\CentralLogics\Helpers::get_restaurant_id()])->NotDigitalOrder()->HasSubscriptionToday()->Notpos()->count()}}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                <li class="nav-item {{Request::is('restaurant-panel/order/list/ready_for_delivery')?'active':''}} @yield('handover')">
-                                    <a class="nav-link" href="{{route('vendor.order.list',['ready_for_delivery'])}}" title="{{translate('Ready For Delivery')}}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{translate('messages.ready_for_delivery')}}
-                                            <span class="badge badge-soft-info badge-pill ml-1">
-                                                {{\App\Models\Order::where(['order_status'=>'handover', 'restaurant_id'=>\App\CentralLogics\Helpers::get_restaurant_id()])->NotDigitalOrder()->HasSubscriptionToday()->Notpos()->count()}}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                <li class="nav-item {{Request::is('restaurant-panel/order/list/food_on_the_way')?'active':''}} @yield('picked_up')">
-                                    <a class="nav-link" href="{{route('vendor.order.list',['food_on_the_way'])}}" title="{{translate('Food On The Way')}}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{translate('messages.food_on_the_way')}}
-                                            <span class="badge badge-soft-info badge-pill ml-1">
-                                                {{\App\Models\Order::where(['order_status'=>'picked_up', 'restaurant_id'=>\App\CentralLogics\Helpers::get_restaurant_id()])->NotDigitalOrder()->HasSubscriptionToday()->Notpos()->count()}}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                <li class="nav-item {{Request::is('restaurant-panel/order/list/delivered')?'active':''}} @yield('delivered')">
-                                    <a class="nav-link " href="{{route('vendor.order.list',['delivered'])}}"  title="{{translate('Delivered')}}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{translate('messages.delivered')}}
-                                                <span class="badge badge-soft-success badge-pill ml-1">
-                                                {{\App\Models\Order::where(['order_status'=>'delivered','restaurant_id'=>\App\CentralLogics\Helpers::get_restaurant_id()])->NotDigitalOrder()->HasSubscriptionToday()->Notpos()->count()}}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                @if(false){{-- 哪吒:堂食停用·仅外卖 --}}
-                                <li class="nav-item {{Request::is('restaurant-panel/order/list/dine_in')?'active':''}} @yield('dine_in')">
-                                    <a class="nav-link " href="{{route('vendor.order.list',['dine_in'])}}"  title="{{translate('dine_in')}}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{translate('messages.dine_in')}}
-                                                <span class="badge badge-soft-success badge-pill ml-1">
-                                                {{\App\Models\Order::where(['order_type'=>'dine_in','restaurant_id'=>\App\CentralLogics\Helpers::get_restaurant_id()])->NotDigitalOrder()->HasSubscriptionToday()->Notpos()->count()}}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                @endif
-                                <li class="nav-item {{Request::is('restaurant-panel/order/list/refunded')?'active':''}} @yield('refunded')">
-                                    <a class="nav-link " href="{{route('vendor.order.list',['refunded'])}}"  title="{{translate('Refunded')}}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{translate('messages.refunded')}}
-                                                <span class="badge badge-soft-danger bg-light badge-pill ml-1">
-                                                {{\App\Models\Order::Refunded()->where(['restaurant_id'=>\App\CentralLogics\Helpers::get_restaurant_id()])->NotDigitalOrder()->HasSubscriptionToday()->Notpos()->count()}}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                <li class="nav-item {{Request::is('restaurant-panel/order/list/refund_requested')?'active':''}} @yield('refund_requested')">
-                                    <a class="nav-link " href="{{route('vendor.order.list',['refund_requested'])}}"  title="{{translate('refund_requested')}}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{translate('messages.refund_requested')}}
-                                                <span class="badge badge-soft-danger bg-light badge-pill ml-1">
-                                                {{\App\Models\Order::Refund_requested()->NotDigitalOrder()->where(['restaurant_id'=>\App\CentralLogics\Helpers::get_restaurant_id()])->Notpos()->count()}}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                <li class="nav-item {{Request::is('restaurant-panel/order/list/scheduled')?'active':''}} @yield('scheduled')">
-                                    <a class="nav-link" href="{{route('vendor.order.list',['scheduled'])}}" title="{{translate('messages.scheduled')}}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{translate('messages.scheduled')}}
-                                            <span class="badge badge-soft-info badge-pill ml-1">
-                                                {{\App\Models\Order::where('restaurant_id',\App\CentralLogics\Helpers::get_restaurant_id())->NotDigitalOrder()->Notpos()->HasSubscriptionToday()->Scheduled()->where(function($q) use($data){
-                                                    if(config('order_confirmation_model') == 'restaurant' || $data)
-                                                    {
-                                                        $q->whereNotIn('order_status',['failed','canceled', 'refund_requested', 'refunded']);
-                                                    }
-                                                    else
-                                                    {
-                                                        $q->whereNotIn('order_status',['pending','failed','canceled', 'refund_requested', 'refunded'])->orWhere(function($query){
-                                                            $query->where('order_status','pending')->whereIn('order_type', ['take_away','dine_in']);
-                                                        });
-                                                    }
-
-                                                })->count()}}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-
-
-                                <li class="nav-item {{Request::is('restaurant-panel/order/list/payment_failed')?'active':''}} @yield('failed')">
-                                    <a class="nav-link " href="{{route('vendor.order.list',['payment_failed'])}}"  title="{{translate('payment_failed')}}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{translate('messages.payment_failed')}}
-                                                <span class="badge badge-soft-success badge-pill ml-1">
-                                                {{\App\Models\Order::where('order_status','failed')->NotDigitalOrder()->where(['restaurant_id'=>\App\CentralLogics\Helpers::get_restaurant_id()])->Notpos()->count()}}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                <li class="nav-item {{Request::is('restaurant-panel/order/list/canceled')?'active':''}} @yield('canceled')">
-                                    <a class="nav-link " href="{{route('vendor.order.list',['canceled'])}}"  title="{{translate('canceled')}}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{translate('messages.canceled')}}
-                                                <span class="badge badge-soft-success badge-pill ml-1">
-                                                {{\App\Models\Order::where('order_status','canceled')->NotDigitalOrder()->where(['restaurant_id'=>\App\CentralLogics\Helpers::get_restaurant_id()])->Notpos()->count()}}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-
-
-
-                            </ul>
                         </li>
 
                     @endif
