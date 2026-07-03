@@ -53,7 +53,17 @@ class WorkbenchController extends Controller
         $rid = (int) Helpers::get_restaurant_id();
         $wb = self::buildSummary($rid);
 
-        return view('vendor-views.workbench.index', compact('wb'));
+        // W3: 叫车抽屉源 —— ②备餐(processing) + ③待叫车(handover) 行对应订单模型, 供 _dispatch_tools 渲染
+        // (复用订单列表页同款「叫车底部抽屉」·同一 partial, 不造第二套写路径)。只取本页已显行的 id, 逐一有源。
+        $dispatchIds = array_merge(
+            array_column($wb['queues']['cooking']['rows'] ?? [], 'id'),
+            array_column(array_filter($wb['queues']['delivery']['rows'] ?? [], fn ($r) => ($r['stage'] ?? '') === 'handover'), 'id')
+        );
+        $dispatchOrders = $dispatchIds
+            ? Order::with('restaurant')->whereIn('id', $dispatchIds)->get()
+            : collect();
+
+        return view('vendor-views.workbench.index', compact('wb', 'dispatchOrders'));
     }
 
     /**
@@ -318,13 +328,21 @@ class WorkbenchController extends Controller
     {
         $op = $order->offline_payments;
         $isHash = false;
+        $url = null;
         if ($op) {
             $pinfo = json_decode($op->payment_info, true) ?: [];
             $mn = mb_strtolower((string) ($pinfo['method_name'] ?? ''));
             $isHash = str_contains($mn, 'usdt') || str_contains($mn, 'trc') || str_contains($mn, 'bep') || str_contains($mn, 'hash');
+            // 第一张凭证图 URL(缩略图点开大图·快速预筛; 正式核对仍在详情页收款tab)。offline_payment_proof_url 只对存在的图片路径返 URL, 否则 null。
+            foreach ($pinfo as $v) {
+                if (is_string($v) && ($u = Helpers::offline_payment_proof_url($v))) {
+                    $url = $u;
+                    break;
+                }
+            }
         }
 
-        return ['has' => (bool) $op, 'label' => $isHash ? '哈希' : '凭证'];
+        return ['has' => (bool) $op, 'label' => $isHash ? '哈希' : '凭证', 'url' => $url];
     }
 
     /** PII 脱敏顾客标识(浏览类展示; 真实电话/地址在派 Yandex 抽屉保留完整, 此处不 over-mask)。 */

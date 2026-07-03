@@ -91,6 +91,22 @@
 /* 空态横幅 */
 .nzwb-banner-empty{background:#fff;border:1px dashed var(--line);border-radius:12px;padding:26px 20px;text-align:center;color:var(--body);font-size:14px;margin-bottom:14px}
 .nzwb-banner-empty .zzz{font-size:26px;color:var(--sec);display:block;margin-bottom:8px}
+
+/* 叫车抽屉(复用订单列表页同款·W3) */
+body.nz-dispatch-lock { overflow: hidden; }
+.nz-dispatch-drawer { position: fixed; inset: 0; z-index: 11050; display: none; }
+.nz-dispatch-drawer.nz-open { display: block; }
+.nz-dispatch-backdrop { position: absolute; inset: 0; background: rgba(16,24,40,.45); }
+.nz-dispatch-sheet { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; border-radius: 16px 16px 0 0; max-height: 88vh; overflow-y: auto; box-shadow: 0 -4px 24px rgba(16,24,40,.18); }
+.nz-dispatch-grip { width: 38px; height: 4px; border-radius: 99px; background: #D8DEE7; margin: 8px auto 2px; }
+.nz-dispatch-head { position: sticky; top: 0; background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 6px 16px 12px; border-bottom: 1px solid #EEF0F3; z-index: 1; }
+.nz-dispatch-title { font-weight: 800; font-size: 15px; color: #17191D; }
+.nz-dispatch-x { border: 0; background: transparent; font-size: 24px; line-height: 1; color: #8A9099; cursor: pointer; padding: 0 4px; }
+.nz-dispatch-body { padding: 4px 16px 20px; }
+@media (min-width: 768px) {
+    .nz-dispatch-sheet { left: 50%; top: 50%; right: auto; bottom: auto; transform: translate(-50%, -50%); width: 460px; max-width: 92vw; border-radius: 16px; max-height: 84vh; }
+    .nz-dispatch-grip { display: none; }
+}
 </style>
 @endpush
 
@@ -105,6 +121,7 @@
     $qd = $queues['delivery'] ?? []; $qn = $queues['nudge_timeout'] ?? []; $qr = $queues['refund'] ?? [];
     $today = $rail['today'] ?? []; $bad = $rail['bad_review'] ?? [];
     $detail = fn($id) => route('vendor.order.details', ['id' => $id]);
+    $detailFin = fn($id) => route('vendor.order.details', ['id' => $id]) . '?tab=fin';
     $listUrl = fn($st) => route('vendor.order.list', [$st]);
     $dur = function ($m) { $m = (int) $m; if ($m < 60) return $m.' 分钟'; $h = intdiv($m, 60); $mm = $m % 60; return $h.' 小时'.($mm ? $mm.' 分' : ''); };
     $waitTxt = function ($m) use ($dur) { return $m === null ? '' : '已等 '.$dur($m); };
@@ -154,9 +171,13 @@
                     <div class="nzwb-row">
                         <div class="grow"><span class="oid">#{{ $r['id'] }}</span> <span class="nzwb-chip">{{ $r['payment_label'] }}</span>
                             <div class="meta">{{ $r['placed_at'] ? '下单 '.$r['placed_at'].' · ' : '' }}{{ $waitTxt($r['waited_min']) }} · 顾客 {{ $r['customer']['name'] }}{{ $r['customer']['phone'] ? '（'.$r['customer']['phone'].'）' : '' }}</div></div>
-                        <div class="nzwb-proof">{{ $r['proof']['label'] ?? '凭证' }}</div>
+                        @if(!empty($r['proof']['url']))
+                            <a class="nzwb-proof" href="{{ $r['proof']['url'] }}" target="_blank" rel="noopener" title="点开大图快速预筛（正式核对在详情页收款）"><img src="{{ $r['proof']['url'] }}" alt="凭证" style="width:100%;height:100%;object-fit:cover;border-radius:6px;"></a>
+                        @else
+                            <div class="nzwb-proof">{{ $r['proof']['label'] ?? '凭证' }}</div>
+                        @endif
                         <div class="nzwb-money num">{{ $r['amount_amd'] }}<small>≈ ¥{{ $r['amount_cny'] }}</small></div>
-                        <div class="nzwb-act"><a class="nzwb-btn green" href="{{ $detail($r['id']) }}">{{ $r['cta']['label'] ?? '确认收款' }}</a><a class="nzwb-btn more" href="{{ $detail($r['id']) }}">⋯</a></div>
+                        <div class="nzwb-act"><a class="nzwb-btn green" href="{{ $detailFin($r['id']) }}">{{ $r['cta']['label'] ?? '确认收款' }}</a><a class="nzwb-btn more" href="{{ $detail($r['id']) }}">⋯</a></div>
                     </div>
                 @empty
                     @if(($qc['no_proof_total'] ?? 0) == 0)<div class="nzwb-qempty">{{ $qc['empty_text'] ?? '暂无待确认收款的订单' }}</div>@endif
@@ -181,7 +202,7 @@
                         <div class="grow"><span class="oid">#{{ $r['id'] }}</span>
                             <div class="meta">{{ $r['items'] ?: '—' }} · 已备 {{ $dur($r['cooking_min'] ?? 0) }}</div></div>
                         <div class="nzwb-money num">{{ $r['amount_amd'] }}<small>≈ ¥{{ $r['amount_cny'] }}</small></div>
-                        <div class="nzwb-act"><a class="nzwb-btn navy" href="{{ $detail($r['id']) }}">出餐 · 叫车</a><a class="nzwb-btn more" href="{{ $detail($r['id']) }}">⋯</a></div>
+                        <div class="nzwb-act"><button type="button" class="nzwb-btn navy nz-dispatch-open" data-nz-dispatch="{{ $r['id'] }}">出餐 · 叫车</button><a class="nzwb-btn more" href="{{ $detail($r['id']) }}">⋯</a></div>
                     </div>
                 @empty
                     <div class="nzwb-qempty">{{ $qk['empty_text'] ?? '暂无备餐中的订单' }}</div>
@@ -205,8 +226,14 @@
                             <div class="meta">{{ $r['items'] ?: '—' }} · {{ $r['stage']==='handover' ? '出餐 '.$dur($r['stage_min'] ?? 0) : '配送 '.$dur($r['stage_min'] ?? 0) }}</div></div>
                         <div class="nzwb-money num">{{ $r['amount_amd'] }}<small>≈ ¥{{ $r['amount_cny'] }}</small></div>
                         <div class="nzwb-act">
-                            @if($r['stage'] === 'handover')<a class="nzwb-btn navy" href="{{ $detail($r['id']) }}">叫车 / 标记配送中</a>
-                            @else<a class="nzwb-btn green" href="{{ $detail($r['id']) }}">标为「已送达」</a>@endif
+                            @if($r['stage'] === 'handover')
+                                <button type="button" class="nzwb-btn navy nz-dispatch-open" data-nz-dispatch="{{ $r['id'] }}">叫车 / 标记配送中</button>
+                            @else
+                                <form action="{{ $r['cta']['route'] ?? $detail($r['id']) }}" method="post" style="margin:0" @if(!empty($r['cta']['confirm'])) onsubmit="return confirm('{{ $r['cta']['confirm'] }}')" @endif>
+                                    @csrf @method($r['cta']['method'] ?? 'PUT')
+                                    <button type="submit" class="nzwb-btn green">标为「已送达」</button>
+                                </form>
+                            @endif
                             <a class="nzwb-btn more" href="{{ $detail($r['id']) }}">⋯</a></div>
                     </div>
                 @empty
@@ -294,6 +321,81 @@
         </aside>
     </div>
 
+    {{-- W3 叫车抽屉: 每单 _dispatch_tools 隐藏源(复用订单列表页同款 partial·同一写路径) + 共享底部抽屉 --}}
+    <div id="nzDispatchHolder" style="display:none">
+        @foreach(($dispatchOrders ?? collect()) as $__do)
+            <div id="nzDispatchSrc-{{ $__do->id }}" data-nz-dispatch-src="{{ $__do->id }}">
+                @include('vendor-views.order.partials._dispatch_tools', ['order' => $__do])
+            </div>
+        @endforeach
+    </div>
+    <div class="nz-dispatch-drawer d-print-none" id="nzDispatchDrawer" aria-hidden="true">
+        <div class="nz-dispatch-backdrop" data-nz-dispatch-close></div>
+        <div class="nz-dispatch-sheet" role="dialog" aria-modal="true" aria-labelledby="nzDispatchTitle">
+            <div class="nz-dispatch-grip"></div>
+            <div class="nz-dispatch-head">
+                <div class="nz-dispatch-title" id="nzDispatchTitle">🛵 Yandex Go 配送</div>
+                <button type="button" class="nz-dispatch-x" data-nz-dispatch-close aria-label="关闭">&times;</button>
+            </div>
+            <div class="nz-dispatch-body" id="nzDispatchBody"></div>
+        </div>
+    </div>
+
 </div>
 </div>
 @endsection
+
+@push('script_2')
+<script>
+    "use strict";
+    (function () {
+        // W3: 叫车底部抽屉 —— 点行内「出餐·叫车 / 叫车·标记配送中」把对应隐藏源移入抽屉(复用订单列表页同款交互)。
+        function initDispatchDrawer(){
+            var drawer = document.getElementById('nzDispatchDrawer');
+            var body = document.getElementById('nzDispatchBody');
+            var holder = document.getElementById('nzDispatchHolder');
+            var title = document.getElementById('nzDispatchTitle');
+            if (!drawer || !body || !holder) return;
+            var openId = null;
+            function stow(){
+                if (openId != null) {
+                    var s = document.getElementById('nzDispatchSrc-' + openId);
+                    if (s) { s.style.display = 'none'; holder.appendChild(s); }
+                    openId = null;
+                }
+            }
+            function openDrawer(id){
+                var src = document.getElementById('nzDispatchSrc-' + id);
+                if (!src) return;
+                stow();
+                body.appendChild(src);
+                src.style.display = 'block';
+                body.scrollTop = 0;
+                openId = id;
+                if (title) title.textContent = '🛵 Yandex Go 配送 · 订单 #' + id;
+                drawer.classList.add('nz-open');
+                drawer.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('nz-dispatch-lock');
+            }
+            function closeDrawer(){
+                stow();
+                drawer.classList.remove('nz-open');
+                drawer.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('nz-dispatch-lock');
+            }
+            document.addEventListener('click', function(e){
+                var t = e.target;
+                if (!t || !t.closest) return;
+                var opener = t.closest('.nz-dispatch-open');
+                if (opener) { e.preventDefault(); openDrawer(opener.getAttribute('data-nz-dispatch')); return; }
+                if (t.closest('[data-nz-dispatch-close]')) { e.preventDefault(); closeDrawer(); }
+            });
+            document.addEventListener('keydown', function(e){
+                if (e.key === 'Escape' && openId != null) closeDrawer();
+            });
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initDispatchDrawer);
+        else initDispatchDrawer();
+    })();
+</script>
+@endpush

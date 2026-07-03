@@ -376,8 +376,13 @@
                 tabbar.addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) applyTab(b.getAttribute('data-tab')); });
                 var savedTab = 'wb';
                 try { savedTab = window.localStorage.getItem(TKEY) || 'wb'; } catch (e) {}
+                // 哪吒作业台深链: URL ?tab=fin/dis/wb 优先(作业台「确认收款」直落收款tab确认区, 不落页顶)
+                var nzDeep = null;
+                try { nzDeep = new URLSearchParams(window.location.search).get('tab'); } catch (e) {}
+                if (nzDeep && tabbar.querySelector('[data-tab="' + nzDeep + '"]')) savedTab = nzDeep;
                 if (!tabbar.querySelector('[data-tab="' + savedTab + '"]')) savedTab = 'wb';
                 applyTab(savedTab);
+                if (nzDeep) { var nzSec = shell.querySelector('[data-tab-in~="' + nzDeep + '"]'); if (nzSec) setTimeout(function(){ nzSec.scrollIntoView({behavior:'smooth',block:'start'}); }, 150); }
             }
             document.querySelectorAll('[data-nzo-copy]').forEach(function (b) {
                 b.addEventListener('click', function () {
