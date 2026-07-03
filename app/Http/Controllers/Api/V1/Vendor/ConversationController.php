@@ -188,7 +188,7 @@ class ConversationController extends Controller
             info($e->getMessage());
         }
 
-        $messages = Message::where(['conversation_id' => $conversation->id])->latest()->paginate($limit, ['*'], 'page', $offset);
+        $messages = Message::where(['conversation_id' => $conversation->id])->orderBy('created_at', 'desc')->orderBy('id', 'desc')->paginate($limit, ['*'], 'page', $offset);
 
         $conv = Conversation::with('sender','receiver','last_message')->find($conversation->id);
 
@@ -408,7 +408,7 @@ class ConversationController extends Controller
                 $conversation->save();
             }
             Message::where(['conversation_id' => $conversation->id])->where('sender_id','!=', $vendor->id)->update(['is_seen' => 1]);
-            $messages = Message::where(['conversation_id' => $conversation->id])->latest()->paginate($limit, ['*'], 'page', $offset);
+            $messages = Message::where(['conversation_id' => $conversation->id])->orderBy('created_at', 'desc')->orderBy('id', 'desc')->paginate($limit, ['*'], 'page', $offset);
         }else{
             $messages =[];
             $order=0;

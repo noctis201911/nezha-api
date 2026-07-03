@@ -233,7 +233,7 @@ class ConversationController extends Controller
             })->afterResponse();
         }
 
-        $messages = Message::with('order')->where(['conversation_id' => $conversation->id])->latest()->paginate($limit, ['*'], 'page', $offset);
+        $messages = Message::with('order')->where(['conversation_id' => $conversation->id])->orderBy('created_at', 'desc')->orderBy('id', 'desc')->paginate($limit, ['*'], 'page', $offset);
 
         $conv = Conversation::with('sender','receiver','last_message.order')->find($conversation->id);
 
@@ -521,7 +521,7 @@ class ConversationController extends Controller
                 $conversation->save();
             }
             Message::where(['conversation_id' => $conversation->id])->where('sender_id','!=',$user->id)->update(['is_seen' => 1]);
-            $messages = Message::with('order')->where(['conversation_id' => $conversation->id])->latest()->paginate($limit, ['*'], 'page', $offset);
+            $messages = Message::with('order')->where(['conversation_id' => $conversation->id])->orderBy('created_at', 'desc')->orderBy('id', 'desc')->paginate($limit, ['*'], 'page', $offset);
         }else{
             $messages =[];
             $order=0;
@@ -737,7 +737,7 @@ class ConversationController extends Controller
             info($e);
         }
 
-        $messages = Message::with('order')->where(['conversation_id' => $conversation->id])->latest()->paginate($limit, ['*'], 'page', $offset);
+        $messages = Message::with('order')->where(['conversation_id' => $conversation->id])->orderBy('created_at', 'desc')->orderBy('id', 'desc')->paginate($limit, ['*'], 'page', $offset);
 
         $conv = Conversation::with('sender','receiver','last_message.order')->find($conversation->id);
 
@@ -970,7 +970,7 @@ class ConversationController extends Controller
             }
 
             Message::where(['conversation_id' => $conversation->id])->where('sender_id','!=',$delivery_man->id)->update(['is_seen' => 1]);
-            $messages = Message::with('order')->where(['conversation_id' => $conversation->id])->latest()->paginate($limit, ['*'], 'page', $offset);
+            $messages = Message::with('order')->where(['conversation_id' => $conversation->id])->orderBy('created_at', 'desc')->orderBy('id', 'desc')->paginate($limit, ['*'], 'page', $offset);
         }else{
             $messages =[];
             $order=0;
