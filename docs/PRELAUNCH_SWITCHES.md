@@ -54,6 +54,14 @@
 | `nezha_notif_async_status` | 0 | 订单通知(SMS/TG/推送)异步化灰度。代码已上线但激活待 /debate + staging 下单 QA + 你签字（关键路径，异步化搞错会漏通知）。见 memory `project_nezha-capacity-queue-redis-staging-isolation`。 | L3-性能 |
 | `nezha_offboard_status` | 0 | 商家退出结算(step4-4/step5 已实装·dormant)。开=商家端「对账中心」底部出现「申请退出平台」入口 + 服务端 `open()` 放行；关=入口不渲染且服务端拒。资金流出路径，审批闸 H(高额净额≥`nezha_offboard_high_amount_amd` 默认 500000֏ 强制审批后 T+1)+制裁实时 re-screen+户名三方核对齐备。**灰度：存量 7 店(6 测试+1 朋友)KYC 未录→退出必落 kyc_pending，无真实退出需求前保持关**；真开前先 staging 单店试跑。超管侧审批队列(`admin/nezha-offboard`)不受本开关限、始终可见。 | 🔴L1-8 |
 
+> 〔2026-07-03 自助充值批次 A3 (S1-S4) 全上线·全 dormant。下列开关一起决定"商家自助充值申请流"是否对外亮。复用运营手动入账，平台不碰钱。审核结果通知(TG+顶栏铃铛站内信 S4·随总闸)与余额不足邮件「去充值」直链(S4·随总闸)一并 dormant。〕
+
+| `nezha_topup_status` | 0 | 自助充值申请**总闸**。开=商家对账中心出现「申请充值」卡(自报额+传凭证→超管队列 `admin/nezha-topup` 审核入账·复用手动入账·平台不碰钱)；关=保持"联系客服"文案。🔴开前须先在后台配好**平台收款账户**(`nezha_topup_alipay_account`/`_name`/`_holder`/`_qr`，否则收款码空)。开后审核结果自动发 TG+铃铛站内信、余额不足邮件带「去充值」直链。 | L2 |
+| `nezha_topup_guarantee_status` | 0 | 押金账户自助充值腿(**总闸开且此开**才亮押金腿)。 | L2 |
+| `nezha_topup_ad_status` | 0 | 广告账户自助充值腿(总闸开且此开)。广告计费(`nezha_ad_billing_status`/`nezha_ad_auction_status`)未上线前不亮，等广告真开再开。 | L2 |
+| `nezha_topup_refund_status` | 0 | 押金**中途退款**(营业中·运营核算制·`NezhaGuaranteeRefund` G0-G6 门)。🔴**前置：`nezha_offboard_status` 未开→本开关不得开**(offboard 全额退是基线、中途退是其子集，护栏共用)。开=商家端申请退押金 + 超管审批放款队列。 | 🔴L1-8 |
+| `nezha_topup_min_amd` / `nezha_topup_max_amd` | 5000 / 2000000 | 自助充值金额上下限(AMD·参数非布尔，后台可调)。 | L2 |
+
 ---
 
 ## E. 🤔 上线前【业务决策】——开不开你定（无对错，想清楚再定）
