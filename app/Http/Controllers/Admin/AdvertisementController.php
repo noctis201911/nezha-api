@@ -790,7 +790,7 @@ class AdvertisementController extends Controller
 
         $note = $request->note ?: '超管后台广告充值';
         try {
-            $newBal = AdBalanceLogic::credit((int) $request->vendor_id, (float) $request->amount, $note);
+            $newBal = AdBalanceLogic::credit((int) $request->vendor_id, (float) $request->amount, $note)->balance_after;
             AdminAuditLog::record('ad_balance_recharge', 'vendor', $request->vendor_id, null,
                 ['amount' => (float) $request->amount, 'new_ad_balance' => $newBal, 'note' => $note]);
             Toastr::success('广告余额充值成功: vendor#' . $request->vendor_id . ' 充后 ad_balance = ' . $newBal . ' ֏');

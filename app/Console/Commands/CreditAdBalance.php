@@ -26,7 +26,7 @@ class CreditAdBalance extends Command
         $note     = $this->option('note') ?: '超管记录广告充值';
 
         try {
-            $newBal = AdBalanceLogic::credit($vendorId, $amount, $note);
+            $newBal = AdBalanceLogic::credit($vendorId, $amount, $note)->balance_after;
             $this->info("充值成功: vendor#{$vendorId} +{$amount}֏ → ad_balance={$newBal}֏ (deposit_balance 未动, INV-1)。");
             return self::SUCCESS;
         } catch (\InvalidArgumentException | \RuntimeException $e) {

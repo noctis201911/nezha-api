@@ -145,6 +145,13 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::post('pay/{id}', [\App\Http\Controllers\Admin\NezhaOffboardController::class, 'pay'])->name('pay');
         });
 
+        // 哪吒 自助充值申请(A3·S3) 审核队列 — 复用 module:deposit 权限位, 不新增权限
+        Route::group(['prefix' => 'nezha-topup', 'as' => 'nezha-topup.', 'middleware' => ['module:deposit']], function () {
+            Route::get('/', [\App\Http\Controllers\Admin\NezhaTopupController::class, 'index'])->name('index');
+            Route::post('approve/{id}', [\App\Http\Controllers\Admin\NezhaTopupController::class, 'approve'])->name('approve');
+            Route::post('reject/{id}', [\App\Http\Controllers\Admin\NezhaTopupController::class, 'reject'])->name('reject');
+        });
+
         // Route::resource('provide-deliveryman-earnings', ProvideDMEarningController::class)->middleware('module:provide_dm_earning');
         // 哪吒 平台集运申报: 需求汇总
         Route::group(['prefix' => 'nezha-consolidation', 'as' => 'nezha-consolidation.'], function () {

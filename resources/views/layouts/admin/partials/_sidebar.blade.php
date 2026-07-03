@@ -1607,6 +1607,13 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                                 <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('商家退出结算') }}</span>
                             </a>
                         </li>
+                        {{-- 哪吒 自助充值申请(A3·S3) 审核队列 --}}
+                        <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-topup*') ? 'active' : '' }}">
+                            <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{ route('admin.nezha-topup.index') }}" title="{{ translate('充值申请') }}">
+                                <i class="tio-add-circle nav-icon"></i>
+                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('充值申请') }}</span>
+                            </a>
+                        </li>
                     @endif
                     <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-consolidation*') ? 'active' : '' }}">
                         <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{ route('admin.nezha-consolidation.index') }}" title="{{ translate('平台集运申报') }}">

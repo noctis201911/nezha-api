@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Brian2694\Toastr\Facades\Toastr;
+use App\CentralLogics\NezhaDepositLedger;
 
 /**
  * 哪吒 B方案 组4 — 商家预存佣金(充值/扣佣)管理 + 组⑤ 押金账户(缴纳/档位核对).
@@ -124,7 +125,6 @@ class NezhaDepositController extends Controller
         ]);
 
         $restaurant = Restaurant::findOrFail($request->restaurant_id);
-        $vendorId = $restaurant->vendor_id;
 
         if (\App\CentralLogics\NezhaOffboard::is_frozen($restaurant)) {
             Toastr::error(translate('该商家正在办理退出结算, 结算期间不可变动预存佣金'));
@@ -133,30 +133,13 @@ class NezhaDepositController extends Controller
 
         try {
             DB::beginTransaction();
-            // 行锁防并发(与扣佣同口径), 读最新余额后累加
-            $wallet = RestaurantWallet::where('vendor_id', $vendorId)->lockForUpdate()->first();
-            if (!$wallet) {
-                $wallet = new RestaurantWallet();
-                $wallet->vendor_id = $vendorId;
-                $wallet->deposit_balance = 0;
-                $wallet->save();
-                $wallet = RestaurantWallet::where('vendor_id', $vendorId)->lockForUpdate()->first();
-            }
-            $newBalance = (float) ($wallet->deposit_balance ?? 0) + (float) $request->amount;
-            $wallet->deposit_balance = $newBalance;
-            $wallet->save();
-
-            RestaurantDepositTransaction::create([
-                'vendor_id'     => $vendorId,
-                'restaurant_id' => $restaurant->id,
-                'order_id'      => null,
-                'type'          => 'recharge',
-                'amount'        => (float) $request->amount,
-                'commission'    => 0,
-                'balance_after' => $newBalance,
-                'note'          => $request->note ?: '管理员记录充值',
-                'created_by'    => auth('admin')->id(),
-            ]);
+            // 入账走单一落点 NezhaDepositLedger(与自助充值审核流 S3 共用, 不造第二套); 事务由本方法开启
+            NezhaDepositLedger::recordRecharge(
+                $restaurant,
+                (float) $request->amount,
+                $request->note,
+                auth('admin')->id()
+            );
             DB::commit();
             Toastr::success(translate('充值已入账, 商家预存佣金已增加'));
         } catch (\Throwable $e) {
@@ -201,7 +184,7 @@ class NezhaDepositController extends Controller
 
         try {
             DB::beginTransaction();
-            $this->recordGuaranteeDeposit(
+            NezhaDepositLedger::recordGuaranteeDeposit(
                 $restaurant,
                 $amount,
                 $request->currency,
@@ -227,49 +210,6 @@ class NezhaDepositController extends Controller
         return $currency === 'CNY'
             ? round($originalAmount * $rateCny, 2)
             : round($originalAmount, 2);
-    }
-
-    /**
-     * 押金缴纳记账核心(资金正确性单一落点, 供 HTTP 与 staging harness 共用)。
-     * 只写 guarantee_balance + type=guarantee_deposit 流水; 假设调用方已开启事务(行锁需在事务内)。
-     */
-    private function recordGuaranteeDeposit(
-        Restaurant $restaurant,
-        float $amount,
-        string $currency,
-        float $originalAmount,
-        string $originalRef,
-        ?string $note,
-        ?int $createdBy
-    ): RestaurantDepositTransaction {
-        $vendorId = $restaurant->vendor_id;
-
-        $wallet = RestaurantWallet::where('vendor_id', $vendorId)->lockForUpdate()->first();
-        if (!$wallet) {
-            $wallet = new RestaurantWallet();
-            $wallet->vendor_id = $vendorId;
-            $wallet->guarantee_balance = 0;
-            $wallet->save();
-            $wallet = RestaurantWallet::where('vendor_id', $vendorId)->lockForUpdate()->first();
-        }
-        $newBalance = (float) ($wallet->guarantee_balance ?? 0) + $amount;
-        $wallet->guarantee_balance = $newBalance;
-        $wallet->save();
-
-        return RestaurantDepositTransaction::create([
-            'vendor_id'       => $vendorId,
-            'restaurant_id'   => $restaurant->id,
-            'order_id'        => null,
-            'type'            => 'guarantee_deposit',
-            'amount'          => $amount,
-            'commission'      => 0,
-            'balance_after'   => $newBalance,
-            'currency'        => $currency,
-            'original_amount' => $originalAmount,
-            'original_ref'    => $originalRef,
-            'note'            => $note ?: '管理员记录押金缴纳',
-            'created_by'      => $createdBy,
-        ]);
     }
 
     /**

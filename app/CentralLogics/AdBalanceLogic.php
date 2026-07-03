@@ -3,6 +3,7 @@
 namespace App\CentralLogics;
 
 use App\Models\RestaurantWallet;
+use App\Models\RestaurantDepositTransaction;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -25,12 +26,12 @@ class AdBalanceLogic
      * @param  int    $vendorId  商家 vendor_id (>0)
      * @param  float  $amount    充值金额 ֏ (>0)
      * @param  string $note      流水备注
-     * @return float             充值后的 ad_balance
+     * @return RestaurantDepositTransaction  写入的 ad_recharge 流水行(balance_after=充值后 ad_balance)
      *
      * @throws \InvalidArgumentException 参数非法
      * @throws \RuntimeException         vendor 不存在
      */
-    public static function credit(int $vendorId, float $amount, string $note = '超管记录广告充值'): float
+    public static function credit(int $vendorId, float $amount, string $note = '超管记录广告充值'): RestaurantDepositTransaction
     {
         if ($vendorId <= 0 || $amount <= 0) {
             throw new \InvalidArgumentException('vendor_id 必须>0, amount 必须>0。');
@@ -63,7 +64,7 @@ class AdBalanceLogic
             $newBal = (float) DB::table('restaurant_wallets')->where('vendor_id', $vendorId)->value('ad_balance');
 
             // 留痕: 与 deposit 'recharge' 区分, 不污染 deposit 对账(INV-1)
-            DB::table('restaurant_deposit_transactions')->insert([
+            $txId = DB::table('restaurant_deposit_transactions')->insertGetId([
                 'vendor_id'     => $vendorId,
                 'restaurant_id' => $restaurant?->id,
                 'order_id'      => null,
@@ -76,7 +77,7 @@ class AdBalanceLogic
                 'updated_at'    => now(),
             ]);
 
-            return $newBal;
+            return RestaurantDepositTransaction::findOrFail($txId);
         });
     }
 }
