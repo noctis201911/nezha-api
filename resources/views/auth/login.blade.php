@@ -42,22 +42,34 @@
         .ribbon { position: absolute; top: -40px; left: -60px; width: 520px; opacity: 0.9; pointer-events: none; }
         #particles { position: absolute; inset: 0; pointer-events: none; }
 
-        .login-inner { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; position: relative; z-index: 10; }
-        .login-columns { width: 100%; max-width: 1080px; display: flex; flex-direction: column; align-items: center; gap: 48px; }
-        @media (min-width: 992px) { .login-columns { flex-direction: row; gap: 64px; } .brand-col { text-align: left; } .brand-col .brand-desc { margin-left: 0; } .brand-col .features { margin-left: 0; } }
+        .login-inner {
+            min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            padding: clamp(32px, 5vh, 64px) clamp(20px, 5vw, 72px);
+            position: relative; z-index: 10;
+        }
+        .login-columns {
+            width: 100%; max-width: 1160px; display: grid; grid-template-columns: minmax(0, 1fr);
+            align-items: center; justify-content: center; gap: 36px;
+        }
 
-        .brand-col { flex: 1; text-align: center; }
+        .brand-col { width: 100%; max-width: 540px; text-align: center; justify-self: center; }
         .brand-logo { display: inline-block; line-height: 0; }
-        .brand-logo img { height: 104px; width: auto; display: inline-block; }
-        .brand-title { font-size: 30px; line-height: 1.2; font-weight: 700; color: #1C1917; margin: 24px 0 24px; }
-        @media (min-width: 992px) { .brand-title { font-size: 36px; } }
-        .brand-desc { font-size: 16px; color: #78716C; max-width: 480px; margin: 0 auto 40px; line-height: 1.7; }
-        .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 400px; margin: 0 auto; }
-        .feature-card { padding: 20px 12px; background: #fff; border-radius: 16px; border: 1px solid var(--border); transition: all 0.3s ease; text-align: center; }
+        .brand-logo img { height: clamp(78px, 7vw, 104px); width: auto; display: inline-block; }
+        .brand-title { font-size: clamp(30px, 3vw, 38px); line-height: 1.18; font-weight: 700; color: #1C1917; margin: 18px 0 14px; }
+        .brand-desc { font-size: 16px; color: #78716C; max-width: 520px; margin: 0 auto 32px; line-height: 1.75; }
+        .features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; max-width: 432px; margin: 0 auto; }
+        .feature-card { min-height: 118px; padding: 18px 12px; background: rgba(255,255,255,0.92); border-radius: 14px; border: 1px solid var(--border); transition: all 0.3s ease; text-align: center; }
         .feature-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(196,25,62,0.06); border-color: rgba(196,25,62,0.2); }
         .feature-ic { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; }
         .feature-card .ft { font-weight: 600; font-size: 14px; color: #1C1917; }
         .feature-card .fs { font-size: 12px; margin-top: 4px; color: #A8A29E; }
+
+        @media (min-width: 992px) {
+            .login-columns { grid-template-columns: minmax(420px, 540px) minmax(380px, 440px); gap: clamp(64px, 8vw, 120px); }
+            .brand-col { justify-self: start; text-align: left; }
+            .brand-col .brand-desc, .brand-col .features { margin-left: 0; margin-right: 0; }
+            .card-col { justify-self: end; }
+        }
 
         .card-col { width: 100%; max-width: 440px; }
         .login-card {
@@ -119,7 +131,18 @@
         .fade-up { opacity: 0; transform: translateY(20px); animation: fadeUp 0.6s ease forwards; }
         @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
 
-        @media (max-width: 640px) { .login-card { padding: 30px 22px; } .feature-card { padding: 16px 8px; } }
+        @media (max-width: 991px) {
+            .login-inner { align-items: flex-start; padding-top: 48px; padding-bottom: 120px; }
+        }
+        @media (max-width: 640px) {
+            .login-card { padding: 30px 22px; border-radius: 20px; }
+            .brand-title { margin-top: 14px; }
+            .brand-desc { font-size: 15px; margin-bottom: 24px; }
+            .features { grid-template-columns: 1fr; max-width: 280px; gap: 12px; }
+            .feature-card { min-height: auto; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px 16px; }
+            .feature-ic { margin: 0; }
+            .feature-card .fs { margin-top: 2px; }
+        }
         @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }
     </style>
 </head>
