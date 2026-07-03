@@ -10,6 +10,7 @@ use Firebase\JWT\JWT;
 use GuzzleHttp\Client;
 use Illuminate\Http\Request;
 use App\CentralLogics\Helpers;
+use App\CentralLogics\NezhaCartExpiry;
 use Illuminate\Support\Carbon;
 use App\Mail\EmailVerification;
 use App\Models\BusinessSetting;
@@ -1205,19 +1206,24 @@ class CustomerAuthController extends Controller
     private function check_guest_cart($user, $guest_id){
         if($guest_id  && isset($user->id)){
 
+            NezhaCartExpiry::expiredQuery(Cart::where('user_id', $guest_id)->where('is_guest', 1))->delete();
+            NezhaCartExpiry::expiredQuery(Cart::where('user_id', $user->id)->where('is_guest', 0))->delete();
+
             $userStoreIds = Cart::where('user_id', $guest_id)
+                ->where('is_guest', 1)
                 ->join('food', 'carts.item_id', '=', 'food.id')
                 ->pluck('food.restaurant_id')
                 ->toArray();
 
-            if(Cart::where('user_id', $guest_id)->count() > 0){
+            if(Cart::where('user_id', $guest_id)->where('is_guest', 1)->count() > 0){
                 Cart::where('user_id', $user->id)
+                    ->where('is_guest', 0)
                     ->whereHas('item', function ($query) use ($userStoreIds) {
                         $query->whereNotIn('restaurant_id', $userStoreIds);
                     })
                     ->delete();
 
-                Cart::where('user_id', $guest_id)->update(['user_id' => $user->id,'is_guest' => 0]);
+                Cart::where('user_id', $guest_id)->where('is_guest', 1)->update(['user_id' => $user->id,'is_guest' => 0]);
             }
 
         }

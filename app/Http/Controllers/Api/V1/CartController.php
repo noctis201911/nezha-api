@@ -7,6 +7,7 @@ use App\Models\Food;
 use App\Models\ItemCampaign;
 use Illuminate\Http\Request;
 use App\CentralLogics\Helpers;
+use App\CentralLogics\NezhaCartExpiry;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Validator;
 
@@ -23,6 +24,7 @@ class CartController extends Controller
         }
         $user_id = $request->user ? $request->user->id : $request['guest_id'];
         $is_guest = $request->user ? 0 : 1;
+        $this->purgeExpiredCarts($user_id, $is_guest);
         $carts = Cart::where('user_id', $user_id)->where('is_guest',$is_guest)->get()
         ->map(function ($data) {
             $data->add_on_ids = is_string($data->add_on_ids) ? json_decode($data->add_on_ids,true) : $data->add_on_ids;
@@ -52,6 +54,7 @@ class CartController extends Controller
 
         $user_id = $request->user ? $request->user->id : $request['guest_id'];
         $is_guest = $request->user ? 0 : 1;
+        $this->purgeExpiredCarts($user_id, $is_guest);
         $model = $request->model === 'Food' ? 'App\Models\Food' : 'App\Models\ItemCampaign';
         $item = $request->model === 'Food' ? Food::find($request->item_id) : ItemCampaign::find($request->item_id);
 
@@ -151,6 +154,7 @@ class CartController extends Controller
 
         $user_id = $request->user ? $request->user->id : $request['guest_id'];
         $is_guest = $request->user ? 0 : 1;
+        $this->purgeExpiredCarts($user_id, $is_guest);
         $cart = Cart::where('id', $request->cart_id)->where('user_id', $user_id)->where('is_guest', $is_guest)->first();
         if(!$cart){
             return response()->json(['errors' => [['code' => 'cart', 'message' => translate('messages.not_found')]]], 404);
@@ -212,6 +216,7 @@ class CartController extends Controller
 
         $user_id = $request->user ? $request->user->id : $request['guest_id'];
         $is_guest = $request->user ? 0 : 1;
+        $this->purgeExpiredCarts($user_id, $is_guest);
 
         $cart = Cart::where('id', $request->cart_id)->where('user_id', $user_id)->where('is_guest', $is_guest)->first();
         if($cart){
@@ -242,6 +247,7 @@ class CartController extends Controller
 
         $user_id = $request->user ? $request->user->id : $request['guest_id'];
         $is_guest = $request->user ? 0 : 1;
+        $this->purgeExpiredCarts($user_id, $is_guest);
 
         // 哪吒[多店购物车]: 传 restaurant_id 时只清该店的车(餐厅抽屉「清空」按钮),不传则清全部(向后兼容)
         $cartQuery = Cart::where('user_id', $user_id)->where('is_guest',$is_guest);
@@ -273,10 +279,12 @@ class CartController extends Controller
             'item_list' => 'required',
         ]);
 
-        $user_id = $request->user ? $request->user->id : $request['guest_id'];
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
+
+        $user_id = $request->user ? $request->user->id : $request['guest_id'];
+        $this->purgeExpiredCarts($user_id, 0);
 
             foreach($request->item_list as $single_item){
 
@@ -343,6 +351,13 @@ class CartController extends Controller
             return $data;
 		});
         return response()->json($carts, 200);
+    }
+
+    private function purgeExpiredCarts($user_id, $is_guest): void
+    {
+        NezhaCartExpiry::expiredQuery(
+            Cart::where('user_id', $user_id)->where('is_guest', $is_guest)
+        )->delete();
     }
 
 
