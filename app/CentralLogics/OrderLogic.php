@@ -1245,7 +1245,7 @@ class OrderLogic
                 return; // 从未真正付款/确认收款的单无款可退, 不建记录
             }
             $exists = \App\Models\NezhaRefundRecord::where('order_id', $order->id)
-                ->whereIn('status', ['pending_merchant_refund', 'merchant_refunded'])
+                ->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_MERCHANT_LIFECYCLE)
                 ->exists();
             if ($exists) {
                 return; // 幂等

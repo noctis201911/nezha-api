@@ -314,6 +314,7 @@ Route::group(['prefix' => 'withdraw-method', 'as' => 'wallet-method.', 'middlewa
             Route::put('deny-offline-payment/{id}', [OrderController::class, 'deny_offline_payment'])->name('deny-offline-payment');
             // 哪吒 F-4: 商家「标记已退款」直付单
             Route::put('mark-refunded/{id}', [OrderController::class, 'mark_refunded'])->name('mark-refunded');
+            Route::put('refund-dispute/{id}', [OrderController::class, 'dispute_refund'])->name('refund-dispute'); // denied 凭证争议流 R1(dormant·开关 nezha_refund_dispute_status)
             // 哪吒 B方案: 商家主动拒单(仅 pending/confirmed) + 处理顾客取消申请(同意/拒绝)
             Route::put('reject/{id}', [OrderController::class, 'reject_order'])->name('reject');
             Route::put('cancel-request-decision/{id}', [OrderController::class, 'cancel_request_decision'])->name('cancel-request-decision');

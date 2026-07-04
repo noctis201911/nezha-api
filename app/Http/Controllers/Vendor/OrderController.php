@@ -385,6 +385,75 @@ class OrderController extends Controller
      * 合规(L1-1): 平台全程不碰钱, 本动作仅更新留痕状态, 不触发任何资金记账。
      * 强校验(轴A 对象级鉴权): 只能标记【本店】且【pending_merchant_refund】的记录(防越权/防重复)。
      */
+    /**
+     * denied 凭证争议流 R1(dormant·开关 nezha_refund_dispute_status 默认 0)。
+     * 商家对「凭证在案·先核后退」(段B)的待退款记录发起争议; 只发起、不关闭(A2 裁决: 商家无单方关闭权)。
+     * 段A(payment_status=paid 或有 verified 凭证)不开放入口; 单记录争议上限 1 次(unique 结构墙 + 此处友好拦)。
+     * 仅创建 nezha_refund_disputes 留痕 + 记录 status→disputed; 不碰资金、不改退款路由(不触 L1-2/3)。
+     */
+    public function dispute_refund(Request $request, $id)
+    {
+        if ((int) Helpers::get_business_settings('nezha_refund_dispute_status') !== 1) {
+            Toastr::error('功能暂未开放');
+            return back();
+        }
+        $restaurantId = Helpers::get_restaurant_id();
+        $order = Order::where(['id' => $id, 'restaurant_id' => $restaurantId])->first();
+        if (!$order) {
+            Toastr::error(translate('messages.order_not_found'));
+            return back();
+        }
+        // 只对本店【待退款(pending_merchant_refund)】记录; 对象级鉴权(轴A)防越权。
+        $record = \App\Models\NezhaRefundRecord::where('order_id', $order->id)
+            ->where('restaurant_id', $restaurantId)
+            ->where('status', 'pending_merchant_refund')
+            ->latest('id')
+            ->first();
+        if (!$record) {
+            Toastr::warning('未找到可发起争议的待退款记录');
+            return back();
+        }
+        // 段A 排除: 已确认收款 / 有 verified 凭证的单不开放争议(不存在"没收到款"争议)。
+        $hasVerifiedProof = \App\Models\OfflinePayments::where('order_id', $order->id)->where('status', 'verified')->exists();
+        if ($order->payment_status === 'paid' || $hasVerifiedProof) {
+            Toastr::warning('已确认收款的订单不可发起争议');
+            return back();
+        }
+        // 单记录争议上限 1 次(unique 兜底 + 友好提示; 维持裁决后记录回 pending 但已有争议行=不可再发起)。
+        if (\App\Models\NezhaRefundDispute::where('refund_record_id', $record->id)->exists()) {
+            Toastr::warning('本单争议已提交，无法重复发起');
+            return back();
+        }
+        $statement = trim((string) $request->input('statement'));
+        if ($statement === '') {
+            Toastr::error('请填写核实说明');
+            return back();
+        }
+        $statement = mb_substr($statement, 0, 1000);
+
+        try {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($record, $order, $restaurantId, $statement) {
+                \App\Models\NezhaRefundDispute::create([
+                    'refund_record_id'   => $record->id,
+                    'order_id'           => $order->id,
+                    'restaurant_id'      => $restaurantId,
+                    'merchant_statement' => $statement,
+                    'status'             => 'open',
+                    'opened_at'          => now(),
+                ]);
+                $record->status = 'disputed';
+                $record->save();
+            });
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('nezha_refund_dispute_open_failed', ['order' => $order->id, 'err' => $e->getMessage()]);
+            Toastr::error(translate('messages.something_went_wrong'));
+            return back();
+        }
+
+        Toastr::success('争议已提交，平台将核实凭证与到账情况');
+        return back();
+    }
+
     public function mark_refunded(Request $request, $id)
     {
         $order = Order::where(['id' => $id, 'restaurant_id' => Helpers::get_restaurant_id()])->first();
