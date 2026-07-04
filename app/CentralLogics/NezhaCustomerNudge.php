@@ -31,7 +31,7 @@ class NezhaCustomerNudge
                 })->orWhere(function ($q) use ($vendorId) {
                     $q->where(function ($pendingRefund) {
                         $pendingRefund->where('order_status', 'refund_requested')
-                            ->orWhereIn('id', NezhaRefundRecord::where('status', 'pending_merchant_refund')->select('order_id'));
+                            ->orWhereIn('id', NezhaRefundRecord::whereIn('status', NezhaRefundRecord::STATUS_NEEDS_ACTION)->select('order_id'));
                     })->whereIn('id', self::notificationOrderIds($vendorId, ['顾客在催退款']));
                 });
             });

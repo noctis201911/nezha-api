@@ -4,6 +4,7 @@ namespace App\CentralLogics;
 
 use App\Models\Order;
 use App\Models\Restaurant;
+use App\Models\NezhaRefundRecord;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -119,7 +120,7 @@ class NezhaOrderCounts
         // 待退款 —— 不加 NotDigitalOrder
         $out['refund_pending'] = $base()
             ->whereIn('id', function ($sub) {
-                $sub->select('order_id')->from('nezha_refund_records')->where('status', 'pending_merchant_refund');
+                $sub->select('order_id')->from('nezha_refund_records')->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_NEEDS_ACTION);
             })->count();
 
         // —— 以下均加 NotDigitalOrder(与 list 后置过滤一致)——
@@ -145,7 +146,7 @@ class NezhaOrderCounts
         // 已完结组的「已取消」chip = 已取消且无未结退款(带未结退款的取消单归售后·待退款, 不重复计已完结, 与 grp_done 同口径)
         $out['done_canceled'] = $base()->where('order_status', 'canceled')
             ->whereNotIn('id', function ($sub) {
-                $sub->select('order_id')->from('nezha_refund_records')->where('status', 'pending_merchant_refund');
+                $sub->select('order_id')->from('nezha_refund_records')->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_UNRESOLVED);
             })->NotDigitalOrder()->count();
 
         $out['scheduled'] = $base()->Scheduled()->where(function ($q) use ($restaurantConfirm) {
@@ -190,7 +191,7 @@ class NezhaOrderCounts
             ->pluck('id')->all();
         $refund = $base()
             ->whereIn('id', function ($sub) {
-                $sub->select('order_id')->from('nezha_refund_records')->where('status', 'pending_merchant_refund');
+                $sub->select('order_id')->from('nezha_refund_records')->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_NEEDS_ACTION);
             })->pluck('id')->all();
         // 退款申请中(顾客已申请退款/取消, 等商家响应) —— Fable 钉板: 典型需动作, 并入告警面
         $refundRequested = $base()->where('order_status', 'refund_requested')->pluck('id')->all();
@@ -233,7 +234,7 @@ class NezhaOrderCounts
                 })
                 // 挂着未结退款的在途单归「售后」不重复进「进行中」(结构性保证分区两两不相交)
                 ->whereNotIn('id', function ($sub) {
-                    $sub->select('order_id')->from('nezha_refund_records')->where('status', 'pending_merchant_refund');
+                    $sub->select('order_id')->from('nezha_refund_records')->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_UNRESOLVED);
                 });
                 break;
 
@@ -241,7 +242,7 @@ class NezhaOrderCounts
                 $query->where(function ($w) {
                     $w->whereIn('order_status', ['refund_requested', 'refunded'])
                       ->orWhereIn('id', function ($sub) {
-                          $sub->select('order_id')->from('nezha_refund_records')->where('status', 'pending_merchant_refund');
+                          $sub->select('order_id')->from('nezha_refund_records')->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_UNRESOLVED);
                       });
                 });
                 break;
@@ -249,7 +250,7 @@ class NezhaOrderCounts
             case 'done':
                 $query->whereIn('order_status', ['delivered', 'failed', 'canceled'])
                       ->whereNotIn('id', function ($sub) {
-                          $sub->select('order_id')->from('nezha_refund_records')->where('status', 'pending_merchant_refund');
+                          $sub->select('order_id')->from('nezha_refund_records')->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_UNRESOLVED);
                       });
                 break;
         }

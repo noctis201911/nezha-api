@@ -174,7 +174,7 @@ class DashboardController extends Controller
         // 与 _sidebar.blade.php 角标 + OrderController::list('refund_pending') 完全一致。
         // 注意: 这是 B方案"待商家原路退"(refund_pending), 不是原生"顾客向平台申请退款"(refund_requested), 两者语义不同勿混。
         $refund_pending = \App\Models\Order::where('restaurant_id', $rid)
-            ->whereIn('id', \App\Models\NezhaRefundRecord::where('status', 'pending_merchant_refund')->pluck('order_id'))
+            ->whereIn('id', \App\Models\NezhaRefundRecord::whereIn('status', \App\Models\NezhaRefundRecord::STATUS_NEEDS_ACTION)->pluck('order_id'))
             ->count();
 
         // 哪吒 M-02: 超时卡落点已改为虚拟过滤 /list/timeout(同源), M-01 过渡 hack timeout_list_map/timeout_list_key 已删。

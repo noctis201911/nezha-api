@@ -87,7 +87,7 @@ class OrderController extends Controller
             // 哪吒P1b-C: 已完结组的「已取消」chip = 已取消且无未结退款(带未结退款的取消单归售后, 与 grp_done 同口径)
             ->when($status == 'done_canceled', function ($query) {
                 return $query->where('order_status', 'canceled')->whereNotIn('id', function ($sub) {
-                    $sub->select('order_id')->from('nezha_refund_records')->where('status', 'pending_merchant_refund');
+                    $sub->select('order_id')->from('nezha_refund_records')->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_UNRESOLVED);
                 });
             })
             ->when($status == 'dine_in', function ($query) {
@@ -105,7 +105,7 @@ class OrderController extends Controller
             // 哪吒 F-4: 「待退款」视图 = 本店有 pending_merchant_refund 留痕的单(平台已取消/退款, 等商家原路退款)。
             ->when($status == 'refund_pending', function ($query) {
                 return $query->whereIn('id', function ($sub) {
-                    $sub->select('order_id')->from('nezha_refund_records')->where('status', 'pending_merchant_refund');
+                    $sub->select('order_id')->from('nezha_refund_records')->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_UNRESOLVED);
                 });
             })
             // 哪吒 M-02: 「超时单」虚拟过滤 = 本店当前 warning/error 超时的开放单(offline_pending+confirmed+processing 并集)。
@@ -189,7 +189,7 @@ class OrderController extends Controller
             ->when($status == 'refund_pending', function ($q) {
                 // 哪吒P1b-D: 待退款两段式 —— 段A(payment_status=paid·真欠退)置顶, 各段按退款记录龄(挂起最久优先)
                 $q->orderByRaw("(payment_status = 'paid') DESC")
-                  ->orderByRaw("(SELECT MIN(nrr.created_at) FROM nezha_refund_records nrr WHERE nrr.order_id = orders.id AND nrr.status = 'pending_merchant_refund') ASC");
+                  ->orderByRaw("(SELECT MIN(nrr.created_at) FROM nezha_refund_records nrr WHERE nrr.order_id = orders.id AND nrr.status IN ('pending_merchant_refund','disputed')) ASC");
             })
             ->orderBy('schedule_at', 'desc')
             ->paginate(config('default_pagination'))

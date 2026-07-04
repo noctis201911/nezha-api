@@ -500,7 +500,7 @@
                                 <!-- offline_payment -->
 
                                 {{-- 哪吒 F-4: 待商家退款卡。平台已取消/退款本直付单, 商家需原路退还原付款人, 退款后点「标记已退款」。平台不碰钱。 --}}
-                                @php($nzRefundRec = \App\Models\NezhaRefundRecord::where('order_id', $order->id)->where('status', 'pending_merchant_refund')->latest('id')->first())
+                                @php($nzRefundRec = \App\Models\NezhaRefundRecord::where('order_id', $order->id)->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_UNRESOLVED)->latest('id')->first())
                                 @if ($nzRefundRec)
                                     @php($nzAddr = $order->delivery_address ? json_decode($order->delivery_address, true) : [])
                                     @php($nzSuspendHours = \App\CentralLogics\NezhaRefundOverdue::thresholdHours('nezha_refund_overdue_suspend_hours', 'nezha_refund_overdue_suspend_days', 72))

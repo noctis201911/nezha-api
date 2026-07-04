@@ -55,7 +55,7 @@ class RefundOverdueSweep extends Command
         $cutoff = $now->copy()->subHours($remindHours);
 
         $records = NezhaRefundRecord::with(['restaurant.vendor', 'order'])
-            ->where('status', 'pending_merchant_refund')
+            ->whereIn('status', NezhaRefundRecord::STATUS_NEEDS_ACTION)
             ->whereNull('merchant_refunded_at')
             ->where('created_at', '<=', $cutoff)
             ->get();

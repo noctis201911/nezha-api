@@ -107,7 +107,7 @@ class OrderController extends Controller
         // 哪吒B方案: 商家出餐(handover)后向顾客暴露取餐号(复用订单otp; 顾客下单时已经 OrderVerificationMail 收到该码作配送验证码, 非新增泄露)。出餐前为空字符串, 前端显示"等待商家出餐"。供顾客自取或交给 Yandex 骑手到店向商家核对。
         $order['pickup_code'] = in_array($order->order_status, ['handover', 'picked_up', 'delivered'], true) ? (string) $order->otp : '';
         // 哪吒 B方案(QA 2026-06-18): 暴露「待退款留痕」状态给顾客,使订单页能回显退款进度(待商家退款/商家已退款)。平台不碰钱,仅展示状态。
-        $nezha_rr = \App\Models\NezhaRefundRecord::where('order_id', $order->id)->whereIn('status', ['pending_merchant_refund', 'merchant_refunded'])->orderByDesc('id')->first();
+        $nezha_rr = \App\Models\NezhaRefundRecord::where('order_id', $order->id)->whereIn('status', array_merge(\App\Models\NezhaRefundRecord::STATUS_UNRESOLVED, ['merchant_refunded']))->orderByDesc('id')->first();
         $order['nezha_refund'] = $nezha_rr ? [
             'status'        => $nezha_rr->status,
             'refund_amount' => $nezha_rr->refund_amount,

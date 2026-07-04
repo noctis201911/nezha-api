@@ -824,7 +824,7 @@
                                     } else {
                                         $__refundPending = \App\Models\NezhaRefundRecord::where('order_id', $order['id'])
                                             ->where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())
-                                            ->where('status', 'pending_merchant_refund')
+                                            ->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_UNRESOLVED)
                                             ->exists();
                                         if ($__refundPending) {
                                             if ($order->payment_status == 'paid') {

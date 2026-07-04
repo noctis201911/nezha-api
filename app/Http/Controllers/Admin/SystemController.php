@@ -54,7 +54,7 @@ class SystemController extends Controller
             $remindHours = \App\CentralLogics\NezhaRefundOverdue::thresholdHours('nezha_refund_overdue_remind_hours', 'nezha_refund_overdue_remind_days', 12);
             if ($remindHours < 1) { $remindHours = 1; }
             $cutoff = \Carbon\Carbon::now()->subHours($remindHours);
-            $abn_refund_ids = \App\Models\NezhaRefundRecord::where('status', 'pending_merchant_refund')
+            $abn_refund_ids = \App\Models\NezhaRefundRecord::whereIn('status', \App\Models\NezhaRefundRecord::STATUS_NEEDS_ACTION)
                 ->whereNull('merchant_refunded_at')
                 ->where('created_at', '<=', $cutoff)
                 ->orderBy('created_at')

@@ -59,7 +59,7 @@ class NezhaRefundOverdue
                 return;
             }
             $stillOverdue = NezhaRefundRecord::where('restaurant_id', $restaurantId)
-                ->where('status', 'pending_merchant_refund')
+                ->whereIn('status', NezhaRefundRecord::STATUS_NEEDS_ACTION)
                 ->whereNull('merchant_refunded_at')
                 ->exists();
             if (!$stillOverdue) {

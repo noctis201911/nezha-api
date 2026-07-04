@@ -120,7 +120,7 @@ class NezhaRefundController extends Controller
         $autoSuspend = (int) (\App\Models\BusinessSetting::where('key', 'nezha_refund_overdue_auto_suspend')->value('value') ?? 0);
 
         $records = NezhaRefundRecord::with(['order', 'restaurant'])
-            ->where('status', 'pending_merchant_refund')
+            ->whereIn('status', NezhaRefundRecord::STATUS_NEEDS_ACTION)
             ->whereNull('merchant_refunded_at')
             ->orderBy('created_at', 'asc')
             ->paginate(30)

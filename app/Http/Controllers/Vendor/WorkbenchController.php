@@ -276,15 +276,15 @@ class WorkbenchController extends Controller
     {
         $orders = self::base($rid)
             ->whereIn('id', function ($sub) {
-                $sub->select('order_id')->from('nezha_refund_records')->where('status', 'pending_merchant_refund');
+                $sub->select('order_id')->from('nezha_refund_records')->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_UNRESOLVED);
             })
             ->orderByRaw("(payment_status = 'paid') DESC")
-            ->orderByRaw("(SELECT MIN(nrr.created_at) FROM nezha_refund_records nrr WHERE nrr.order_id = orders.id AND nrr.status = 'pending_merchant_refund') ASC")
+            ->orderByRaw("(SELECT MIN(nrr.created_at) FROM nezha_refund_records nrr WHERE nrr.order_id = orders.id AND nrr.status IN ('pending_merchant_refund','disputed')) ASC")
             ->limit(self::ROWS)->get();
 
         // 每单取最新一条 pending 退款记录(与 mark_refunded latest('id') 目标一致)
         $recs = NezhaRefundRecord::whereIn('order_id', $orders->pluck('id'))
-            ->where('status', 'pending_merchant_refund')
+            ->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_UNRESOLVED)
             ->orderBy('id', 'desc')->get()->groupBy('order_id');
 
         $rows = $orders->map(function ($o) use ($recs, $rateCny) {
