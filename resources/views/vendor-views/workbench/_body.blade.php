@@ -180,7 +180,7 @@
                     <div class="nzwb-sect b"><span class="d"></span>凭证在案 · 先核后退（{{ $segB->count() }}）</div>
                     @foreach($segB as $r)
                         <div class="nzwb-row">
-                            <div class="grow"><span class="oid">#{{ $r['id'] }}</span> <span class="nzwb-chip">{{ $r['channel'] }}</span>
+                            <div class="grow"><span class="oid">#{{ $r['id'] }}</span> <span class="nzwb-chip">{{ $r['channel'] }}</span>@if($r['disputed'] ?? false) <span class="nzwb-chip" style="background:#e5e7eb;color:#4b5563;">争议中</span>@endif
                                 <div class="meta">{{ $r['meta'] ?: '顾客有付款凭证在案，请核对您的收款账户' }} · {{ $r['held_text'] }}</div></div>
                             <div class="nzwb-money num" style="color:var(--red)">应退 {{ $r['refund_amd'] }}<small>≈ ¥{{ $r['refund_cny'] }}</small></div>
                             <a class="nzwb-btn line" href="{{ $detail($r['id']) }}">{{ $r['cta']['label'] ?? '去退款核对' }}</a>

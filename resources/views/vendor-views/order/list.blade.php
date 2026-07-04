@@ -822,12 +822,18 @@
                                                   'label' => '已送达', 'cls' => 'btn-success', 'icon' => 'tio-done-all',
                                                   'confirm' => '确认本单已送达顾客？确认后不可撤销。'];
                                     } else {
-                                        $__refundPending = \App\Models\NezhaRefundRecord::where('order_id', $order['id'])
+                                        $__rr = \App\Models\NezhaRefundRecord::where('order_id', $order['id'])
                                             ->where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())
                                             ->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_UNRESOLVED)
-                                            ->exists();
+                                            ->latest('id')->first();
+                                        $__refundPending = (bool) $__rr;
+                                        $__refundDisputed = $__rr && $__rr->status === 'disputed';
                                         if ($__refundPending) {
-                                            if ($order->payment_status == 'paid') {
+                                            if ($__refundDisputed) {
+                                                $__qa = ['type' => 'link', 'route' => route('vendor.order.details', ['id' => $order['id']]),
+                                                          'label' => '争议审核中', 'title' => '退款争议审核中·平台核实中，暂不可退款',
+                                                          'cls' => 'btn-secondary', 'icon' => 'tio-time'];
+                                            } elseif ($order->payment_status == 'paid') {
                                                 // 哪吒P1b-D 段A: 已确认收款·真欠退 → 标记已退款(原 L1 强确认 endpoint 不变)
                                                 $__qa = ['route' => route('vendor.order.mark-refunded', ['id' => $order['id']]),
                                                           'label' => '标记已退款', 'cls' => 'btn-warning', 'icon' => 'tio-receipt-outlined',

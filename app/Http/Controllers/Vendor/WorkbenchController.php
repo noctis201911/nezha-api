@@ -295,6 +295,7 @@ class WorkbenchController extends Controller
             return [
                 'id'         => (int) $o->id,
                 'segment'    => $seg,                        // A=已确认收款·须退 / B=凭证在案·先核后退
+                'disputed'   => optional($rec)->status === 'disputed',
                 'refund_amd' => Helpers::format_currency($amt),
                 'refund_cny' => $rateCny > 0 ? round($amt / $rateCny, 1) : null,
                 'channel'    => self::refundChannelLabel($rec, $o),
@@ -303,7 +304,7 @@ class WorkbenchController extends Controller
                 // 卡上不做一键标记; CTA = 去退款核对 → 进详情退款核对卡(原路强确认 L1 呈现原样保留)
                 'cta'        => [
                     'kind'  => 'link',
-                    'label' => '去退款核对',
+                    'label' => optional($rec)->status === 'disputed' ? '查看争议' : '去退款核对',
                     'route' => route('vendor.order.details', ['id' => $o->id]),
                 ],
             ];

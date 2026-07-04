@@ -106,6 +106,12 @@
     $nzoRR = \App\Models\NezhaRefundRecord::where('order_id', $order->id)->latest('id')->first();
     $nzoRefundFlow = $nzoRR || in_array($order->order_status, ['refunded', 'refund_requested'], true);
     $nzoRefundAmt = $nzoRR ? (float) $nzoRR->refund_amount : $nzoAmt;
+    // denied 凭证争议流 R2b(dormant·开关 nezha_refund_dispute_status): 争议态/入口资格
+    $nzoDisputed = $nzoRR && $nzoRR->status === 'disputed';
+    $nzoDispute = $nzoDisputed ? \App\Models\NezhaRefundDispute::where('refund_record_id', $nzoRR->id)->latest('id')->first() : null;
+    $nzoDisputeFlag = (int) \App\CentralLogics\Helpers::get_business_settings('nezha_refund_dispute_status') === 1;
+    $nzoHasVerifiedProof = \App\Models\OfflinePayments::where('order_id', $order->id)->where('status', 'verified')->exists();
+    $nzoCanDispute = $nzoDisputeFlag && $nzoRR && $nzoRR->status === 'pending_merchant_refund' && $order->payment_status !== 'paid' && !$nzoHasVerifiedProof;
 
     $nzoOp = $order->offline_payments;
     $nzoOpInfo = ($nzoOp && $nzoOp->payment_info) ? (is_array($nzoOp->payment_info) ? $nzoOp->payment_info : (json_decode($nzoOp->payment_info, true) ?: [])) : [];
@@ -117,8 +123,9 @@
 
     $nzoFmt = fn($t) => $t ? date('Y-m-d H:i', strtotime($t)) : null;
     $nzoStatusMap = ['pending' => '待接单', 'confirmed' => '已接单', 'accepted' => '已接单', 'processing' => '备餐中', 'handover' => '待配送', 'picked_up' => '配送中', 'delivered' => '已送达', 'canceled' => '已取消', 'failed' => '已失败', 'refunded' => '已退款', 'refund_requested' => '退款申请中', 'refund_request_canceled' => '退款已撤销'];
-    $nzoBizStatus = $nzoRR ? '待退款' : ($nzOffPending ? '待确认收款' : ($nzoStatusMap[$order->order_status] ?? $order->order_status));
-    if ($nzoRR || in_array($order->order_status, ['refund_requested'], true)) { $nzoBadge = 'b-amber'; }
+    $nzoBizStatus = $nzoDisputed ? '争议中' : ($nzoRR ? '待退款' : ($nzOffPending ? '待确认收款' : ($nzoStatusMap[$order->order_status] ?? $order->order_status)));
+    if ($nzoDisputed) { $nzoBadge = 'b-gray'; }
+    elseif ($nzoRR || in_array($order->order_status, ['refund_requested'], true)) { $nzoBadge = 'b-amber'; }
     elseif ($order->order_status == 'refunded' || $order->order_status == 'delivered') { $nzoBadge = 'b-green'; }
     elseif (in_array($order->order_status, ['canceled', 'failed', 'refund_request_canceled'], true)) { $nzoBadge = 'b-gray'; }
     elseif (in_array($order->order_status, ['processing', 'handover', 'picked_up'], true)) { $nzoBadge = 'b-blue'; }
@@ -170,7 +177,9 @@
             <div class="cv">≈ ¥{{ number_format(($nzoRefundFlow ? $nzoRefundAmt : $nzoAmt) / max($nzoRateCny, 0.0001), 2) }} · ≈ ${{ number_format(($nzoRefundFlow ? $nzoRefundAmt : $nzoAmt) / max($nzoRateUsd, 0.0001), 2) }}</div>
         </div>
         <div class="nzo-hact">
-            @if ($nzoRR)
+            @if ($nzoDisputed)
+                <span class="nzo-badge b-gray" style="padding:7px 12px;display:inline-flex;align-items:center;gap:5px;"><i class="tio-time"></i> 争议审核中</span>
+            @elseif ($nzoRR)
                 <button type="button" class="nzo-btn nzo-btn-primary" data-toggle="modal" data-target="#nzoMarkRefunded-{{ $order['id'] }}"><i class="tio-checkmark-circle"></i> 标记已退款</button>
             @elseif ($nzPrimary['visible'] && $nzPrimary['kind'] == 'form' && !empty($nzPrimary['combined_yandex']))
                 <a href="#nzYandexCard-{{ $order['id'] }}" onclick="var c=document.getElementById('nzYandexCard-{{ $order['id'] }}');if(c){c.scrollIntoView({behavior:'smooth',block:'center'});}return false;" class="nzo-btn nzo-btn-blue">↓ {{ $nzPrimary['label'] }}</a>
@@ -223,7 +232,11 @@
                 <div class="nzo-card nzo-sec" data-tab-in="wb fin">
                     <div class="nzo-ch"><h3>退款核对</h3><span class="nzo-badge {{ $nzoBadge }}">{{ $nzoBizStatus }}</span></div>
                     <div class="nzo-cb">
-                        <div class="nzo-warn"><i class="tio-warning"></i> 平台不经手货款，请确认已按原路退款给顾客，再点「确认已退款」。</div>
+                        @if ($nzoDisputed)
+                            <div class="nzo-warn" style="background:#f3f4f6;color:#4b5563;border-color:#e5e7eb;"><i class="tio-time"></i> 该单退款争议审核中{{ $nzoDispute && $nzoDispute->opened_at ? ' · 提交于 ' . $nzoFmt($nzoDispute->opened_at) : '' }}。平台正在核实顾客是否已付款，核实期间暂停本单催办与逾期计时，裁决前暂不可退款。</div>
+                        @else
+                            <div class="nzo-warn"><i class="tio-warning"></i> 平台不经手货款，请确认已按原路退款给顾客，再点「确认已退款」。</div>
+                        @endif
                         <div class="nzo-3">
                             <div class="nzo-sub">
                                 <div class="st">顾客应退</div>
@@ -248,17 +261,29 @@
                             </div>
                             <div class="nzo-sub">
                                 <div class="st">商家操作</div>
-                                <form action="{{ route('vendor.order.mark-refunded', ['id' => $order['id']]) }}" method="post" onsubmit="return confirm('请确认：您已在自己的账户按原路退款给顾客？');">
-                                    @csrf @method('PUT')
-                                    <label class="nzo-ck"><input type="checkbox" required> 我已按原路向顾客完成退款</label>
-                                    <div style="font-size:11.5px;color:var(--faint);">实际退款金额</div>
-                                    <input class="nzo-ip" name="actual_refund_amount" value="{{ (int) $nzoRefundAmt }}">
-                                    @if ($nzoRR && $nzoRR->payment_channel == 'usdt')
-                                        <input class="nzo-ip" name="merchant_refund_tx" placeholder="链上转账 tx hash（选填）">
+                                @if ($nzoDisputed)
+                                    <div class="nzo-note" style="background:#f3f4f6;color:#4b5563;">⏸ 争议审核中，平台裁决前暂不可退款。</div>
+                                    @if ($nzoDispute && $nzoDispute->merchant_statement)
+                                        <div style="font-size:12px;color:var(--meta);margin-top:8px;">您的说明：{{ $nzoDispute->merchant_statement }}</div>
                                     @endif
-                                    <input class="nzo-ip" name="merchant_note" placeholder="备注（选填）">
-                                    <button type="submit" class="nzo-btn nzo-btn-primary" style="width:100%;justify-content:center;margin-top:10px;"><i class="tio-checkmark-circle"></i> 确认已按原路退款</button>
-                                </form>
+                                @else
+                                    <form action="{{ route('vendor.order.mark-refunded', ['id' => $order['id']]) }}" method="post" onsubmit="return confirm('请确认：您已在自己的账户按原路退款给顾客？');">
+                                        @csrf @method('PUT')
+                                        <label class="nzo-ck"><input type="checkbox" required> 我已按原路向顾客完成退款</label>
+                                        <div style="font-size:11.5px;color:var(--faint);">实际退款金额</div>
+                                        <input class="nzo-ip" name="actual_refund_amount" value="{{ (int) $nzoRefundAmt }}">
+                                        @if ($nzoRR && $nzoRR->payment_channel == 'usdt')
+                                            <input class="nzo-ip" name="merchant_refund_tx" placeholder="链上转账 tx hash（选填）">
+                                        @endif
+                                        <input class="nzo-ip" name="merchant_note" placeholder="备注（选填）">
+                                        <button type="submit" class="nzo-btn nzo-btn-primary" style="width:100%;justify-content:center;margin-top:10px;"><i class="tio-checkmark-circle"></i> 确认已按原路退款</button>
+                                    </form>
+                                    @if ($nzoCanDispute)
+                                        <div style="margin-top:10px;text-align:center;">
+                                            <a href="javascript:void(0);" data-toggle="modal" data-target="#nzoDispute-{{ $order['id'] }}" style="font-size:12px;color:var(--meta);text-decoration:underline;">核实未收到款？发起争议</a>
+                                        </div>
+                                    @endif
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -355,6 +380,22 @@
                     <div class="form-group mb-0"><label>备注（选填）</label><input type="text" name="merchant_note" class="form-control" placeholder="如：已退回原支付宝"></div>
                 </div>
                 <div class="modal-footer"><button type="button" class="btn btn-light" data-dismiss="modal">取消</button><button type="submit" class="btn btn-success">确认已退款</button></div>
+            </form>
+        </div></div>
+    </div>
+@endif
+
+@if ($nzoCanDispute)
+    <div class="modal fade" id="nzoDispute-{{ $order['id'] }}" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document"><div class="modal-content">
+            <form action="{{ route('vendor.order.refund-dispute', ['id' => $order['id']]) }}" method="post">
+                @csrf @method('PUT')
+                <div class="modal-header"><h5 class="modal-title">发起退款争议</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div>
+                <div class="modal-body">
+                    <div style="margin-bottom:14px;background:#f3f4f6;color:#4b5563;border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.75;">提交须知：仅当您核实顾客<b>并未实际付款</b>、系统却生成了待退款时使用。平台将核实顾客付款情况；争议审核期间，本单<b>暂停催办与逾期计时</b>。若核实顾客确已付款，您的原路退款义务将恢复。<b>本单争议只可发起一次</b>。</div>
+                    <div class="form-group mb-0"><label>核实说明（必填）<span style="color:#dc3545;">*</span></label><textarea name="statement" class="form-control" rows="4" required maxlength="1000" placeholder="请说明为何认为不应退款，例如：顾客实际未付款 / 凭证不实 / 已与顾客沟通确认……"></textarea></div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-light" data-dismiss="modal">取消</button><button type="submit" class="btn btn-warning">提交争议</button></div>
             </form>
         </div></div>
     </div>
