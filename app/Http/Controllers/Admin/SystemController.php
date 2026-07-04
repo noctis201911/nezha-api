@@ -56,8 +56,9 @@ class SystemController extends Controller
             $cutoff = \Carbon\Carbon::now()->subHours($remindHours);
             $abn_refund_ids = \App\Models\NezhaRefundRecord::whereIn('status', \App\Models\NezhaRefundRecord::STATUS_NEEDS_ACTION)
                 ->whereNull('merchant_refunded_at')
-                ->where('created_at', '<=', $cutoff)
-                ->orderBy('created_at')
+                // 逾期计时锚点(同 RefundOverdueSweep 口径): 争议维持裁决后从裁决时刻起算。
+                ->whereRaw(\App\Models\NezhaRefundRecord::OVERDUE_SINCE_SQL . ' <= ?', [$cutoff->toDateTimeString()])
+                ->orderByRaw(\App\Models\NezhaRefundRecord::OVERDUE_SINCE_SQL)
                 ->pluck('order_id')->filter()->unique()->values()->all();
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('NEZHA_ADMIN_ABN refund: ' . $e->getMessage());

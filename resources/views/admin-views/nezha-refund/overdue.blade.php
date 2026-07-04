@@ -107,7 +107,8 @@
                     <tbody>
                         @forelse ($records as $rec)
                             @php
-                                $overdueHours = $rec->created_at ? (int) floor($rec->created_at->diffInSeconds(\Carbon\Carbon::now()) / 3600) : 0;
+                                $overdueSince = $rec->overdue_since; // 锚点优先, 回退生成时刻(争议维持裁决后从裁决时刻起算)
+                                $overdueHours = $overdueSince ? (int) floor($overdueSince->diffInSeconds(\Carbon\Carbon::now()) / 3600) : 0;
                                 $overdueLabel = \App\CentralLogics\NezhaRefundOverdue::humanizeHours($overdueHours);
                                 $isSuspended = $rec->restaurant && (int) ($rec->restaurant->nezha_order_suspended ?? 0) === 1;
                             @endphp
@@ -126,6 +127,9 @@
                                         <span class="badge badge-soft-warning">{{ $overdueLabel }}</span>
                                     @else
                                         <span class="badge badge-soft-secondary">{{ $overdueLabel }}</span>
+                                    @endif
+                                    @if ($rec->overdue_anchor_at)
+                                        <br><small class="text-muted">{{ translate('争议裁决后重算') }} · {{ $rec->overdue_anchor_at }}</small>
                                     @endif
                                 </td>
                                 <td style="min-width:260px;">

@@ -32,6 +32,15 @@ class NezhaRefundRecord extends Model
     const STATUS_RESOLVED          = ['merchant_refunded', 'closed_no_payment'];
     const STATUS_MERCHANT_LIFECYCLE = ['pending_merchant_refund', 'disputed', 'merchant_refunded', 'closed_no_payment'];
 
+    /**
+     * 逾期计时口径(单一真相源): 争议维持裁决(R3)后 overdue_anchor_at=裁决时刻, 逾期从此刻重算;
+     * 普通待退款单 overdue_anchor_at=NULL 时回退 created_at(生成时刻)。
+     * 🔴 全站"逾期几小时/是否达阈值/是否进催办窗口/排序"必须都走它, 不得直接读 created_at, 否则显示与执行会各算各的。
+     *   - SQL(筛选/排序): whereRaw/orderByRaw 用 self::OVERDUE_SINCE_SQL
+     *   - PHP(单条时长):  $rec->overdue_since (accessor, 返回 Carbon)
+     */
+    const OVERDUE_SINCE_SQL = 'COALESCE(overdue_anchor_at, created_at)';
+
     protected $casts = [
         'order_id'             => 'integer',
         'refund_id'            => 'integer',
@@ -60,6 +69,12 @@ class NezhaRefundRecord extends Model
     public function scopeResolved($q)
     {
         return $q->whereIn('status', self::STATUS_RESOLVED);
+    }
+
+    /** 逾期计时起点(锚点优先, 回退生成时刻)。见 self::OVERDUE_SINCE_SQL 注释。 */
+    public function getOverdueSinceAttribute()
+    {
+        return $this->overdue_anchor_at ?? $this->created_at;
     }
 
     public function disputes()

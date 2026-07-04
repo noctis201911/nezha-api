@@ -57,12 +57,13 @@ class RefundOverdueSweep extends Command
         $records = NezhaRefundRecord::with(['restaurant.vendor', 'order'])
             ->whereIn('status', NezhaRefundRecord::STATUS_NEEDS_ACTION)
             ->whereNull('merchant_refunded_at')
-            ->where('created_at', '<=', $cutoff)
+            // 逾期计时锚点: 争议维持裁决后 created_at 不再是起点(见 NezhaRefundRecord::OVERDUE_SINCE_SQL)。
+            ->whereRaw(NezhaRefundRecord::OVERDUE_SINCE_SQL . ' <= ?', [$cutoff->toDateTimeString()])
             ->get();
 
         $acted = 0;
         foreach ($records as $rec) {
-            $overdueHours = (int) floor($rec->created_at->diffInSeconds($now) / 3600);
+            $overdueHours = (int) floor($rec->overdue_since->diffInSeconds($now) / 3600);
             $overdueLabel = \App\CentralLogics\NezhaRefundOverdue::humanizeHours($overdueHours);
 
             // T1: 风控记录 + 催办商家 + 告警运营

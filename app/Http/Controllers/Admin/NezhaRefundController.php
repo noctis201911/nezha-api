@@ -122,7 +122,7 @@ class NezhaRefundController extends Controller
         $records = NezhaRefundRecord::with(['order', 'restaurant'])
             ->whereIn('status', NezhaRefundRecord::STATUS_NEEDS_ACTION)
             ->whereNull('merchant_refunded_at')
-            ->orderBy('created_at', 'asc')
+            ->orderByRaw(NezhaRefundRecord::OVERDUE_SINCE_SQL . ' asc')
             ->paginate(30)
             ->appends($request->all());
 
@@ -273,9 +273,13 @@ class NezhaRefundController extends Controller
             $dispute->save();
 
             if ($resolution === 'upheld') {
-                // 维持退款义务: disputed → pending_merchant_refund; 逾期计时锚点=裁决时刻(R4 消费)
+                // 维持退款义务: disputed → pending_merchant_refund; 逾期计时锚点=裁决时刻(R4 消费)。
                 $rec->status            = 'pending_merchant_refund';
                 $rec->overdue_anchor_at = now();
+                // 逾期是一个全新周期: 清掉该留痕旧的幂等账本行(纯幂等去重表, 非审计),
+                // 让催办/记风控/停接单据新锚点重新触发; 否则"维持退款义务"催不动商家(旧行会压制重发)。
+                \Illuminate\Support\Facades\DB::table('nezha_refund_overdue_events')
+                    ->where('refund_record_id', $rec->id)->delete();
             } else {
                 // 核实未收款: disputed → closed_no_payment(终态·留痕非删除)
                 $rec->status = 'closed_no_payment';
