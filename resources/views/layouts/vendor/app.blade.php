@@ -106,40 +106,68 @@
     /* 哪吒[2026-07-02]: 后端弹窗默认垂直居中——原 Bootstrap 默认贴顶(margin 1.75rem auto)显得"太高", 商家反馈全后端弹窗都偏高。
        用 Bootstrap modal-dialog-centered 同款机制统一居中; 已显式带 .modal-dialog-centered 的不重复处理。短弹窗居中, 超高弹窗仍可随 .modal 滚动。 */
     .modal-dialog:not(.modal-dialog-centered){ display:flex; align-items:center; min-height:calc(100% - 3.5rem); }
+    #nz-alert-stack {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        z-index: 100000;
+        display: flex;
+        flex-direction: column-reverse;
+        gap: 12px;
+        align-items: flex-end;
+        pointer-events: none;
+    }
+    #nz-alert-stack > #nz-new-order-toast,
+    #nz-alert-stack > #nz-timeout-toast {
+        position: static !important;
+        right: auto !important;
+        bottom: auto !important;
+        z-index: auto !important;
+        pointer-events: auto;
+    }
+    #nz-alert-stack > #nz-timeout-toast { order: 0; }
+    #nz-alert-stack > #nz-new-order-toast { order: 1; }
     @media (max-width: 600px) {
-        #nz-new-order-toast, #nz-timeout-toast {
-            left: 10px !important; right: 10px !important;
-            min-width: 0 !important; max-width: none !important; width: auto !important;
-            bottom: auto !important; padding: 10px 12px !important;
+        #nz-alert-stack {
+            left: 10px;
+            right: 10px;
+            top: 66px;
+            bottom: auto;
+            align-items: stretch;
         }
-        #nz-new-order-toast { top: 66px !important; }
-        #nz-timeout-toast   { top: 142px !important; }
+        #nz-alert-stack > #nz-new-order-toast,
+        #nz-alert-stack > #nz-timeout-toast {
+            min-width: 0 !important; max-width: none !important; width: auto !important;
+            padding: 10px 12px !important;
+        }
     }
     </style>
-    <!-- 哪吒: 新订单非阻塞提示条 (响一次不反复弹窗) -->
-    <div id="nz-new-order-toast" style="display:none;position:fixed;right:20px;bottom:20px;z-index:100000;background:#fff;border:1px solid #f0f0f0;border-left:4px solid #C4193E;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.15);padding:14px 16px;min-width:248px;max-width:320px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">
-        <div style="display:flex;align-items:flex-start;gap:10px;">
-            <div style="font-size:22px;line-height:1;">&#128276;</div>
-            <div style="flex:1;">
-                <div style="font-weight:600;color:#1f1f1f;font-size:15px;margin-bottom:2px;"><span id="nz-new-order-count">0</span> 个新订单<span id="nz-new-order-label">待接单</span></div>
-                <div style="color:#8a8a8a;font-size:12px;">点「立即接单」直接进对应订单列表</div>
+    <div id="nz-alert-stack" aria-live="polite" aria-atomic="false">
+        <!-- 哪吒: 新订单非阻塞提示条 (响一次不反复弹窗) -->
+        <div id="nz-new-order-toast" style="display:none;background:#fff;border:1px solid #f0f0f0;border-left:4px solid #C4193E;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.15);padding:14px 16px;min-width:248px;max-width:320px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">
+            <div style="display:flex;align-items:flex-start;gap:10px;">
+                <div style="font-size:22px;line-height:1;">&#128276;</div>
+                <div style="flex:1;">
+                    <div style="font-weight:600;color:#1f1f1f;font-size:15px;margin-bottom:2px;"><span id="nz-new-order-count">0</span> 个新订单<span id="nz-new-order-label">待接单</span></div>
+                    <div style="color:#8a8a8a;font-size:12px;">点「立即接单」直接进对应订单列表</div>
+                </div>
+                <button type="button" id="nz-new-order-close" aria-label="关闭" style="border:none;background:none;color:#bbb;font-size:20px;line-height:1;cursor:pointer;padding:0;">&times;</button>
             </div>
-            <button type="button" id="nz-new-order-close" aria-label="关闭" style="border:none;background:none;color:#bbb;font-size:20px;line-height:1;cursor:pointer;padding:0;">&times;</button>
+            <button type="button" id="nz-new-order-go" style="margin-top:10px;width:100%;background:#C4193E;color:#fff;border:none;border-radius:8px;padding:9px 0;font-size:14px;font-weight:600;cursor:pointer;">立即接单</button>
         </div>
-        <button type="button" id="nz-new-order-go" style="margin-top:10px;width:100%;background:#C4193E;color:#fff;border:none;border-radius:8px;padding:9px 0;font-size:14px;font-weight:600;cursor:pointer;">立即接单</button>
-    </div>
-    {{-- 哪吒 C3(W4·告警分级): 超时=不可逆倒计时→保留右下抢占式浮层(仅非作业台页弹); 催配送=辅助类→收进顶栏铃铛栈(_header #nzBellBtn + window.nzBell)。新订单浮层保留(核心唤起)。 --}}
-    <!-- 哪吒: 订单超时紧急提示条 (系统/面板渠道, 红色高优先, 独立于新订单提示) -->
-    <div id="nz-timeout-toast" style="display:none;position:fixed;right:20px;bottom:96px;z-index:100001;background:#fff;border:1px solid #f3c2c2;border-left:4px solid #d32029;border-radius:12px;box-shadow:0 6px 24px rgba(211,32,41,.2);padding:14px 16px;min-width:248px;max-width:320px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">
-        <div style="display:flex;align-items:flex-start;gap:10px;">
-            <div style="font-size:22px;line-height:1;">&#9888;&#65039;</div>
-            <div style="flex:1;">
-                <div style="font-weight:600;color:#d32029;font-size:15px;margin-bottom:2px;"><span id="nz-timeout-count">0</span> 个订单超时未处理</div>
-                <div style="color:#8a8a8a;font-size:12px;">已超过处理时限，请尽快接单/确认收款/出餐，避免被系统自动取消</div>
+        {{-- 哪吒 C3(W4·告警分级): 超时=不可逆倒计时→保留右下抢占式浮层(仅非作业台页弹); 催配送=辅助类→收进顶栏铃铛栈(_header #nzBellBtn + window.nzBell)。新订单浮层保留(核心唤起)。 --}}
+        <!-- 哪吒: 订单超时紧急提示条 (系统/面板渠道, 红色高优先, 独立于新订单提示) -->
+        <div id="nz-timeout-toast" style="display:none;background:#fff;border:1px solid #f3c2c2;border-left:4px solid #d32029;border-radius:12px;box-shadow:0 6px 24px rgba(211,32,41,.2);padding:14px 16px;min-width:248px;max-width:320px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">
+            <div style="display:flex;align-items:flex-start;gap:10px;">
+                <div style="font-size:22px;line-height:1;">&#9888;&#65039;</div>
+                <div style="flex:1;">
+                    <div style="font-weight:600;color:#d32029;font-size:15px;margin-bottom:2px;"><span id="nz-timeout-count">0</span> 个订单超时未处理</div>
+                    <div style="color:#8a8a8a;font-size:12px;">已超过处理时限，请尽快接单/确认收款/出餐，避免被系统自动取消</div>
+                </div>
+                <button type="button" id="nz-timeout-close" aria-label="关闭" style="border:none;background:none;color:#bbb;font-size:20px;line-height:1;cursor:pointer;padding:0;">&times;</button>
             </div>
-            <button type="button" id="nz-timeout-close" aria-label="关闭" style="border:none;background:none;color:#bbb;font-size:20px;line-height:1;cursor:pointer;padding:0;">&times;</button>
+            <button type="button" id="nz-timeout-go" style="margin-top:10px;width:100%;background:#d32029;color:#fff;border:none;border-radius:8px;padding:9px 0;font-size:14px;font-weight:600;cursor:pointer;">立即处理</button>
         </div>
-        <button type="button" id="nz-timeout-go" style="margin-top:10px;width:100%;background:#d32029;color:#fff;border:none;border-radius:8px;padding:9px 0;font-size:14px;font-weight:600;cursor:pointer;">立即处理</button>
     </div>
     <div class="modal fade" id="popup-modal-msg">
         <div class="modal-dialog modal-dialog-centered" role="document">
