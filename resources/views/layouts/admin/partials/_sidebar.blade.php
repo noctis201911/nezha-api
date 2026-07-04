@@ -474,6 +474,12 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                                         <span class="text-truncate">{{ translate('逾期未退款') }}</span>
                                     </a>
                                 </li>
+                                <li class="nav-item {{ Request::is('admin/nezha-refund/disputes') ? 'active' : '' }}">
+                                    <a class="nav-link" href="{{ route('admin.nezha-refund.disputes') }}" title="{{ translate('退款争议裁决') }}">
+                                        <span class="tio-circle nav-indicator-icon"></span>
+                                        <span class="text-truncate">{{ translate('退款争议裁决') }}</span>
+                                    </a>
+                                </li>
                                 @endif
                                 @if (Helpers::module_permission_check('kyc'))
                                 <li class="nav-item {{ Request::is('admin/nezha-kyc*') ? 'active' : '' }}">

@@ -214,4 +214,79 @@ class NezhaRefundController extends Controller
         }
         return back();
     }
+
+    /**
+     * denied 凭证争议流 R3: 待裁决争议队列(open) + 近期已裁决(context)。
+     * 争议由商家对「待退款(段B·凭证在案先核后退)」发起, 运营在此裁决:
+     *   维持退款义务(upheld)        → 记录回 pending_merchant_refund(逾期计时锚点=裁决时刻·R4 消费)
+     *   核实未收款(closed_no_payment) → 记录留痕关闭终态(无退款义务·非删除·业主 2026-07-03 批准)
+     * dormant(nezha_refund_dispute_status=0): 列表可看(通常无 open 行), 裁决动作被门禁拦。
+     */
+    public function disputes(Request $request)
+    {
+        $status = (int) (\App\Models\BusinessSetting::where('key', 'nezha_refund_dispute_status')->value('value') ?? 0);
+        $open = \App\Models\NezhaRefundDispute::with(['order', 'restaurant', 'record'])
+            ->where('status', 'open')
+            ->orderBy('opened_at', 'asc')
+            ->paginate(30)->appends($request->all());
+        $resolved = \App\Models\NezhaRefundDispute::with(['order', 'restaurant'])
+            ->where('status', 'resolved')
+            ->orderByDesc('resolved_at')->limit(20)->get();
+
+        return view('admin-views.nezha-refund.disputes', compact('open', 'resolved', 'status'));
+    }
+
+    /**
+     * R3 裁决: upheld(维持退款义务) / closed_no_payment(核实未收款)。
+     * 🔴 仅改留痕+争议状态(留痕/审计), 零资金操作; L1 退款路由不变。
+     * 对象级鉴权: 仅 open 争议 + disputed 记录可裁; 全程事务, 单记录争议 unique 墙保证不可重复。
+     */
+    public function disputeResolve(Request $request, $id)
+    {
+        if ((int) Helpers::get_business_settings('nezha_refund_dispute_status') !== 1) {
+            Toastr::error(translate('功能暂未开放'));
+            return back();
+        }
+        $request->validate([
+            'resolution'      => 'required|in:upheld,closed_no_payment',
+            'operator_reason' => 'required|string|max:1000',
+        ]);
+        $dispute = \App\Models\NezhaRefundDispute::where('id', $id)->where('status', 'open')->first();
+        if (!$dispute) {
+            Toastr::warning(translate('该争议不存在或已裁决'));
+            return back();
+        }
+        $rec = NezhaRefundRecord::where('id', $dispute->refund_record_id)->where('status', 'disputed')->first();
+        if (!$rec) {
+            Toastr::warning(translate('关联退款记录状态异常, 无法裁决'));
+            return back();
+        }
+        $resolution = $request->input('resolution');
+        $reason = mb_substr(trim((string) $request->input('operator_reason')), 0, 1000);
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($dispute, $rec, $resolution, $reason) {
+            $dispute->status          = 'resolved';
+            $dispute->resolution      = $resolution;
+            $dispute->operator_id     = auth('admin')->id();
+            $dispute->operator_reason = $reason;
+            $dispute->resolved_at     = now();
+            $dispute->save();
+
+            if ($resolution === 'upheld') {
+                // 维持退款义务: disputed → pending_merchant_refund; 逾期计时锚点=裁决时刻(R4 消费)
+                $rec->status            = 'pending_merchant_refund';
+                $rec->overdue_anchor_at = now();
+            } else {
+                // 核实未收款: disputed → closed_no_payment(终态·留痕非删除)
+                $rec->status = 'closed_no_payment';
+            }
+            $rec->save();
+        });
+        \App\CentralLogics\NezhaOrderCounts::forgetByOrderId($dispute->order_id);
+        Toastr::success($resolution === 'upheld'
+            ? translate('已裁决: 维持退款义务。商家须原路退款给顾客, 逾期计时从此刻恢复。')
+            : translate('已裁决: 核实未收款。该单已留痕关闭, 商家无需退款(记录保留可审计)。'));
+
+        return back();
+    }
 }
