@@ -176,13 +176,14 @@ class NezhaMerchantOrderUiContractTest extends TestCase
         $this->assertStringContainsString('NezhaCustomerNudge::count', $blade);
     }
 
-    public function testRestaurantLoginLandsOnResponsiveOrderList(): void
+    public function testRestaurantLoginReturnsToVendorDashboardByDefault(): void
     {
         $controller = file_get_contents(app_path('Http/Controllers/LoginController.php'));
 
-        $this->assertStringContainsString("\$data == 'vendor' && \$request->role == 'vendor'", $controller);
-        $this->assertStringContainsString("redirect()->route('vendor.order.list", $controller);
-        $this->assertStringContainsString("['all']", $controller);
+        $this->assertStringNotContainsString("\$data == 'vendor' && \$request->role == 'vendor'", $controller);
+        $this->assertStringNotContainsString("redirect()->route('vendor.order.list", $controller);
+        $this->assertStringContainsString("if(\$data == 'vendor' )", $controller);
+        $this->assertStringContainsString("return redirect()->route('vendor.dashboard');", $controller);
     }
 
     public function testMerchantOrderDetailSupportsGuardedAutoPrintAfterStateChange(): void

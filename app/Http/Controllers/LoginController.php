@@ -296,9 +296,6 @@ class LoginController extends Controller
         }
         return redirect()->route('admin.dashboard');
     }
-    if($data == 'vendor' && $request->role == 'vendor'){
-        return redirect()->route('vendor.order.list', ['all']);
-    }
     if($data == 'vendor' ){
         return redirect()->route('vendor.dashboard');
     }
