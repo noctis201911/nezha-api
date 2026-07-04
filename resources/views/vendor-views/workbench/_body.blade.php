@@ -7,9 +7,13 @@
     $queues = $wb['queues'] ?? [];
     $rail   = $wb['rail'] ?? [];
     $rateCny = $wb['rates']['cny'] ?? 55;
+    $rateUsd = $wb['rates']['usd'] ?? 400;
     $qc = $queues['confirm_payment'] ?? []; $qk = $queues['cooking'] ?? [];
     $qd = $queues['delivery'] ?? []; $qn = $queues['nudge_timeout'] ?? []; $qr = $queues['refund'] ?? [];
     $today = $rail['today'] ?? []; $bad = $rail['bad_review'] ?? [];
+    $todayCollected = (float)($today['collected'] ?? 0);
+    $todayCny = $rateCny > 0 ? number_format($todayCollected / $rateCny) : 0;
+    $todayUsd = $rateUsd > 0 ? number_format($todayCollected / $rateUsd, 2) : 0;
     $store = $wb['store'] ?? []; $tempClosed = (bool)($store['temp_closed'] ?? false);   // W5 店态
     // W6 移动分段: 五队列计数 + 默认落第一个非空队列。桌面(>600px)不生效(全展示)。
     $qCounts = ['confirm' => ($qc['total'] ?? 0) + ($qc['no_proof_total'] ?? 0), 'cooking' => $qk['total'] ?? 0, 'delivery' => $qd['total'] ?? 0, 'nudge' => $qn['total'] ?? 0, 'refund' => $qr['total'] ?? 0];
@@ -78,7 +82,7 @@
                         @else
                             <div class="nzwb-proof">{{ $r['proof']['label'] ?? '凭证' }}</div>
                         @endif
-                        <div class="nzwb-money num">{{ $r['amount_amd'] }}<small>≈ ¥{{ $r['amount_cny'] }}</small></div>
+                        <div class="nzwb-money num">{{ $r['amount_amd'] }}<small>≈ ¥{{ $r['amount_cny'] }} / ${{ $r['amount_usd'] ?? '' }}</small></div>
                         <div class="nzwb-act"><a class="nzwb-btn green" href="{{ $detailFin($r['id']) }}">{{ $r['cta']['label'] ?? '确认收款' }}</a><a class="nzwb-btn more" href="{{ $detail($r['id']) }}">⋯</a></div>
                     </div>
                 @empty
@@ -88,7 +92,7 @@
                     <div class="nzwb-row mute">
                         <div class="grow"><span class="oid">#{{ $r['id'] }}</span> <span class="nzwb-chip amber">无凭证</span>
                             <div class="meta">等顾客传凭证 · {{ $waitTxt($r['waited_min']) }} · 超时未传将自动取消</div></div>
-                        <div class="nzwb-money num" style="color:var(--gray)">{{ $r['amount_amd'] }}<small>≈ ¥{{ $r['amount_cny'] }}</small></div>
+                        <div class="nzwb-money num" style="color:var(--gray)">{{ $r['amount_amd'] }}<small>≈ ¥{{ $r['amount_cny'] }} / ${{ $r['amount_usd'] ?? '' }}</small></div>
                         <a class="nzwb-btn line" href="{{ $detail($r['id']) }}">详情</a>
                     </div>
                 @endforeach
@@ -103,7 +107,7 @@
                     <div class="nzwb-row">
                         <div class="grow"><span class="oid">#{{ $r['id'] }}</span>
                             <div class="meta">{{ $r['items'] ?: '—' }} · 已备 {{ $dur($r['cooking_min'] ?? 0) }}</div></div>
-                        <div class="nzwb-money num">{{ $r['amount_amd'] }}<small>≈ ¥{{ $r['amount_cny'] }}</small></div>
+                        <div class="nzwb-money num">{{ $r['amount_amd'] }}<small>≈ ¥{{ $r['amount_cny'] }} / ${{ $r['amount_usd'] ?? '' }}</small></div>
                         <div class="nzwb-act"><button type="button" class="nzwb-btn navy nz-dispatch-open" data-nz-dispatch="{{ $r['id'] }}">出餐 · 叫车</button><a class="nzwb-btn more" href="{{ $detail($r['id']) }}">⋯</a></div>
                     </div>
                 @empty
@@ -126,7 +130,7 @@
                             @else<span class="nzwb-chip amber">未贴链接</span>@endif
                             @if(!empty($r['nudged']))<span class="nzwb-chip red">顾客催促中</span>@endif
                             <div class="meta">{{ $r['items'] ?: '—' }} · {{ $r['stage']==='handover' ? '出餐 '.$dur($r['stage_min'] ?? 0) : '配送 '.$dur($r['stage_min'] ?? 0) }}</div></div>
-                        <div class="nzwb-money num">{{ $r['amount_amd'] }}<small>≈ ¥{{ $r['amount_cny'] }}</small></div>
+                        <div class="nzwb-money num">{{ $r['amount_amd'] }}<small>≈ ¥{{ $r['amount_cny'] }} / ${{ $r['amount_usd'] ?? '' }}</small></div>
                         <div class="nzwb-act">
                             @if($r['stage'] === 'handover')
                                 <button type="button" class="nzwb-btn navy nz-dispatch-open" data-nz-dispatch="{{ $r['id'] }}">叫车 / 标记配送中</button>
@@ -171,7 +175,7 @@
                         <div class="nzwb-row">
                             <div class="grow"><span class="oid">#{{ $r['id'] }}</span> <span class="nzwb-chip">{{ $r['channel'] }}</span>
                                 <div class="meta">{{ $r['held_text'] }}</div></div>
-                            <div class="nzwb-money num" style="color:var(--red)">应退 {{ $r['refund_amd'] }}<small>≈ ¥{{ $r['refund_cny'] }}</small></div>
+                            <div class="nzwb-money num" style="color:var(--red)">应退 {{ $r['refund_amd'] }}<small>≈ ¥{{ $r['refund_cny'] }} / ${{ $r['refund_usd'] ?? '' }}</small></div>
                             <a class="nzwb-btn line" href="{{ $detail($r['id']) }}">{{ $r['cta']['label'] ?? '去退款核对' }}</a>
                         </div>
                     @endforeach
@@ -182,7 +186,7 @@
                         <div class="nzwb-row">
                             <div class="grow"><span class="oid">#{{ $r['id'] }}</span> <span class="nzwb-chip">{{ $r['channel'] }}</span>@if($r['disputed'] ?? false) <span class="nzwb-chip" style="background:#e5e7eb;color:#4b5563;">争议中</span>@endif
                                 <div class="meta">{{ $r['meta'] ?: '顾客有付款凭证在案，请核对您的收款账户' }} · {{ $r['held_text'] }}</div></div>
-                            <div class="nzwb-money num" style="color:var(--red)">应退 {{ $r['refund_amd'] }}<small>≈ ¥{{ $r['refund_cny'] }}</small></div>
+                            <div class="nzwb-money num" style="color:var(--red)">应退 {{ $r['refund_amd'] }}<small>≈ ¥{{ $r['refund_cny'] }} / ${{ $r['refund_usd'] ?? '' }}</small></div>
                             <a class="nzwb-btn line" href="{{ $detail($r['id']) }}">{{ $r['cta']['label'] ?? '去退款核对' }}</a>
                         </div>
                     @endforeach
@@ -207,7 +211,7 @@
             <div class="nzwb-rcard">
                 <h4>今日经营</h4>
                 <div class="nzwb-stat"><span>今日单量</span><b class="num">{{ (int)($today['orders'] ?? 0) }}</b></div>
-                <div class="nzwb-stat"><span>自收款</span><b class="num">֏{{ number_format((float)($today['collected'] ?? 0)) }} <small style="color:var(--sec);font-weight:400">≈ ¥{{ $rateCny > 0 ? number_format(((float)($today['collected'] ?? 0))/$rateCny) : 0 }}</small></b></div>
+                <div class="nzwb-stat"><span>自收款</span><b class="num">֏{{ number_format($todayCollected) }} <small style="color:var(--sec);font-weight:400">≈ ¥{{ $todayCny }} / ${{ $todayUsd }}</small></b></div>
                 <div class="nzwb-stat"><span>客单价</span><b class="num">{{ $today['avg_ticket'] !== null ? '֏'.number_format((float)$today['avg_ticket']) : '—' }}</b></div>
                 <div class="nzwb-rcap">自收款为「已确认收款」口径，与对账中心一致。</div>
             </div>

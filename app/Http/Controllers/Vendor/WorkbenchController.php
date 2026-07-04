@@ -116,11 +116,11 @@ class WorkbenchController extends Controller
 
         // ── 五队列(每队列前 5 行 + total==provider 计数, DoD#2) ──
         $queues = [
-            'confirm_payment' => self::queueConfirmPayment($rid, $counts, $rateCny),
-            'cooking'         => self::queueCooking($rid, $counts, $rateCny),
-            'delivery'        => self::queueDelivery($rid, $counts, $rateCny),
+            'confirm_payment' => self::queueConfirmPayment($rid, $counts, $rateCny, $rateUsd),
+            'cooking'         => self::queueCooking($rid, $counts, $rateCny, $rateUsd),
+            'delivery'        => self::queueDelivery($rid, $counts, $rateCny, $rateUsd),
             'nudge_timeout'   => self::queueNudgeTimeout($rid, $nudgeIds, $timeoutIds, $nudgeOrTimeout),
-            'refund'          => self::queueRefund($rid, $counts, $rateCny),
+            'refund'          => self::queueRefund($rid, $counts, $rateCny, $rateUsd),
         ];
 
         // ── 右栏数字 ──
@@ -160,15 +160,15 @@ class WorkbenchController extends Controller
     /**
      * ① 待确认收款 = pending + offline + 有 pending 凭证(计徽标) ; 尾部弱化行 = 无凭证 pending 离线单(不计徽标·无主CTA)。
      */
-    protected static function queueConfirmPayment(int $rid, array $counts, float $rateCny): array
+    protected static function queueConfirmPayment(int $rid, array $counts, float $rateCny, float $rateUsd): array
     {
         // 有凭证待核(等待最久置顶)
         $rows = self::base($rid)
             ->where('order_status', 'pending')->where('payment_method', 'offline_payment')
             ->whereHas('offline_payments', function ($q) { $q->where('status', 'pending'); })
             ->orderBy('created_at', 'asc')->limit(self::ROWS)->get()
-            ->map(function ($o) use ($rateCny) {
-                return self::row($o, $rateCny, [
+            ->map(function ($o) use ($rateCny, $rateUsd) {
+                return self::row($o, $rateCny, $rateUsd, [
                     'proof'      => self::proofMeta($o),
                     'placed_at'  => $o->created_at ? Carbon::parse($o->created_at)->format('H:i') : null,
                     'waited_min' => self::minutesSince($o->created_at),
@@ -181,8 +181,8 @@ class WorkbenchController extends Controller
             ->whereDoesntHave('offline_payments', function ($q) { $q->where('status', 'pending'); });
         $noProofTotal = (clone $noProofQ)->count();
         $noProofRows  = $noProofQ->orderBy('created_at', 'asc')->limit(self::ROWS)->get()
-            ->map(function ($o) use ($rateCny) {
-                return self::row($o, $rateCny, [
+            ->map(function ($o) use ($rateCny, $rateUsd) {
+                return self::row($o, $rateCny, $rateUsd, [
                     'no_proof'   => true,
                     'waited_min' => self::minutesSince($o->created_at),
                 ]);
@@ -198,13 +198,13 @@ class WorkbenchController extends Controller
     }
 
     /** ② 备餐中 = processing 。 */
-    protected static function queueCooking(int $rid, array $counts, float $rateCny): array
+    protected static function queueCooking(int $rid, array $counts, float $rateCny, float $rateUsd): array
     {
         $rows = self::base($rid)
             ->where('order_status', 'processing')->NotDigitalOrder()
             ->orderBy('processing', 'asc')->limit(self::ROWS)->get()
-            ->map(function ($o) use ($rateCny) {
-                return self::row($o, $rateCny, [
+            ->map(function ($o) use ($rateCny, $rateUsd) {
+                return self::row($o, $rateCny, $rateUsd, [
                     'cooking_min' => self::minutesSince($o->processing ?? $o->confirmed ?? $o->created_at),
                 ]);
             })->values()->all();
@@ -217,15 +217,15 @@ class WorkbenchController extends Controller
     }
 
     /** ③ 配送 = handover(待叫车) ∪ picked_up(配送中) 。 */
-    protected static function queueDelivery(int $rid, array $counts, float $rateCny): array
+    protected static function queueDelivery(int $rid, array $counts, float $rateCny, float $rateUsd): array
     {
         $rows = self::base($rid)
             ->whereIn('order_status', ['handover', 'picked_up'])->NotDigitalOrder()
             ->orderByRaw("FIELD(order_status,'handover','picked_up')")
             ->orderBy('schedule_at', 'asc')->limit(self::ROWS)->get()
-            ->map(function ($o) use ($rateCny) {
+            ->map(function ($o) use ($rateCny, $rateUsd) {
                 $picked = $o->order_status === 'picked_up';
-                return self::row($o, $rateCny, [
+                return self::row($o, $rateCny, $rateUsd, [
                     'stage'      => $picked ? 'picked_up' : 'handover',
                     'stage_min'  => self::minutesSince($picked ? $o->picked_up : $o->handover),
                     'tracking'   => $o->yandex_tracking_url ? 'posted' : 'none',
@@ -272,7 +272,7 @@ class WorkbenchController extends Controller
     }
 
     /** ⑤ 退款处理(两段式) = 有 pending_merchant_refund 留痕的单; 段A payment=paid(红·置顶) / 段B 非 paid(灰)。 */
-    protected static function queueRefund(int $rid, array $counts, float $rateCny): array
+    protected static function queueRefund(int $rid, array $counts, float $rateCny, float $rateUsd): array
     {
         $orders = self::base($rid)
             ->whereIn('id', function ($sub) {
@@ -287,7 +287,7 @@ class WorkbenchController extends Controller
             ->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_UNRESOLVED)
             ->orderBy('id', 'desc')->get()->groupBy('order_id');
 
-        $rows = $orders->map(function ($o) use ($recs, $rateCny) {
+        $rows = $orders->map(function ($o) use ($recs, $rateCny, $rateUsd) {
             $rec = optional($recs->get($o->id))->first();
             $amt = $rec ? (float) $rec->refund_amount : (float) $o->order_amount;
             $seg = $o->payment_status === 'paid' ? 'A' : 'B';
@@ -298,6 +298,7 @@ class WorkbenchController extends Controller
                 'disputed'   => optional($rec)->status === 'disputed',
                 'refund_amd' => Helpers::format_currency($amt),
                 'refund_cny' => $rateCny > 0 ? round($amt / $rateCny, 1) : null,
+                'refund_usd' => $rateUsd > 0 ? round($amt / $rateUsd, 2) : null,
                 'channel'    => self::refundChannelLabel($rec, $o),
                 'held_text'  => self::heldSince(optional($rec)->created_at),
                 'meta'       => $seg === 'B' ? '顾客有付款凭证在案，请核对您的收款账户' : null,
@@ -320,13 +321,14 @@ class WorkbenchController extends Controller
     /* ───────────────────────── 行 / 字段构造 ───────────────────────── */
 
     /** 队列行公共字段 + decide() 主 CTA(与详情页同源)。$extra 为各队列专属字段。 */
-    protected static function row($order, float $rateCny, array $extra = []): array
+    protected static function row($order, float $rateCny, float $rateUsd, array $extra = []): array
     {
         return array_merge([
             'id'            => (int) $order->id,
             'amount'        => (float) $order->order_amount,
             'amount_amd'    => Helpers::format_currency($order->order_amount),
             'amount_cny'    => $rateCny > 0 ? round(((float) $order->order_amount) / $rateCny, 1) : null,
+            'amount_usd'    => $rateUsd > 0 ? round(((float) $order->order_amount) / $rateUsd, 2) : null,
             'payment_label' => self::paymentLabel($order),
             'customer'      => self::maskedCustomer($order),
             'items'         => self::itemsSummary($order),
