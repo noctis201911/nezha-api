@@ -623,6 +623,9 @@ class VendorController extends Controller
                 format: 'png',
                 image: $request->file('rmb_qr_image')
             );
+            // 哪吒[B·打开支付宝直跳]: 解码新收款码提取 qr.alipay.com 收款链接存 rmb_qr_url(前端「打开支付宝」深链直跳);
+            // 解不出/非支付宝链接→null→前端回落「扫一扫」。收款码换了必须重解, 不然直跳旧链=转错人(资金语境)。
+            $restaurant->rmb_qr_url = \App\CentralLogics\NezhaAlipayQr::decodeUrl($restaurant->rmb_qr_image);
         }
         $restaurant->payee_name   = $request->payee_name;
         $restaurant->usdt_address = $request->usdt_address;
