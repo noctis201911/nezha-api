@@ -97,6 +97,9 @@ return Application::configure(basePath: dirname(__DIR__))
         //    一直未运行。2026-06-16 经用户批准 + 三任务 --dry-run 实测命中 0(无超期积压, 接回零删除最安全的时机)后
         //    迁来此处正式接回每日调度。只抹超期 PII 字段+关联文件, 保留行/状态供审计; 不动订单/交易/链上记录。
         $schedule->command('nezha:purge-payment-proofs')->dailyAt('03:30')->withoutOverlapping();
+        // 哪吒本地生活: 到期(expires_at<now)的在售 UGC 帖转 expired(已失效)。排在 PII 清(03:40)之前(03:35),
+        //   只翻生命周期态、不碰 PII；PII 到期清仍由下一行 purge-locallife-pii 负责(同 keyed 到 expires_at)。
+        $schedule->command('nezha:expire-locallife-posts')->dailyAt('03:35')->withoutOverlapping();
         $schedule->command('nezha:purge-locallife-pii')->dailyAt('03:40')->withoutOverlapping();
         $schedule->command('nezha:purge-merchant-leads')->dailyAt('03:50')->withoutOverlapping();
         // 哪吒[L1-7相邻 数据最小化]: 终态订单的 Yandex 配送链接超保留期清除(默认30天, 开关 nezha_yandex_link_purge_status)

@@ -569,6 +569,10 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         Route::post('posts', [LocalLifeController::class, 'storePost']);
         Route::get('my-posts', [LocalLifeController::class, 'myPosts']);
         Route::post('posts/{id}/report', [LocalLifeController::class, 'reportPost']);
+        // 我的发布·生命周期动作(仅本人 UGC 帖，控制器内 ownedPost 对象级鉴权)
+        Route::post('posts/{id}/mark-sold', [LocalLifeController::class, 'markSold']);
+        Route::post('posts/{id}/take-down', [LocalLifeController::class, 'takeDown']);
+        Route::post('posts/{id}/renew', [LocalLifeController::class, 'renew']);
     });
 
     Route::get('vehicle/extra_charge', [ConfigController::class, 'extra_charge']);

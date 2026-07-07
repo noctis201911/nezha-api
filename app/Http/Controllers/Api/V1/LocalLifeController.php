@@ -84,7 +84,8 @@ class LocalLifeController extends Controller
         $offset = (int) ($request->input('offset', 1));
         $offset = $offset > 0 ? $offset : 1;
 
-        $query = LocalLifePost::where('status', LocalLifePost::STATUS_PUBLISHED);
+        $query = LocalLifePost::where('status', LocalLifePost::STATUS_PUBLISHED)
+            ->where('listing_status', LocalLifePost::LISTING_ACTIVE); // 信息流只出在售(已成交/已失效不进流)
 
         // 信息流只出「个人发帖(ugc)」类目：商家服务类目(移民/签证/美容美发/按摩…)走商家页，不混进信息流
         $ugcCats = LocalLifeCategory::where('status', true)->where('kind', 'ugc')->pluck('name')->toArray();
@@ -134,6 +135,8 @@ class LocalLifeController extends Controller
      */
     public function postDetail(Request $request, $id)
     {
+        // 审核态仍须已发布(1)；但生命周期态(在售/已成交/已失效)不过滤——
+        // 已成交/已失效帖直链访问显「终态章」而非 404(HANDOFF §C.10)。
         $post = LocalLifePost::where('status', LocalLifePost::STATUS_PUBLISHED)->find($id);
 
         if (!$post) {
@@ -143,10 +146,13 @@ class LocalLifeController extends Controller
         $data = $post->toArray();
         $data['image_urls'] = $this->imageUrls($post->images);
         unset($data['user_id'], $data['reject_reason']); // 不对外暴露内部字段
+        // listing_status / contact_method / contact_value 已在 toArray 中，前端据此渲染状态章 + sticky 转化条
 
-        // PII 红线(L1-7)：联系方式只给已登录用户，游客看不到
+        // PII 红线(L1-7)：联系方式(含结构化 method/value)只给已登录用户，游客看不到
         if (!auth('api')->check()) {
-            $data['contact_info'] = null;
+            $data['contact_info']   = null;
+            $data['contact_method'] = null;
+            $data['contact_value']  = null;
         }
 
         $data['ugc_disclaimer'] = $this->disclaimerText();
@@ -328,7 +334,10 @@ class LocalLifeController extends Controller
             'category'       => ['required', 'string', 'in:' . implode(',', $this->categoryNames())],
             'tab'            => ['required', 'string', 'in:' . implode(',', self::TABS)],
             'description'    => 'nullable|string|max:2000',
-            'contact_info'   => 'required|string|max:200',
+            // 结构化联系方式(批1)：method+value 为主；contact_info 保留兼容旧客户端。二者至少一组，见下方 composeContact。
+            'contact_method' => ['nullable', 'string', 'in:微信,电话,WhatsApp,Telegram'],
+            'contact_value'  => 'nullable|string|max:200',
+            'contact_info'   => 'nullable|string|max:200',
             'price_amd'      => 'nullable|integer|min:0|max:999999999',
             'price_suffix'   => 'nullable|string|max:20',
             'is_free'        => 'nullable|boolean',
@@ -358,6 +367,12 @@ class LocalLifeController extends Controller
             return response()->json(['errors' => $errs], 422);
         }
 
+        // 结构化联系方式(批1)：优先 method+value 合成展示串，回退旧客户端自由文本 contact_info。
+        [$contactInfo, $contactMethod, $contactValue] = $this->composeContact($request);
+        if ($contactInfo === '') {
+            return response()->json(['errors' => [['code' => 'contact_value', 'message' => '请填写联系方式，否则别人无法联系你']]], 422);
+        }
+
         // 最小发帖间隔（反刷）：同用户两次发帖间隔过短直接拦
         $minInterval = (int) $this->setting('locallife_ugc_min_interval_sec', 60);
         if ($minInterval > 0) {
@@ -376,8 +391,8 @@ class LocalLifeController extends Controller
             return response()->json(['errors' => [['code' => 'duplicate', 'message' => '你已发布过相同标题的信息']]], 422);
         }
 
-        // 违禁词过滤（命中即拒，不转待审核）：扫 title + description + contact_info
-        $scan = trim($request->title . "\n" . (string) $request->description . "\n" . (string) $request->contact_info);
+        // 违禁词过滤（命中即拒，不转待审核）：扫 title + description + 合成后的联系方式
+        $scan = trim($request->title . "\n" . (string) $request->description . "\n" . $contactInfo);
         if ($this->hitsBannedWord($scan)) {
             // 不回显命中词，避免被试探绕过
             return response()->json(['errors' => [['code' => 'banned', 'message' => '内容含违规词，请修改后再发布']]], 422);
@@ -412,9 +427,13 @@ class LocalLifeController extends Controller
             'location_label' => $request->location_label,
             'is_urgent'      => false,
             'want_count'     => 0,
-            'contact_info'   => $request->contact_info,
-            'expires_at'     => Carbon::now()->addDays(30),
+            'contact_info'   => $contactInfo,
+            'contact_method' => $contactMethod,
+            'contact_value'  => $contactValue,
+            // 单时钟(业主 2026-07-07 批准)：expires_at=60 天，既是上架寿命又是 PII 到期清锚点(L1-7)
+            'expires_at'     => Carbon::now()->addDays(60),
             'status'         => LocalLifePost::STATUS_PENDING,
+            'listing_status' => LocalLifePost::LISTING_ACTIVE,
             'source'         => 'user',
         ]);
 
@@ -438,8 +457,13 @@ class LocalLifeController extends Controller
             ->get()
             ->map(function ($p) {
                 $arr = $p->toArray();
-                $arr['status_label'] = $p->statusLabel();
-                $arr['image_urls']   = $this->imageUrls($p->images);
+                $arr['status_label']    = $p->statusLabel();     // 审核态中文
+                $arr['lifecycle_label'] = $p->lifecycleLabel();  // 生命周期态中文(在售/已成交/已失效)
+                // 续期资格：未超 180 天总寿命硬顶(封顶 PII 留存, L1-7)
+                $arr['renewable'] = $p->created_at
+                    ? Carbon::now()->lt($p->created_at->copy()->addDays(180))
+                    : true;
+                $arr['image_urls'] = $this->imageUrls($p->images);
                 return $arr;
             });
 
@@ -512,7 +536,101 @@ class LocalLifeController extends Controller
         return response()->json(['message' => '已收到举报，感谢反馈'], 200);
     }
 
+    /* =================== 我的发布·生命周期动作(auth:api, 仅本人 UGC 帖) =================== */
+
+    /** 仅取当前登录用户自己的 UGC 帖(source=user)——对象级鉴权，防越权改他人帖(IDOR)。 */
+    private function ownedPost($id): ?LocalLifePost
+    {
+        return LocalLifePost::where('user_id', auth('api')->id())
+            ->where('source', 'user')
+            ->find($id);
+    }
+
+    /**
+     * 接口 G：标记成交  POST /api/v1/local-life/posts/{id}/mark-sold
+     * listing_status -> sold(已成交)；仅本人帖。不动审核态、不碰 expires_at/PII。
+     */
+    public function markSold(Request $request, $id)
+    {
+        $post = $this->ownedPost($id);
+        if (!$post) {
+            return response()->json(['errors' => [['code' => 'post', 'message' => '帖子不存在']]], 404);
+        }
+        $post->listing_status = LocalLifePost::LISTING_SOLD;
+        $post->save();
+        return response()->json(['message' => '已标记为成交', 'listing_status' => 'sold'], 200);
+    }
+
+    /**
+     * 接口 H：下架  POST /api/v1/local-life/posts/{id}/take-down
+     * listing_status -> expired(已失效)；仅本人帖。信息流即不再展示，直链显终态章。
+     */
+    public function takeDown(Request $request, $id)
+    {
+        $post = $this->ownedPost($id);
+        if (!$post) {
+            return response()->json(['errors' => [['code' => 'post', 'message' => '帖子不存在']]], 404);
+        }
+        $post->listing_status = LocalLifePost::LISTING_EXPIRED;
+        $post->save();
+        return response()->json(['message' => '已下架', 'listing_status' => 'expired'], 200);
+    }
+
+    /**
+     * 接口 I：续期  POST /api/v1/local-life/posts/{id}/renew
+     * listing_status -> active + expires_at 重置 now+60 天(封顶 created_at+180 天硬顶)。
+     * - 联系方式已被 PII 到期清(contact_info 空) → 拒绝，引导重发(空联系方式的活帖无意义)。
+     * - 超 180 天总寿命 → 拒绝，引导重发(封顶 PII 留存, L1-7)。
+     * expired / sold 态均可续回 active(HANDOFF §C.10)。
+     */
+    public function renew(Request $request, $id)
+    {
+        $post = $this->ownedPost($id);
+        if (!$post) {
+            return response()->json(['errors' => [['code' => 'post', 'message' => '帖子不存在']]], 404);
+        }
+        if (trim((string) $post->contact_info) === '') {
+            return response()->json(['errors' => [['code' => 'purged', 'message' => '联系方式已过期清除，请重新发布']]], 422);
+        }
+        $created = $post->created_at ?: Carbon::now();
+        $hardCap = $created->copy()->addDays(180);
+        if (Carbon::now()->gte($hardCap)) {
+            return response()->json(['errors' => [['code' => 'cap', 'message' => '该信息已达最长展示期（180 天），请重新发布']]], 422);
+        }
+        $newExpiry = Carbon::now()->addDays(60);
+        if ($newExpiry->gt($hardCap)) {
+            $newExpiry = $hardCap; // 不越过总寿命硬顶
+        }
+        $post->listing_status = LocalLifePost::LISTING_ACTIVE;
+        $post->expires_at = $newExpiry;
+        $post->save();
+        return response()->json([
+            'message'        => '已续期，将继续展示',
+            'listing_status' => 'active',
+            'expires_at'     => $post->expires_at->toIso8601String(),
+        ], 200);
+    }
+
     /* ============================ 内部工具 ============================ */
+
+    /**
+     * 结构化联系方式 → [合并展示串 contact_info, method, value]。
+     * 新前端传 contact_method(微信/电话/WhatsApp/Telegram)+contact_value；
+     * 旧客户端只传自由文本 contact_info → 原样保留、method/value 置 null(降级)。
+     * contact_info 始终有合并串：供后台展示 / 旧详情渲染 / PII 到期清一致(单一 PII 载体)。
+     */
+    private function composeContact(Request $request): array
+    {
+        $method = trim((string) $request->input('contact_method'));
+        $value  = trim((string) $request->input('contact_value'));
+        $allowed = ['微信', '电话', 'WhatsApp', 'Telegram'];
+        if ($method !== '' && in_array($method, $allowed, true) && $value !== '') {
+            return [$method . '：' . $value, $method, $value];
+        }
+        // 回退旧自由文本
+        $free = trim((string) $request->input('contact_info'));
+        return [$free, null, null];
+    }
 
     private function imageUrls($images): array
     {
