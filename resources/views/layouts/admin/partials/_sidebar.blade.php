@@ -38,26 +38,32 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
 });
 
 /**
- * 哪吒超管M1(D1 侧栏配置数组化)。
- * 条目schema: label(可见文本translate键,必填) / title(tooltip translate键,省略则等于label) /
- *   route / icon(仅顶层用) / active(预算好的布尔值) / badge{value,class} / yield(单个或数组,legacy @yield标记) /
- *   extra_class / children(同schema递归,存在则渲染为可展开toggle父项) / hide(true=本轮藏匿,渲染为@if(false)不出现在侧栏但DOM里保留注释) / hide_reason。
- * 组schema: gate(预算好的布尔值) / subtitle(translate键或null) / items。
+ * 哪吒超管M1(D1 侧栏配置数组化 + D3 8组重排)。
+ * 条目schema: label(可见文本translate键,必填) / label_raw(true=label是字面中文,不走translate) /
+ *   title(tooltip translate键,省略则等于label) / title_literal(预拼好的字符串,绕过translate) /
+ *   route / icon(仅顶层用) / active(预算好的布尔值) / expanded(可选,子菜单展开态) / badge{value,class} /
+ *   badge_no_container / yield(单个或数组,legacy @yield标记) / extra_class / li_base / plain_link /
+ *   mini_mode_span / children(同schema递归,存在则渲染为可展开toggle父项) / gate(条目级权限,缺省回退组gate) /
+ *   hide(true=藏,§A清单,渲染为HTML注释不出现在侧栏) / hide_reason。
+ * 组schema: gate(预算好的布尔值) / subtitle(translate键或中文字面,配合subtitle_raw) / subtitle_raw(true=中文直书不走translate) /
+ *   subtitle_title(tooltip translate键) / items。
+ * D3 8组顺序: ①今天(仅数据看板占位,M2建驾驶舱) / ②订单 / ③钱·风控 / ④商家 / ⑤内容·审核 / ⑥顾客·客服 / ⑦洞察 / ⑧系统。
  * 所有值在本次请求渲染时一次性求值,与原文件逐条内联求值等价。
  * 已死/插件态代码块(骑手管理/分账/顾客钱包&钱包报表/TaxModule插件/订阅管理/withdraw/deliveryman-earning-report/addon_menus动态段)
- * 保持原样字面 blade 不纳入本数组,原样保留在文件对应位置。
+ * 保持原样字面 blade 不纳入本数组,原样保留在文件对应位置(TaxModule经raw_include插入⑧系统组内)。
  */
 $__navGroups = [];
 
-// ==== 组: 仪表盘 + POS ====
+// ==== ①今天(M1占位: 数据看板,M2建驾驶舱才改名) ====
 $__navGroups[] = [
     'gate' => true,
     'subtitle' => null,
     'items' => [
-        ['label' => 'messages.dashboard', 'route' => route('admin.dashboard'), 'icon' => 'tio-dashboard-vs',
+        ['label' => '数据看板', 'label_raw' => true, 'route' => route('admin.dashboard'), 'icon' => 'tio-dashboard-vs',
             'active' => Request::is('admin')],
     ],
 ];
+// POS(哪吒M1藏§A#1,D2已处理): 保留原group位置,不并入任何D3新组,藏匿与分组正交
 $__navGroups[] = [
     'gate' => Helpers::module_permission_check('pos'),
     'subtitle' => null,
@@ -67,10 +73,10 @@ $__navGroups[] = [
     ],
 ];
 
-// ==== 组: 订单 ====
+// ==== ②订单 ====
 $__navGroups[] = [
     'gate' => Helpers::module_permission_check('order'),
-    'subtitle' => 'messages.order_management',
+    'subtitle' => '订单', 'subtitle_raw' => true,
     'items' => [
         [
             'label' => 'messages.orders', 'icon' => 'tio-file-text-outlined',
@@ -108,10 +114,10 @@ $__navGroups[] = [
     ],
 ];
 
-// ==== 组: 风控中心(已由SEC/UI-1窗口对齐过权限位,此处逐字节照搬,组gate=4权限位OR,每个子项各自再判自己的权限位) ====
+// ==== ③钱·风控(风控中心原样迁入 + 原"交易/资金管理"组的deposit系5项合并进来;搜索需求/顾客取消理由已按§B移出至⑦洞察) ====
 $__navGroups[] = [
-    'gate' => Helpers::module_permission_check('risk') || Helpers::module_permission_check('risk_settings') || Helpers::module_permission_check('refund') || Helpers::module_permission_check('kyc'),
-    'subtitle' => null,
+    'gate' => Helpers::module_permission_check('risk') || Helpers::module_permission_check('risk_settings') || Helpers::module_permission_check('refund') || Helpers::module_permission_check('kyc') || Helpers::module_permission_check('deposit'),
+    'subtitle' => '钱·风控', 'subtitle_raw' => true,
     'items' => [
         [
             'label' => '风控中心', 'label_raw' => true, 'icon' => 'tio-shield',
@@ -134,19 +140,23 @@ $__navGroups[] = [
                 ] : [],
             ),
         ],
+        ['label' => '佣金充值管理', 'label_raw' => true, 'route' => route('admin.nezha-deposit.index'), 'icon' => 'tio-wallet', 'active' => Request::is('admin/nezha-deposit*'), 'gate' => Helpers::module_permission_check('deposit')],
+        ['label' => '商家退出结算', 'label_raw' => true, 'route' => route('admin.nezha-offboard.index'), 'icon' => 'tio-logout', 'active' => Request::is('admin/nezha-offboard*'), 'gate' => Helpers::module_permission_check('deposit')],
+        ['label' => '充值申请', 'label_raw' => true, 'route' => route('admin.nezha-topup.index'), 'icon' => 'tio-add-circle', 'active' => Request::is('admin/nezha-topup*'), 'gate' => Helpers::module_permission_check('deposit')],
+        ['label' => '押金退款', 'label_raw' => true, 'route' => route('admin.nezha-topup.refunds'), 'icon' => 'tio-undo', 'active' => Request::is('admin/nezha-topup/refunds*'), 'gate' => Helpers::module_permission_check('deposit')],
+        ['label' => '平台集运申报', 'label_raw' => true, 'route' => route('admin.nezha-consolidation.index'), 'icon' => 'tio-cube', 'active' => Request::is('admin/nezha-consolidation*'), 'gate' => true],
     ],
 ];
 
-// ==== 组: 商家(zone/cuisine/restaurants) ====
+// ==== ④商家(zone_setup未见于§B文字,按"商家基础设施"就近判断留此,判断口径见D3报告) ====
 $__navGroups[] = [
-    'gate' => Helpers::module_permission_check('zone') || Helpers::module_permission_check('restaurant'),
-    'subtitle' => 'messages.restaurant_management', 'subtitle_title' => 'messages.restaurant_section',
+    'gate' => Helpers::module_permission_check('zone') || Helpers::module_permission_check('restaurant') || Helpers::module_permission_check('nezha_cs'),
+    'subtitle' => '商家', 'subtitle_raw' => true,
     'items' => array_merge(
         Helpers::module_permission_check('zone') ? [
             ['label' => 'messages.zone_setup', 'route' => route('admin.zone.home'), 'icon' => 'tio-poi-outlined', 'active' => Request::is('admin/zone*')],
         ] : [],
         Helpers::module_permission_check('restaurant') ? [
-            ['label' => 'messages.cuisine', 'route' => route('admin.cuisine.add'), 'icon' => 'tio-link', 'active' => Request::is('admin/cuisine/add')],
             [
                 'label' => 'messages.restaurants', 'icon' => 'tio-restaurant',
                 'active' => (Request::is('admin/restaurant/*') && !Request::is('admin/restaurant/withdraw_list') && !Request::is('admin/restaurant/withdraw-view*')),
@@ -161,15 +171,22 @@ $__navGroups[] = [
                     ['label' => 'messages.bulk_export', 'route' => route('admin.restaurant.bulk-export-index'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/restaurant/bulk-export')],
                 ],
             ],
+            ['label' => '商家入驻申请', 'label_raw' => true, 'route' => route('admin.merchant-lead.list'), 'icon' => 'tio-shop', 'active' => Request::is('admin/merchant-lead/*')],
         ] : [],
+        [
+            ['label' => '商家反馈', 'label_raw' => true, 'route' => route('admin.vendor-feedback.index'), 'icon' => 'tio-comment-text-outlined', 'active' => Request::is('admin/vendor-feedback*'), 'gate' => Helpers::module_permission_check('nezha_cs')],
+        ],
     ),
 ];
 
-// ==== 组: 食品(category/addon/food) ====
+// ==== ⑤内容·审核(addon 034-036未见于§B文字,按"食品配置"域就近归入,判断口径见D3报告) ====
 $__navGroups[] = [
-    'gate' => Helpers::module_permission_check('category') || Helpers::module_permission_check('addon') || Helpers::module_permission_check('food'),
-    'subtitle' => 'messages.food_management', 'subtitle_title' => 'messages.food_section',
+    'gate' => Helpers::module_permission_check('restaurant') || Helpers::module_permission_check('category') || Helpers::module_permission_check('addon') || Helpers::module_permission_check('food') || Helpers::module_permission_check('campaign') || Helpers::module_permission_check('coupon') || Helpers::module_permission_check('advertisement') || Helpers::module_permission_check('banner') || Helpers::module_permission_check('settings'),
+    'subtitle' => '内容·审核', 'subtitle_raw' => true,
     'items' => array_merge(
+        Helpers::module_permission_check('restaurant') ? [
+            ['label' => 'messages.cuisine', 'route' => route('admin.cuisine.add'), 'icon' => 'tio-link', 'active' => Request::is('admin/cuisine/add')],
+        ] : [],
         Helpers::module_permission_check('category') ? [[
             'label' => 'messages.categories', 'icon' => 'tio-category', 'active' => Request::is('admin/category*'),
             'children' => [
@@ -198,14 +215,6 @@ $__navGroups[] = [
                 ['label' => 'messages.bulk_export', 'route' => route('admin.food.bulk-export-index'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/food/bulk-export')],
             ],
         ]] : [],
-    ),
-];
-
-// ==== 组: 营销(campaign/coupon/cashback/banner/advertisement/notification) ====
-$__navGroups[] = [
-    'gate' => Helpers::module_permission_check('campaign') || Helpers::module_permission_check('coupon') || Helpers::module_permission_check('cashback') || Helpers::module_permission_check('advertisement') || Helpers::module_permission_check('notification') || Helpers::module_permission_check('banner'),
-    'subtitle' => 'Promotions_management', 'subtitle_title' => 'Promotion_management',
-    'items' => array_merge(
         Helpers::module_permission_check('campaign') ? [[
             'label' => 'messages.campaigns', 'icon' => 'tio-notice', 'active' => Request::is('admin/campaign*'),
             'children' => [
@@ -235,42 +244,28 @@ $__navGroups[] = [
                 ['label' => '广告余额充值', 'label_raw' => true, 'route' => route('admin.advertisement.ad-recharge'), 'active' => false, 'yield' => 'advertisement_recharge'],
             ],
         ]] : [],
-        Helpers::module_permission_check('notification') ? [
-            ['label' => 'messages.push_notification', 'route' => route('admin.notification.add-new'), 'icon' => 'tio-notifications-on', 'active' => Request::is('admin/notification*')],
-        ] : [],
+        [
+            ['label' => '本地生活', 'label_raw' => true, 'route' => route('admin.local-life.list'), 'icon' => 'tio-poi-outlined', 'active' => Request::is('admin/local-life*'), 'gate' => Helpers::module_permission_check('settings')],
+            ['label' => '本地生活类目', 'label_raw' => true, 'route' => route('admin.local-life.categories.list'), 'icon' => 'tio-folder-labeled', 'active' => Request::is('admin/local-life/categories*'), 'gate' => Helpers::module_permission_check('settings')],
+            ['label' => '本地生活商家', 'label_raw' => true, 'route' => route('admin.local-life.merchants.list'), 'icon' => 'tio-shop-outlined', 'active' => Request::is('admin/local-life/merchants*'), 'gate' => Helpers::module_permission_check('settings')],
+            ['label' => '举报商家', 'label_raw' => true, 'route' => route('admin.restaurant-report.list'), 'icon' => 'tio-flag', 'active' => Request::is('admin/restaurant-report*'), 'gate' => Helpers::module_permission_check('settings') && Helpers::module_permission_check('restaurant')],
+        ],
     ),
 ];
 
-// ==== 组: 帮助与支持(subtitle闸=chat||contact_message,与下属nezha_cs/vendor_feedback各自独立闸不同——原文件既有的不一致,逐字节保留不"顺手修") ====
+// ==== ⑥顾客·客服(帮助与支持组的nezha-cs/Chattings/Contact + 营销组的push_notification + 顾客组customerList/subscribed 合并) ====
 $__navGroups[] = [
-    'gate' => Helpers::module_permission_check('chat') || Helpers::module_permission_check('contact_message'),
-    'subtitle' => 'messages.Help_&_Support',
-    'items' => [
-        ['label' => 'messages.Chattings', 'route' => route('admin.message.list', ['tab' => 'customer']), 'icon' => 'tio-chat', 'active' => Request::is('admin/message/list'), 'gate' => Helpers::module_permission_check('chat')],
-        ['label' => 'AI在线客服', 'label_raw' => true, 'route' => route('admin.nezha-cs.index'), 'icon' => 'tio-online', 'active' => Request::is('admin/nezha-cs*'), 'gate' => Helpers::module_permission_check('nezha_cs')],
-        ['label' => '商家反馈', 'label_raw' => true, 'route' => route('admin.vendor-feedback.index'), 'icon' => 'tio-comment-text-outlined', 'active' => Request::is('admin/vendor-feedback*'), 'gate' => Helpers::module_permission_check('nezha_cs')],
-        ['label' => 'messages.Contact_messages', 'route' => route('admin.contact.list'), 'icon' => 'tio-messages', 'active' => Request::is('admin/contact/*'), 'gate' => Helpers::module_permission_check('contact_message')],
-    ],
-];
-
-// ==== 组: 本地生活+举报商家(settings闸,举报商家额外叠加restaurant闸) + 商家入驻申请(restaurant闸,原文件里是紧随其后的独立@if块,无subtitle) ====
-$__navGroups[] = [
-    'gate' => true,
-    'subtitle' => null,
-    'items' => [
-        ['label' => '本地生活', 'label_raw' => true, 'route' => route('admin.local-life.list'), 'icon' => 'tio-poi-outlined', 'active' => Request::is('admin/local-life*'), 'gate' => Helpers::module_permission_check('settings')],
-        ['label' => '本地生活类目', 'label_raw' => true, 'route' => route('admin.local-life.categories.list'), 'icon' => 'tio-folder-labeled', 'active' => Request::is('admin/local-life/categories*'), 'gate' => Helpers::module_permission_check('settings')],
-        ['label' => '本地生活商家', 'label_raw' => true, 'route' => route('admin.local-life.merchants.list'), 'icon' => 'tio-shop-outlined', 'active' => Request::is('admin/local-life/merchants*'), 'gate' => Helpers::module_permission_check('settings')],
-        ['label' => '举报商家', 'label_raw' => true, 'route' => route('admin.restaurant-report.list'), 'icon' => 'tio-flag', 'active' => Request::is('admin/restaurant-report*'), 'gate' => Helpers::module_permission_check('settings') && Helpers::module_permission_check('restaurant')],
-        ['label' => '商家入驻申请', 'label_raw' => true, 'route' => route('admin.merchant-lead.list'), 'icon' => 'tio-shop', 'active' => Request::is('admin/merchant-lead/*'), 'gate' => Helpers::module_permission_check('restaurant')],
-    ],
-];
-
-// ==== 组: 顾客(customerList||customer_wallet;顾客钱包已死@if(false)不迁移入数组,原样留在文件里) ====
-$__navGroups[] = [
-    'gate' => Helpers::module_permission_check('customerList') || Helpers::module_permission_check('customer_wallet'),
-    'subtitle' => 'messages.customer_management', 'subtitle_title' => 'messages.customer_section',
+    'gate' => Helpers::module_permission_check('chat') || Helpers::module_permission_check('nezha_cs') || Helpers::module_permission_check('contact_message') || Helpers::module_permission_check('notification') || Helpers::module_permission_check('customerList'),
+    'subtitle' => '顾客·客服', 'subtitle_raw' => true,
     'items' => array_merge(
+        [
+            ['label' => 'messages.Chattings', 'route' => route('admin.message.list', ['tab' => 'customer']), 'icon' => 'tio-chat', 'active' => Request::is('admin/message/list'), 'gate' => Helpers::module_permission_check('chat')],
+            ['label' => 'AI在线客服', 'label_raw' => true, 'route' => route('admin.nezha-cs.index'), 'icon' => 'tio-online', 'active' => Request::is('admin/nezha-cs*'), 'gate' => Helpers::module_permission_check('nezha_cs')],
+            ['label' => 'messages.Contact_messages', 'route' => route('admin.contact.list'), 'icon' => 'tio-messages', 'active' => Request::is('admin/contact/*'), 'gate' => Helpers::module_permission_check('contact_message')],
+        ],
+        Helpers::module_permission_check('notification') ? [
+            ['label' => 'messages.push_notification', 'route' => route('admin.notification.add-new'), 'icon' => 'tio-notifications-on', 'active' => Request::is('admin/notification*')],
+        ] : [],
         Helpers::module_permission_check('customerList') ? [
             ['label' => 'messages.customeres', 'title' => 'messages.Customer_List', 'route' => route('admin.customer.list'), 'icon' => 'tio-poi-user', 'active' => false, 'yield' => 'customerDetails'],
             [
@@ -285,75 +280,64 @@ $__navGroups[] = [
     ),
 ];
 
-// ==== 组: 报表(report闸;骑手/分账相关报表·顾客钱包报表·骑手收入报表 已死@if(false)不迁移) ====
+// ==== ⑦洞察(留4张报表 + 搜索需求/顾客取消理由;原两个2子项父级拆分,非留4张的子项挪入⑧报表存档折叠) ====
 $__navGroups[] = [
-    'gate' => Helpers::module_permission_check('report'),
-    'subtitle' => 'messages.report_management', 'subtitle_title' => 'messages.report_and_analytics',
+    'gate' => true,
+    'subtitle' => '洞察', 'subtitle_raw' => true,
     'items' => [
-        ['label' => 'messages.transaction_report', 'route' => route('admin.report.day-wise-report'), 'icon' => 'tio-chart-pie-1', 'active' => Request::is('admin/report/transaction-report'), 'plain_link' => true],
-        ['label' => 'messages.expense_report', 'route' => route('admin.report.expense-report'), 'icon' => 'tio-image', 'active' => Request::is('admin/report/expense-report'), 'plain_link' => true],
-        [
-            'label' => 'messages.disbursement_report', 'icon' => 'tio-saving',
-            'active' => Request::is('admin/report/disbursement-report/restaurant') || Request::is('admin/report/disbursement-report/delivery_man'),
-            'hide' => true, 'hide_reason' => '哪吒M1藏(§A#11): 结算腿危险面同§A#5语义,disbursement_restaurant/dm恒0(L1-5打款腿已拔)',
-            'children' => [
-                ['label' => 'messages.restaurants', 'route' => route('admin.report.disbursement_report', ['tab' => 'restaurant']), 'active' => Request::is('admin/report/disbursement-report/restaurant'), 'li_base' => 'navbar-vertical-aside-has-menu', 'plain_link' => true],
-                ['label' => 'messages.delivery_men', 'route' => route('admin.report.disbursement_report', ['tab' => 'delivery_man']), 'active' => Request::is('admin/report/disbursement-report/delivery_man'), 'li_base' => 'navbar-vertical-aside-has-menu', 'plain_link' => true],
-            ],
-        ],
-        ['label' => 'messages.food_report', 'route' => route('admin.report.food-wise-report'), 'icon' => 'tio-fastfood', 'active' => Request::is('admin/report/food-wise-report'), 'plain_link' => true],
-        [
-            'label' => 'messages.Order_Report', 'icon' => 'tio-user',
-            'active' => Request::is('admin/report/order-report') || Request::is('admin/report/campaign-order-report'),
-            'children' => [
-                ['label' => 'messages.Regular_order_report', 'title' => 'messages.order_report', 'route' => route('admin.report.order-report'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/report/order-report'), 'li_base' => 'navbar-vertical-aside-has-menu', 'plain_link' => true],
-                ['label' => 'messages.Campaign_Order_Report', 'route' => route('admin.report.campaign_order-report'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/report/campaign-order-report'), 'li_base' => 'navbar-vertical-aside-has-menu', 'plain_link' => true],
-            ],
-        ],
-        [
-            'label' => 'messages.restaurant_report', 'icon' => 'tio-files',
-            'active' => Request::is('admin/report/subscription-report') || Request::is('admin/report/restaurant-report'),
-            'children' => array_merge(
-                [['label' => 'messages.restaurant_report', 'route' => route('admin.report.restaurant-report'), 'active' => Request::is('admin/report/restaurant-report'), 'li_base' => 'navbar-vertical-aside-has-menu', 'plain_link' => true]],
-                (Helpers::subscription_check() == true) ? [['label' => 'messages.Subscription_report', 'route' => route('admin.report.subscription-report'), 'active' => Request::is('admin/report/subscription-report'), 'li_base' => 'navbar-vertical-aside-has-menu', 'plain_link' => true]] : [],
-            ),
-        ],
-        [
-            'label' => 'messages.Customer_Report', 'icon' => 'tio-poi-user',
-            'active' => Request::is('admin/customer/wallet/report*'),
-            'expanded' => Request::is('admin/customer/wallet/report*') || Request::is('admin/customer/overview/report*'),
-            'children' => [
-                ['label' => 'messages.Customer_Overview_Report', 'route' => route('admin.customer.overview.report'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/customer/overview/report*')],
-            ],
-        ],
-        ['label' => 'Tax_Report', 'route' => route('admin.report.getTaxReport'), 'icon' => 'tio-albums', 'active' => false, 'yield' => 'tax_report', 'extra_class' => 'text-capitalize', 'plain_link' => true],
-        ['label' => 'Restaurant_VAT_Report', 'route' => route('admin.report.vendorWiseTaxes'), 'icon' => 'tio-american-express', 'active' => false, 'yield' => 'vendor_tax_report', 'extra_class' => 'text-capitalize', 'plain_link' => true],
-        ['label' => 'Admin_Earning_Report', 'route' => route('admin.report.admin-earning-report'), 'icon' => 'tio-account-circle', 'active' => false, 'yield' => 'admin_earning_report', 'extra_class' => 'text-capitalize', 'plain_link' => true],
-        ['label' => 'Restaurant_Earning_Report', 'route' => route('admin.report.restaurant-earning-report'), 'icon' => 'tio-align-to-bottom', 'active' => Request::is('admin/report/restaurant-earning-report*'), 'yield' => 'restaurant_earning_report', 'extra_class' => 'text-capitalize', 'plain_link' => true],
-    ],
-];
-
-// ==== 组: 交易/资金管理(subtitle闸=account||deposit||withdraw_list||provide_dm_earning;注意集运申报/搜索需求/顾客取消理由三项原文件完全无权限闸,不受subtitle闸影响恒渲染;收现金/提现列表/提现方式已死@if(false)不迁移) ====
-$__navGroups[] = [
-    'gate' => Helpers::module_permission_check('account') || Helpers::module_permission_check('deposit') || Helpers::module_permission_check('withdraw_list') || Helpers::module_permission_check('provide_dm_earning'),
-    'subtitle' => 'messages.transaction_management', 'subtitle_title' => 'messages.business_section',
-    'items' => [
-        ['label' => '佣金充值管理', 'label_raw' => true, 'route' => route('admin.nezha-deposit.index'), 'icon' => 'tio-wallet', 'active' => Request::is('admin/nezha-deposit*'), 'gate' => Helpers::module_permission_check('deposit')],
-        ['label' => '商家退出结算', 'label_raw' => true, 'route' => route('admin.nezha-offboard.index'), 'icon' => 'tio-logout', 'active' => Request::is('admin/nezha-offboard*'), 'gate' => Helpers::module_permission_check('deposit')],
-        ['label' => '充值申请', 'label_raw' => true, 'route' => route('admin.nezha-topup.index'), 'icon' => 'tio-add-circle', 'active' => Request::is('admin/nezha-topup*'), 'gate' => Helpers::module_permission_check('deposit')],
-        ['label' => '押金退款', 'label_raw' => true, 'route' => route('admin.nezha-topup.refunds'), 'icon' => 'tio-undo', 'active' => Request::is('admin/nezha-topup/refunds*'), 'gate' => Helpers::module_permission_check('deposit')],
-        ['label' => '平台集运申报', 'label_raw' => true, 'route' => route('admin.nezha-consolidation.index'), 'icon' => 'tio-cube', 'active' => Request::is('admin/nezha-consolidation*'), 'gate' => true],
         ['label' => '搜索需求', 'label_raw' => true, 'route' => route('admin.nezha-search-demand.index'), 'icon' => 'tio-search', 'active' => Request::is('admin/nezha-search-demand*'), 'gate' => true],
         ['label' => '顾客取消理由', 'label_raw' => true, 'route' => route('admin.nezha-order-cancel-demand.index'), 'icon' => 'tio-clear-circle', 'active' => Request::is('admin/nezha-order-cancel-demand*'), 'gate' => true],
-        ['label' => 'messages.DeliveryMan_Payments', 'route' => route('admin.provide-deliveryman-earnings.index'), 'icon' => 'tio-send', 'active' => Request::is('admin/provide-deliveryman-earnings*'), 'gate' => Helpers::module_permission_check('provide_dm_earning'), 'hide' => true, 'hide_reason' => '哪吒M1藏(§A#6/#9): 平台无自营骑手·不打款(L1-5打款腿已拔),provide_dm_earning恒0'],
+        ['label' => 'messages.transaction_report', 'route' => route('admin.report.day-wise-report'), 'icon' => 'tio-chart-pie-1', 'active' => Request::is('admin/report/transaction-report'), 'plain_link' => true, 'gate' => Helpers::module_permission_check('report')],
+        ['label' => 'messages.Regular_order_report', 'title' => 'messages.order_report', 'route' => route('admin.report.order-report'), 'icon' => 'tio-user', 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/report/order-report'), 'plain_link' => true, 'gate' => Helpers::module_permission_check('report')],
+        ['label' => 'messages.restaurant_report', 'route' => route('admin.report.restaurant-report'), 'icon' => 'tio-files', 'active' => Request::is('admin/report/restaurant-report'), 'plain_link' => true, 'gate' => Helpers::module_permission_check('report')],
+        ['label' => 'Admin_Earning_Report', 'route' => route('admin.report.admin-earning-report'), 'icon' => 'tio-account-circle', 'active' => false, 'yield' => 'admin_earning_report', 'extra_class' => 'text-capitalize', 'plain_link' => true, 'gate' => Helpers::module_permission_check('report')],
     ],
 ];
 
-// ==== 组: 员工管理(custom_role||employee) ====
+// ==== ⑧系统 ====
 $__navGroups[] = [
-    'gate' => Helpers::module_permission_check('custom_role') || Helpers::module_permission_check('employee'),
-    'subtitle' => 'messages.Employee_Management', 'subtitle_title' => 'messages.employee_handle',
+    'gate' => Helpers::module_permission_check('settings') || Helpers::module_permission_check('system_settings') || Helpers::module_permission_check('system_addon') || Helpers::module_permission_check('custom_role') || Helpers::module_permission_check('employee') || Helpers::module_permission_check('audit') || Helpers::module_permission_check('report'),
+    'subtitle' => '系统', 'subtitle_raw' => true,
     'items' => array_merge(
+        Helpers::module_permission_check('settings') ? [
+            ['label' => 'messages.business_setup', 'route' => route('admin.business-settings.business-setup'), 'icon' => 'tio-settings',
+                'active' => (Request::is('admin/business-settings/business-setup*') || Request::is('admin/business-settings/refund/settings*') || Request::is('admin/business-settings/language*')), 'plain_link' => true],
+            ['label' => 'messages.email_template', 'route' => route('admin.business-settings.email-setup', ['admin', 'forgot-password']), 'icon' => 'tio-email', 'active' => Request::is('admin/business-settings/email-setup*'), 'plain_link' => true],
+            [
+                'label' => '政策页', 'label_raw' => true, 'icon' => 'tio-pages',
+                'active' => Request::is('admin/business-settings/pages*'),
+                'children' => [
+                    ['label' => 'messages.terms_and_condition', 'route' => route('admin.business-settings.terms-and-conditions'), 'active' => Request::is('admin/business-settings/pages/terms-and-conditions')],
+                    ['label' => 'messages.privacy_policy', 'route' => route('admin.business-settings.privacy-policy'), 'active' => Request::is('admin/business-settings/pages/privacy-policy')],
+                    ['label' => 'messages.about_us', 'route' => route('admin.business-settings.about-us'), 'active' => Request::is('admin/business-settings/pages/about-us')],
+                    ['label' => 'messages.refund_policy', 'route' => route('admin.business-settings.refund-policy'), 'active' => Request::is('admin/business-settings/pages/refund-policy')],
+                    ['label' => 'messages.shipping_policy', 'route' => route('admin.business-settings.shipping-policy'), 'active' => Request::is('admin/business-settings/pages/shipping-policy')],
+                    ['label' => 'messages.cancellation_policy', 'route' => route('admin.business-settings.cancellation-policy'), 'active' => Request::is('admin/business-settings/pages/cancellation-policy')],
+                ],
+            ],
+            [
+                'label' => '第三方与集成', 'label_raw' => true, 'icon' => 'tio-plugin', 'yield' => '3rd_party',
+                'active' => (Request::is('admin/business-settings/fcm-*') || Request::is('admin/business-settings/payment-method') || Request::is('admin/business-settings/sms-module') || Request::is('admin/business-settings/mail-config') || Request::is('admin/social-login/view') || Request::is('admin/business-settings/offline*') || Request::is('admin/business-settings/config*') || Request::is('admin/business-settings/recaptcha*') || Request::is('admin/business-settings/*')),
+                'expanded' => (Request::is('admin/business-settings/deliveryman/join-us/*') || Request::is('admin/business-settings/restaurant/join-us/*') || Request::is('admin/business-settings/fcm-*') || Request::is('admin/business-settings/payment-method') || Request::is('admin/business-settings/sms-module') || Request::is('admin/business-settings/mail-config') || Request::is('admin/social-login/view') || Request::is('admin/business-settings/config*') || Request::is('admin/business-settings/recaptcha*') || Request::is('admin/business-settings/offline*') || Request::is('admin/business-settings/marketing/*') || Request::is('admin/business-settings/open-ai') || Request::is('admin/business-settings/open-ai-settings') || Request::is('admin/business-settings/firebase-otp*') || Request::is('admin/business-settings/storage-connection*') || Request::is('admin/business-settings/notification-setup*') || Request::is('admin/business-settings/notificationMessages*')),
+                'children' => array_merge(
+                    [
+                        ['label' => 'messages.3rd_Party', 'route' => route('admin.business-settings.payment-method'), 'yield' => ['firebase_otp', 'storage'],
+                            'active' => (Request::is('admin/business-settings/payment-method') || Request::is('admin/business-settings/sms-module') || Request::is('admin/business-settings/mail-config') || Request::is('admin/social-login/view') || Request::is('admin/business-settings/config*') || Request::is('admin/business-settings/recaptcha*'))],
+                        ['label' => 'messages.Firebase_Notification', 'route' => route('admin.business-settings.fcm-index'), 'active' => Request::is('admin/business-settings/fcm-*')],
+                    ],
+                    Helpers::get_mail_status('offline_payment_status') ? [
+                        ['label' => 'messages.Offline_Payment_Setup', 'route' => route('admin.business-settings.offline'), 'active' => Request::is('admin/business-settings/offline*')],
+                    ] : [],
+                    [
+                        ['label' => 'messages.Join_us_page_setup', 'route' => route('admin.business-settings.restaurant_page_setup'), 'active' => false, 'yield' => 'reg_page'],
+                        ['label' => 'Analytics_Script', 'route' => route('admin.business-settings.marketing.analytic'), 'active' => false, 'yield' => 'analytics_Script'],
+                        ['label' => 'AI_Setup', 'route' => route('admin.business-settings.openAI'), 'active' => false, 'yield' => 'openAI'],
+                        ['label' => 'messages.Notification_Channels', 'route' => route('admin.business-settings.notification_setup'), 'active' => false, 'yield' => 'notification_setup'],
+                        ['label' => 'messages.Notification_Messages', 'route' => route('admin.business-settings.notificationMessages'), 'active' => false, 'yield' => 'notification_message'],
+                    ],
+                ),
+            ],
+        ] : [],
         Helpers::module_permission_check('custom_role') ? [
             ['label' => 'messages.employee_Role', 'route' => route('admin.custom-role.create'), 'icon' => 'tio-incognito', 'active' => Request::is('admin/custom-role*')],
         ] : [],
@@ -364,97 +348,67 @@ $__navGroups[] = [
                 ['label' => 'messages.Employee_List', 'title' => 'messages.Employee_list', 'route' => route('admin.employee.list'), 'active' => (Request::is('admin/employee/list') || Request::is('admin/employee/update/*'))],
             ],
         ]] : [],
-    ),
-];
-
-// ==== 组: 业务设置(settings闸;TaxModule插件块+订阅管理块 原样保留字面blade,不迁移入数组——两者均已知恒不可见,迁移收益为零风险不为零,详见D1提交说明) ====
-$__navGroups[] = [
-    'gate' => Helpers::module_permission_check('settings'),
-    'subtitle' => 'messages.business_settings', 'subtitle_title' => 'messages.business_settings',
-    'items' => [
-        ['label' => 'messages.business_setup', 'route' => route('admin.business-settings.business-setup'), 'icon' => 'tio-settings',
-            'active' => (Request::is('admin/business-settings/business-setup*') || Request::is('admin/business-settings/refund/settings*') || Request::is('admin/business-settings/language*')), 'plain_link' => true],
-    ],
-];
-// ---- 原文件此处紧接 TaxModule插件块 + 订阅管理块(均嵌套在settings闸内,见 raw_blocks 片段),真实环境TaxModule addon已发布会渲染,位置不可挪动 ----
-$__navGroups[] = ['raw_include' => 'layouts.admin.partials._sidebar-raw-taxmodule-subscription'];
-$__navGroups[] = [
-    'gate' => Helpers::module_permission_check('settings'),
-    'subtitle' => null,
-    'items' => [
-        ['label' => 'messages.email_template', 'route' => route('admin.business-settings.email-setup', ['admin', 'forgot-password']), 'icon' => 'tio-email', 'active' => Request::is('admin/business-settings/email-setup*'), 'plain_link' => true],
-        ['label' => 'messages.theme_settings', 'route' => route('admin.business-settings.theme-settings'), 'icon' => 'tio-brush', 'active' => Request::is('admin/business-settings/theme-settings*'), 'plain_link' => true],
-        ['label' => 'messages.gallery', 'route' => route('admin.file-manager.index'), 'icon' => 'tio-album', 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/file-manager*'), 'plain_link' => true],
-        ['label' => 'messages.login_setup', 'route' => route('admin.login-settings.index'), 'icon' => 'tio-devices-apple', 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/login-settings*'), 'plain_link' => true],
-        ['label' => 'messages.invoice_setup', 'route' => route('admin.business-settings.invoice-setup'), 'icon' => 'tio-receipt', 'active' => Request::is('admin/business-settings/invoice-setup*'), 'plain_link' => true],
-        [
-            'label' => 'messages.Pages_&_Social_Media', 'icon' => 'tio-pages',
-            'active' => (Request::is('admin/business-settings/pages*') || Request::is('admin/business-settings/social-media') || Request::is('admin/business-settings/registration-page/react*')),
+        Helpers::module_permission_check('audit') ? [
+            ['label' => '安全审计日志', 'label_raw' => true, 'route' => route('admin.nezha-audit.logs'), 'icon' => 'tio-file-lock', 'active' => Request::is('admin/nezha-audit*')],
+        ] : [],
+        Helpers::module_permission_check('settings') ? [[
+            'label' => '装配', 'label_raw' => true, 'icon' => 'tio-puzzle',
+            'active' => (Request::is('admin/business-settings/theme-settings*') || Request::is('admin/file-manager*') || Request::is('admin/login-settings*') || Request::is('admin/business-settings/invoice-setup*') || Request::is('admin/business-settings/social-media') || Request::is('admin/business-settings/registration-page/react*') || Request::is('admin/business-settings/app-settings*') || Request::is('admin/page-meta-data*') || Request::is('admin/addon-activation*') || Request::is('admin/react-landing-page*') || Request::is('admin/landing-page*')),
             'children' => [
-                ['label' => 'messages.Social_Media', 'route' => route('admin.business-settings.social-media.index'), 'active' => Request::is('admin/business-settings/social-media'), 'li_base' => 'navbar-vertical-aside-has-menu', 'plain_link' => true],
-                ['label' => 'messages.terms_and_condition', 'route' => route('admin.business-settings.terms-and-conditions'), 'active' => Request::is('admin/business-settings/pages/terms-and-conditions')],
-                ['label' => 'messages.privacy_policy', 'route' => route('admin.business-settings.privacy-policy'), 'active' => Request::is('admin/business-settings/pages/privacy-policy')],
-                ['label' => 'messages.about_us', 'route' => route('admin.business-settings.about-us'), 'active' => Request::is('admin/business-settings/pages/about-us')],
-                ['label' => 'messages.refund_policy', 'route' => route('admin.business-settings.refund-policy'), 'active' => Request::is('admin/business-settings/pages/refund-policy')],
-                ['label' => 'messages.shipping_policy', 'route' => route('admin.business-settings.shipping-policy'), 'active' => Request::is('admin/business-settings/pages/shipping-policy')],
-                ['label' => 'messages.cancellation_policy', 'route' => route('admin.business-settings.cancellation-policy'), 'active' => Request::is('admin/business-settings/pages/cancellation-policy')],
+                ['label' => 'messages.theme_settings', 'route' => route('admin.business-settings.theme-settings'), 'active' => Request::is('admin/business-settings/theme-settings*')],
+                ['label' => 'messages.gallery', 'route' => route('admin.file-manager.index'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/file-manager*')],
+                ['label' => 'messages.login_setup', 'route' => route('admin.login-settings.index'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/login-settings*')],
+                ['label' => 'messages.invoice_setup', 'route' => route('admin.business-settings.invoice-setup'), 'active' => Request::is('admin/business-settings/invoice-setup*')],
+                ['label' => 'messages.Social_Media', 'route' => route('admin.business-settings.social-media.index'), 'active' => Request::is('admin/business-settings/social-media')],
                 ['label' => 'messages.react_registration', 'route' => route('admin.business-settings.react-registration-page.hero'), 'active' => Request::is('admin/business-settings/registration-page/react*')],
-            ],
-        ],
-    ],
-];
-
-// ==== 组: 系统设置(system_settings闸) ====
-$__navGroups[] = [
-    'gate' => Helpers::module_permission_check('system_settings'),
-    'subtitle' => 'messages.system_settings', 'subtitle_title' => 'messages.system_settings',
-    'items' => [
-        [
-            'label' => 'messages.3rd_Party_&_Configurations', 'icon' => 'tio-plugin', 'yield' => '3rd_party',
-            'active' => (Request::is('admin/business-settings/fcm-*') || Request::is('admin/business-settings/payment-method') || Request::is('admin/business-settings/sms-module') || Request::is('admin/business-settings/mail-config') || Request::is('admin/social-login/view') || Request::is('admin/business-settings/offline*') || Request::is('admin/business-settings/config*') || Request::is('admin/business-settings/recaptcha*') || Request::is('admin/business-settings/*')),
-            'expanded' => (Request::is('admin/business-settings/deliveryman/join-us/*') || Request::is('admin/business-settings/restaurant/join-us/*') || Request::is('admin/business-settings/fcm-*') || Request::is('admin/business-settings/payment-method') || Request::is('admin/business-settings/sms-module') || Request::is('admin/business-settings/mail-config') || Request::is('admin/social-login/view') || Request::is('admin/business-settings/config*') || Request::is('admin/business-settings/recaptcha*') || Request::is('admin/business-settings/offline*') || Request::is('admin/business-settings/marketing/*') || Request::is('admin/business-settings/open-ai') || Request::is('admin/business-settings/open-ai-settings') || Request::is('admin/business-settings/firebase-otp*') || Request::is('admin/business-settings/storage-connection*')),
-            'children' => array_merge(
-                [
-                    ['label' => 'messages.3rd_Party', 'route' => route('admin.business-settings.payment-method'), 'yield' => ['firebase_otp', 'storage'],
-                        'active' => (Request::is('admin/business-settings/notification-setup*') || Request::is('admin/business-settings/payment-method') || Request::is('admin/business-settings/sms-module') || Request::is('admin/business-settings/mail-config') || Request::is('admin/social-login/view') || Request::is('admin/business-settings/config*') || Request::is('admin/business-settings/recaptcha*'))],
-                    ['label' => 'messages.Firebase_Notification', 'route' => route('admin.business-settings.fcm-index'), 'active' => Request::is('admin/business-settings/fcm-*')],
-                ],
-                Helpers::get_mail_status('offline_payment_status') ? [
-                    ['label' => 'messages.Offline_Payment_Setup', 'route' => route('admin.business-settings.offline'), 'active' => Request::is('admin/business-settings/offline*')],
-                ] : [],
-                [
-                    ['label' => 'messages.Join_us_page_setup', 'route' => route('admin.business-settings.restaurant_page_setup'), 'active' => false, 'yield' => 'reg_page'],
-                    ['label' => 'Analytics_Script', 'route' => route('admin.business-settings.marketing.analytic'), 'active' => false, 'yield' => 'analytics_Script'],
-                    ['label' => 'AI_Setup', 'route' => route('admin.business-settings.openAI'), 'active' => false, 'yield' => 'openAI'],
-                ],
-            ),
-        ],
-        ['label' => 'messages.App_&_Web_Settings', 'route' => route('admin.business-settings.app-settings'), 'icon' => 'tio-android', 'active' => Request::is('admin/business-settings/app-settings*'), 'plain_link' => true],
-        ['label' => 'messages.Notification_Channels', 'route' => route('admin.business-settings.notification_setup'), 'icon' => 'tio-snooze-notification', 'active' => false, 'yield' => 'notification_setup', 'plain_link' => true],
-        ['label' => 'messages.Notification_Messages', 'route' => route('admin.business-settings.notificationMessages'), 'icon' => 'tio-notifications-on-outlined', 'active' => false, 'yield' => 'notification_message', 'plain_link' => true],
-        [
-            'label' => 'messages.landing_page_settings', 'icon' => 'tio-files',
-            'active' => (Request::is('admin/react-landing-page*') || Request::is('admin/landing-page*')),
-            'children' => [
+                ['label' => 'messages.App_&_Web_Settings', 'route' => route('admin.business-settings.app-settings'), 'active' => Request::is('admin/business-settings/app-settings*')],
+                ['label' => 'Page_Meta_data', 'route' => route('admin.pageMetaData'), 'active' => Request::is('admin/page-meta-data*')],
+                ['label' => 'messages.Addon_Activation', 'route' => route('admin.addon-activation.index'), 'active' => Request::is('admin/addon-activation*')],
                 ['label' => 'messages.Admin_landing_page', 'route' => route('admin.landing_page.setup'), 'active' => Request::is('admin/landing-page*'), 'mini_mode_span' => true],
                 ['label' => 'messages.React_landing_page', 'route' => route('admin.react_landing_page.react_header'), 'active' => Request::is('admin/react-landing-page*'), 'mini_mode_span' => true],
+                ['label' => 'messages.system_addons', 'route' => route('admin.business-settings.system-addon.index'), 'active' => Request::is('admin/business-settings/system-addon'), 'gate' => Helpers::module_permission_check('system_addon')],
             ],
+        ]] : [],
+        Helpers::module_permission_check('settings') ? [[
+            'label' => '危险区', 'label_raw' => true, 'icon' => 'tio-warning-outlined',
+            'active' => Request::is('admin/business-settings/db-index'),
+            'children' => [
+                ['label' => 'messages.clean_database', 'route' => route('admin.business-settings.db-index'), 'active' => Request::is('admin/business-settings/db-index')],
+            ],
+        ]] : [],
+        Helpers::module_permission_check('report') ? [[
+            'label' => '报表(存档)', 'label_raw' => true, 'icon' => 'tio-archive',
+            'active' => (Request::is('admin/report/expense-report') || Request::is('admin/report/food-wise-report') || Request::is('admin/report/campaign-order-report') || Request::is('admin/customer/overview/report*') || Request::is('admin/report/getTaxReport') || Request::is('admin/report/vendorWiseTaxes') || Request::is('admin/report/restaurant-earning-report*') || Request::is('admin/report/subscription-report')),
+            'children' => array_merge(
+                [
+                    ['label' => 'messages.expense_report', 'route' => route('admin.report.expense-report'), 'active' => Request::is('admin/report/expense-report'), 'plain_link' => true],
+                    ['label' => 'messages.food_report', 'route' => route('admin.report.food-wise-report'), 'active' => Request::is('admin/report/food-wise-report'), 'plain_link' => true],
+                    ['label' => 'messages.Campaign_Order_Report', 'route' => route('admin.report.campaign_order-report'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/report/campaign-order-report'), 'plain_link' => true],
+                    ['label' => 'messages.Customer_Overview_Report', 'route' => route('admin.customer.overview.report'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/customer/overview/report*')],
+                    ['label' => 'Tax_Report', 'route' => route('admin.report.getTaxReport'), 'active' => false, 'yield' => 'tax_report', 'extra_class' => 'text-capitalize', 'plain_link' => true],
+                    ['label' => 'Restaurant_VAT_Report', 'route' => route('admin.report.vendorWiseTaxes'), 'active' => false, 'yield' => 'vendor_tax_report', 'extra_class' => 'text-capitalize', 'plain_link' => true],
+                    ['label' => 'Restaurant_Earning_Report', 'route' => route('admin.report.restaurant-earning-report'), 'active' => Request::is('admin/report/restaurant-earning-report*'), 'yield' => 'restaurant_earning_report', 'extra_class' => 'text-capitalize', 'plain_link' => true],
+                ],
+                (Helpers::subscription_check() == true) ? [['label' => 'messages.Subscription_report', 'route' => route('admin.report.subscription-report'), 'active' => Request::is('admin/report/subscription-report'), 'plain_link' => true]] : [],
+            ),
+        ]] : [],
+        [
+            [
+                'label' => 'messages.disbursement_report', 'icon' => 'tio-saving',
+                'active' => Request::is('admin/report/disbursement-report/restaurant') || Request::is('admin/report/disbursement-report/delivery_man'),
+                'gate' => Helpers::module_permission_check('report'),
+                'hide' => true, 'hide_reason' => '哪吒M1藏(§A#11): 结算腿危险面同§A#5语义,disbursement_restaurant/dm恒0(L1-5打款腿已拔)',
+                'children' => [
+                    ['label' => 'messages.restaurants', 'route' => route('admin.report.disbursement_report', ['tab' => 'restaurant']), 'active' => Request::is('admin/report/disbursement-report/restaurant'), 'li_base' => 'navbar-vertical-aside-has-menu', 'plain_link' => true],
+                    ['label' => 'messages.delivery_men', 'route' => route('admin.report.disbursement_report', ['tab' => 'delivery_man']), 'active' => Request::is('admin/report/disbursement-report/delivery_man'), 'li_base' => 'navbar-vertical-aside-has-menu', 'plain_link' => true],
+                ],
+            ],
+            ['label' => 'messages.DeliveryMan_Payments', 'route' => route('admin.provide-deliveryman-earnings.index'), 'icon' => 'tio-send', 'active' => Request::is('admin/provide-deliveryman-earnings*'), 'gate' => Helpers::module_permission_check('provide_dm_earning'), 'hide' => true, 'hide_reason' => '哪吒M1藏(§A#6/#9): 平台无自营骑手·不打款(L1-5打款腿已拔),provide_dm_earning恒0'],
         ],
-        ['label' => 'Page_Meta_data', 'route' => route('admin.pageMetaData'), 'icon' => 'tio-share-message', 'active' => Request::is('admin/page-meta-data*')],
-        ['label' => 'messages.clean_database', 'route' => route('admin.business-settings.db-index'), 'icon' => 'tio-cloud', 'active' => Request::is('admin/business-settings/db-index')],
-        ['label' => 'messages.Addon_Activation', 'route' => route('admin.addon-activation.index'), 'icon' => 'tio-appointment', 'active' => Request::is('admin/addon-activation*'), 'plain_link' => true],
-    ],
+    ),
 ];
-
-// ==== 组: 系统插件(system_addon闸) ====
-$__navGroups[] = [
-    'gate' => Helpers::module_permission_check('system_addon'),
-    'subtitle' => 'messages.system_addons',
-    'items' => [
-        ['label' => 'messages.system_addons', 'route' => route('admin.business-settings.system-addon.index'), 'icon' => 'tio-add-circle-outlined',
-            'active' => Request::is('admin/business-settings/system-addon'), 'active_extra_token' => 'show'],
-    ],
-];
+// ---- TaxModule插件块 + 订阅管理块(均嵌套在settings闸内,原样字面blade,插入⑧系统组尾部;真实环境TaxModule addon已发布会渲染) ----
+$__navGroups[] = ['raw_include' => 'layouts.admin.partials._sidebar-raw-taxmodule-subscription'];
 
 ?>
 <div id="sidebarMain" class="d-none">
@@ -684,8 +638,8 @@ $__navGroups[] = [
                                         href="{{ route('admin.delivery-man.incentive-history') }}"
                                         title="{{ translate('messages.incentives_history') }}">
                                         <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="text-truncate text-capitalize">{{ translate('messages.incentives_history') }}</span>
+                                        <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
+                                            {{ translate('messages.incentives_history') }}</span>
                                     </a>
                                 </li>
                             </ul>
@@ -856,7 +810,6 @@ $__navGroups[] = [
                     </li>
                 @endif
                 <!-- End Business Settings -->
-
 
 
 
