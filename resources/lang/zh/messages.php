@@ -3293,7 +3293,6 @@
   'See More' => '查看更多',
   'See Less' => '收起',
   'Select Date' => '选择日期',
-  'Select Date Range' => '选择日期范围',
   'Apply' => '应用',
   'product_deleted_successfully' => '商品已删除',
   'After change any setup in this page must click the' => '在此页面修改任何设置后，必须点击',
@@ -6220,4 +6219,5 @@
   'Ratting' => '评分',
   'ratting' => '评分',
   'Incomplete_profile' => '资料未完善',
+  'order_data_unavailable' => '订单数据当前不可见（跨分区）',
 );

@@ -10021,4 +10021,5 @@ characters)',
   '推荐 1200 × 630 · JPG / PNG，≤2MB · 不传则用封面兜底' => '推荐 1200 × 630 · JPG / PNG，≤2MB · 不传则用封面兜底',
   '店铺 Logo 和封面已统一在「门店形象」页管理，这里只看不改。' => '店铺 Logo 和封面已统一在「门店形象」页管理，这里只看不改。',
   '去门店形象页' => '去门店形象页',
+  'order_data_unavailable' => 'Order data unavailable (cross-zone)',
 );

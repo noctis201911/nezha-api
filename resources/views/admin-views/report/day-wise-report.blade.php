@@ -283,6 +283,11 @@
                                     <td><a
                                             href="{{ route('admin.order.details', $ot->order_id) }}">{{ $ot->order_id }}</a>
                                     </td>
+                                @if (!$ot->order)
+                                    <td colspan="23" class="text-center text-muted">{{ translate('order_data_unavailable') }}</td>
+                                    </tr>
+                                    @continue
+                                @endif
                                 <td  class="text-capitalize">
                                     @if($ot->order?->restaurant)
                                         {{Str::limit($ot->order->restaurant->name,25,'...')}}
