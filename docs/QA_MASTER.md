@@ -47,3 +47,45 @@
 - 每建好一层的 playbook，把本表该行 ⬜ 改 ✅ + 填文件名，一起 commit。
 - 每做完一个第三节待办，勾掉。
 - 这张表是 QA 的**单一真相源**；新增 QA 层先在这登记再建 playbook。
+
+
+## 五、运营期例行 QA 节奏（上线后生效 · 触发词「日常巡检 / 运维QA / 运营期排错」）
+
+> 定位：上线后"什么时候跑哪本"的日历 + "出了症状先查什么"的路由。各轴正文都在既有 playbook，本节不重复只指路。报告一律走证据账本（每 ✅ 带证据 + 「未测：…」行）。
+
+### T0 每日晨检（≤10 分钟，可整段交给任意窗口）
+1. `bash /www/wwwroot/api.nezha.am/nzhealth.sh` —— 负载/跑飞进程/内存/磁盘/fpm/源站延迟/COD 门。
+2. `bash /www/wwwroot/api.nezha.am/nzdaily.sh` —— 昨日请求量+5xx/499、queue:failed、备份+R2 末行、laravel 新增 ERROR、pm2 重启增量、磁盘。
+3. HetrixTools 告警邮箱扫一眼（站外拨测 4 探针：/home、商家登录页、/api/v1/config、餐厅列表非空；补 nzwatch 自身盲区）。
+4. 后台业务队列清零检查（人工点开）：需动作订单（超时未接/未出餐）· 待退款+逾期（风控中心）· 争议单（开关开后）· 充值审核 admin/nezha-topup（开后）· 举报商家 · 差评预警 · 商家反馈 · KYC 待审。
+5. 全绿 → 一行报告；任何 🔴 → 走 T3 路由，先取证再动手。
+
+### T1 每周深检（30–60 分钟，固定周几由业主定）
+- OPS_QA_PLAYBOOK 10 轴全跑（A-J：含备份产物体积、cron 真跑、证书、看门狗自身）。
+- 5xx 周环比（nginx 按日计数）+ PERF C 轴延迟基线对照（涨了回 PERF D/F 轴找原因）。
+- `grep 'N+1-guard' laravel.log` 收集本周高查询数端点，攒够立修复项。
+- PRELAUNCH_SWITCHES「表值 vs 生产现值」核对（防开关漂移，表内自带方法）。
+- nginx 手改配置存活核对：api 微缓存 include（nezha_apicache.conf）+ CSP 两处 location —— aaPanel 面板重生成会冲掉（历史吃过亏）。
+- 安全轻扫：fail2ban 封禁异常飙升 / auth.log 异常登录 / webroot 新冒可疑文件。
+- 商家运营指标：出餐超时率、差评预警存量、退款平均时长、搜索无结果 Top（后台「搜索需求」）。
+
+### T2 每月（半天）
+- 🔴 容灾恢复演练（QA_MASTER 第 7 层，至今 0 次）：取最新加密备份真恢复进 staging 库，计时=RTO，对照 README-RESTORE 校订步骤。没演练≈没备份。
+- SECURITY_QA 11 轴复跑 + FUNDS_COMPLIANCE 8 轴复跑（PII purge 真删、制裁名单真同步、留存表只增不删）。
+- 密码/密钥轮换检查（root/admin 轮换欠账见 §三）。
+- 成本盘点：Google Maps 配额/账单（预算告警仍未设）、CF、磁盘增长、SMS（若开 customer_verification）。
+- composer audit / npm audit 高危扫一眼。
+
+### T3 症状 → 排错路由（先跑左列取证，再动手）
+| 症状 | 先查 | 正本 |
+|---|---|---|
+| 全站打不开/白屏 | nzhealth [1][2] → pm2 ls(nezha-web) → nginx error log 尾部；刚部署过→/tmp/nezha_build_last.log + previous 回滚；警惕 opcache 假 200 | OPS C 轴 · memory[部署vendor竞态] |
+| 单页 500 | pm2 err log + laravel.log 同时刻对表；后端页跑 blade 探针 | memory[blade渲染验证法] |
+| 变慢 | PERF C 轴基线对照 → OPS B 轴跑飞进程 → 慢查询/swap | PERF_LOAD_QA_PLAYBOOK |
+| 顾客下不了单 | nzcheck-cod → maintenance/offline_payment 开关 → nezha_risk_records 误拦 → zone 覆盖/营业时间/售罄 | PRELAUNCH_SWITCHES + 风控中心 |
+| 通知没到 | queue llen+failed → 通知链路 6 分发器 → TG relay 开关 → 在场感知抑制是否误伤 | memory[订单态通知链路] |
+| 数字对不上 | 同源对账（横幅==徽标==列表==详情） | CROSSCHECK 轴 I |
+| 支付/退款纠纷 | 🔴先读 INVARIANTS(L1) → nezha_refund_records/offline_payments 留痕还原时间线 | FUNDS_COMPLIANCE_QA_PLAYBOOK |
+| 疑似被刷 | 限速 1200/min 命中 → fail2ban → reCAPTCHA → nezha_risk_records | memory[防刷盘点] |
+
+维护：触发词已进本机 CLAUDE.md 路由表；改巡检项只改本节，别抄进别处（单一 owner）。
