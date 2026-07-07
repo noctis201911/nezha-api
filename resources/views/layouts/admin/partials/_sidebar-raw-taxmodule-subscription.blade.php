@@ -37,9 +37,9 @@
                                 </ul>
                             </li>
                         @endif
-{{-- 订阅管理(subscription_check恒假则不可见) 原文件1804-1844行 --}}
+{{-- 订阅管理(哪吒M1藏,§A#10: 佣金模式非订阅制业主既定决策,非仅当前business_model.subscription=0的临时态) 原文件1804-1844行 --}}
                         <!-- Subscription-->
-                        @if (Helpers::subscription_check() == true && Helpers::module_permission_check('restaurant'))
+                        @if (false && Helpers::subscription_check() == true && Helpers::module_permission_check('restaurant'))
                             <li
                                 class="navbar-vertical-aside-has-menu {{ Request::is('admin/subscription*') ? 'active' : '' }}">
                                 <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle"

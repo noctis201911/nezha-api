@@ -63,7 +63,7 @@ $__navGroups[] = [
     'subtitle' => null,
     'items' => [
         ['label' => 'messages.Point_of_Sale', 'title' => 'messages.pos', 'route' => route('admin.pos.index'), 'icon' => 'tio-receipt',
-            'active' => Request::is('admin/pos')],
+            'active' => Request::is('admin/pos'), 'hide' => true, 'hide_reason' => '哪吒M1藏(§A#1): 代下单场景不存在(游客单已关),POS orders恒0'],
     ],
 ];
 
@@ -87,18 +87,19 @@ $__navGroups[] = [
                 ['label' => 'messages.canceled', 'title' => 'messages.canceled_orders', 'route' => route('admin.order.list', ['canceled']), 'active' => Request::is('admin/order/list/canceled'), 'yield' => 'canceled', 'badge' => ['value' => $order->canceled, 'class' => 'badge-soft-danger']],
                 ['label' => 'messages.payment_failed', 'title' => 'messages.payment_failed_orders', 'route' => route('admin.order.list', ['failed']), 'active' => Request::is('admin/order/list/failed'), 'yield' => 'failed', 'extra_class' => 'text-capitalize', 'badge' => ['value' => $order->failed, 'class' => 'badge-soft-danger']],
                 ['label' => 'messages.refunded', 'title' => 'messages.refunded_orders', 'route' => route('admin.order.list', ['refunded']), 'active' => Request::is('admin/order/list/refunded'), 'yield' => 'refunded', 'badge' => ['value' => $order->refunded, 'class' => 'badge-soft-danger']],
-                ['label' => 'messages.dine_in', 'title' => 'messages.dine_in_orders', 'route' => route('admin.order.list', ['dine_in']), 'active' => Request::is('admin/order/list/dine_in'), 'yield' => 'dine_in', 'badge' => ['value' => $order->dine_in, 'class' => 'badge-soft-info']],
+                ['label' => 'messages.dine_in', 'title' => 'messages.dine_in_orders', 'route' => route('admin.order.list', ['dine_in']), 'active' => Request::is('admin/order/list/dine_in'), 'yield' => 'dine_in', 'badge' => ['value' => $order->dine_in, 'class' => 'badge-soft-info'], 'hide' => true, 'hide_reason' => '哪吒M1藏(§A#2): 堂食从未启用,dine_in订单恒0'],
                 ['label' => 'messages.Offline_Payments', 'title' => 'Offline_Payments', 'route' => route('admin.order.offline_verification_list', ['all']), 'active' => Request::is('admin/order/offline/payment/list*'), 'badge' => ['value' => \App\Models\Order::has('offline_payments')->Notpos()->count(), 'class' => 'badge-soft-danger bg-light']],
             ],
         ],
         [
             'label' => 'messages.Subscription_orders', 'route' => route('admin.order.subscription.index'), 'icon' => 'tio-appointment',
-            'active' => Request::is('admin/order/subscription*'),
+            'active' => Request::is('admin/order/subscription*'), 'hide' => true, 'hide_reason' => '哪吒M1藏(§A#2): 佣金模式非订阅制(business_model.subscription=0)',
         ],
         [
             'label' => 'messages.Dispatch_Management', 'icon' => 'tio-clock',
             'active' => Request::is('admin/dispatch/*'),
             'expanded' => Request::is('admin/dispatch*'),
+            'hide' => true, 'hide_reason' => '哪吒M1藏(§A#3): 平台无自营骑手,调度永空(orders_with_dm恒0)',
             'children' => [
                 ['label' => 'messages.searching_DeliveryMan', 'title_literal' => translate('messages.searching_DeliveryMan') . ' ' . $order_sch->searching_dm, 'route' => route('admin.dispatch.list', ['searching_for_deliverymen']), 'active' => Request::is('admin/dispatch/list/searching_for_deliverymen'), 'badge' => ['value' => $order_sch->searching_dm, 'class' => 'badge-soft-info'], 'badge_no_container' => true],
                 ['label' => 'messages.ongoing_Orders', 'route' => route('admin.dispatch.list', ['on_going']), 'active' => Request::is('admin/dispatch/list/on_going'), 'badge' => ['value' => $order_sch->ongoing, 'class' => 'badge-soft-dark bg-light']],
@@ -216,7 +217,7 @@ $__navGroups[] = [
             ['label' => 'messages.coupons', 'route' => route('admin.coupon.add-new'), 'icon' => 'tio-ticket', 'active' => Request::is('admin/coupon*')],
         ] : [],
         Helpers::module_permission_check('cashback') ? [
-            ['label' => 'messages.cashback', 'route' => route('admin.cashback.add-new'), 'icon' => 'tio-settings-back', 'active' => Request::is('admin/cashback*')],
+            ['label' => 'messages.cashback', 'route' => route('admin.cashback.add-new'), 'icon' => 'tio-settings-back', 'active' => Request::is('admin/cashback*'), 'hide' => true, 'hide_reason' => '哪吒M1藏(§A#8): 返现未启用,cashback_history恒0'],
         ] : [],
         Helpers::module_permission_check('banner') ? [
             ['label' => 'messages.banners', 'route' => route('admin.banner.add-new'), 'icon' => 'tio-bookmark', 'icon_extra_class' => 'side-nav-icon--design', 'active' => (Request::is('admin/banner*') && !Request::is('admin/banner/promotional-banner*'))],
@@ -274,6 +275,7 @@ $__navGroups[] = [
             ['label' => 'messages.customeres', 'title' => 'messages.Customer_List', 'route' => route('admin.customer.list'), 'icon' => 'tio-poi-user', 'active' => false, 'yield' => 'customerDetails'],
             [
                 'label' => 'messages.loyalty_point', 'icon' => 'tio-medal', 'active' => Request::is('admin/customer/loyalty-point-report*'),
+                'hide' => true, 'hide_reason' => '哪吒M1藏(§A#8): 忠诚积分未启用,与自动满减哲学冲突,loyalty_tx恒0',
                 'children' => [
                     ['label' => 'messages.report', 'route' => route('admin.customer.loyalty-point.report'), 'active' => Request::is('admin/customer/loyalty-point-report*')],
                 ],
@@ -293,6 +295,7 @@ $__navGroups[] = [
         [
             'label' => 'messages.disbursement_report', 'icon' => 'tio-saving',
             'active' => Request::is('admin/report/disbursement-report/restaurant') || Request::is('admin/report/disbursement-report/delivery_man'),
+            'hide' => true, 'hide_reason' => '哪吒M1藏(§A#11): 结算腿危险面同§A#5语义,disbursement_restaurant/dm恒0(L1-5打款腿已拔)',
             'children' => [
                 ['label' => 'messages.restaurants', 'route' => route('admin.report.disbursement_report', ['tab' => 'restaurant']), 'active' => Request::is('admin/report/disbursement-report/restaurant'), 'li_base' => 'navbar-vertical-aside-has-menu', 'plain_link' => true],
                 ['label' => 'messages.delivery_men', 'route' => route('admin.report.disbursement_report', ['tab' => 'delivery_man']), 'active' => Request::is('admin/report/disbursement-report/delivery_man'), 'li_base' => 'navbar-vertical-aside-has-menu', 'plain_link' => true],
@@ -342,7 +345,7 @@ $__navGroups[] = [
         ['label' => '平台集运申报', 'label_raw' => true, 'route' => route('admin.nezha-consolidation.index'), 'icon' => 'tio-cube', 'active' => Request::is('admin/nezha-consolidation*'), 'gate' => true],
         ['label' => '搜索需求', 'label_raw' => true, 'route' => route('admin.nezha-search-demand.index'), 'icon' => 'tio-search', 'active' => Request::is('admin/nezha-search-demand*'), 'gate' => true],
         ['label' => '顾客取消理由', 'label_raw' => true, 'route' => route('admin.nezha-order-cancel-demand.index'), 'icon' => 'tio-clear-circle', 'active' => Request::is('admin/nezha-order-cancel-demand*'), 'gate' => true],
-        ['label' => 'messages.DeliveryMan_Payments', 'route' => route('admin.provide-deliveryman-earnings.index'), 'icon' => 'tio-send', 'active' => Request::is('admin/provide-deliveryman-earnings*'), 'gate' => Helpers::module_permission_check('provide_dm_earning')],
+        ['label' => 'messages.DeliveryMan_Payments', 'route' => route('admin.provide-deliveryman-earnings.index'), 'icon' => 'tio-send', 'active' => Request::is('admin/provide-deliveryman-earnings*'), 'gate' => Helpers::module_permission_check('provide_dm_earning'), 'hide' => true, 'hide_reason' => '哪吒M1藏(§A#6/#9): 平台无自营骑手·不打款(L1-5打款腿已拔),provide_dm_earning恒0'],
     ],
 ];
 
