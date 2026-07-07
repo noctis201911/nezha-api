@@ -31,7 +31,7 @@
                 @if (session('ma_action'))
                     @php
                         $nzAct = session('ma_action');
-                        $nzLbl = ['pause' => '✅ 确认暂停接单', 'resume' => '✅ 确认恢复接单', 'feedback' => '✅ 确认提交给平台'][$nzAct] ?? '✅ 确认';
+                        $nzLbl = ['pause' => '✅ 确认暂停接单', 'resume' => '✅ 确认恢复接单', 'feedback' => '✅ 确认提交给平台', 'price' => '✅ 确认改价'][$nzAct] ?? '✅ 确认';
                         $nzCls = $nzAct === 'pause' ? 'btn-danger' : ($nzAct === 'resume' ? 'btn-success' : 'btn-primary');
                     @endphp
                     {{-- 动作确认：AI 只提议，真正执行要商家点这个按钮（走 auth 商家端点、绑本店、服务端校验） --}}
@@ -46,7 +46,7 @@
                 <div class="mt-3">
                     <small class="text-muted">{{ translate('常见问题：') }}</small>
                     <div class="d-flex flex-wrap" style="gap:8px;margin-top:8px;">
-                        @foreach (['太忙了，先暂停接单', '这笔订单有问题，帮我反馈给平台', '怎么上传新菜品？', '怎么设置营业时间？', '顾客要退款怎么处理？', '帮我给麻辣香锅写一段吸引人的描述'] as $eg)
+                        @foreach (['太忙了，先暂停接单', '把麻辣香锅改成 5800', '这笔订单有问题，帮我反馈给平台', '怎么上传新菜品？', '顾客要退款怎么处理？', '帮我给麻辣香锅写一段吸引人的描述'] as $eg)
                             <form method="POST" action="{{ route('vendor.nezha-assistant.ask') }}" style="display:inline-block;" class="nz-ma-form">
                                 @csrf
                                 <input type="hidden" name="question" value="{{ $eg }}">

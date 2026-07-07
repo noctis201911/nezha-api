@@ -1278,6 +1278,52 @@ SYS;
         ];
     }
 
+    /**
+     * Phase3: 从商家的话里提取"改哪道菜、改成多少钱"。返回 ['name'=>菜名, 'price'=>float] 或 null。
+     * 只做抽取，不落库；具体改价由控制器 findOrFail(全局RestaurantScope绑本店) + 确认后执行。
+     */
+    public static function extractPriceChange(string $question): ?array
+    {
+        $key = Helpers::get_business_settings('nezha_cs_ai_api_key');
+        if (!$key) {
+            return null;
+        }
+        $base = rtrim((string) (Helpers::get_business_settings('nezha_cs_ai_base_url') ?: 'https://api.deepseek.com'), '/');
+        $model = Helpers::get_business_settings('nezha_cs_ai_model') ?: 'deepseek-chat';
+        $system = <<<SYS
+从商家的话里提取"要改哪道菜的价格、改成多少钱"。只输出严格 JSON（无多余文字）：{"name":"菜名(商家提到的，尽量原样，不含价格数字)","price":新单价数字(纯数字，德拉姆֏)}。
+提取不到明确菜名或明确新价格，就输出 {"name":"","price":0}。不要解释、不要代码块。
+SYS;
+        $payload = [
+            'model' => $model,
+            'messages' => [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => trim($question)]],
+            'temperature' => 0,
+            'max_tokens' => 120,
+            'stream' => false,
+            'response_format' => ['type' => 'json_object'],
+        ];
+        $ch = curl_init($base . '/chat/completions');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_TIMEOUT => 20,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $key],
+            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+        ]);
+        $raw = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($raw === false || $code >= 400) {
+            return null;
+        }
+        $json = json_decode($raw, true);
+        $parsed = json_decode(trim((string) ($json['choices'][0]['message']['content'] ?? '')), true);
+        if (!is_array($parsed) || empty($parsed['name']) || !isset($parsed['price']) || (float) $parsed['price'] <= 0) {
+            return null;
+        }
+        return ['name' => mb_substr((string) $parsed['name'], 0, 100), 'price' => (float) $parsed['price']];
+    }
+
     // 商家助手知识库：以权威的 MERCHANT_GUIDE.md 为准（手册一更新助手即同步）+ 后台补充 + 停用功能强化兜底。
     protected static function merchantKb(): string
     {

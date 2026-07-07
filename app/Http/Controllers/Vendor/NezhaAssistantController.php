@@ -30,7 +30,7 @@ class NezhaAssistantController extends Controller
         // ① 确认执行分支：来自答案下方"确认"按钮，直接执行动作（不经 AI）。
         if ($request->filled('confirm_action')) {
             $action = $request->input('confirm_action');
-            if (!in_array($action, ['pause', 'resume', 'feedback'], true)) {
+            if (!in_array($action, ['pause', 'resume', 'feedback', 'price'], true)) {
                 return back()->with('ma_a', '这个操作我没看懂，请重试。');
             }
             $vendorId = Helpers::get_vendor_id();
@@ -39,7 +39,11 @@ class NezhaAssistantController extends Controller
                 return back()->with('ma_a', '操作太频繁了，请稍后再试～');
             }
             RateLimiter::hit($akey, 60);
-            $result = $action === 'feedback' ? $this->applyFeedback() : $this->applyStoreStatus($action);
+            $result = match ($action) {
+                'feedback' => $this->applyFeedback(),
+                'price' => $this->applyPriceChange(),
+                default => $this->applyStoreStatus($action),
+            };
             return back()->with('ma_a', $result);
         }
 
@@ -80,6 +84,26 @@ class NezhaAssistantController extends Controller
             $typeLabel = \App\Models\VendorFeedback::TYPE_LABELS[$draft['type']] ?? $draft['type'];
             $preview = "我按您说的整理了一条反馈，确认后提交给平台超管：\n\n【类型】{$typeLabel}\n【主题】{$draft['subject']}\n【详情】{$draft['description']}\n\n没问题就点下方「确认提交给平台」；想补充或改，直接把要说的再发我一遍。";
             return back()->with('ma_q', $q)->with('ma_a', $preview)->with('ma_action', 'feedback');
+        }
+
+        // Phase 3 动作意图：改某道菜的价格（LLM 抽取菜名+新价 → 本店查菜(全局RestaurantScope) → 确认 → 改价）
+        if ($this->detectPriceIntent($q)) {
+            $pc = NezhaCsAssistant::extractPriceChange($q);
+            if ($pc) {
+                $foods = \App\Models\Food::where('name', 'like', '%' . $pc['name'] . '%')->limit(6)->get(['id', 'name', 'price']);
+                if ($foods->count() === 1) {
+                    $food = $foods->first();
+                    session()->put('ma_price_draft', ['food_id' => $food->id, 'price' => $pc['price']]);
+                    $tip = "找到【{$food->name}】，当前单价 ֏" . $this->nzMoney($food->price) . "。要改成 ֏" . $this->nzMoney($pc['price']) . " 吗？确认请点下方按钮。";
+                    return back()->with('ma_q', $q)->with('ma_a', $tip)->with('ma_action', 'price');
+                }
+                if ($foods->count() > 1) {
+                    $names = $foods->pluck('name')->implode('、');
+                    return back()->with('ma_q', $q)->with('ma_a', "找到多道名字相近的菜：{$names}。请说得更具体些，比如「把{$foods->first()->name}改成" . intval($pc['price']) . "」。");
+                }
+                return back()->with('ma_q', $q)->with('ma_a', "没找到叫「{$pc['name']}」的菜，请对照「商品列表」里的准确菜名再说一次。");
+            }
+            // 抽取不到明确菜名/价格 → 落到 Q&A 引导商家怎么改价
         }
 
         $answer = NezhaCsAssistant::merchantAssistant($q);
@@ -184,5 +208,47 @@ class NezhaAssistantController extends Controller
         } catch (\Throwable $e) {
         }
         return "✅ 已把这条反馈提交给平台，编号 #{$fb->id}。处理进度和平台回复会显示在「问题反馈」页；平台处理完您也会收到通知。";
+    }
+
+    /** 识别"改某道菜价格"命令（确定性关键词，抽取交给 LLM）。误判无害（提取不到就落 Q&A）。 */
+    private function detectPriceIntent(string $q): bool
+    {
+        $s = preg_replace('/\s+/u', '', $q);
+        if (preg_match('/怎么|如何|怎样|在哪|哪里/u', $s)) {
+            return false;
+        }
+        return (bool) preg_match('/(改|调|涨|降|设|定)(一?下)?价|价格.{0,4}(改|调|设|定|涨|降)|(涨|降|调|改)到\d|改成\d|卖\d|(单价|售价).{0,4}\d|\d+.{0,3}(元|块|֏|德拉姆)/u', $s);
+    }
+
+    /** ֏ 价格显示：去掉多余小数零（1500.00 -> 1500）。 */
+    private function nzMoney($p): string
+    {
+        return rtrim(rtrim(number_format((float) $p, 2, '.', ''), '0'), '.');
+    }
+
+    /**
+     * 执行改价（草稿在 session ma_price_draft）。🔴 Food 全局 RestaurantScope 自动绑本店，
+     * findOrFail 外店 id -> 404，天然防越权改他店价；save() 触发模型缓存失效（同 updatePrice）。
+     */
+    private function applyPriceChange(): string
+    {
+        $d = session('ma_price_draft');
+        session()->forget('ma_price_draft');
+        if (!is_array($d) || empty($d['food_id']) || !isset($d['price']) || (float) $d['price'] <= 0) {
+            return '没找到要改的价格信息，麻烦重新说一遍（比如「把麻婆豆腐改成 1200」）。';
+        }
+        try {
+            $food = \App\Models\Food::findOrFail((int) $d['food_id']);
+        } catch (\Throwable $e) {
+            return '没找到这道菜（可能已删除或改名），请刷新后重试。';
+        }
+        $food->price = (float) $d['price'];
+        // 与 FoodController::updatePrice 一致：固定折扣 >= 新价会算出负价，随价调整清掉，防坏数据
+        if (($food->discount_type ?? '') === 'amount' && (float) $food->discount >= (float) $food->price) {
+            $food->discount = 0;
+        }
+        $food->save();
+        $now = \App\Models\Food::findOrFail($food->id)->price;
+        return '✅ 已把【' . $food->name . '】的单价改成 ֏' . $this->nzMoney($now) . '，顾客端菜单已同步。';
     }
 }
