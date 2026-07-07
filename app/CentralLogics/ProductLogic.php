@@ -597,13 +597,6 @@ class ProductLogic
                     foreach ($name as $value) {
                         $q->orWhere('name', 'like', "%{$value}%");
                     }
-                    $q->orWhereHas('tags',function($query)use($name){
-                        $query->where(function($q)use($name){
-                            foreach ($name as $value) {
-                                $q->where('tag', 'like', "%{$value}%");
-                            };
-                        });
-                    });
                 });
             })
             ->active()->type($type)->Recommended()
@@ -622,13 +615,6 @@ class ProductLogic
                     foreach ($name as $value) {
                         $q->orWhere('name', 'like', "%{$value}%");
                     }
-                    $q->orWhereHas('tags',function($query)use($name){
-                        $query->where(function($q)use($name){
-                            foreach ($name as $value) {
-                                $q->where('tag', 'like', "%{$value}%");
-                            };
-                        });
-                    });
                 });
             })
             ->limit(50)
@@ -677,13 +663,6 @@ class ProductLogic
                 foreach ($name as $value) {
                     $q->orWhere('name', 'like', "%{$value}%");
                 }
-                $q->orWhereHas('tags',function($query)use($name){
-                    $query->where(function($q)use($name){
-                        foreach ($name as $value) {
-                            $q->where('tag', 'like', "%{$value}%");
-                        };
-                    });
-                });
             });
         })
         ->limit(50)->applyRating($request)
@@ -707,13 +686,6 @@ class ProductLogic
                     foreach ($name as $value) {
                         $q->orWhere('name', 'like', "%{$value}%");
                     }
-                    $q->orWhereHas('tags',function($query)use($name){
-                        $query->where(function($q)use($name){
-                            foreach ($name as $value) {
-                                $q->where('tag', 'like', "%{$value}%");
-                            };
-                        });
-                    });
                 });
             })
             ->active()->type($type)

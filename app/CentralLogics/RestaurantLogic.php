@@ -122,11 +122,6 @@ class RestaurantLogic
                             $query->where('translationable_type', 'App\Models\Restaurant')->where('key','name')->where('value', 'like', "%{$value}%");
                         };
                     });
-                    $q->orWhereHas('tags',function($query)use($key){
-                        foreach ($key as $value) {
-                            $query->where('tag', 'like', "%{$value}%");
-                        };
-                    });
                 });
             });
             if($all_restaurant_default_status == '1' && (!isset($additional_data['sort_by']) || $additional_data['sort_by'] == 'default')) {
