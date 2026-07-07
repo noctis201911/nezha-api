@@ -37,6 +37,422 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
         ->first();
 });
 
+/**
+ * 哪吒超管M1(D1 侧栏配置数组化)。
+ * 条目schema: label(可见文本translate键,必填) / title(tooltip translate键,省略则等于label) /
+ *   route / icon(仅顶层用) / active(预算好的布尔值) / badge{value,class} / yield(单个或数组,legacy @yield标记) /
+ *   extra_class / children(同schema递归,存在则渲染为可展开toggle父项) / hide(true=本轮藏匿,渲染为@if(false)不出现在侧栏但DOM里保留注释) / hide_reason。
+ * 组schema: gate(预算好的布尔值) / subtitle(translate键或null) / items。
+ * 所有值在本次请求渲染时一次性求值,与原文件逐条内联求值等价。
+ * 已死/插件态代码块(骑手管理/分账/顾客钱包&钱包报表/TaxModule插件/订阅管理/withdraw/deliveryman-earning-report/addon_menus动态段)
+ * 保持原样字面 blade 不纳入本数组,原样保留在文件对应位置。
+ */
+$__navGroups = [];
+
+// ==== 组: 仪表盘 + POS ====
+$__navGroups[] = [
+    'gate' => true,
+    'subtitle' => null,
+    'items' => [
+        ['label' => 'messages.dashboard', 'route' => route('admin.dashboard'), 'icon' => 'tio-dashboard-vs',
+            'active' => Request::is('admin')],
+    ],
+];
+$__navGroups[] = [
+    'gate' => Helpers::module_permission_check('pos'),
+    'subtitle' => null,
+    'items' => [
+        ['label' => 'messages.Point_of_Sale', 'title' => 'messages.pos', 'route' => route('admin.pos.index'), 'icon' => 'tio-receipt',
+            'active' => Request::is('admin/pos')],
+    ],
+];
+
+// ==== 组: 订单 ====
+$__navGroups[] = [
+    'gate' => Helpers::module_permission_check('order'),
+    'subtitle' => 'messages.order_management',
+    'items' => [
+        [
+            'label' => 'messages.orders', 'icon' => 'tio-file-text-outlined',
+            'active' => Request::is('admin/order*'),
+            'expanded' => Request::is('admin/order*') && (Request::is('admin/order/subscription*') == false && Request::is('admin/order-cancel-reasons') == false),
+            'children' => [
+                ['label' => 'messages.all', 'title' => 'messages.all_orders', 'route' => route('admin.order.list', ['all']), 'active' => Request::is('admin/order/list/all'), 'yield' => 'all_order', 'badge' => ['value' => $order->total, 'class' => 'badge-soft-info']],
+                ['label' => 'messages.scheduled', 'title' => 'messages.scheduled_orders', 'route' => route('admin.order.list', ['scheduled']), 'active' => Request::is('admin/order/list/scheduled'), 'yield' => 'scheduled', 'badge' => ['value' => $order->scheduled, 'class' => 'badge-soft-info']],
+                ['label' => 'messages.pending', 'title' => 'messages.pending_orders', 'route' => route('admin.order.list', ['pending']), 'active' => Request::is('admin/order/list/pending'), 'yield' => 'pending', 'badge' => ['value' => $order_sch->pending, 'class' => 'badge-soft-info']],
+                ['label' => 'messages.accepted', 'title' => 'messages.accepted_orders', 'route' => route('admin.order.list', ['accepted']), 'active' => Request::is('admin/order/list/accepted'), 'yield' => 'accepted', 'badge' => ['value' => $order_sch->accepted, 'class' => 'badge-soft-success']],
+                ['label' => 'messages.processing', 'title' => 'messages.processing_orders', 'route' => route('admin.order.list', ['processing']), 'active' => Request::is('admin/order/list/processing'), 'yield' => 'processing', 'badge' => ['value' => $order->processing, 'class' => 'badge-soft-warning']],
+                ['label' => 'messages.food_On_The_Way', 'title' => 'messages.foodOnTheWay_orders', 'route' => route('admin.order.list', ['food_on_the_way']), 'active' => Request::is('admin/order/list/food_on_the_way'), 'yield' => 'picked_up', 'extra_class' => 'text-capitalize', 'badge' => ['value' => $order_sch->picked_up, 'class' => 'badge-soft-warning']],
+                ['label' => 'messages.delivered', 'title' => 'messages.delivered_orders', 'route' => route('admin.order.list', ['delivered']), 'active' => Request::is('admin/order/list/delivered'), 'yield' => 'delivered', 'badge' => ['value' => $order->delivered, 'class' => 'badge-soft-success']],
+                ['label' => 'messages.canceled', 'title' => 'messages.canceled_orders', 'route' => route('admin.order.list', ['canceled']), 'active' => Request::is('admin/order/list/canceled'), 'yield' => 'canceled', 'badge' => ['value' => $order->canceled, 'class' => 'badge-soft-danger']],
+                ['label' => 'messages.payment_failed', 'title' => 'messages.payment_failed_orders', 'route' => route('admin.order.list', ['failed']), 'active' => Request::is('admin/order/list/failed'), 'yield' => 'failed', 'extra_class' => 'text-capitalize', 'badge' => ['value' => $order->failed, 'class' => 'badge-soft-danger']],
+                ['label' => 'messages.refunded', 'title' => 'messages.refunded_orders', 'route' => route('admin.order.list', ['refunded']), 'active' => Request::is('admin/order/list/refunded'), 'yield' => 'refunded', 'badge' => ['value' => $order->refunded, 'class' => 'badge-soft-danger']],
+                ['label' => 'messages.dine_in', 'title' => 'messages.dine_in_orders', 'route' => route('admin.order.list', ['dine_in']), 'active' => Request::is('admin/order/list/dine_in'), 'yield' => 'dine_in', 'badge' => ['value' => $order->dine_in, 'class' => 'badge-soft-info']],
+                ['label' => 'messages.Offline_Payments', 'title' => 'Offline_Payments', 'route' => route('admin.order.offline_verification_list', ['all']), 'active' => Request::is('admin/order/offline/payment/list*'), 'badge' => ['value' => \App\Models\Order::has('offline_payments')->Notpos()->count(), 'class' => 'badge-soft-danger bg-light']],
+            ],
+        ],
+        [
+            'label' => 'messages.Subscription_orders', 'route' => route('admin.order.subscription.index'), 'icon' => 'tio-appointment',
+            'active' => Request::is('admin/order/subscription*'),
+        ],
+        [
+            'label' => 'messages.Dispatch_Management', 'icon' => 'tio-clock',
+            'active' => Request::is('admin/dispatch/*'),
+            'expanded' => Request::is('admin/dispatch*'),
+            'children' => [
+                ['label' => 'messages.searching_DeliveryMan', 'title_literal' => translate('messages.searching_DeliveryMan') . ' ' . $order_sch->searching_dm, 'route' => route('admin.dispatch.list', ['searching_for_deliverymen']), 'active' => Request::is('admin/dispatch/list/searching_for_deliverymen'), 'badge' => ['value' => $order_sch->searching_dm, 'class' => 'badge-soft-info'], 'badge_no_container' => true],
+                ['label' => 'messages.ongoing_Orders', 'route' => route('admin.dispatch.list', ['on_going']), 'active' => Request::is('admin/dispatch/list/on_going'), 'badge' => ['value' => $order_sch->ongoing, 'class' => 'badge-soft-dark bg-light']],
+            ],
+        ],
+    ],
+];
+
+// ==== 组: 风控中心(已由SEC/UI-1窗口对齐过权限位,此处逐字节照搬,组gate=4权限位OR,每个子项各自再判自己的权限位) ====
+$__navGroups[] = [
+    'gate' => Helpers::module_permission_check('risk') || Helpers::module_permission_check('risk_settings') || Helpers::module_permission_check('refund') || Helpers::module_permission_check('kyc'),
+    'subtitle' => null,
+    'items' => [
+        [
+            'label' => '风控中心', 'label_raw' => true, 'icon' => 'tio-shield',
+            'active' => Request::is('admin/nezha-risk*') || Request::is('admin/nezha-refund*') || Request::is('admin/nezha-kyc*'),
+            'children' => array_merge(
+                Helpers::module_permission_check('risk') ? [
+                    ['label' => '审核队列', 'label_raw' => true, 'route' => route('admin.nezha-risk.queue'), 'active' => Request::is('admin/nezha-risk/queue')],
+                    ['label' => '风控日志', 'label_raw' => true, 'route' => route('admin.nezha-risk.logs'), 'active' => Request::is('admin/nezha-risk/logs')],
+                ] : [],
+                Helpers::module_permission_check('risk_settings') ? [
+                    ['label' => '风控设置', 'label_raw' => true, 'route' => route('admin.nezha-risk.settings'), 'active' => Request::is('admin/nezha-risk/settings')],
+                ] : [],
+                Helpers::module_permission_check('refund') ? [
+                    ['label' => '退款留痕/审核', 'label_raw' => true, 'route' => route('admin.nezha-refund.records'), 'active' => Request::is('admin/nezha-refund/records')],
+                    ['label' => '逾期未退款', 'label_raw' => true, 'route' => route('admin.nezha-refund.overdue'), 'active' => Request::is('admin/nezha-refund/overdue')],
+                    ['label' => '退款争议裁决', 'label_raw' => true, 'route' => route('admin.nezha-refund.disputes'), 'active' => Request::is('admin/nezha-refund/disputes')],
+                ] : [],
+                Helpers::module_permission_check('kyc') ? [
+                    ['label' => '商家KYC', 'label_raw' => true, 'route' => route('admin.nezha-kyc.index'), 'active' => Request::is('admin/nezha-kyc*')],
+                ] : [],
+            ),
+        ],
+    ],
+];
+
+// ==== 组: 商家(zone/cuisine/restaurants) ====
+$__navGroups[] = [
+    'gate' => Helpers::module_permission_check('zone') || Helpers::module_permission_check('restaurant'),
+    'subtitle' => 'messages.restaurant_management', 'subtitle_title' => 'messages.restaurant_section',
+    'items' => array_merge(
+        Helpers::module_permission_check('zone') ? [
+            ['label' => 'messages.zone_setup', 'route' => route('admin.zone.home'), 'icon' => 'tio-poi-outlined', 'active' => Request::is('admin/zone*')],
+        ] : [],
+        Helpers::module_permission_check('restaurant') ? [
+            ['label' => 'messages.cuisine', 'route' => route('admin.cuisine.add'), 'icon' => 'tio-link', 'active' => Request::is('admin/cuisine/add')],
+            [
+                'label' => 'messages.restaurants', 'icon' => 'tio-restaurant',
+                'active' => (Request::is('admin/restaurant/*') && !Request::is('admin/restaurant/withdraw_list') && !Request::is('admin/restaurant/withdraw-view*')),
+                'expanded' => (Request::is('admin/restaurant/*') && !Request::is('admin/restaurant/withdraw_list')) || stripos(Request()->fullUrl(), 'pending-list', 5),
+                'children' => [
+                    ['label' => 'messages.add_restaurant', 'route' => route('admin.restaurant.add'), 'active' => Request::is('admin/restaurant/add'), 'expanded_child_style' => true, 'li_base' => 'navbar-vertical-aside-has-menu'],
+                    ['label' => 'messages.restaurants_list', 'route' => route('admin.restaurant.list'), 'yield' => 'restaurant_list', 'expanded_child_style' => true, 'li_base' => 'navbar-item',
+                        'active' => (!stripos(Request()->fullUrl(), 'pending-list', 5) && (Request::is('admin/restaurant/list') || Request::is('admin/restaurant/transcation/*') || Request::is('admin/restaurant/view*')))],
+                    ['label' => 'messages.New_joining_request', 'route' => route('admin.restaurant.pending'), 'yield' => 'restaurant_new_join', 'expanded_child_style' => true, 'li_base' => 'navbar-item',
+                        'active' => (stripos(Request()->fullUrl(), 'pending-list', 5) || Request::is('admin/restaurant/pending/list*') || Request::is('admin/restaurant/denied/list*'))],
+                    ['label' => 'messages.bulk_import', 'route' => route('admin.restaurant.bulk-import'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/restaurant/bulk-import')],
+                    ['label' => 'messages.bulk_export', 'route' => route('admin.restaurant.bulk-export-index'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/restaurant/bulk-export')],
+                ],
+            ],
+        ] : [],
+    ),
+];
+
+// ==== 组: 食品(category/addon/food) ====
+$__navGroups[] = [
+    'gate' => Helpers::module_permission_check('category') || Helpers::module_permission_check('addon') || Helpers::module_permission_check('food'),
+    'subtitle' => 'messages.food_management', 'subtitle_title' => 'messages.food_section',
+    'items' => array_merge(
+        Helpers::module_permission_check('category') ? [[
+            'label' => 'messages.categories', 'icon' => 'tio-category', 'active' => Request::is('admin/category*'),
+            'children' => [
+                ['label' => 'messages.category', 'route' => route('admin.category.add'), 'active' => (Request::is('admin/category/add') || Request::is('admin/category/edit/*'))],
+                ['label' => 'messages.sub_category', 'route' => route('admin.category.add-sub-category'), 'active' => Request::is('admin/category/add-sub-category')],
+                ['label' => 'messages.bulk_import', 'route' => route('admin.category.bulk-import'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/category/bulk-import')],
+                ['label' => 'messages.bulk_export', 'route' => route('admin.category.bulk-export-index'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/category/bulk-export')],
+            ],
+        ]] : [],
+        Helpers::module_permission_check('addon') ? [[
+            'label' => 'messages.addons', 'icon' => 'tio-add-circle-outlined', 'active' => Request::is('admin/addon/*'),
+            'children' => [
+                ['label' => 'messages.Addon_Category', 'route' => route('admin.addon.addon-category'), 'active' => Request::is('admin/addon/addon-category')],
+                ['label' => 'messages.list', 'title' => 'messages.addon_list', 'route' => route('admin.addon.add-new'), 'active' => (Request::is('admin/addon/add-new') || Request::is('admin/addon/edit/*'))],
+                ['label' => 'messages.bulk_import', 'route' => route('admin.addon.bulk-import'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/addon/bulk-import')],
+                ['label' => 'messages.bulk_export', 'route' => route('admin.addon.bulk-export-index'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/addon/bulk-export')],
+            ],
+        ]] : [],
+        Helpers::module_permission_check('food') ? [[
+            'label' => 'messages.foods', 'icon' => 'tio-fastfood', 'active' => Request::is('admin/food*'),
+            'children' => [
+                ['label' => 'messages.add_new', 'route' => route('admin.food.add-new'), 'active' => Request::is('admin/food/add-new')],
+                ['label' => 'messages.list', 'title' => 'messages.food_list', 'route' => route('admin.food.list'), 'active' => (Request::is('admin/food/list') || Request::is('admin/food/view/*'))],
+                ['label' => 'messages.review', 'title' => 'messages.review_list', 'route' => route('admin.food.reviews'), 'active' => Request::is('admin/food/reviews')],
+                ['label' => 'messages.bulk_import', 'route' => route('admin.food.bulk-import'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/food/bulk-import')],
+                ['label' => 'messages.bulk_export', 'route' => route('admin.food.bulk-export-index'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/food/bulk-export')],
+            ],
+        ]] : [],
+    ),
+];
+
+// ==== 组: 营销(campaign/coupon/cashback/banner/advertisement/notification) ====
+$__navGroups[] = [
+    'gate' => Helpers::module_permission_check('campaign') || Helpers::module_permission_check('coupon') || Helpers::module_permission_check('cashback') || Helpers::module_permission_check('advertisement') || Helpers::module_permission_check('notification') || Helpers::module_permission_check('banner'),
+    'subtitle' => 'Promotions_management', 'subtitle_title' => 'Promotion_management',
+    'items' => array_merge(
+        Helpers::module_permission_check('campaign') ? [[
+            'label' => 'messages.campaigns', 'icon' => 'tio-notice', 'active' => Request::is('admin/campaign*'),
+            'children' => [
+                ['label' => 'messages.basic_campaign', 'route' => route('admin.campaign.list', 'basic'), 'active' => Request::is('admin/campaign/basic/*')],
+                ['label' => 'messages.food_campaign', 'route' => route('admin.campaign.list', 'item'), 'active' => Request::is('admin/campaign/item/*')],
+            ],
+        ]] : [],
+        Helpers::module_permission_check('coupon') ? [
+            ['label' => 'messages.coupons', 'route' => route('admin.coupon.add-new'), 'icon' => 'tio-ticket', 'active' => Request::is('admin/coupon*')],
+        ] : [],
+        Helpers::module_permission_check('cashback') ? [
+            ['label' => 'messages.cashback', 'route' => route('admin.cashback.add-new'), 'icon' => 'tio-settings-back', 'active' => Request::is('admin/cashback*')],
+        ] : [],
+        Helpers::module_permission_check('banner') ? [
+            ['label' => 'messages.banners', 'route' => route('admin.banner.add-new'), 'icon' => 'tio-bookmark', 'icon_extra_class' => 'side-nav-icon--design', 'active' => (Request::is('admin/banner*') && !Request::is('admin/banner/promotional-banner*'))],
+            ['label' => 'messages.promotional_banner', 'route' => route('admin.banner.promotional_banner'), 'icon' => 'tio-tabs', 'icon_extra_class' => 'side-nav-icon--design', 'active' => Request::is('admin/banner/promotional-banner*')],
+        ] : [],
+        Helpers::module_permission_check('advertisement') ? [[
+            'label' => 'messages.advertisement', 'icon' => 'tio-tv-old',
+            'active' => false, 'yield' => 'advertisement',
+            'expanded' => Request::is('admin/advertisement*'),
+            'children' => [
+                ['label' => 'messages.New_Advertisement', 'route' => route('admin.advertisement.create'), 'active' => false, 'yield' => 'advertisement_create'],
+                ['label' => 'messages.Ad_Requests', 'route' => route('admin.advertisement.requestList'), 'active' => false, 'yield' => 'advertisement_request'],
+                ['label' => 'messages.Ads_list', 'route' => route('admin.advertisement.index'), 'active' => false, 'yield' => 'advertisement_list'],
+                ['label' => '竞价参数设置', 'label_raw' => true, 'route' => route('admin.advertisement.auction-settings'), 'active' => false, 'yield' => 'advertisement_auction'],
+                ['label' => '广告余额充值', 'label_raw' => true, 'route' => route('admin.advertisement.ad-recharge'), 'active' => false, 'yield' => 'advertisement_recharge'],
+            ],
+        ]] : [],
+        Helpers::module_permission_check('notification') ? [
+            ['label' => 'messages.push_notification', 'route' => route('admin.notification.add-new'), 'icon' => 'tio-notifications-on', 'active' => Request::is('admin/notification*')],
+        ] : [],
+    ),
+];
+
+// ==== 组: 帮助与支持(subtitle闸=chat||contact_message,与下属nezha_cs/vendor_feedback各自独立闸不同——原文件既有的不一致,逐字节保留不"顺手修") ====
+$__navGroups[] = [
+    'gate' => Helpers::module_permission_check('chat') || Helpers::module_permission_check('contact_message'),
+    'subtitle' => 'messages.Help_&_Support',
+    'items' => [
+        ['label' => 'messages.Chattings', 'route' => route('admin.message.list', ['tab' => 'customer']), 'icon' => 'tio-chat', 'active' => Request::is('admin/message/list'), 'gate' => Helpers::module_permission_check('chat')],
+        ['label' => 'AI在线客服', 'label_raw' => true, 'route' => route('admin.nezha-cs.index'), 'icon' => 'tio-online', 'active' => Request::is('admin/nezha-cs*'), 'gate' => Helpers::module_permission_check('nezha_cs')],
+        ['label' => '商家反馈', 'label_raw' => true, 'route' => route('admin.vendor-feedback.index'), 'icon' => 'tio-comment-text-outlined', 'active' => Request::is('admin/vendor-feedback*'), 'gate' => Helpers::module_permission_check('nezha_cs')],
+        ['label' => 'messages.Contact_messages', 'route' => route('admin.contact.list'), 'icon' => 'tio-messages', 'active' => Request::is('admin/contact/*'), 'gate' => Helpers::module_permission_check('contact_message')],
+    ],
+];
+
+// ==== 组: 本地生活+举报商家(settings闸,举报商家额外叠加restaurant闸) + 商家入驻申请(restaurant闸,原文件里是紧随其后的独立@if块,无subtitle) ====
+$__navGroups[] = [
+    'gate' => true,
+    'subtitle' => null,
+    'items' => [
+        ['label' => '本地生活', 'label_raw' => true, 'route' => route('admin.local-life.list'), 'icon' => 'tio-poi-outlined', 'active' => Request::is('admin/local-life*'), 'gate' => Helpers::module_permission_check('settings')],
+        ['label' => '本地生活类目', 'label_raw' => true, 'route' => route('admin.local-life.categories.list'), 'icon' => 'tio-folder-labeled', 'active' => Request::is('admin/local-life/categories*'), 'gate' => Helpers::module_permission_check('settings')],
+        ['label' => '本地生活商家', 'label_raw' => true, 'route' => route('admin.local-life.merchants.list'), 'icon' => 'tio-shop-outlined', 'active' => Request::is('admin/local-life/merchants*'), 'gate' => Helpers::module_permission_check('settings')],
+        ['label' => '举报商家', 'label_raw' => true, 'route' => route('admin.restaurant-report.list'), 'icon' => 'tio-flag', 'active' => Request::is('admin/restaurant-report*'), 'gate' => Helpers::module_permission_check('settings') && Helpers::module_permission_check('restaurant')],
+        ['label' => '商家入驻申请', 'label_raw' => true, 'route' => route('admin.merchant-lead.list'), 'icon' => 'tio-shop', 'active' => Request::is('admin/merchant-lead/*'), 'gate' => Helpers::module_permission_check('restaurant')],
+    ],
+];
+
+// ==== 组: 顾客(customerList||customer_wallet;顾客钱包已死@if(false)不迁移入数组,原样留在文件里) ====
+$__navGroups[] = [
+    'gate' => Helpers::module_permission_check('customerList') || Helpers::module_permission_check('customer_wallet'),
+    'subtitle' => 'messages.customer_management', 'subtitle_title' => 'messages.customer_section',
+    'items' => array_merge(
+        Helpers::module_permission_check('customerList') ? [
+            ['label' => 'messages.customeres', 'title' => 'messages.Customer_List', 'route' => route('admin.customer.list'), 'icon' => 'tio-poi-user', 'active' => false, 'yield' => 'customerDetails'],
+            [
+                'label' => 'messages.loyalty_point', 'icon' => 'tio-medal', 'active' => Request::is('admin/customer/loyalty-point-report*'),
+                'children' => [
+                    ['label' => 'messages.report', 'route' => route('admin.customer.loyalty-point.report'), 'active' => Request::is('admin/customer/loyalty-point-report*')],
+                ],
+            ],
+            ['label' => 'messages.subscribed_mail_list', 'title' => 'messages.Subscribed_Emails', 'route' => route('admin.customer.subscribed'), 'icon' => 'tio-email-outlined', 'active' => Request::is('admin/customer/subscribed')],
+        ] : [],
+    ),
+];
+
+// ==== 组: 报表(report闸;骑手/分账相关报表·顾客钱包报表·骑手收入报表 已死@if(false)不迁移) ====
+$__navGroups[] = [
+    'gate' => Helpers::module_permission_check('report'),
+    'subtitle' => 'messages.report_management', 'subtitle_title' => 'messages.report_and_analytics',
+    'items' => [
+        ['label' => 'messages.transaction_report', 'route' => route('admin.report.day-wise-report'), 'icon' => 'tio-chart-pie-1', 'active' => Request::is('admin/report/transaction-report'), 'plain_link' => true],
+        ['label' => 'messages.expense_report', 'route' => route('admin.report.expense-report'), 'icon' => 'tio-image', 'active' => Request::is('admin/report/expense-report'), 'plain_link' => true],
+        [
+            'label' => 'messages.disbursement_report', 'icon' => 'tio-saving',
+            'active' => Request::is('admin/report/disbursement-report/restaurant') || Request::is('admin/report/disbursement-report/delivery_man'),
+            'children' => [
+                ['label' => 'messages.restaurants', 'route' => route('admin.report.disbursement_report', ['tab' => 'restaurant']), 'active' => Request::is('admin/report/disbursement-report/restaurant'), 'li_base' => 'navbar-vertical-aside-has-menu', 'plain_link' => true],
+                ['label' => 'messages.delivery_men', 'route' => route('admin.report.disbursement_report', ['tab' => 'delivery_man']), 'active' => Request::is('admin/report/disbursement-report/delivery_man'), 'li_base' => 'navbar-vertical-aside-has-menu', 'plain_link' => true],
+            ],
+        ],
+        ['label' => 'messages.food_report', 'route' => route('admin.report.food-wise-report'), 'icon' => 'tio-fastfood', 'active' => Request::is('admin/report/food-wise-report'), 'plain_link' => true],
+        [
+            'label' => 'messages.Order_Report', 'icon' => 'tio-user',
+            'active' => Request::is('admin/report/order-report') || Request::is('admin/report/campaign-order-report'),
+            'children' => [
+                ['label' => 'messages.Regular_order_report', 'title' => 'messages.order_report', 'route' => route('admin.report.order-report'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/report/order-report'), 'li_base' => 'navbar-vertical-aside-has-menu', 'plain_link' => true],
+                ['label' => 'messages.Campaign_Order_Report', 'route' => route('admin.report.campaign_order-report'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/report/campaign-order-report'), 'li_base' => 'navbar-vertical-aside-has-menu', 'plain_link' => true],
+            ],
+        ],
+        [
+            'label' => 'messages.restaurant_report', 'icon' => 'tio-files',
+            'active' => Request::is('admin/report/subscription-report') || Request::is('admin/report/restaurant-report'),
+            'children' => array_merge(
+                [['label' => 'messages.restaurant_report', 'route' => route('admin.report.restaurant-report'), 'active' => Request::is('admin/report/restaurant-report'), 'li_base' => 'navbar-vertical-aside-has-menu', 'plain_link' => true]],
+                (Helpers::subscription_check() == true) ? [['label' => 'messages.Subscription_report', 'route' => route('admin.report.subscription-report'), 'active' => Request::is('admin/report/subscription-report'), 'li_base' => 'navbar-vertical-aside-has-menu', 'plain_link' => true]] : [],
+            ),
+        ],
+        [
+            'label' => 'messages.Customer_Report', 'icon' => 'tio-poi-user',
+            'active' => Request::is('admin/customer/wallet/report*'),
+            'expanded' => Request::is('admin/customer/wallet/report*') || Request::is('admin/customer/overview/report*'),
+            'children' => [
+                ['label' => 'messages.Customer_Overview_Report', 'route' => route('admin.customer.overview.report'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/customer/overview/report*')],
+            ],
+        ],
+        ['label' => 'Tax_Report', 'route' => route('admin.report.getTaxReport'), 'icon' => 'tio-albums', 'active' => false, 'yield' => 'tax_report', 'extra_class' => 'text-capitalize', 'plain_link' => true],
+        ['label' => 'Restaurant_VAT_Report', 'route' => route('admin.report.vendorWiseTaxes'), 'icon' => 'tio-american-express', 'active' => false, 'yield' => 'vendor_tax_report', 'extra_class' => 'text-capitalize', 'plain_link' => true],
+        ['label' => 'Admin_Earning_Report', 'route' => route('admin.report.admin-earning-report'), 'icon' => 'tio-account-circle', 'active' => false, 'yield' => 'admin_earning_report', 'extra_class' => 'text-capitalize', 'plain_link' => true],
+        ['label' => 'Restaurant_Earning_Report', 'route' => route('admin.report.restaurant-earning-report'), 'icon' => 'tio-align-to-bottom', 'active' => Request::is('admin/report/restaurant-earning-report*'), 'yield' => 'restaurant_earning_report', 'extra_class' => 'text-capitalize', 'plain_link' => true],
+    ],
+];
+
+// ==== 组: 交易/资金管理(subtitle闸=account||deposit||withdraw_list||provide_dm_earning;注意集运申报/搜索需求/顾客取消理由三项原文件完全无权限闸,不受subtitle闸影响恒渲染;收现金/提现列表/提现方式已死@if(false)不迁移) ====
+$__navGroups[] = [
+    'gate' => Helpers::module_permission_check('account') || Helpers::module_permission_check('deposit') || Helpers::module_permission_check('withdraw_list') || Helpers::module_permission_check('provide_dm_earning'),
+    'subtitle' => 'messages.transaction_management', 'subtitle_title' => 'messages.business_section',
+    'items' => [
+        ['label' => '佣金充值管理', 'label_raw' => true, 'route' => route('admin.nezha-deposit.index'), 'icon' => 'tio-wallet', 'active' => Request::is('admin/nezha-deposit*'), 'gate' => Helpers::module_permission_check('deposit')],
+        ['label' => '商家退出结算', 'label_raw' => true, 'route' => route('admin.nezha-offboard.index'), 'icon' => 'tio-logout', 'active' => Request::is('admin/nezha-offboard*'), 'gate' => Helpers::module_permission_check('deposit')],
+        ['label' => '充值申请', 'label_raw' => true, 'route' => route('admin.nezha-topup.index'), 'icon' => 'tio-add-circle', 'active' => Request::is('admin/nezha-topup*'), 'gate' => Helpers::module_permission_check('deposit')],
+        ['label' => '押金退款', 'label_raw' => true, 'route' => route('admin.nezha-topup.refunds'), 'icon' => 'tio-undo', 'active' => Request::is('admin/nezha-topup/refunds*'), 'gate' => Helpers::module_permission_check('deposit')],
+        ['label' => '平台集运申报', 'label_raw' => true, 'route' => route('admin.nezha-consolidation.index'), 'icon' => 'tio-cube', 'active' => Request::is('admin/nezha-consolidation*'), 'gate' => true],
+        ['label' => '搜索需求', 'label_raw' => true, 'route' => route('admin.nezha-search-demand.index'), 'icon' => 'tio-search', 'active' => Request::is('admin/nezha-search-demand*'), 'gate' => true],
+        ['label' => '顾客取消理由', 'label_raw' => true, 'route' => route('admin.nezha-order-cancel-demand.index'), 'icon' => 'tio-clear-circle', 'active' => Request::is('admin/nezha-order-cancel-demand*'), 'gate' => true],
+        ['label' => 'messages.DeliveryMan_Payments', 'route' => route('admin.provide-deliveryman-earnings.index'), 'icon' => 'tio-send', 'active' => Request::is('admin/provide-deliveryman-earnings*'), 'gate' => Helpers::module_permission_check('provide_dm_earning')],
+    ],
+];
+
+// ==== 组: 员工管理(custom_role||employee) ====
+$__navGroups[] = [
+    'gate' => Helpers::module_permission_check('custom_role') || Helpers::module_permission_check('employee'),
+    'subtitle' => 'messages.Employee_Management', 'subtitle_title' => 'messages.employee_handle',
+    'items' => array_merge(
+        Helpers::module_permission_check('custom_role') ? [
+            ['label' => 'messages.employee_Role', 'route' => route('admin.custom-role.create'), 'icon' => 'tio-incognito', 'active' => Request::is('admin/custom-role*')],
+        ] : [],
+        Helpers::module_permission_check('employee') ? [[
+            'label' => 'messages.employees', 'title' => 'Employees', 'icon' => 'tio-user', 'active' => Request::is('admin/employee*'),
+            'children' => [
+                ['label' => 'messages.Add_New_Employee', 'title' => 'messages.add_new_Employee', 'route' => route('admin.employee.add-new'), 'active' => Request::is('admin/employee/add-new')],
+                ['label' => 'messages.Employee_List', 'title' => 'messages.Employee_list', 'route' => route('admin.employee.list'), 'active' => (Request::is('admin/employee/list') || Request::is('admin/employee/update/*'))],
+            ],
+        ]] : [],
+    ),
+];
+
+// ==== 组: 业务设置(settings闸;TaxModule插件块+订阅管理块 原样保留字面blade,不迁移入数组——两者均已知恒不可见,迁移收益为零风险不为零,详见D1提交说明) ====
+$__navGroups[] = [
+    'gate' => Helpers::module_permission_check('settings'),
+    'subtitle' => 'messages.business_settings', 'subtitle_title' => 'messages.business_settings',
+    'items' => [
+        ['label' => 'messages.business_setup', 'route' => route('admin.business-settings.business-setup'), 'icon' => 'tio-settings',
+            'active' => (Request::is('admin/business-settings/business-setup*') || Request::is('admin/business-settings/refund/settings*') || Request::is('admin/business-settings/language*')), 'plain_link' => true],
+    ],
+];
+// ---- 原文件此处紧接 TaxModule插件块 + 订阅管理块(均嵌套在settings闸内,见 raw_blocks 片段),真实环境TaxModule addon已发布会渲染,位置不可挪动 ----
+$__navGroups[] = ['raw_include' => 'layouts.admin.partials._sidebar-raw-taxmodule-subscription'];
+$__navGroups[] = [
+    'gate' => Helpers::module_permission_check('settings'),
+    'subtitle' => null,
+    'items' => [
+        ['label' => 'messages.email_template', 'route' => route('admin.business-settings.email-setup', ['admin', 'forgot-password']), 'icon' => 'tio-email', 'active' => Request::is('admin/business-settings/email-setup*'), 'plain_link' => true],
+        ['label' => 'messages.theme_settings', 'route' => route('admin.business-settings.theme-settings'), 'icon' => 'tio-brush', 'active' => Request::is('admin/business-settings/theme-settings*'), 'plain_link' => true],
+        ['label' => 'messages.gallery', 'route' => route('admin.file-manager.index'), 'icon' => 'tio-album', 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/file-manager*'), 'plain_link' => true],
+        ['label' => 'messages.login_setup', 'route' => route('admin.login-settings.index'), 'icon' => 'tio-devices-apple', 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/login-settings*'), 'plain_link' => true],
+        ['label' => 'messages.invoice_setup', 'route' => route('admin.business-settings.invoice-setup'), 'icon' => 'tio-receipt', 'active' => Request::is('admin/business-settings/invoice-setup*'), 'plain_link' => true],
+        [
+            'label' => 'messages.Pages_&_Social_Media', 'icon' => 'tio-pages',
+            'active' => (Request::is('admin/business-settings/pages*') || Request::is('admin/business-settings/social-media') || Request::is('admin/business-settings/registration-page/react*')),
+            'children' => [
+                ['label' => 'messages.Social_Media', 'route' => route('admin.business-settings.social-media.index'), 'active' => Request::is('admin/business-settings/social-media'), 'li_base' => 'navbar-vertical-aside-has-menu', 'plain_link' => true],
+                ['label' => 'messages.terms_and_condition', 'route' => route('admin.business-settings.terms-and-conditions'), 'active' => Request::is('admin/business-settings/pages/terms-and-conditions')],
+                ['label' => 'messages.privacy_policy', 'route' => route('admin.business-settings.privacy-policy'), 'active' => Request::is('admin/business-settings/pages/privacy-policy')],
+                ['label' => 'messages.about_us', 'route' => route('admin.business-settings.about-us'), 'active' => Request::is('admin/business-settings/pages/about-us')],
+                ['label' => 'messages.refund_policy', 'route' => route('admin.business-settings.refund-policy'), 'active' => Request::is('admin/business-settings/pages/refund-policy')],
+                ['label' => 'messages.shipping_policy', 'route' => route('admin.business-settings.shipping-policy'), 'active' => Request::is('admin/business-settings/pages/shipping-policy')],
+                ['label' => 'messages.cancellation_policy', 'route' => route('admin.business-settings.cancellation-policy'), 'active' => Request::is('admin/business-settings/pages/cancellation-policy')],
+                ['label' => 'messages.react_registration', 'route' => route('admin.business-settings.react-registration-page.hero'), 'active' => Request::is('admin/business-settings/registration-page/react*')],
+            ],
+        ],
+    ],
+];
+
+// ==== 组: 系统设置(system_settings闸) ====
+$__navGroups[] = [
+    'gate' => Helpers::module_permission_check('system_settings'),
+    'subtitle' => 'messages.system_settings', 'subtitle_title' => 'messages.system_settings',
+    'items' => [
+        [
+            'label' => 'messages.3rd_Party_&_Configurations', 'icon' => 'tio-plugin', 'yield' => '3rd_party',
+            'active' => (Request::is('admin/business-settings/fcm-*') || Request::is('admin/business-settings/payment-method') || Request::is('admin/business-settings/sms-module') || Request::is('admin/business-settings/mail-config') || Request::is('admin/social-login/view') || Request::is('admin/business-settings/offline*') || Request::is('admin/business-settings/config*') || Request::is('admin/business-settings/recaptcha*') || Request::is('admin/business-settings/*')),
+            'expanded' => (Request::is('admin/business-settings/deliveryman/join-us/*') || Request::is('admin/business-settings/restaurant/join-us/*') || Request::is('admin/business-settings/fcm-*') || Request::is('admin/business-settings/payment-method') || Request::is('admin/business-settings/sms-module') || Request::is('admin/business-settings/mail-config') || Request::is('admin/social-login/view') || Request::is('admin/business-settings/config*') || Request::is('admin/business-settings/recaptcha*') || Request::is('admin/business-settings/offline*') || Request::is('admin/business-settings/marketing/*') || Request::is('admin/business-settings/open-ai') || Request::is('admin/business-settings/open-ai-settings') || Request::is('admin/business-settings/firebase-otp*') || Request::is('admin/business-settings/storage-connection*')),
+            'children' => array_merge(
+                [
+                    ['label' => 'messages.3rd_Party', 'route' => route('admin.business-settings.payment-method'), 'yield' => ['firebase_otp', 'storage'],
+                        'active' => (Request::is('admin/business-settings/notification-setup*') || Request::is('admin/business-settings/payment-method') || Request::is('admin/business-settings/sms-module') || Request::is('admin/business-settings/mail-config') || Request::is('admin/social-login/view') || Request::is('admin/business-settings/config*') || Request::is('admin/business-settings/recaptcha*'))],
+                    ['label' => 'messages.Firebase_Notification', 'route' => route('admin.business-settings.fcm-index'), 'active' => Request::is('admin/business-settings/fcm-*')],
+                ],
+                Helpers::get_mail_status('offline_payment_status') ? [
+                    ['label' => 'messages.Offline_Payment_Setup', 'route' => route('admin.business-settings.offline'), 'active' => Request::is('admin/business-settings/offline*')],
+                ] : [],
+                [
+                    ['label' => 'messages.Join_us_page_setup', 'route' => route('admin.business-settings.restaurant_page_setup'), 'active' => false, 'yield' => 'reg_page'],
+                    ['label' => 'Analytics_Script', 'route' => route('admin.business-settings.marketing.analytic'), 'active' => false, 'yield' => 'analytics_Script'],
+                    ['label' => 'AI_Setup', 'route' => route('admin.business-settings.openAI'), 'active' => false, 'yield' => 'openAI'],
+                ],
+            ),
+        ],
+        ['label' => 'messages.App_&_Web_Settings', 'route' => route('admin.business-settings.app-settings'), 'icon' => 'tio-android', 'active' => Request::is('admin/business-settings/app-settings*'), 'plain_link' => true],
+        ['label' => 'messages.Notification_Channels', 'route' => route('admin.business-settings.notification_setup'), 'icon' => 'tio-snooze-notification', 'active' => false, 'yield' => 'notification_setup', 'plain_link' => true],
+        ['label' => 'messages.Notification_Messages', 'route' => route('admin.business-settings.notificationMessages'), 'icon' => 'tio-notifications-on-outlined', 'active' => false, 'yield' => 'notification_message', 'plain_link' => true],
+        [
+            'label' => 'messages.landing_page_settings', 'icon' => 'tio-files',
+            'active' => (Request::is('admin/react-landing-page*') || Request::is('admin/landing-page*')),
+            'children' => [
+                ['label' => 'messages.Admin_landing_page', 'route' => route('admin.landing_page.setup'), 'active' => Request::is('admin/landing-page*'), 'mini_mode_span' => true],
+                ['label' => 'messages.React_landing_page', 'route' => route('admin.react_landing_page.react_header'), 'active' => Request::is('admin/react-landing-page*'), 'mini_mode_span' => true],
+            ],
+        ],
+        ['label' => 'Page_Meta_data', 'route' => route('admin.pageMetaData'), 'icon' => 'tio-share-message', 'active' => Request::is('admin/page-meta-data*')],
+        ['label' => 'messages.clean_database', 'route' => route('admin.business-settings.db-index'), 'icon' => 'tio-cloud', 'active' => Request::is('admin/business-settings/db-index')],
+        ['label' => 'messages.Addon_Activation', 'route' => route('admin.addon-activation.index'), 'icon' => 'tio-appointment', 'active' => Request::is('admin/addon-activation*'), 'plain_link' => true],
+    ],
+];
+
+// ==== 组: 系统插件(system_addon闸) ====
+$__navGroups[] = [
+    'gate' => Helpers::module_permission_check('system_addon'),
+    'subtitle' => 'messages.system_addons',
+    'items' => [
+        ['label' => 'messages.system_addons', 'route' => route('admin.business-settings.system-addon.index'), 'icon' => 'tio-add-circle-outlined',
+            'active' => Request::is('admin/business-settings/system-addon'), 'active_extra_token' => 'show'],
+    ],
+];
+
 ?>
 <div id="sidebarMain" class="d-none">
     <aside
@@ -89,302 +505,26 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                 </form>
                 <!-- Search Form -->
                 <ul class="navbar-nav navbar-nav-lg nav-tabs mt-3">
-                    <!-- Dashboards -->
-                    <li class="navbar-vertical-aside-has-menu {{ Request::is('admin') ? 'active' : '' }}">
-                        <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{ route('admin.dashboard') }}"
-                            title="{{ translate('messages.dashboard') }}">
-                            <i class="tio-dashboard-vs nav-icon"></i>
-                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                {{ translate('messages.dashboard') }}
-                            </span>
-                        </a>
-                    </li>
-                    <!-- End Dashboards -->
-                    @if (Helpers::module_permission_check('pos'))
-                        <!-- POS -->
-                        <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/pos') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{ route('admin.pos.index') }}"
-                                title="{{ translate('messages.pos') }}">
-                                <i class="tio-receipt nav-icon"></i>
-                                <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.Point_of_Sale') }}</span>
-                            </a>
-                        </li>
-                        <!-- End POS -->
+                @foreach ($__navGroups as $__group)
+                    @if (!empty($__group['raw_include']))
+                        @include($__group['raw_include'])
+                        @continue
                     @endif
+                    @if ($__group['gate'])
+                        @if (!is_null($__group['subtitle']))
+                            <li class="nav-item">
+                                <small class="nav-subtitle"@if (!empty($__group['subtitle_title'])) title="{{ translate($__group['subtitle_title']) }}"@endif>{{ !empty($__group['subtitle_raw']) ? $__group['subtitle'] : translate($__group['subtitle']) }}</small>
+                                <small class="tio-more-horizontal nav-subtitle-replacer"></small>
+                            </li>
+                        @endif
+                    @endif
+                    @foreach ($__group['items'] as $__item)
+                        @include('layouts.admin.partials._sidebar-item', ['item' => $__item, 'depth' => 0, 'groupGate' => $__group['gate']])
+                    @endforeach
+                @endforeach
 
-
-
-                    <!-- Orders -->
-                    @if (Helpers::module_permission_check('order'))
-                        <li class="nav-item">
-                            <small class="nav-subtitle">{{ translate('messages.order_management') }}</small>
-                            <small class="tio-more-horizontal nav-subtitle-replacer"></small>
-                        </li>
-
-                        <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/order*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
-                                title="{{ translate('messages.orders') }}">
-                                <i class="tio-file-text-outlined nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                    {{ translate('messages.orders') }}
-                                </span>
-                            </a>
-                            <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                                style="display: {{ Request::is('admin/order*') && (Request::is('admin/order/subscription*') == false && Request::is('admin/order-cancel-reasons') == false) ? 'block' : 'none' }}">
-                                <li
-                                    class="nav-item {{ Request::is('admin/order/list/all') ? 'active' : '' }} @yield('all_order')">
-                                    <a class="nav-link" href="{{ route('admin.order.list', ['all']) }}"
-                                        title="{{ translate('messages.all_orders') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{ translate('messages.all') }}
-                                            <span class="badge badge-soft-info badge-pill ml-1">
-                                                {{-- {{ \App\Models\Order::Notpos()->HasSubscriptionToday()->count() }} ==
-                                            --}}
-                                                {{ $order->total }}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                <li
-                                    class="nav-item {{ Request::is('admin/order/list/scheduled') ? 'active' : '' }} @yield('scheduled')">
-                                    <a class="nav-link" href="{{ route('admin.order.list', ['scheduled']) }}"
-                                        title="{{ translate('messages.scheduled_orders') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{ translate('messages.scheduled') }}
-                                            <span class="badge badge-soft-info badge-pill ml-1">
-                                                {{-- {{ \App\Models\Order::Scheduled()->HasSubscriptionToday()->count() }}
-                                            == --}}
-                                                {{ $order->scheduled }}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                <li
-                                    class="nav-item {{ Request::is('admin/order/list/pending') ? 'active' : '' }} @yield('pending')">
-                                    <a class="nav-link " href="{{ route('admin.order.list', ['pending']) }}"
-                                        title="{{ translate('messages.pending_orders') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{ translate('messages.pending') }}
-                                            <span class="badge badge-soft-info badge-pill ml-1">
-                                                {{-- {{
-                                            \App\Models\Order::Pending()->HasSubscriptionToday()->OrderScheduledIn(30)->count()
-                                            }} == --}}
-                                                {{ $order_sch->pending }}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-
-                                <li
-                                    class="nav-item {{ Request::is('admin/order/list/accepted') ? 'active' : '' }} @yield('accepted')">
-                                    <a class="nav-link " href="{{ route('admin.order.list', ['accepted']) }}"
-                                        title="{{ translate('messages.accepted_orders') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{ translate('messages.accepted') }}
-                                            <span class="badge badge-soft-success badge-pill ml-1">
-                                                {{-- {{
-                                            \App\Models\Order::AccepteByDeliveryman()->HasSubscriptionToday()->OrderScheduledIn(30)->count()
-                                            }} == --}}
-
-                                                {{ $order_sch->accepted }}
-
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                <li
-                                    class="nav-item {{ Request::is('admin/order/list/processing') ? 'active' : '' }} @yield('processing')">
-                                    <a class="nav-link " href="{{ route('admin.order.list', ['processing']) }}"
-                                        title="{{ translate('messages.processing_orders') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{ translate('messages.processing') }}
-                                            <span class="badge badge-soft-warning badge-pill ml-1">
-                                                {{-- {{ \App\Models\Order::whereIn('order_status',
-                                            ['confirmed','processing','handover'])->HasSubscriptionToday()->count() }}==
-                                            --}}
-                                                {{ $order->processing }}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                <li
-                                    class="nav-item {{ Request::is('admin/order/list/food_on_the_way') ? 'active' : '' }} @yield('picked_up')">
-                                    <a class="nav-link text-capitalize"
-                                        href="{{ route('admin.order.list', ['food_on_the_way']) }}"
-                                        title="{{ translate('messages.foodOnTheWay_orders') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{ translate('messages.food_On_The_Way') }}
-                                            <span class="badge badge-soft-warning badge-pill ml-1">
-                                                {{-- {{
-                                            \App\Models\Order::FoodOnTheWay()->HasSubscriptionToday()->OrderScheduledIn(30)->count()
-                                            }}== --}}
-                                                {{ $order_sch->picked_up }}
-
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                <li
-                                    class="nav-item {{ Request::is('admin/order/list/delivered') ? 'active' : '' }} @yield('delivered')">
-                                    <a class="nav-link " href="{{ route('admin.order.list', ['delivered']) }}"
-                                        title="{{ translate('messages.delivered_orders') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{ translate('messages.delivered') }}
-                                            <span class="badge badge-soft-success badge-pill ml-1">
-                                                {{-- {{
-                                            \App\Models\Order::Delivered()->HasSubscriptionToday()->Notpos()->count()
-                                            }}== --}}
-                                                {{ $order->delivered }}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                <li
-                                    class="nav-item {{ Request::is('admin/order/list/canceled') ? 'active' : '' }} @yield('canceled')">
-                                    <a class="nav-link " href="{{ route('admin.order.list', ['canceled']) }}"
-                                        title="{{ translate('messages.canceled_orders') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{ translate('messages.canceled') }}
-                                            <span class="badge badge-soft-danger badge-pill ml-1">
-                                                {{-- {{ \App\Models\Order::Canceled()->HasSubscriptionToday()->count() }}==
-                                            --}}
-                                                {{ $order->canceled }}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                <li
-                                    class="nav-item {{ Request::is('admin/order/list/failed') ? 'active' : '' }} @yield('failed')">
-                                    <a class="nav-link " href="{{ route('admin.order.list', ['failed']) }}"
-                                        title="{{ translate('messages.payment_failed_orders') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container text-capitalize">
-                                            {{ translate('messages.payment_failed') }}
-                                            <span class="badge badge-soft-danger badge-pill ml-1">
-                                                {{-- {{ \App\Models\Order::failed()->HasSubscriptionToday()->count() }}==
-                                            --}}
-                                                {{ $order->failed }}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                <li
-                                    class="nav-item {{ Request::is('admin/order/list/refunded') ? 'active' : '' }} @yield('refunded')">
-                                    <a class="nav-link " href="{{ route('admin.order.list', ['refunded']) }}"
-                                        title="{{ translate('messages.refunded_orders') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{ translate('messages.refunded') }}
-                                            <span
-                                                class="badge badge-soft-danger badge-pill ml-1">{{ $order->refunded }}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                <li
-                                    class="nav-item {{ Request::is('admin/order/list/dine_in') ? 'active' : '' }} @yield('dine_in')">
-                                    <a class="nav-link " href="{{ route('admin.order.list', ['dine_in']) }}"
-                                        title="{{ translate('messages.dine_in_orders') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{ translate('messages.dine_in') }}
-                                            <span class="badge badge-soft-info badge-pill ml-1">
-                                                {{ $order->dine_in }}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-
-                                <li
-                                    class="nav-item {{ Request::is('admin/order/offline/payment/list*') ? 'active' : '' }}">
-                                    <a class="nav-link "
-                                        href="{{ route('admin.order.offline_verification_list', ['all']) }}"
-                                        title="{{ translate('Offline_Payments') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{ translate('messages.Offline_Payments') }}
-                                            <span class="badge badge-soft-danger bg-light badge-pill ml-1">
-                                                {{ \App\Models\Order::has('offline_payments')->Notpos()->count() }}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-
-
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/order/subscription*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                href="{{ route('admin.order.subscription.index') }}"
-                                title="{{ translate('messages.Subscription_orders') }} ">
-                                <i class="tio-appointment nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                    {{ translate('messages.Subscription_orders') }}</span>
-                            </a>
-                        </li>
-
-
-
-
-                        <!-- Order dispachment -->
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/dispatch/*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
-                                title="{{ translate('messages.Dispatch_Management') }}">
-                                <i class="tio-clock nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                    {{ translate('messages.Dispatch_Management') }}
-                                </span>
-                            </a>
-                            <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                                style="display: {{ Request::is('admin/dispatch*') ? 'block' : 'none' }}">
-                                <li
-                                    class="nav-item {{ Request::is('admin/dispatch/list/searching_for_deliverymen') ? 'active' : '' }}">
-                                    <a class="nav-link "
-                                        href="{{ route('admin.dispatch.list', ['searching_for_deliverymen']) }}"
-                                        title="{{ translate('messages.searching_DeliveryMan') }} {{ $order_sch->searching_dm }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">
-                                            {{ translate('messages.searching_DeliveryMan') }}
-                                            <span class="badge badge-soft-info badge-pill ml-1">
-                                                {{-- {{
-                                            \App\Models\Order::SearchingForDeliveryman()->OrderScheduledIn(30)->count()
-                                            }} --}}
-                                                {{ $order_sch->searching_dm }}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                                <li
-                                    class="nav-item {{ Request::is('admin/dispatch/list/on_going') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.dispatch.list', ['on_going']) }}"
-                                        title="{{ translate('messages.ongoing_Orders') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate sidebar--badge-container">
-                                            {{ translate('messages.ongoing_Orders') }}
-                                            <span class="badge badge-soft-dark bg-light badge-pill ml-1">
-                                                {{-- {{ \App\Models\Order::Ongoing()->OrderScheduledIn(30)->count() }}==
-                                            --}}
-                                                {{ $order_sch->ongoing }}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-                        <!-- Order dispachment End-->
-
-                        <!-- Order refund -->
+{{-- ===== 以下为哪吒M1原样保留的已死/插件态代码块(逐字节照抄自原文件,不迁移入配置数组; 详见D1提交说明) ===== --}}
+{{-- 订单退款(StackFood旧退款申请列表,已停用) 原文件388-422行 --}}
                         @if(false){{-- 哪吒隐藏: StackFood 退款申请列表已停用(refund_active_status 已关+顾客端入口已删, 再造不出 refund_requested); 路由/页面仍在, 恢复即删 @if(false)/@endif --}}
 <li
                             class="navbar-vertical-aside-has-menu {{ Request::is('admin/refund/*') ? 'active' : '' }}">
@@ -420,761 +560,7 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                         </li>
                         @endif
                         <!-- Order refund End-->
-                    @endif
-                    <!-- End Orders -->
-
-                    <!-- 哪吒风控中心 -->
-                    {{-- 权限位对齐(UI-1): 路由已拆 module:risk/risk_settings/refund/kyc(提交8cb8b83), 组壳判「任一新位」, 各子项各自判对应位, 使侧栏可见性=路由可达性 --}}
-                    @if (Helpers::module_permission_check('risk') ||
-                            Helpers::module_permission_check('risk_settings') ||
-                            Helpers::module_permission_check('refund') ||
-                            Helpers::module_permission_check('kyc'))
-                        <li class="navbar-vertical-aside-has-menu {{ (Request::is('admin/nezha-risk*') || Request::is('admin/nezha-refund*') || Request::is('admin/nezha-kyc*')) ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
-                                title="{{ translate('风控中心') }}">
-                                <i class="tio-shield nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                    {{ translate('风控中心') }}
-                                </span>
-                            </a>
-                            <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                                style="display: {{ (Request::is('admin/nezha-risk*') || Request::is('admin/nezha-refund*') || Request::is('admin/nezha-kyc*')) ? 'block' : 'none' }}">
-                                @if (Helpers::module_permission_check('risk'))
-                                <li class="nav-item {{ Request::is('admin/nezha-risk/queue') ? 'active' : '' }}">
-                                    <a class="nav-link" href="{{ route('admin.nezha-risk.queue') }}" title="{{ translate('审核队列') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('审核队列') }}</span>
-                                    </a>
-                                </li>
-                                <li class="nav-item {{ Request::is('admin/nezha-risk/logs') ? 'active' : '' }}">
-                                    <a class="nav-link" href="{{ route('admin.nezha-risk.logs') }}" title="{{ translate('风控日志') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('风控日志') }}</span>
-                                    </a>
-                                </li>
-                                @endif
-                                @if (Helpers::module_permission_check('risk_settings'))
-                                <li class="nav-item {{ Request::is('admin/nezha-risk/settings') ? 'active' : '' }}">
-                                    <a class="nav-link" href="{{ route('admin.nezha-risk.settings') }}" title="{{ translate('风控设置') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('风控设置') }}</span>
-                                    </a>
-                                </li>
-                                @endif
-                                @if (Helpers::module_permission_check('refund'))
-                                <li class="nav-item {{ Request::is('admin/nezha-refund/records') ? 'active' : '' }}">
-                                    <a class="nav-link" href="{{ route('admin.nezha-refund.records') }}" title="{{ translate('退款留痕/审核') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('退款留痕/审核') }}</span>
-                                    </a>
-                                </li>
-                                <li class="nav-item {{ Request::is('admin/nezha-refund/overdue') ? 'active' : '' }}">
-                                    <a class="nav-link" href="{{ route('admin.nezha-refund.overdue') }}" title="{{ translate('逾期未退款') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('逾期未退款') }}</span>
-                                    </a>
-                                </li>
-                                <li class="nav-item {{ Request::is('admin/nezha-refund/disputes') ? 'active' : '' }}">
-                                    <a class="nav-link" href="{{ route('admin.nezha-refund.disputes') }}" title="{{ translate('退款争议裁决') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('退款争议裁决') }}</span>
-                                    </a>
-                                </li>
-                                @endif
-                                @if (Helpers::module_permission_check('kyc'))
-                                <li class="nav-item {{ Request::is('admin/nezha-kyc*') ? 'active' : '' }}">
-                                    <a class="nav-link" href="{{ route('admin.nezha-kyc.index') }}" title="{{ translate('商家KYC') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('商家KYC') }}</span>
-                                    </a>
-                                </li>
-                                @endif
-                            </ul>
-                        </li>
-                    @endif
-                    <!-- End 风控中心 -->
-
-
-
-                    @if (Helpers::module_permission_check('zone') || Helpers::module_permission_check('restaurant'))
-                        <!-- Restaurant -->
-                        <li class="nav-item">
-                            <small class="nav-subtitle"
-                                title="{{ translate('messages.restaurant_section') }}">{{ translate('messages.restaurant_management') }}</small>
-                            <small class="tio-more-horizontal nav-subtitle-replacer"></small>
-                        </li>
-                    @endif
-
-                    @if (Helpers::module_permission_check('zone'))
-                        <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/zone*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                href="{{ route('admin.zone.home') }}"
-                                title="{{ translate('messages.zone_setup') }}">
-                                <i class="tio-poi-outlined nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                    {{ translate('messages.zone_setup') }}</span>
-                            </a>
-                        </li>
-                    @endif
-                    @if (Helpers::module_permission_check('restaurant'))
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/cuisine/add') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                href="{{ route('admin.cuisine.add') }}"
-                                title="{{ translate('messages.cuisine') }}">
-                                <i class="tio-link nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                    {{ translate('messages.cuisine') }}
-                            </a>
-                        </li>
-
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/restaurant/*') && !Request::is('admin/restaurant/withdraw_list') && !Request::is('admin/restaurant/withdraw-view*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
-                                title="{{ translate('messages.restaurants') }}">
-                                <i class="tio-restaurant nav-icon"></i>
-                                <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.restaurants') }}</span>
-                            </a>
-                            <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                                style="display: {{ (Request::is('admin/restaurant/*') && !Request::is('admin/restaurant/withdraw_list')) ||
-                                stripos(Request()->fullurl(), 'pending-list', 5)
-                                    ? 'block'
-                                    : 'none' }}">
-                                {{ stripos(Request()->fullurl(), 'pending-list', 5) }}
-                                <li
-                                    class="navbar-vertical-aside-has-menu {{ Request::is('admin/restaurant/add') ? 'active' : '' }}">
-                                    <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                        href="{{ route('admin.restaurant.add') }}"
-                                        title="{{ translate('messages.add_restaurant') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                            {{ translate('messages.add_restaurant') }}
-                                        </span>
-                                    </a>
-                                </li>
-
-                                <li
-                                    class="navbar-item @yield('restaurant_list') {{ !stripos(Request()->fullurl(), 'pending-list', 5) && (Request::is('admin/restaurant/list') || Request::is('admin/restaurant/transcation/*') || Request::is('admin/restaurant/view*')) ? 'active' : '' }} ">
-                                    <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                        href="{{ route('admin.restaurant.list') }}"
-                                        title="{{ translate('messages.restaurants_list') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.restaurants_list') }}</span>
-                                    </a>
-                                </li>
-
-                                <li
-                                    class="navbar-item  @yield('restaurant_new_join') {{ stripos(Request()->fullurl(), 'pending-list', 5) || Request::is('admin/restaurant/pending/list*') || Request::is('admin/restaurant/denied/list*') ? 'active' : '' }}">
-                                    <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                        href="{{ route('admin.restaurant.pending') }}"
-                                        title="{{ translate('messages.New_joining_request') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.New_joining_request') }}
-                                        </span>
-                                    </a>
-                                </li>
-
-                                <li
-                                    class="nav-item {{ Request::is('admin/restaurant/bulk-import') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.restaurant.bulk-import') }}"
-                                        title="{{ translate('messages.bulk_import') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="text-truncate text-capitalize">{{ translate('messages.bulk_import') }}</span>
-                                    </a>
-                                </li>
-                                <li
-                                    class="nav-item {{ Request::is('admin/restaurant/bulk-export') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.restaurant.bulk-export-index') }}"
-                                        title="{{ translate('messages.bulk_export') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="text-truncate text-capitalize">{{ translate('messages.bulk_export') }}</span>
-                                    </a>
-                                </li>
-
-                            </ul>
-                        </li>
-                    @endif
-                    <!-- End Restaurant -->
-
-                    @if (Helpers::module_permission_check('category') ||
-                            Helpers::module_permission_check('addon') ||
-                            Helpers::module_permission_check('food'))
-                        <li class="nav-item">
-                            <small class="nav-subtitle"
-                                title="{{ translate('messages.food_section') }}">{{ translate('messages.food_management') }}</small>
-                            <small class="tio-more-horizontal nav-subtitle-replacer"></small>
-                        </li>
-                    @endif
-
-                    <!-- Category -->
-                    @if (Helpers::module_permission_check('category'))
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/category*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
-                                title="{{ translate('messages.categories') }}">
-                                <i class="tio-category nav-icon"></i>
-                                <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.categories') }}</span>
-                            </a>
-                            <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                                style="display: {{ Request::is('admin/category*') ? 'block' : 'none' }}">
-
-
-                                <li
-                                    class="nav-item {{ Request::is('admin/category/add') || Request::is('admin/category/edit/*') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.category.add') }}"
-                                        title="{{ translate('messages.category') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('messages.category') }}</span>
-                                    </a>
-                                </li>
-
-                                <li
-                                    class="nav-item {{ Request::is('admin/category/add-sub-category') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.category.add-sub-category') }}"
-                                        title="{{ translate('messages.sub_category') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('messages.sub_category') }}</span>
-                                    </a>
-                                </li>
-
-
-                                <li class="nav-item {{ Request::is('admin/category/bulk-import') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.category.bulk-import') }}"
-                                        title="{{ translate('messages.bulk_import') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="text-truncate text-capitalize">{{ translate('messages.bulk_import') }}</span>
-                                    </a>
-                                </li>
-                                <li class="nav-item {{ Request::is('admin/category/bulk-export') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.category.bulk-export-index') }}"
-                                        title="{{ translate('messages.bulk_export') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="text-truncate text-capitalize">{{ translate('messages.bulk_export') }}</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-                    @endif
-                    <!-- End Category -->
-
-                    <!-- AddOn -->
-                    @if (Helpers::module_permission_check('addon'))
-                        <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/addon/*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
-                                title="{{ translate('messages.addons') }}">
-                                <i class="tio-add-circle-outlined nav-icon"></i>
-                                <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.addons') }}</span>
-                            </a>
-                            <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                                style="display: {{ Request::is('admin/addon/*') ? 'block' : 'none' }}">
-                                <li class="nav-item {{ Request::is('admin/addon/addon-category') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.addon.addon-category') }}"
-                                        title="{{ translate('messages.Addon_Category') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('messages.Addon_Category') }}</span>
-                                    </a>
-                                </li>
-                                <li
-                                    class="nav-item {{ Request::is('admin/addon/add-new') || Request::is('admin/addon/edit/*') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.addon.add-new') }}"
-                                        title="{{ translate('messages.addon_list') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('messages.list') }}</span>
-                                    </a>
-                                </li>
-
-                                <li class="nav-item {{ Request::is('admin/addon/bulk-import') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.addon.bulk-import') }}"
-                                        title="{{ translate('messages.bulk_import') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="text-truncate text-capitalize">{{ translate('messages.bulk_import') }}</span>
-                                    </a>
-                                </li>
-                                <li class="nav-item {{ Request::is('admin/addon/bulk-export') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.addon.bulk-export-index') }}"
-                                        title="{{ translate('messages.bulk_export') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="text-truncate text-capitalize">{{ translate('messages.bulk_export') }}</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-                    @endif
-                    <!-- End AddOn -->
-                    <!-- Food -->
-                    @if (Helpers::module_permission_check('food'))
-                        <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/food*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
-                                title="{{ translate('messages.foods') }}">
-                                <i class="tio-fastfood nav-icon"></i>
-                                <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.foods') }}</span>
-                            </a>
-                            <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                                style="display: {{ Request::is('admin/food*') ? 'block' : 'none' }}">
-                                <li class="nav-item {{ Request::is('admin/food/add-new') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.food.add-new') }}"
-                                        title="{{ translate('messages.add_new') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('messages.add_new') }}</span>
-                                    </a>
-                                </li>
-                                <li
-                                    class="nav-item {{ Request::is('admin/food/list') || Request::is('admin/food/view/*') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.food.list') }}"
-                                        title="{{ translate('messages.food_list') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('messages.list') }}</span>
-                                    </a>
-                                </li>
-                                <li class="nav-item {{ Request::is('admin/food/reviews') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.food.reviews') }}"
-                                        title="{{ translate('messages.review_list') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('messages.review') }}</span>
-                                    </a>
-                                </li>
-                                <li class="nav-item {{ Request::is('admin/food/bulk-import') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.food.bulk-import') }}"
-                                        title="{{ translate('messages.bulk_import') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="text-truncate text-capitalize">{{ translate('messages.bulk_import') }}</span>
-                                    </a>
-                                </li>
-                                <li class="nav-item {{ Request::is('admin/food/bulk-export') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.food.bulk-export-index') }}"
-                                        title="{{ translate('messages.bulk_export') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="text-truncate text-capitalize">{{ translate('messages.bulk_export') }}</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-                    @endif
-                    <!-- End Food -->
-
-
-
-                    @if (Helpers::module_permission_check('campaign') ||
-                            Helpers::module_permission_check('coupon') ||
-                            Helpers::module_permission_check('cashback') ||
-                            Helpers::module_permission_check('advertisement') ||
-                            Helpers::module_permission_check('notification') ||
-                            Helpers::module_permission_check('banner'))
-                        <!-- Marketing section -->
-                        <li class="nav-item">
-                            <small class="nav-subtitle"
-                                title="{{ translate('Promotion_management') }}">{{ translate('Promotions_management') }}</small>
-                            <small class="tio-more-horizontal nav-subtitle-replacer"></small>
-                        </li>
-                    @endif
-
-
-                    <!-- Campaign -->
-                    @if (Helpers::module_permission_check('campaign'))
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/campaign*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
-                                title="{{ translate('messages.campaigns') }}">
-                                <i class="tio-notice nav-icon"></i>
-                                <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.campaigns') }}</span>
-                            </a>
-                            <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                                style="display: {{ Request::is('admin/campaign*') ? 'block' : 'none' }}">
-
-                                <li class="nav-item {{ Request::is('admin/campaign/basic/*') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.campaign.list', 'basic') }}"
-                                        title="{{ translate('messages.basic_campaign') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('messages.basic_campaign') }}</span>
-                                    </a>
-                                </li>
-                                <li class="nav-item {{ Request::is('admin/campaign/item/*') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.campaign.list', 'item') }}"
-                                        title="{{ translate('messages.food_campaign') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('messages.food_campaign') }}</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-                    @endif
-                    <!-- End Campaign -->
-
-
-
-                    <!-- Coupon -->
-                    @if (Helpers::module_permission_check('coupon'))
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/coupon*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                href="{{ route('admin.coupon.add-new') }}"
-                                title="{{ translate('messages.coupons') }}">
-                                <i class="tio-ticket nav-icon"></i>
-                                <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.coupons') }}</span>
-                            </a>
-                        </li>
-                    @endif
-                    <!-- End Coupon -->
-
-                    @if (Helpers::module_permission_check('cashback'))
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/cashback*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                href="{{ route('admin.cashback.add-new') }}"
-                                title="{{ translate('messages.cashback') }}">
-                                <i class="tio-settings-back nav-icon"></i>
-                                <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.cashback') }}</span>
-                            </a>
-                        </li>
-                    @endif
-
-
-                    <!-- Banner -->
-                    @if (Helpers::module_permission_check('banner'))
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/banner*') && !Request::is('admin/banner/promotional-banner*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                href="{{ route('admin.banner.add-new') }}"
-                                title="{{ translate('messages.banners') }}">
-                                <i class="tio-bookmark nav-icon side-nav-icon--design"></i>
-                                <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.banners') }}</span>
-                            </a>
-                        </li>
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/banner/promotional-banner*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                href="{{ route('admin.banner.promotional_banner') }}"
-                                title="{{ translate('messages.promotional_banner') }}">
-                                <i class="tio-tabs nav-icon side-nav-icon--design"></i>
-                                <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.promotional_banner') }}</span>
-                            </a>
-                        </li>
-                    @endif
-                    <!-- End Banner -->
-
-
-
-
-
-
-                    <!-- advertisement -->
-                    @if (Helpers::module_permission_check('advertisement'))
-                        <li class="navbar-vertical-aside-has-menu  @yield('advertisement')">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
-                                title="{{ translate('messages.advertisement') }}">
-                                <i class="tio-tv-old nav-icon"></i>
-                                <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.advertisement') }}</span>
-                            </a>
-                            <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                                style="display: {{ Request::is('admin/advertisement*') ? 'block' : 'none' }}">
-
-                                <li class="nav-item @yield('advertisement_create')">
-                                    <a class="nav-link " href="{{ route('admin.advertisement.create') }}"
-                                        title="{{ translate('messages.New_Advertisement') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="text-truncate">{{ translate('messages.New_Advertisement') }}</span>
-                                    </a>
-                                </li>
-                                <li class="nav-item @yield('advertisement_request')">
-                                    <a class="nav-link " href="{{ route('admin.advertisement.requestList') }}"
-                                        title="{{ translate('messages.Ad_Requests') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('messages.Ad_Requests') }}</span>
-                                    </a>
-                                </li>
-                                <li class="nav-item @yield('advertisement_list')">
-                                    <a class="nav-link " href="{{ route('admin.advertisement.index') }}"
-                                        title="{{ translate('messages.Ads_list') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('messages.Ads_list') }}</span>
-                                    </a>
-                                </li>
-                                <li class="nav-item @yield('advertisement_auction')">
-                                    <a class="nav-link " href="{{ route('admin.advertisement.auction-settings') }}"
-                                        title="竞价参数设置">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">竞价参数设置</span>
-                                    </a>
-                                </li>
-                                <li class="nav-item @yield('advertisement_recharge')">
-                                    <a class="nav-link " href="{{ route('admin.advertisement.ad-recharge') }}"
-                                        title="广告余额充值">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">广告余额充值</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-                    @endif
-                    <!-- End Campaign -->
-
-
-
-
-                    <!-- Notification -->
-                    @if (Helpers::module_permission_check('notification'))
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/notification*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                href="{{ route('admin.notification.add-new') }}"
-                                title="{{ translate('messages.push_notification') }}">
-                                <i class="tio-notifications-on nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                    {{ translate('messages.push_notification') }}
-                                </span>
-                            </a>
-                        </li>
-                    @endif
-                    <!-- End Notification -->
-
-
-                    @if (Helpers::module_permission_check('chat') || Helpers::module_permission_check('contact_message'))
-                        <li class="nav-item">
-                            <small class="nav-subtitle">{{ translate('messages.Help_&_Support') }}</small>
-                            <small class="tio-more-horizontal nav-subtitle-replacer"></small>
-                        </li>
-                    @endif
-
-                    @if (Helpers::module_permission_check('chat'))
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/message/list') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                href="{{ route('admin.message.list', ['tab' => 'customer']) }}"
-                                title="{{ translate('messages.Chattings') }}">
-                                <i class="tio-chat nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                    {{ translate('messages.Chattings') }}
-                                </span>
-                            </a>
-                        </li>
-                    @endif
-                    @if (Helpers::module_permission_check('nezha_cs'))
-                        <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-cs*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                href="{{ route('admin.nezha-cs.index') }}"
-                                title="{{ translate('AI在线客服') }}">
-                                <i class="tio-online nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                    {{ translate('AI在线客服') }}
-                                </span>
-                            </a>
-                        </li>
-                    @endif
-                    @if (Helpers::module_permission_check('nezha_cs'))
-                        <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/vendor-feedback*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                href="{{ route('admin.vendor-feedback.index') }}"
-                                title="{{ translate('商家反馈') }}">
-                                <i class="tio-comment-text-outlined nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                    {{ translate('商家反馈') }}
-                                </span>
-                            </a>
-                        </li>
-                    @endif
-                    @if (Helpers::module_permission_check('contact_message'))
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/contact/*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                href="{{ route('admin.contact.list') }}"
-                                title="{{ translate('messages.Contact_messages') }}">
-                                <i class="tio-messages nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                    {{ translate('messages.Contact_messages') }}
-                                </span>
-                            </a>
-                        </li>
-                    @endif
-
-                    @if (Helpers::module_permission_check('settings'))
-                    <li
-                        class="navbar-vertical-aside-has-menu {{ Request::is('admin/local-life*') ? 'active' : '' }}">
-                        <a class="js-navbar-vertical-aside-menu-link nav-link"
-                            href="{{ route('admin.local-life.list') }}"
-                            title="本地生活">
-                            <i class="tio-poi-outlined nav-icon"></i>
-                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                本地生活
-                            </span>
-                        </a>
-                    </li>
-
-                    <li
-                        class="navbar-vertical-aside-has-menu {{ Request::is('admin/local-life/categories*') ? 'active' : '' }}">
-                        <a class="js-navbar-vertical-aside-menu-link nav-link"
-                            href="{{ route('admin.local-life.categories.list') }}"
-                            title="本地生活类目">
-                            <i class="tio-folder-labeled nav-icon"></i>
-                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                本地生活类目
-                            </span>
-                        </a>
-                    </li>
-
-                    <li
-                        class="navbar-vertical-aside-has-menu {{ Request::is('admin/local-life/merchants*') ? 'active' : '' }}">
-                        <a class="js-navbar-vertical-aside-menu-link nav-link"
-                            href="{{ route('admin.local-life.merchants.list') }}"
-                            title="本地生活商家">
-                            <i class="tio-shop-outlined nav-icon"></i>
-                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                本地生活商家
-                            </span>
-                        </a>
-                    </li>
-                    @if (Helpers::module_permission_check('restaurant'))
-                    <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/restaurant-report*') ? 'active' : '' }}">
-                        <a class="js-navbar-vertical-aside-menu-link nav-link"
-                            href="{{ route('admin.restaurant-report.list') }}"
-                            title="举报商家">
-                            <i class="tio-flag nav-icon"></i>
-                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                举报商家
-                            </span>
-                        </a>
-                    </li>
-                    @endif
-
-                    @endif
-
-                    @if (Helpers::module_permission_check('restaurant'))
-                    <li
-                        class="navbar-vertical-aside-has-menu {{ Request::is('admin/merchant-lead/*') ? 'active' : '' }}">
-                        <a class="js-navbar-vertical-aside-menu-link nav-link"
-                            href="{{ route('admin.merchant-lead.list') }}"
-                            title="商家入驻申请">
-                            <i class="tio-shop nav-icon"></i>
-                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                商家入驻申请
-                            </span>
-                        </a>
-                    </li>
-                    @endif
-
-
-
-
-                    <!-- Custommer -->
-                    @if (Helpers::module_permission_check('customerList') || Helpers::module_permission_check('customer_wallet'))
-                        <li class="nav-item">
-                            <small class="nav-subtitle"
-                                title="{{ translate('messages.customer_section') }}">{{ translate('messages.customer_management') }}</small>
-                            <small class="tio-more-horizontal nav-subtitle-replacer"></small>
-                        </li>
-                    @endif
-
-                    @if (Helpers::module_permission_check('customerList'))
-                        <li class="navbar-vertical-aside-has-menu @yield('customerDetails')">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                href="{{ route('admin.customer.list') }}"
-                                title="{{ translate('messages.Customer_List') }}">
-                                <i class="tio-poi-user nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                    {{ translate('messages.customeres') }}
-                                </span>
-                            </a>
-                        </li>
-                    @endif
-
-                    {{-- 哪吒B方案隐藏「顾客钱包」(加款/返现): 平台不持币·不给顾客钱包充值(L1-1 平台不碰钱),StackFood残留菜单。恢复把 false 改回即可;路由 admin.customer.wallet.* 未动 --}}
-                    @if (false && Helpers::module_permission_check('customer_wallet'))
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ !Request::is('admin/customer/wallet/report*') && Request::is('admin/customer/wallet*') ? 'active' : '' }}">
-
-                            <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
-                                title="{{ translate('messages.Customer_Wallet') }}">
-                                <i class="tio-wallet nav-icon"></i>
-                                <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate  text-capitalize">
-                                    {{ translate('messages.wallet') }}
-                                </span>
-                            </a>
-
-                            <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                                style="display: {{ !Request::is('admin/customer/wallet/report*') && Request::is('admin/customer/wallet*') ? 'block' : 'none' }}">
-                                <li
-                                    class="nav-item {{ Request::is('admin/customer/wallet/add-fund') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.customer.wallet.add-fund') }}"
-                                        title="{{ translate('messages.add_fund') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="text-truncate text-capitalize">{{ translate('messages.add_fund') }}</span>
-                                    </a>
-                                </li>
-                                <li
-                                    class="nav-item {{ Request::is('admin/customer/wallet/bonus*') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.customer.wallet.bonus.add-new') }}"
-                                        title="{{ translate('messages.bonus') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="text-truncate text-capitalize">{{ translate('messages.bonus') }}</span>
-                                    </a>
-                                </li>
-
-                            </ul>
-                        </li>
-                    @endif
-                    @if (Helpers::module_permission_check('customerList'))
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/customer/loyalty-point-report*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link  nav-link-toggle" href="javascript:"
-                                title="{{ translate('messages.loyalty_point') }}">
-                                <i class="tio-medal nav-icon"></i>
-                                <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate  text-capitalize">
-                                    {{ translate('messages.loyalty_point') }}
-                                </span>
-                            </a>
-
-                            <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                                style="display: {{ Request::is('admin/customer/loyalty-point-report*') ? 'block' : 'none' }}">
-                                <li
-                                    class="nav-item {{ Request::is('admin/customer/loyalty-point-report*') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.customer.loyalty-point.report') }}"
-                                        title="{{ translate('messages.report') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="text-truncate text-capitalize">{{ translate('messages.report') }}</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/customer/subscribed') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                href="{{ route('admin.customer.subscribed') }}"
-                                title="{{ translate('messages.Subscribed_Emails') }}">
-                                <i class="tio-email-outlined nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                    {{ translate('messages.subscribed_mail_list') }}
-                                </span>
-                            </a>
-                        </li>
-                        </li>
-                    @endif
-                    <!-- End Custommer -->
-
+{{-- 骑手管理整组(已死) 原文件1178-1305行 --}}
                     <!-- DeliveryMan -->
                     {{-- 哪吒B方案隐藏「骑手管理」全块(管理/列表/评价): 平台无自营骑手,配送由商家手动叫Yandex(见 yandex-delivery-bridge)。StackFood残留菜单。恢复把 false 改回即可;路由未动 --}}
                     @if (false && Helpers::module_permission_check('deliveryman'))
@@ -1303,12 +689,7 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                         </li>
                     @endif
                     <!-- End DeliveryMan -->
-
-
-
-
-
-
+{{-- 分账/打款管理整组(已死) 原文件1312-1349行 --}}
 
                     {{-- 哪吒B方案隐藏「分账/打款管理」全块(商家结算/骑手结算/分账报表): 平台不向商家/骑手打款(L1-1/L1-5,打款腿已拔),Disbursement恒空。StackFood残留菜单。恢复把 false 改回即可;路由未动 --}}
                     @if (false && Helpers::module_permission_check('disbursement'))
@@ -1347,166 +728,46 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                             </a>
                         </li>
                     @endif
-
-
-
-                    <!-- Report -->
-                    @if (Helpers::module_permission_check('report'))
-                        <li class="nav-item">
-                            <small class="nav-subtitle"
-                                title="{{ translate('messages.report_and_analytics') }}">{{ translate('messages.report_management') }}</small>
-                            <small class="tio-more-horizontal nav-subtitle-replacer"></small>
-                        </li>
-
+{{-- 顾客钱包(加款/返现,已死) 原文件1100-1137行 --}}
+                    {{-- 哪吒B方案隐藏「顾客钱包」(加款/返现): 平台不持币·不给顾客钱包充值(L1-1 平台不碰钱),StackFood残留菜单。恢复把 false 改回即可;路由 admin.customer.wallet.* 未动 --}}
+                    @if (false && Helpers::module_permission_check('customer_wallet'))
                         <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/report/transaction-report') ? 'active' : '' }}">
-                            <a class="nav-link " href="{{ route('admin.report.day-wise-report') }}"
-                                title="{{ translate('messages.transaction_report') }}">
-                                <span class="tio-chart-pie-1 nav-icon"></span>
-                                <span class="text-truncate">{{ translate('messages.transaction_report') }}</span>
-                            </a>
-                        </li>
+                            class="navbar-vertical-aside-has-menu {{ !Request::is('admin/customer/wallet/report*') && Request::is('admin/customer/wallet*') ? 'active' : '' }}">
 
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/report/expense-report') ? 'active' : '' }}">
-                            <a class="nav-link " href="{{ route('admin.report.expense-report') }}"
-                                title="{{ translate('messages.expense_report') }}">
-                                <span class="tio-image  nav-icon"></span>
-                                <span class="text-truncate">{{ translate('messages.expense_report') }}</span>
-                            </a>
-                        </li>
-
-
-                        <li
-                            class="navbar-vertical-aside-has-menu   {{ Request::is('admin/report/disbursement-report/restaurant') || Request::is('admin/report/disbursement-report/delivery_man') ? 'active' : '' }}">
                             <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
-                                title="{{ translate('messages.disbursement_report') }}">
-                                <span class="tio-saving nav-icon"></span>
+                                title="{{ translate('messages.Customer_Wallet') }}">
+                                <i class="tio-wallet nav-icon"></i>
                                 <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.disbursement_report') }}</span>
+                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate  text-capitalize">
+                                    {{ translate('messages.wallet') }}
+                                </span>
                             </a>
-                            <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                                style="display: {{ Request::is('admin/report/disbursement-report/restaurant') || Request::is('admin/report/disbursement-report/delivery_man') ? 'block' : 'none' }}">
 
+                            <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
+                                style="display: {{ !Request::is('admin/customer/wallet/report*') && Request::is('admin/customer/wallet*') ? 'block' : 'none' }}">
                                 <li
-                                    class="navbar-vertical-aside-has-menu {{ Request::is('admin/report/disbursement-report/restaurant') ? 'active' : '' }}">
-                                    <a class="nav-link "
-                                        href="{{ route('admin.report.disbursement_report', ['tab' => 'restaurant']) }}"
-                                        title="{{ translate('messages.restaurants') }}">
+                                    class="nav-item {{ Request::is('admin/customer/wallet/add-fund') ? 'active' : '' }}">
+                                    <a class="nav-link " href="{{ route('admin.customer.wallet.add-fund') }}"
+                                        title="{{ translate('messages.add_fund') }}">
                                         <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('messages.restaurants') }}</span>
+                                        <span
+                                            class="text-truncate text-capitalize">{{ translate('messages.add_fund') }}</span>
                                     </a>
                                 </li>
                                 <li
-                                    class="navbar-vertical-aside-has-menu {{ Request::is('admin/report/disbursement-report/delivery_man') ? 'active' : '' }}">
-                                    <a class="nav-link "
-                                        href="{{ route('admin.report.disbursement_report', ['tab' => 'delivery_man']) }}"
-                                        title="{{ translate('messages.delivery_men') }}">
+                                    class="nav-item {{ Request::is('admin/customer/wallet/bonus*') ? 'active' : '' }}">
+                                    <a class="nav-link " href="{{ route('admin.customer.wallet.bonus.add-new') }}"
+                                        title="{{ translate('messages.bonus') }}">
                                         <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('messages.delivery_men') }}</span>
+                                        <span
+                                            class="text-truncate text-capitalize">{{ translate('messages.bonus') }}</span>
                                     </a>
                                 </li>
 
                             </ul>
                         </li>
-
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/report/food-wise-report') ? 'active' : '' }}">
-                            <a class="nav-link " href="{{ route('admin.report.food-wise-report') }}"
-                                title="{{ translate('messages.food_report') }}">
-                                <span class="tio-fastfood nav-icon"></span>
-                                <span class="text-truncate">{{ translate('messages.food_report') }}</span>
-                            </a>
-                        </li>
-
-
-
-
-                        <li
-                            class="navbar-vertical-aside-has-menu  {{ Request::is('admin/report/order-report') || Request::is('admin/report/campaign-order-report') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
-                                title="{{ translate('messages.Order_Report') }}">
-                                <i class="tio-user nav-icon"></i>
-                                <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.Order_Report') }}</span>
-                            </a>
-                            <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                                style="display: {{ Request::is('admin/report/order-report') || Request::is('admin/report/campaign-order-report') ? 'block' : 'none' }}">
-                                <li
-                                    class="navbar-vertical-aside-has-menu {{ Request::is('admin/report/order-report') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.report.order-report') }}"
-                                        title="{{ translate('messages.order_report') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="text-truncate text-capitalize">{{ translate('messages.Regular_order_report') }}</span>
-                                    </a>
-                                </li>
-                                <li
-                                    class="navbar-vertical-aside-has-menu {{ Request::is('admin/report/campaign-order-report') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.report.campaign_order-report') }}"
-                                        title="{{ translate('messages.Campaign_Order_Report') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="text-truncate text-capitalize">{{ translate('messages.Campaign_Order_Report') }}</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-
-
-                        <li
-                            class="navbar-vertical-aside-has-menu   {{ Request::is('admin/report/subscription-report') || Request::is('admin/report/restaurant-report') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
-                                title="{{ translate('messages.restaurant_report') }}">
-                                <span class="tio-files nav-icon"></span>
-                                <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.restaurant_report') }}</span>
-                            </a>
-                            <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                                style="display: {{ Request::is('admin/report/subscription-report') || Request::is('admin/report/restaurant-report') ? 'block' : 'none' }}">
-
-                                <li
-                                    class="navbar-vertical-aside-has-menu {{ Request::is('admin/report/restaurant-report') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.report.restaurant-report') }}"
-                                        title="{{ translate('messages.restaurant_report') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="text-truncate">{{ translate('messages.restaurant_report') }}</span>
-                                    </a>
-                                </li>
-                                @if (Helpers::subscription_check() == true)
-                                    <li
-                                        class="navbar-vertical-aside-has-menu {{ Request::is('admin/report/subscription-report') ? 'active' : '' }}">
-                                        <a class="nav-link " href="{{ route('admin.report.subscription-report') }}"
-                                            title="{{ translate('messages.Subscription_report') }}">
-                                            <span class="tio-circle nav-indicator-icon"></span>
-                                            <span
-                                                class="text-truncate">{{ translate('messages.Subscription_report') }}</span>
-                                        </a>
-                                    </li>
-                                @endif
-                            </ul>
-                        </li>
-                        <li
-                            class="navbar-vertical-aside-has-menu   {{ Request::is('admin/customer/wallet/report*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
-                                title="{{ translate('messages.Customer_Report') }}">
-                                <span class="tio-poi-user nav-icon"></span>
-                                <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.Customer_Report') }}</span>
-                            </a>
-                            <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                                style="display: {{ Request::is('admin/customer/wallet/report*') || Request::is('admin/customer/overview/report*') ? 'block' : 'none' }}">
-
-                                <li
-                                    class="nav-item {{ Request::is('admin/customer/overview/report*') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.customer.overview.report') }}"
-                                        title="{{ translate('messages.Customer_Overview_Report') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="text-truncate text-capitalize">{{ translate('messages.Customer_Overview_Report') }}</span>
-                                    </a>
-                                </li>
+                    @endif
+{{-- 顾客钱包报表(已死) 原文件1510-1521行 --}}
                                 {{-- 哪吒B方案隐藏「顾客钱包报表」: 平台不持顾客钱包(L1-1)。恢复删掉本 @if(false)/@endif 包裹即可;路由未动 --}}
                                 @if (false)
                                 <li
@@ -1519,44 +780,7 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                                     </a>
                                 </li>
                                 @endif
-                            </ul>
-                        </li>
-
-
-                        <li class="navbar-vertical-aside-has-menu @yield('tax_report')">
-                            <a class="nav-link " href="{{ route('admin.report.getTaxReport') }}"
-                                title="{{ translate('Tax_Report') }}">
-                                <span class="tio-albums nav-icon"></span>
-                                <span class="text-truncate text-capitalize">{{ translate('Tax_Report') }}</span>
-                            </a>
-                        </li>
-                        <li class="navbar-vertical-aside-has-menu @yield('vendor_tax_report')">
-                            <a class="nav-link " href="{{ route('admin.report.vendorWiseTaxes') }}"
-                                title="{{ translate('Restaurant_VAT_Report') }}">
-                                <span class="tio-american-express nav-icon"></span>
-                                <span
-                                    class="text-truncate text-capitalize">{{ translate('Restaurant_VAT_Report') }}</span>
-                            </a>
-                        </li>
-
-                        <li class="navbar-vertical-aside-has-menu @yield('admin_earning_report')">
-                            <a class="nav-link " href="{{ route('admin.report.admin-earning-report') }}"
-                                title="{{ translate('Admin_Earning_Report') }}">
-                                <span class="tio-account-circle nav-icon"></span>
-                                <span
-                                    class="text-truncate text-capitalize">{{ translate('Admin_Earning_Report') }}</span>
-                            </a>
-                        </li>
-
-                        <li class="navbar-vertical-aside-has-menu @yield('restaurant_earning_report') {{ Request::is('admin/report/restaurant-earning-report*') ? 'active' : '' }}">
-                            <a class="nav-link " href="{{ route('admin.report.restaurant-earning-report') }}"
-                                title="{{ translate('Restaurant_Earning_Report') }}">
-                                <span class="tio-align-to-bottom nav-icon"></span>
-                                <span
-                                    class="text-truncate text-capitalize">{{ translate('Restaurant_Earning_Report') }}</span>
-                            </a>
-                        </li>
-
+{{-- 骑手收入报表(已死) 原文件1560-1570行 --}}
                         {{-- 哪吒B方案隐藏「骑手收入报表」: 无自营骑手(配送走Yandex)。恢复删掉本 @if(false)/@endif 包裹即可;路由未动 --}}
                         @if (false)
                         <li class="navbar-vertical-aside-has-menu @yield('deliveryman_earning_report') {{ Request::is('admin/report/deliveryman-earning-report*') ? 'active' : '' }}">
@@ -1568,86 +792,7 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                             </a>
                         </li>
                         @endif
-                    @endif
-
-
-                    @if (Helpers::module_permission_check('account') ||
-                            Helpers::module_permission_check('deposit') ||
-                            Helpers::module_permission_check('withdraw_list') ||
-                            Helpers::module_permission_check('provide_dm_earning'))
-                        <!-- transaction_management -->
-
-                        <li class="nav-item">
-                            <small class="nav-subtitle"
-                                title="{{ translate('messages.business_section') }}">{{ translate('messages.transaction_management') }}</small>
-                            <small class="tio-more-horizontal nav-subtitle-replacer"></small>
-                        </li>
-                        <!-- account -->
-                    @endif
-
-                    {{-- 哪吒B方案隐藏「收取现金」(account-transaction): 平台不经手现金/不做现金归集(L1-1 平台不碰钱)。StackFood残留菜单。恢复把 false 改回即可;路由 admin.account-transaction.index 未动 --}}
-                    @if (false && Helpers::module_permission_check('account'))
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/account-transaction*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                href="{{ route('admin.account-transaction.index') }}"
-                                title="{{ translate('messages.collect_cash') }}">
-                                <i class="tio-money nav-icon"></i>
-                                <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.collect_cash') }}</span>
-                            </a>
-                        </li>
-                    @endif
-                    <!-- End account -->
-                    @if (Helpers::module_permission_check('deposit'))
-                        <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-deposit*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{ route('admin.nezha-deposit.index') }}" title="{{ translate('佣金充值管理') }}">
-                                <i class="tio-wallet nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('佣金充值管理') }}</span>
-                            </a>
-                        </li>
-                        {{-- 哪吒 商家退出结算 审批/放款(step4-4) --}}
-                        <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-offboard*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{ route('admin.nezha-offboard.index') }}" title="{{ translate('商家退出结算') }}">
-                                <i class="tio-logout nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('商家退出结算') }}</span>
-                            </a>
-                        </li>
-                        {{-- 哪吒 自助充值申请(A3·S3) 审核队列 --}}
-                        <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-topup*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{ route('admin.nezha-topup.index') }}" title="{{ translate('充值申请') }}">
-                                <i class="tio-add-circle nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('充值申请') }}</span>
-                            </a>
-                        </li>
-                        {{-- 哪吒 押金退款审核(A3·S3-B·dormant) --}}
-                        <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-topup/refunds*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{ route('admin.nezha-topup.refunds') }}" title="{{ translate('押金退款') }}">
-                                <i class="tio-undo nav-icon"></i>
-                                <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('押金退款') }}</span>
-                            </a>
-                        </li>
-                    @endif
-                    <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-consolidation*') ? 'active' : '' }}">
-                        <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{ route('admin.nezha-consolidation.index') }}" title="{{ translate('平台集运申报') }}">
-                            <i class="tio-cube nav-icon"></i>
-                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('平台集运申报') }}</span>
-                        </a>
-                    </li>
-                    <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-search-demand*') ? 'active' : '' }}">
-                        <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{ route('admin.nezha-search-demand.index') }}" title="{{ translate('搜索需求') }}">
-                            <i class="tio-search nav-icon"></i>
-                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('搜索需求') }}</span>
-                        </a>
-                    </li>
-                    <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/nezha-order-cancel-demand*') ? 'active' : '' }}">
-                        <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{ route('admin.nezha-order-cancel-demand.index') }}" title="{{ translate('顾客取消理由') }}">
-                            <i class="tio-clear-circle nav-icon"></i>
-                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('顾客取消理由') }}</span>
-                        </a>
-                    </li>
-
-<!-- withdraw -->
+{{-- 提现列表(已死) 原文件1651-1663行 --}}
                     {{-- 哪吒 B方案隐藏「提现列表」: 平台不向商家打款(INVARIANTS L1-1/L1-5,提现/打款腿已拔除),withdraw_requests 恒空且审批不触发真实打款,此为StackFood残留菜单,避免误导运营。恢复直付台账时把 false 改回即可;路由 admin.restaurant.withdraw_list 未动 --}}
                     @if (false && Helpers::module_permission_check('withdraw_list'))
                         <li
@@ -1661,21 +806,7 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                             </a>
                         </li>
                     @endif
-                    <!-- provide_dm_earning -->
-                    @if (Helpers::module_permission_check('provide_dm_earning'))
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/provide-deliveryman-earnings*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                href="{{ route('admin.provide-deliveryman-earnings.index') }}"
-                                title="{{ translate('messages.DeliveryMan_Payments') }}">
-                                <i class="tio-send nav-icon"></i>
-                                <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.DeliveryMan_Payments') }}</span>
-                            </a>
-                        </li>
-                    @endif
-                    <!-- End provide_dm_earning -->
-
+{{-- 提现方式(已死) 原文件1679-1691行 --}}
                     {{-- 哪吒 B方案隐藏「提现方式」: 同上,平台不打款,提现方式无实义。路由 admin.business-settings.withdraw-method.list 未动 --}}
                     @if (false && Helpers::module_permission_check('withdraw_list'))
                         <li
@@ -1689,493 +820,6 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
                             </a>
                         </li>
                     @endif
-                    <!-- End withdraw -->
-                    @if (Helpers::module_permission_check('custom_role') || Helpers::module_permission_check('employee'))
-                        <!-- Employee-->
-                        <li class="nav-item">
-                            <small class="nav-subtitle"
-                                title="{{ translate('messages.employee_handle') }}">{{ translate('messages.Employee_Management') }}</small>
-                            <small class="tio-more-horizontal nav-subtitle-replacer"></small>
-                        </li>
-                    @endif
-
-                    @if (Helpers::module_permission_check('custom_role'))
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/custom-role*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                href="{{ route('admin.custom-role.create') }}"
-                                title="{{ translate('messages.employee_Role') }}">
-                                <i class="tio-incognito nav-icon"></i>
-                                <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.employee_Role') }}</span>
-                            </a>
-                        </li>
-                    @endif
-
-                    @if (Helpers::module_permission_check('employee'))
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/employee*') ? 'active' : '' }}">
-                            <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
-                                title="{{ translate('Employees') }}">
-                                <i class="tio-user nav-icon"></i>
-                                <span
-                                    class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.employees') }}</span>
-                            </a>
-                            <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                                style="display: {{ Request::is('admin/employee*') ? 'block' : 'none' }}">
-                                <li class="nav-item {{ Request::is('admin/employee/add-new') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.employee.add-new') }}"
-                                        title="{{ translate('messages.add_new_Employee') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="text-truncate">{{ translate('messages.Add_New_Employee') }}</span>
-                                    </a>
-                                </li>
-                                <li
-                                    class="nav-item {{ Request::is('admin/employee/list') || Request::is('admin/employee/update/*') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.employee.list') }}"
-                                        title="{{ translate('messages.Employee_list') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span class="text-truncate">{{ translate('messages.Employee_List') }}</span>
-                                    </a>
-                                </li>
-
-                            </ul>
-                        </li>
-                    @endif
-                    <!-- End Employee -->
-
-                    <!-- Business Settings -->
-                    @if (Helpers::module_permission_check('settings'))
-                        <li class="nav-item">
-                            <small class="nav-subtitle"
-                                title="{{ translate('messages.business_settings') }}">{{ translate('messages.business_settings') }}</small>
-                            <small class="tio-more-horizontal nav-subtitle-replacer"></small>
-                        </li>
-
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/business-settings/business-setup*') ||
-                            Request::is('admin/business-settings/refund/settings*') ||
-                            Request::is('admin/business-settings/language*')
-                                ? 'active'
-                                : '' }}">
-                            <a class="nav-link " href="{{ route('admin.business-settings.business-setup') }}"
-                                title="{{ translate('messages.business_setup') }}">
-                                <span class="tio-settings nav-icon"></span>
-                                <span class="text-truncate">{{ translate('messages.business_setup') }}</span>
-                            </a>
-                        </li>
-                        @if (addon_published_status('TaxModule'))
-                            <li class="navbar-vertical-aside-has-menu @yield('taxModule')">
-                                <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle"
-                                    href="javascript:">
-                                    <i class="tio-wallet nav-icon"></i>
-                                    <span
-                                        class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('System_Tax') }}</span>
-                                </a>
-                                <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                                    style="display: @yield('taxModuleDisplay', 'none')">
-
-
-                                    <li class="navbar-vertical-aside-has-menu @yield('tax_setup')">
-                                        <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                            href="{{ route('taxvat.index') }}" title="{{ translate('navbar') }}">
-                                            <i class="tio-chart-line-up nav-icon"></i>
-                                            <span
-                                                class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                                {{ translate('Create_Taxes') }}
-                                            </span>
-                                        </a>
-                                    </li>
-                                    <li class="navbar-vertical-aside-has-menu @yield('tax_system_setup')">
-                                        <a class="js-navbar-vertical-aside-menu-link nav-link"
-                                            href="{{ route('taxvat.systemTaxvat') }}"
-                                            title="{{ translate('Setup_Taxes') }}">
-                                            <i class="tio-calculator nav-icon"></i>
-                                            <span
-                                                class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                                {{ translate('Setup_Taxes') }}
-                                            </span>
-                                        </a>
-                                    </li>
-                                </ul>
-                            </li>
-                        @endif
-                        <!-- Subscription-->
-                        @if (Helpers::subscription_check() == true && Helpers::module_permission_check('restaurant'))
-                            <li
-                                class="navbar-vertical-aside-has-menu {{ Request::is('admin/subscription*') ? 'active' : '' }}">
-                                <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle"
-                                    href="javascript:" title="{{ translate('messages.subscription') }}">
-                                    <i class="tio-crown  nav-icon"></i>
-                                    <span
-                                        class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.subscription_management') }}</span>
-                                </a>
-                                <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                                    style="display: {{ Request::is('admin/subscription*') ? 'block' : 'none' }}">
-                                    <li
-                                        class="nav-item @yield('subscription_index') {{ Request::is('admin/subscription/package/*') || Request::is('admin/subscription/search') || Request::is('admin/subscription/transcation/list/*') ? 'active' : '' }}">
-                                        <a class="nav-link " href="{{ route('admin.subscription.package_list') }}"
-                                            title="{{ translate('messages.Package_list') }}">
-                                            <span class="tio-circle nav-indicator-icon"></span>
-                                            <span
-                                                class="text-truncate">{{ translate('messages.subscription_Packages') }}</span>
-                                        </a>
-                                    </li>
-                                    <li class="nav-item @yield('subscriberList')">
-                                        <a class="nav-link "
-                                            href="{{ route('admin.subscription.subscription_list') }}"
-                                            title="{{ translate('messages.Subscriber_list') }}">
-                                            <span class="tio-circle nav-indicator-icon"></span>
-                                            <span class="text-truncate">{{ translate('Subscriber_list') }}</span>
-                                        </a>
-                                    </li>
-                            </li>
-                            <li class="nav-item {{ Request::is('admin/subscription/settings') ? 'active' : '' }}">
-                                <a class="nav-link " href="{{ route('admin.subscription.settings') }}"
-                                    title="{{ translate('messages.settings') }}">
-                                    <span class="tio-circle nav-indicator-icon"></span>
-                                    <span class="text-truncate">{{ translate('messages.settings') }}</span>
-                                </a>
-                            </li>
-                </ul>
-                </li>
-                @endif
-                <!-- End Subscription -->
-
-                <li
-                    class="navbar-vertical-aside-has-menu {{ Request::is('admin/business-settings/email-setup*') ? 'active' : '' }}">
-                    <a class="nav-link "
-                        href="{{ route('admin.business-settings.email-setup', ['admin', 'forgot-password']) }}"
-                        title="{{ translate('messages.email_template') }}">
-                        <span class="tio-email nav-icon"></span>
-                        <span class="text-truncate">{{ translate('messages.email_template') }}</span>
-                    </a>
-                </li>
-
-                <li
-                    class="navbar-vertical-aside-has-menu {{ Request::is('admin/business-settings/theme-settings*') ? 'active' : '' }}">
-                    <a class="nav-link " href="{{ route('admin.business-settings.theme-settings') }}"
-                        title="{{ translate('messages.theme_settings') }}">
-                        <span class="tio-brush nav-icon"></span>
-                        <span class="text-truncate">{{ translate('messages.theme_settings') }}</span>
-                    </a>
-                </li>
-
-                <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/file-manager*') ? 'active' : '' }}">
-                    <a class="nav-link " href="{{ route('admin.file-manager.index') }}"
-                        title="{{ translate('messages.gallery') }}">
-                        <span class="tio-album nav-icon"></span>
-                        <span class="text-truncate text-capitalize">{{ translate('messages.gallery') }}</span>
-                    </a>
-                </li>
-
-                <li
-                    class="navbar-vertical-aside-has-menu {{ Request::is('admin/login-settings*') ? 'active' : '' }}">
-                    <a class="nav-link " href="{{ route('admin.login-settings.index') }}"
-                        title="{{ translate('messages.login_setup') }}">
-                        <span class="tio-devices-apple nav-icon"></span>
-                        <span class="text-truncate text-capitalize">{{ translate('messages.login_setup') }}</span>
-                    </a>
-                </li>
-
-                <li
-                        class="navbar-vertical-aside-has-menu {{ Request::is('admin/business-settings/invoice-setup*') ? 'active' : '' }}">
-                        <a class="nav-link " href="{{ route('admin.business-settings.invoice-setup') }}"
-                            title="{{ translate('messages.invoice_setup') }}">
-                            <span class="tio-receipt nav-icon"></span>
-                            <span class="text-truncate">{{ translate('messages.invoice_setup') }}</span>
-                        </a>
-                </li>
-
-
-
-                <!-- web & adpp Settings -->
-                <li
-                    class="navbar-vertical-aside-has-menu {{ Request::is('admin/business-settings/pages*') || Request::is('admin/business-settings/social-media') || Request::is('admin/business-settings/registration-page/react*') ? 'active' : '' }}">
-                    <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
-                        title="{{ translate('messages.Pages_&_Social_Media') }}">
-                        <i class="tio-pages nav-icon"></i>
-                        <span
-                            class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.Pages_&_Social_Media') }}
-                        </span>
-                    </a>
-                    <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                        style="display: {{ Request::is('admin/business-settings/pages*') || Request::is('admin/business-settings/social-media') || Request::is('admin/business-settings/registration-page/react*') ? 'block' : 'none' }}">
-
-
-                        <li
-                            class="navbar-vertical-aside-has-menu {{ Request::is('admin/business-settings/social-media') ? 'active' : '' }}">
-                            <a class="nav-link " href="{{ route('admin.business-settings.social-media.index') }}"
-                                title="{{ translate('messages.Social_Media') }}">
-                                <span class="tio-circle nav-indicator-icon"></span>
-                                <span class="text-truncate">{{ translate('messages.Social_Media') }}</span>
-                            </a>
-                        </li>
-
-                        <li
-                            class="nav-item {{ Request::is('admin/business-settings/pages/terms-and-conditions') ? 'active' : '' }}">
-                            <a class="nav-link " href="{{ route('admin.business-settings.terms-and-conditions') }}"
-                                title="{{ translate('messages.terms_and_condition') }}">
-                                <span class="tio-circle nav-indicator-icon"></span>
-                                <span class="text-truncate">{{ translate('messages.terms_and_condition') }}</span>
-                            </a>
-                        </li>
-
-                        <li
-                            class="nav-item {{ Request::is('admin/business-settings/pages/privacy-policy') ? 'active' : '' }}">
-                            <a class="nav-link " href="{{ route('admin.business-settings.privacy-policy') }}"
-                                title="{{ translate('messages.privacy_policy') }}">
-                                <span class="tio-circle nav-indicator-icon"></span>
-                                <span class="text-truncate">{{ translate('messages.privacy_policy') }}</span>
-                            </a>
-                        </li>
-
-                        <li
-                            class="nav-item {{ Request::is('admin/business-settings/pages/about-us') ? 'active' : '' }}">
-                            <a class="nav-link " href="{{ route('admin.business-settings.about-us') }}"
-                                title="{{ translate('messages.about_us') }}">
-                                <span class="tio-circle nav-indicator-icon"></span>
-                                <span class="text-truncate">{{ translate('messages.about_us') }}</span>
-                            </a>
-                        </li>
-
-
-                        <li
-                            class="nav-item {{ Request::is('admin/business-settings/pages/refund-policy') ? 'active' : '' }}">
-                            <a class="nav-link " href="{{ route('admin.business-settings.refund-policy') }}"
-                                title="{{ translate('messages.refund_policy') }}">
-                                <span class="tio-circle nav-indicator-icon"></span>
-                                <span class="text-truncate">{{ translate('messages.refund_policy') }}</span>
-                            </a>
-                        </li>
-
-
-                        <li
-                            class="nav-item {{ Request::is('admin/business-settings/pages/shipping-policy') ? 'active' : '' }}">
-                            <a class="nav-link " href="{{ route('admin.business-settings.shipping-policy') }}"
-                                title="{{ translate('messages.shipping_policy') }}">
-                                <span class="tio-circle nav-indicator-icon"></span>
-                                <span class="text-truncate">{{ translate('messages.shipping_policy') }}</span>
-                            </a>
-                        </li>
-
-                        <li
-                            class="nav-item {{ Request::is('admin/business-settings/pages/cancellation-policy') ? 'active' : '' }}">
-                            <a class="nav-link " href="{{ route('admin.business-settings.cancellation-policy') }}"
-                                title="{{ translate('messages.cancellation_policy') }}">
-                                <span class="tio-circle nav-indicator-icon"></span>
-                                <span class="text-truncate">{{ translate('messages.cancellation_policy') }}</span>
-                            </a>
-                        </li>
-
-                        <li
-                            class="nav-item {{ Request::is('admin/business-settings/registration-page/react*') ? 'active' : '' }}">
-                            <a class="nav-link "
-                                href="{{ route('admin.business-settings.react-registration-page.hero') }}"
-                                title="{{ translate('messages.react_registration') }}">
-                                <span class="tio-circle nav-indicator-icon"></span>
-                                <span class="text-truncate">{{ translate('messages.react_registration') }}</span>
-                            </a>
-                        </li>
-
-
-                    </ul>
-                </li>
-                @endif
-
-
-                @if (Helpers::module_permission_check('system_settings'))
-
-
-                    <li class="nav-item">
-                        <small class="nav-subtitle"
-                            title="{{ translate('messages.system_settings') }}">{{ translate('messages.system_settings') }}</small>
-                        <small class="tio-more-horizontal nav-subtitle-replacer"></small>
-                    </li>
-
-                    <li
-                        class="navbar-vertical-aside-has-menu   {{ Request::is('admin/business-settings/fcm-*') || Request::is('admin/business-settings/payment-method') || Request::is('admin/business-settings/sms-module') || Request::is('admin/business-settings/mail-config') || Request::is('admin/social-login/view') || Request::is('admin/business-settings/offline*') || Request::is('admin/business-settings/config*') || Request::is('admin/business-settings/recaptcha*') || Request::is('admin/business-settings/*') ? 'active' : '' }} @yield('3rd_party')">
-                        <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
-                            title="{{ translate('3rd_Party_&_Configurations') }}">
-                            <span class="tio-plugin nav-icon"></span>
-                            <span
-                                class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.3rd_Party_&_Configurations') }}</span>
-                        </a>
-                        <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                            style="display: {{ Request::is('admin/business-settings/deliveryman/join-us/*') || Request::is('admin/business-settings/restaurant/join-us/*') || Request::is('admin/business-settings/fcm-*') || Request::is('admin/business-settings/payment-method') || Request::is('admin/business-settings/sms-module') || Request::is('admin/business-settings/mail-config') || Request::is('admin/social-login/view') || Request::is('admin/business-settings/config*') || Request::is('admin/business-settings/recaptcha*') || Request::is('admin/business-settings/offline*') || Request::is('admin/business-settings/marketing/*') || Request::is('admin/business-settings/open-ai') || Request::is('admin/business-settings/open-ai-settings') || Request::is('admin/business-settings/firebase-otp*') || Request::is('admin/business-settings/storage-connection*') ? 'block' : 'none' }}  ">
-
-
-                            <li
-                                class="nav-item @yield('firebase_otp') @yield('storage') {{ Request::is('admin/business-settings/notification-setup*') || Request::is('admin/business-settings/payment-method') || Request::is('admin/business-settings/sms-module') || Request::is('admin/business-settings/mail-config') || Request::is('admin/social-login/view') || Request::is('admin/business-settings/config*') || Request::is('admin/business-settings/recaptcha*') ? 'active' : '' }}">
-                                <a class="nav-link " href="{{ route('admin.business-settings.payment-method') }}"
-                                    title="{{ translate('messages.3rd_Party') }}">
-                                    <span class="tio-circle nav-indicator-icon"></span>
-                                    <span class="text-truncate">{{ translate('messages.3rd_Party') }}
-                                    </span>
-                                </a>
-                            </li>
-
-                            <li class="nav-item  {{ Request::is('admin/business-settings/fcm-*') ? 'active' : '' }}">
-                                <a class="nav-link " href="{{ route('admin.business-settings.fcm-index') }}"
-                                    title="{{ translate('messages.Firebase_Notification') }} ">
-                                    <span class="tio-circle nav-indicator-icon"></span>
-                                    <span class="text-truncate">{{ translate('messages.Firebase_Notification') }}
-                                    </span>
-                                </a>
-                            </li>
-                            @if (Helpers::get_mail_status('offline_payment_status'))
-                                <li
-                                    class="nav-item {{ Request::is('admin/business-settings/offline*') ? 'active' : '' }}">
-                                    <a class="nav-link " href="{{ route('admin.business-settings.offline') }}"
-                                        title="{{ translate('messages.Offline_Payment_Setup') }}">
-                                        <span class="tio-circle nav-indicator-icon"></span>
-                                        <span
-                                            class="text-truncate">{{ translate('messages.Offline_Payment_Setup') }}</span>
-                                    </a>
-                                </li>
-                            @endif
-
-                            <li class="nav-item @yield('reg_page')">
-                                <a class="nav-link "
-                                    href="{{ route('admin.business-settings.restaurant_page_setup') }}"
-                                    title="{{ translate('messages.Join_us_page_setup') }}">
-                                    <span class="tio-circle nav-indicator-icon"></span>
-                                    <span class="text-truncate">{{ translate('messages.Join_us_page_setup') }}</span>
-                                </a>
-                            </li>
-                            <li class="nav-item @yield('analytics_Script')">
-                                <a class="nav-link "
-                                    href="{{ route('admin.business-settings.marketing.analytic') }}"
-                                    title="{{ translate('Analytics_Script') }}">
-                                    <span class="tio-circle nav-indicator-icon"></span>
-                                    <span class="text-truncate">{{ translate('Analytics_Script') }}</span>
-                                </a>
-                            </li>
-
-                            <li class="nav-item @yield('openAI')">
-                                <a class="nav-link " href="{{ route('admin.business-settings.openAI') }}"
-                                    title="{{ translate('AI_Setup') }}">
-                                    <span class="tio-circle nav-indicator-icon"></span>
-                                    <span class="text-truncate">{{ translate('AI_Setup') }}</span>
-                                </a>
-                            </li>
-                        </ul>
-                    </li>
-
-                    <li
-                        class="navbar-vertical-aside-has-menu {{ Request::is('admin/business-settings/app-settings*') ? 'active' : '' }}">
-                        <a class="nav-link " href="{{ route('admin.business-settings.app-settings') }}"
-                            title="{{ translate('messages.App_&_Web_Settings') }}">
-                            <span class="tio-android nav-icon"></span>
-                            <span class="text-truncate">{{ translate('messages.App_&_Web_Settings') }}</span>
-                        </a>
-                    </li>
-
-                    <li class="navbar-vertical-aside-has-menu  @yield('notification_setup')">
-                        <a class="nav-link " href="{{ route('admin.business-settings.notification_setup') }}"
-                            title="{{ translate('messages.Notification_Channels') }} ">
-                            <span class="tio-snooze-notification  nav-icon"></span>
-                            <span class="text-truncate">{{ translate('messages.Notification_Channels') }}
-                            </span>
-                        </a>
-                    </li>
-
-
-                    <li class="navbar-vertical-aside-has-menu  @yield('notification_message')">
-                        <a class="nav-link " href="{{ route('admin.business-settings.notificationMessages') }}"
-                            title="{{ translate('messages.Notification_Messages') }} ">
-                            <span class="tio-notifications-on-outlined  nav-icon"></span>
-                            <span class="text-truncate">{{ translate('messages.Notification_Messages') }}
-                            </span>
-                        </a>
-                    </li>
-
-                    <li
-                        class="navbar-vertical-aside-has-menu   {{ Request::is('admin/react-landing-page*') || Request::is('admin/landing-page*') ? 'active' : '' }}">
-                        <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle" href="javascript:"
-                            title="{{ translate('landing_page_settings') }}">
-                            <span class="tio-files nav-icon"></span>
-                            <span
-                                class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.landing_page_settings') }}</span>
-                        </a>
-                        <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
-                            style="display: {{ Request::is('admin/react-landing-page*') || Request::is('admin/landing-page*') ? 'block' : 'none' }}">
-
-                            <li class="nav-item {{ Request::is('admin/landing-page*') ? 'active' : '' }}">
-                                <a class="nav-link" href="{{ route('admin.landing_page.setup') }}"
-                                    title="{{ translate('messages.Admin_landing_page') }} ">
-                                    <span class="tio-circle nav-indicator-icon"></span>
-                                    <span
-                                        class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.Admin_landing_page') }}</span>
-                                </a>
-                            </li>
-
-                            <li class="nav-item {{ Request::is('admin/react-landing-page*') ? 'active' : '' }}">
-                                <a class="nav-link" href="{{ route('admin.react_landing_page.react_header') }}"
-                                    title="{{ translate('messages.React_landing_page') }} ">
-                                    <span class="tio-circle nav-indicator-icon"></span>
-                                    <span
-                                        class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{ translate('messages.React_landing_page') }}</span>
-                                </a>
-                            </li>
-                        </ul>
-                    </li>
-
-                    <li
-                        class="navbar-vertical-aside-has-menu {{ Request::is('admin/page-meta-data*') ? 'active' : '' }}">
-                        <a class="js-navbar-vertical-aside-menu-link nav-link"
-                            href="{{ route('admin.pageMetaData') }}" title="{{ translate('Page_Meta_data') }}">
-                            <i class="tio-share-message nav-icon"></i>
-                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                {{ translate('Page_Meta_data') }}
-                            </span>
-                        </a>
-                    </li>
-
-
-                    <li
-                        class="navbar-vertical-aside-has-menu {{ Request::is('admin/business-settings/db-index') ? 'active' : '' }}">
-                        <a class="js-navbar-vertical-aside-menu-link nav-link"
-                            href="{{ route('admin.business-settings.db-index') }}"
-                            title="{{ translate('messages.clean_database') }}">
-                            <i class="tio-cloud nav-icon"></i>
-                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                {{ translate('messages.clean_database') }}
-                            </span>
-                        </a>
-                    </li>
-                    <li
-                        class="navbar-vertical-aside-has-menu {{ Request::is('admin/addon-activation*') ? 'active' : '' }}">
-                        <a class="nav-link " href="{{ route('admin.addon-activation.index') }}"
-                            title="{{ translate('messages.Addon_Activation') }}">
-                            <span class="tio-appointment nav-icon"></span>
-                            <span class="text-truncate">{{ translate('messages.Addon_Activation') }}</span>
-                        </a>
-                    </li>
-                @endif
-                <!-- End web & adpp Settings -->
-
-                @if (Helpers::module_permission_check('system_addon'))
-                    <li class="nav-item">
-                        <small class="nav-subtitle">{{ translate('messages.system_addons') }}</small>
-                        <small class="tio-more-horizontal nav-subtitle-replacer"></small>
-                    </li>
-                    <!-- system_addons -->
-                    <li
-                        class="navbar-vertical-aside-has-menu {{ Request::is('admin/business-settings/system-addon') ? 'show active' : '' }}">
-                        <a class="js-navbar-vertical-aside-menu-link nav-link"
-                            href="{{ route('admin.business-settings.system-addon.index') }}"
-                            title="{{ translate('messages.system_addons') }}">
-                            <i class="tio-add-circle-outlined nav-icon"></i>
-                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
-                                {{ translate('messages.system_addons') }}
-                            </span>
-                        </a>
-                    </li>
-                    <!-- End system_addons -->
-                @endif
-
                 {{-- 防御: 某个插件 admin_routes.php 返回非数组(string等)时不应崩掉整个后台侧边栏 --}}
                 @php($addonRoutes = is_array(config('addon_admin_routes')) ? config('addon_admin_routes') : [])
                 @if (count($addonRoutes) > 0 && Helpers::module_permission_check('system_addon'))
@@ -2229,29 +873,3 @@ $order_sch = Cache::rememberForever('order_scheduled_stats', function () {
 <div id="sidebarCompact" class="d-none">
 
 </div>
-
-
-@push('script_2')
-    <script>
-        "use strict";
-        $(window).on('load', function() {
-            if ($(".navbar-vertical-content li.active").length) {
-                $('.navbar-vertical-content').animate({
-                    scrollTop: $(".navbar-vertical-content li.active").offset().top - 150
-                }, 300);
-            }
-        });
-
-        var $navItems = $('#navbar-vertical-content > ul > li');
-        $('#search').keyup(function() {
-            var val = $.trim($(this).val()).replace(/ +/g, ' ').toLowerCase();
-            $navItems.show().filter(function() {
-                var $listItem = $(this);
-                var text = $listItem.text().replace(/\s+/g, ' ').toLowerCase();
-                var $list = $listItem.closest('li');
-
-                return !~text.indexOf(val) && !$list.text().toLowerCase().includes(val);
-            }).hide();
-        });
-    </script>
-@endpush
