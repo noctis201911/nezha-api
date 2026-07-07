@@ -70,7 +70,7 @@
 - 商家运营指标：出餐超时率、差评预警存量、退款平均时长、搜索无结果 Top（后台「搜索需求」）。
 
 ### T2 每月（半天 · 每月1号）
-- 🔴 容灾恢复演练（QA_MASTER 第 7 层，至今 0 次）：取最新加密备份真恢复进 staging 库，计时=RTO，对照 README-RESTORE 校订步骤。没演练≈没备份。
+- 🔴 容灾恢复演练（QA_MASTER 第 7 层，首次2026-07-08已跑通✅RTO5s/0错/183表全恢复,之后每月复跑）：取最新加密备份恢复进一次性scratch库(见nzdr_drill脚本)，计时=RTO，对照 README-RESTORE 校订步骤。没演练≈没备份。
 - SECURITY_QA 11 轴复跑 + FUNDS_COMPLIANCE 8 轴复跑（PII purge 真删、制裁名单真同步、留存表只增不删）。
 - 密码/密钥轮换检查（root/admin 轮换欠账见 §三）。
 - 成本盘点：Google Maps 配额/账单（预算告警仍未设）、CF、磁盘增长、SMS（若开 customer_verification）。
