@@ -138,44 +138,16 @@ class ProductController extends Controller
                     foreach ($key as $value) {
                         $q->orWhere('name', 'like', "%{$value}%");
                     }
-                    $q->orWhereHas('translations',function($query)use($key){
-                        $query->where(function($q)use($key){
+                    // 哪吒[搜索精准化]: 商品搜索只按「菜名 + 译名(仅 name 键)」匹配; 去掉
+                    // cuisine/tags/allergies/nutritions 及译文 description 的 OR —— 原实现会因"餐厅类目名含关键词"
+                    // (如类目"槟榔零食"含"槟榔")把整店菜品灌进结果, 顾客只搜关键词却看到"别的产品"。
+                    $q->orWhereHas('translations', function($query) use($key){
+                        $query->where('key', 'name')->where(function($q) use($key){
                             foreach ($key as $value) {
                                 $q->where('value', 'like', "%{$value}%");
                             };
                         });
                     });
-                    $q->orWhereHas('tags',function($query)use($key){
-                        $query->where(function($q1)use($key){
-                            foreach ($key as $value) {
-                                $q1->where('tag', 'like', "%{$value}%");
-                            };
-                        });
-                    });
-                    $q->orWhereHas('restaurant.cuisine',function($query) use($key){
-                        $query->where(function($q2)use($key){
-                            foreach ($key as $value) {
-                                $q2->where('name', 'like', "%{$value}%");
-                            };
-                        });
-                    });
-
-                    $q->orWhereHas('allergies',function($query)use($key){
-                        $query->where(function($q)use($key){
-                            foreach ($key as $value) {
-                                $q->where('allergy', 'like', "%{$value}%");
-                            };
-                        });
-                    });
-                    $q->orWhereHas('nutritions',function($query)use($key){
-                        $query->where(function($q)use($key){
-                            foreach ($key as $value) {
-                                $q->where('nutrition', 'like', "%{$value}%");
-                            };
-                        });
-                    });
-
-
                 });
             })
 

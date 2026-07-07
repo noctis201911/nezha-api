@@ -501,11 +501,8 @@ class RestaurantLogic
                     foreach ($key as $value) {
                         $q->Where('name', 'like', "%{$value}%");
                     }
-                    $q->orWhereHas('tags',function($query)use($key){
-                        foreach ($key as $value) {
-                            $query->where('tag', 'like', "%{$value}%");
-                        };
-                    });
+                    // 哪吒[搜索精准化]: 餐厅搜索保留「店名 + 译名 + 在售菜名(找卖某道菜的店) + 类目」;
+                    // 去掉 tags / foods.nutritions / foods.allergies 的 OR(结构化元数据非顾客搜索意图, 造成无关命中)。
                     $q->orWhereHas('cuisine',function($query) use($key){
                         foreach ($key as $value) {
                             $query->where('name', 'like', "%{$value}%");
@@ -515,20 +512,6 @@ class RestaurantLogic
                         foreach ($key as $value) {
                             $query->where('name', 'like', "%{$value}%");
                         };
-                    });
-                    $q->orWhereHas('foods.nutritions',function($query)use($key){
-                        $query->where(function($q)use($key){
-                            foreach ($key as $value) {
-                                $q->where('nutrition', 'like', "%{$value}%");
-                            };
-                        });
-                    });
-                    $q->orWhereHas('foods.allergies',function($query)use($key){
-                        $query->where(function($q)use($key){
-                            foreach ($key as $value) {
-                                $q->where('allergy', 'like', "%{$value}%");
-                            };
-                        });
                     });
                     $q->orWhereHas('translations',function($query) use($key){
                         foreach ($key as $value) {
