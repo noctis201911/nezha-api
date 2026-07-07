@@ -76,7 +76,9 @@
 ---
 
 ## F. ℹ️ 已开着的其它（无需动作，仅记录）
-`nezha_feedback_digest_status=1`(反馈日报) · `nezha_cs_ai_status=1`(AI客服) · `nezha_cs_merchant_relay_status=1` · `nezha_cs_vendor_tg_relay_status=1`(商家↔顾客 TG) · `nezha_search_log_status=1`(搜索需求探针) · `order_delivery_verification=1`。
+`nezha_feedback_digest_status=1`(反馈日报) · `nezha_cs_ai_status=1`(AI客服) · `nezha_cs_merchant_relay_status=1` · `nezha_cs_vendor_tg_relay_status=1`(商家↔顾客 TG) · `nezha_search_log_status=1`(搜索需求探针) · `order_delivery_verification=1` · `nezha_busy_mode_status=1`(商家忙碌模式/定时挂起)。
+
+**`nezha_busy_mode_status`（2026-07-08 go-live）**：一次性功能总闸（非日常操作·无后台 UI）。开=商家「今天·作业台」店态胶囊出三档（营业/忙碌·选原因+出餐分钟/暂停·选时长或不定时），顾客端餐厅页顶部显 🔥暖黄「高峰期繁忙·出餐约需X分钟」(仍可下单) 或 ☕暖灰「店家小憩中·约X分钟后恢复接单」(倒计时)。日常商家翻自己店的忙碌/暂停**不动此闸、无缓存坑**。🔴 **只有翻这个总闸本身**才须 `php artisan cache:clear` + `/etc/init.d/php-fpm-82 restart`（单 `Cache::forget`+graceful reload **不够**·实测 FPM worker 仍读旧值恒返回关）。
 
 ---
 
