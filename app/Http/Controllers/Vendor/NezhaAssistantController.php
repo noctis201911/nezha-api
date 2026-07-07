@@ -30,7 +30,7 @@ class NezhaAssistantController extends Controller
         // ① 确认执行分支：来自答案下方"确认"按钮，直接执行动作（不经 AI）。
         if ($request->filled('confirm_action')) {
             $action = $request->input('confirm_action');
-            if (!in_array($action, ['pause', 'resume'], true)) {
+            if (!in_array($action, ['pause', 'resume', 'feedback'], true)) {
                 return back()->with('ma_a', '这个操作我没看懂，请重试。');
             }
             $vendorId = Helpers::get_vendor_id();
@@ -39,7 +39,8 @@ class NezhaAssistantController extends Controller
                 return back()->with('ma_a', '操作太频繁了，请稍后再试～');
             }
             RateLimiter::hit($akey, 60);
-            return back()->with('ma_a', $this->applyStoreStatus($action));
+            $result = $action === 'feedback' ? $this->applyFeedback() : $this->applyStoreStatus($action);
+            return back()->with('ma_a', $result);
         }
 
         // ② 普通提问 / 动作意图
@@ -70,6 +71,15 @@ class NezhaAssistantController extends Controller
                 ? '您是要把店铺改成【暂停接单】吗？改后顾客暂时下不了单，进行中的订单不受影响。确认请点下方按钮。'
                 : '您是要把店铺改成【营业中·恢复接单】吗？确认请点下方按钮。';
             return back()->with('ma_q', $q)->with('ma_a', $tip)->with('ma_action', $cmd);
+        }
+
+        // Phase 2 动作意图：把商家的话整理成一条「问题反馈」交给平台超管（先给商家看草稿→确认→提交）
+        if ($this->detectFeedbackIntent($q)) {
+            $draft = NezhaCsAssistant::draftMerchantFeedback($q);
+            session()->put('ma_fb_draft', $draft);
+            $typeLabel = \App\Models\VendorFeedback::TYPE_LABELS[$draft['type']] ?? $draft['type'];
+            $preview = "我按您说的整理了一条反馈，确认后提交给平台超管：\n\n【类型】{$typeLabel}\n【主题】{$draft['subject']}\n【详情】{$draft['description']}\n\n没问题就点下方「确认提交给平台」；想补充或改，直接把要说的再发我一遍。";
+            return back()->with('ma_q', $q)->with('ma_a', $preview)->with('ma_action', 'feedback');
         }
 
         $answer = NezhaCsAssistant::merchantAssistant($q);
@@ -130,5 +140,49 @@ class NezhaAssistantController extends Controller
         return $want
             ? '✅ 已帮您把店铺改成【暂停接单】。顾客现在下不了单（进行中的订单不受影响）。想恢复，跟我说一声「恢复接单」就行。'
             : '✅ 已帮您把店铺改成【营业中】，正常接单啦～';
+    }
+
+    /** 识别"帮我反馈给平台/超管、投诉、联系超管"类升级诉求（确定性关键词）。误判无害（要人点确认才提交）。 */
+    private function detectFeedbackIntent(string $q): bool
+    {
+        $s = preg_replace('/\s+/u', '', $q);
+        if (preg_match('/怎么|如何|怎样|在哪|哪里|什么意思/u', $s)) {
+            return false; // "怎么提交反馈" 这类是提问 → 交给 Q&A
+        }
+        return (bool) preg_match('/联系超管|联系平台|联系官方客服|找超管|找平台|向平台(反映|反馈|报告|投诉|说明)|反馈给(平台|超管)|帮我(写|提交|发|弄).{0,4}(反馈|投诉)|(提交|写|发).{0,3}(问题)?反馈|问题反馈|让(平台|超管)(介入|处理)|需要(平台|超管)(介入|处理)|上报(平台|超管)|投诉.{0,12}(平台|超管|官方)|(给|向)(平台|超管|官方).{0,4}投诉/u', $s);
+    }
+
+    /**
+     * 提交草稿好的问题反馈给平台（逻辑同 FeedbackController::store，🔴绑定本商家 get_vendor_data）。
+     * 草稿放 session ma_fb_draft（服务端，防客户端篡改），提交后清除。
+     */
+    private function applyFeedback(): string
+    {
+        $draft = session('ma_fb_draft');
+        session()->forget('ma_fb_draft');
+        if (!is_array($draft) || empty($draft['subject']) || empty($draft['description'])) {
+            return '没找到要提交的反馈内容，麻烦把您的问题再说一遍。';
+        }
+        $type = in_array(($draft['type'] ?? 'other'), ['commission', 'settlement', 'feature', 'other'], true) ? $draft['type'] : 'other';
+        $vendor = Helpers::get_vendor_data();
+        if (!$vendor) {
+            return '没找到您的商家信息，请刷新后重试。';
+        }
+        $restaurant = $vendor->restaurants->first() ?? null;
+        $fb = \App\Models\VendorFeedback::create([
+            'vendor_id'     => $vendor->id,
+            'restaurant_id' => $restaurant?->id,
+            'type'          => $type,
+            'subject'       => mb_substr((string) $draft['subject'], 0, 150),
+            'description'   => mb_substr((string) $draft['description'], 0, 4000),
+            'status'        => 'open',
+        ]);
+        try {
+            $name = $restaurant?->name ?? ('商家#' . $vendor->id);
+            $typeLabel = \App\Models\VendorFeedback::TYPE_LABELS[$type] ?? $type;
+            Helpers::sendTelegramToAdmin("🛎️ 新商家反馈 #{$fb->id}\n商家: {$name}\n类型: {$typeLabel}\n主题: {$draft['subject']}\n(来自商家助手 · 后台「商家反馈」可查看处理)");
+        } catch (\Throwable $e) {
+        }
+        return "✅ 已把这条反馈提交给平台，编号 #{$fb->id}。处理进度和平台回复会显示在「问题反馈」页；平台处理完您也会收到通知。";
     }
 }

@@ -1219,6 +1219,65 @@ SYS;
         return '没有得到有效回答，请换个问法试试。';
     }
 
+    /**
+     * Phase2: 把商家的话整理成一条规范「问题反馈」({type,subject,description})交给超管。
+     * 返回结构化数组；LLM 失败或解析失败时回退成商家原话，保证还能提交。
+     * 🔴 只整理事实、不编造订单号/金额、不替平台承诺处理结果。
+     */
+    public static function draftMerchantFeedback(string $question): array
+    {
+        $q = trim($question);
+        $fallback = ['type' => 'other', 'subject' => mb_substr($q, 0, 60), 'description' => mb_substr($q, 0, 4000)];
+        $key = Helpers::get_business_settings('nezha_cs_ai_api_key');
+        if (!$key) {
+            return $fallback;
+        }
+        $base = rtrim((string) (Helpers::get_business_settings('nezha_cs_ai_base_url') ?: 'https://api.deepseek.com'), '/');
+        $model = Helpers::get_business_settings('nezha_cs_ai_model') ?: 'deepseek-chat';
+        $system = <<<SYS
+你在帮「哪吒外卖」的商家把要发给平台超管的「问题反馈」整理成规范格式。根据商家的话，只输出**严格 JSON**（无多余文字、无代码块）：
+{"type":"commission|settlement|feature|other","subject":"一句话主题(≤40字)","description":"完整问题描述(客观、第一人称商家口吻，保留商家提到的订单号/金额/时间等关键信息)"}
+分类：佣金相关=commission；结算/到账/收款=settlement；功能建议或报障=feature；其它(含订单纠纷/漏送/客诉/需要平台介入)=other。
+🔴 只整理商家陈述的事实，不要编造订单号/金额/时间；不要替平台承诺退款、赔偿或任何处理结果。用中文。
+SYS;
+        $payload = [
+            'model' => $model,
+            'messages' => [
+                ['role' => 'system', 'content' => $system],
+                ['role' => 'user', 'content' => $q],
+            ],
+            'temperature' => 0.3,
+            'max_tokens' => 700,
+            'stream' => false,
+            'response_format' => ['type' => 'json_object'],
+        ];
+        $ch = curl_init($base . '/chat/completions');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $key],
+            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+        ]);
+        $raw = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($raw === false || $code >= 400) {
+            return $fallback;
+        }
+        $json = json_decode($raw, true);
+        $parsed = json_decode(trim((string) ($json['choices'][0]['message']['content'] ?? '')), true);
+        if (!is_array($parsed) || empty($parsed['subject']) || empty($parsed['description'])) {
+            return $fallback;
+        }
+        $type = in_array(($parsed['type'] ?? 'other'), ['commission', 'settlement', 'feature', 'other'], true) ? $parsed['type'] : 'other';
+        return [
+            'type' => $type,
+            'subject' => mb_substr((string) $parsed['subject'], 0, 150),
+            'description' => mb_substr((string) $parsed['description'], 0, 4000),
+        ];
+    }
+
     // 商家助手知识库：以权威的 MERCHANT_GUIDE.md 为准（手册一更新助手即同步）+ 后台补充 + 停用功能强化兜底。
     protected static function merchantKb(): string
     {
