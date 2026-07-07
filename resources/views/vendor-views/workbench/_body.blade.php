@@ -15,6 +15,10 @@
     $todayCny = $rateCny > 0 ? number_format($todayCollected / $rateCny) : 0;
     $todayUsd = $rateUsd > 0 ? number_format($todayCollected / $rateUsd, 2) : 0;
     $store = $wb['store'] ?? []; $tempClosed = (bool)($store['temp_closed'] ?? false);   // W5 店态
+    $stBusy = (bool)($store['busy'] ?? false); $stBusyMin = (int)($store['busy_min'] ?? 30); $stBusyReason = $store['busy_reason'] ?? 'peak';
+    $stModeEnabled = (bool)($store['mode_enabled'] ?? false); $stPauseUntil = $store['pause_until'] ?? null;
+    $capState = $tempClosed ? 'paused' : ($stBusy ? 'busy' : 'open');
+    $capText  = $tempClosed ? '暂停接单' : ($stBusy ? ('忙碌中 · '.$stBusyMin.'分') : '营业中');
     // W6 移动分段: 五队列计数 + 默认落第一个非空队列。桌面(>600px)不生效(全展示)。
     $qCounts = ['confirm' => ($qc['total'] ?? 0) + ($qc['no_proof_total'] ?? 0), 'cooking' => $qk['total'] ?? 0, 'delivery' => $qd['total'] ?? 0, 'nudge' => $qn['total'] ?? 0, 'refund' => $qr['total'] ?? 0];
     $segFirst = 'confirm'; foreach ($qCounts as $k => $n) { if ($n > 0) { $segFirst = $k; break; } }
@@ -35,7 +39,10 @@
     {{-- 顶部: 店态胶囊(W5 变交互·W2 静态) + 今日单量 --}}
     <div class="nzwb-top">
         <span class="nzwb-title">今天 · 作业台</span>
-        <button type="button" class="nzwb-cap nzwb-store{{ $tempClosed ? ' paused' : '' }}" data-nz-store="{{ $tempClosed ? 'paused' : 'open' }}" title="点击切换 营业中 / 暂停接单"><span class="dot"></span>{{ $tempClosed ? '暂停接单' : '营业中' }}</button>
+        <button type="button" class="nzwb-cap nzwb-store{{ $capState === 'paused' ? ' paused' : ($capState === 'busy' ? ' busy' : '') }}"
+            data-nz-store="{{ $capState }}" data-nz-mode-enabled="{{ $stModeEnabled ? 1 : 0 }}"
+            data-nz-busy-min="{{ $stBusyMin }}" data-nz-busy-reason="{{ $stBusyReason }}" data-nz-pause-until="{{ $stPauseUntil }}"
+            title="{{ $stModeEnabled ? '点击设置营业状态' : '点击切换 营业中 / 暂停接单' }}"><span class="dot"></span>{{ $capText }}</button>
         <span class="nzwb-today">今日 <b class="num">{{ (int)($today['orders'] ?? 0) }}</b> 单 · 自收款 <b class="num">֏{{ number_format((float)($today['collected'] ?? 0)) }}</b></span>
     </div>
 

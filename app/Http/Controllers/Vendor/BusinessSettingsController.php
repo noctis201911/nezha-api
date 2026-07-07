@@ -406,6 +406,73 @@ class BusinessSettingsController extends Controller
         return response()->json(['message' => $restaurant->nezha_temp_closed?translate('messages.restaurant_temporarily_closed'):translate('messages.restaurant_opened')], 200);
     }
 
+    /**
+     * 哪吒 忙碌模式 / 定时挂起 —— 作业台店态胶囊三档写路径。GET(与 active_status 同风格·auth vendor·绑本店)。
+     *   mode=open  → 恢复营业(清 busy/pause)
+     *   mode=busy  → 仍接单 + 挂"出餐约需 minutes 分钟"横幅(reason=peak/prep/short); busy_until=now+minutes
+     *   mode=pause → 暂停接单; minutes>0 = 到点自动恢复(pause_until=now+minutes), minutes=0 = 无限期手动暂停
+     * 🔴 只动本店本功能状态位, 不碰钱/订单/L1。顾客端展示仍受总闸 nezha_busy_mode_status gate(见 nezha_store_extra)。
+     */
+    public function nezha_store_mode(Request $request)
+    {
+        $restaurant = Helpers::get_restaurant_data();
+        if (!$restaurant) {
+            return response()->json(['message' => '没找到您的店铺信息，请刷新后重试。'], 404);
+        }
+        $mode = (string) $request->input('mode');
+        if (!in_array($mode, ['open', 'busy', 'pause'], true)) {
+            return response()->json(['message' => '参数错误'], 422);
+        }
+        $minutes = (int) $request->input('minutes', 0);
+
+        if ($mode === 'open') {
+            $restaurant->nezha_temp_closed = 0;
+            $restaurant->nezha_pause_until = null;
+            $restaurant->nezha_busy_until = null;
+            $restaurant->nezha_busy_min = null;
+            $restaurant->nezha_busy_reason = null;
+        } elseif ($mode === 'busy') {
+            $minutes = max(5, min(240, $minutes ?: 30));
+            $reason = (string) $request->input('reason', 'peak');
+            $restaurant->nezha_temp_closed = 0;                 // 忙碌 = 仍营业接单
+            $restaurant->nezha_pause_until = null;
+            $restaurant->nezha_busy_until = now()->addMinutes($minutes);
+            $restaurant->nezha_busy_min = $minutes;
+            $restaurant->nezha_busy_reason = in_array($reason, ['peak', 'prep', 'short'], true) ? $reason : 'peak';
+        } else { // pause
+            $restaurant->nezha_temp_closed = 1;
+            $restaurant->active = 1;                            // 暂停时保持可见(休息中), 与 active_status 一致
+            $restaurant->nezha_pause_until = $minutes > 0 ? now()->addMinutes(min(1440, $minutes)) : null; // 0=无限期
+            $restaurant->nezha_busy_until = null;               // 暂停清忙碌
+            $restaurant->nezha_busy_min = null;
+            $restaurant->nezha_busy_reason = null;
+        }
+        $restaurant->save();
+
+        \Illuminate\Support\Facades\Log::info('nezha_store_mode', [
+            'restaurant_id' => $restaurant->id,
+            'by'            => optional(auth('vendor')->user())->id,
+            'mode'          => $mode,
+            'minutes'       => $minutes,
+            'reason'        => $restaurant->nezha_busy_reason,
+            'via'           => 'workbench',
+            'at'            => now()->toIso8601String(),
+        ]);
+
+        // 回读真实态返回(单一真相源)
+        $sr = \Illuminate\Support\Facades\DB::table('restaurants')->where('id', $restaurant->id)
+            ->first(['nezha_temp_closed', 'nezha_pause_until', 'nezha_busy_until', 'nezha_busy_min', 'nezha_busy_reason']);
+        $busy = $sr->nezha_busy_until && \Carbon\Carbon::parse($sr->nezha_busy_until)->isFuture();
+        return response()->json([
+            'message'     => $mode === 'open' ? '已恢复营业' : ($mode === 'busy' ? '已设为忙碌中' : '已暂停接单'),
+            'temp_closed' => (int) $sr->nezha_temp_closed,
+            'busy'        => (bool) $busy,
+            'busy_min'    => $busy ? (int) $sr->nezha_busy_min : null,
+            'busy_reason' => $busy ? $sr->nezha_busy_reason : null,
+            'pause_until' => ((int) $sr->nezha_temp_closed === 1) ? $sr->nezha_pause_until : null,
+        ], 200);
+    }
+
     public function add_schedule(Request $request)
     {
         $validator = Validator::make($request->all(),[

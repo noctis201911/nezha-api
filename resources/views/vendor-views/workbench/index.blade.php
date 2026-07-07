@@ -25,6 +25,30 @@
 .nzwb-cap.nzwb-store:hover{border-color:var(--navy)}
 .nzwb-cap.paused{color:var(--red);border-color:var(--red)}
 .nzwb-cap.paused .dot{background:var(--red)}
+.nzwb-cap.busy{color:var(--amber);border-color:var(--amber)}
+.nzwb-cap.busy .dot{background:var(--amber)}
+/* 店态设置底部抽屉(忙碌模式/定时挂起·灰度开时) */
+.nzss-mask{position:fixed;inset:0;z-index:12000;background:rgba(20,25,40,.42);display:flex;align-items:flex-end;justify-content:center}
+.nzss-mask[hidden]{display:none}
+.nzss{background:#fff;width:100%;max-width:460px;border-radius:18px 18px 0 0;padding:16px 16px 22px;box-shadow:0 -8px 30px rgba(0,0,0,.18);font-family:inherit;max-height:88vh;overflow-y:auto}
+@media(min-width:520px){.nzss-mask{align-items:center}.nzss{border-radius:18px}}
+.nzss-h{display:flex;align-items:center;justify-content:space-between;font-size:16px;font-weight:700;color:var(--navy);margin-bottom:12px}
+.nzss-x{border:none;background:none;font-size:18px;color:var(--sec);cursor:pointer;line-height:1;padding:4px}
+.nzss-opt{width:100%;display:flex;align-items:center;gap:11px;border:1.5px solid var(--line);background:#fff;border-radius:13px;padding:13px 14px;font-size:15px;font-weight:600;color:var(--navy);font-family:inherit;cursor:pointer;margin-top:9px;text-align:left}
+.nzss-opt small{color:var(--sec);font-weight:400;font-size:12.5px;margin-left:2px}
+.nzss-opt.on{border-color:var(--navy);background:var(--bg2)}
+.nzss-opt.on[data-nzss-mode=busy]{border-color:var(--amber);background:#FFF7EA}
+.nzss-opt.on[data-nzss-mode=pause]{border-color:var(--red);background:#FDEEEB}
+.nzss-dot{width:11px;height:11px;border-radius:50%;flex:0 0 auto}
+.nzss-dot.open{background:var(--greenCta)} .nzss-dot.busy{background:var(--amber)} .nzss-dot.pause{background:var(--red)}
+.nzss-sub{padding:2px 4px 2px 6px}
+.nzss-sub[hidden]{display:none}
+.nzss-lbl{font-size:12.5px;color:var(--sec);margin:12px 0 7px}
+.nzss-chips{display:flex;flex-wrap:wrap;gap:8px}
+.nzss-chip{border:1px solid var(--line);background:#fff;color:var(--body);border-radius:999px;padding:7px 14px;font-size:13.5px;font-family:inherit;cursor:pointer}
+.nzss-chip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.nzss-go{width:100%;margin-top:16px;border:none;background:var(--navy);color:#fff;border-radius:12px;padding:13px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer}
+.nzss-go:disabled{opacity:.5;cursor:not-allowed}
 
 /* W6 移动端: 五队列横滑分段控件(桌面隐藏·全展示; ≤600px 只显选中队列 + 全宽 CTA) */
 .nzwb-segbar{display:none}
@@ -154,6 +178,43 @@ body.nz-dispatch-lock { overflow: hidden; }
         </div>
     </div>
 
+    {{-- 店态设置抽屉(忙碌模式/定时挂起·静态·在 #nzwbRefresh 之外; 灰度总闸开才渲染) --}}
+    @if((bool)($wb['store']['mode_enabled'] ?? false))
+    <div id="nzStoreSheet" class="nzss-mask" hidden>
+        <div class="nzss" role="dialog" aria-modal="true" aria-label="设置营业状态">
+            <div class="nzss-h"><span>设置营业状态</span><button type="button" class="nzss-x" data-nzss-close>✕</button></div>
+            <button type="button" class="nzss-opt" data-nzss-mode="open"><span class="nzss-dot open"></span>营业中<small>正常接单</small></button>
+            <button type="button" class="nzss-opt" data-nzss-mode="busy"><span class="nzss-dot busy"></span>忙碌中<small>仍接单 · 提示顾客出餐较慢</small></button>
+            <div class="nzss-sub" data-nzss-sub="busy" hidden>
+                <div class="nzss-lbl">原因</div>
+                <div class="nzss-chips" data-nzss-reasons>
+                    <button type="button" class="nzss-chip on" data-r="peak">高峰繁忙</button>
+                    <button type="button" class="nzss-chip" data-r="prep">正在备料</button>
+                    <button type="button" class="nzss-chip" data-r="short">人手紧张</button>
+                </div>
+                <div class="nzss-lbl">出餐约需</div>
+                <div class="nzss-chips" data-nzss-busymin>
+                    <button type="button" class="nzss-chip" data-m="15">15 分钟</button>
+                    <button type="button" class="nzss-chip on" data-m="30">30 分钟</button>
+                    <button type="button" class="nzss-chip" data-m="45">45 分钟</button>
+                    <button type="button" class="nzss-chip" data-m="60">60 分钟</button>
+                </div>
+            </div>
+            <button type="button" class="nzss-opt" data-nzss-mode="pause"><span class="nzss-dot pause"></span>暂停接单<small>顾客暂时下不了单 · 到点自动恢复</small></button>
+            <div class="nzss-sub" data-nzss-sub="pause" hidden>
+                <div class="nzss-lbl">多久后自动恢复接单</div>
+                <div class="nzss-chips" data-nzss-pausemin>
+                    <button type="button" class="nzss-chip on" data-m="15">15 分钟</button>
+                    <button type="button" class="nzss-chip" data-m="30">30 分钟</button>
+                    <button type="button" class="nzss-chip" data-m="60">60 分钟</button>
+                    <button type="button" class="nzss-chip" data-m="0">不定时（手动恢复）</button>
+                </div>
+            </div>
+            <button type="button" class="nzss-go" data-nzss-confirm disabled>确定</button>
+        </div>
+    </div>
+    @endif
+
 </div>
 </div>
 @endsection
@@ -247,14 +308,23 @@ body.nz-dispatch-lock { overflow: hidden; }
     })();
 
     (function () {
-        // W5: 店态胶囊 —— 点击切换 营业中/暂停接单(复用 update-active-status·翻转 nezha_temp_closed·同门店页写路径)+二次确认+后端留痕。
-        // 胶囊在 #nzwbRefresh 内(每 6s 心跳重渲染), 故事件委托; 成功后乐观翻转 + 立即刷新从服务器 re-sync(单一真相源)。
+        // W5+: 店态胶囊 —— 灰度关(data-nz-mode-enabled=0)=两档 营业/暂停(旧行为·复用 update-active-status);
+        //   灰度开=点开三档抽屉(营业/忙碌/暂停接单 + 时长/原因·走 nezha-store-mode)。胶囊在 6s 心跳区内→事件委托; 成功后 re-sync。
         var TOGGLE_URL = '{{ route('vendor.business-settings.update-active-status') }}';
+        var MODE_URL   = '{{ route('vendor.business-settings.nezha-store-mode') }}';
         var busy = false;
+        var sheet = document.getElementById('nzStoreSheet');
+        var sel = { mode: null, reason: 'peak', busyMin: 30, pauseMin: 15 };
+
         document.addEventListener('click', function (e) {
             var cap = (e.target && e.target.closest) ? e.target.closest('.nzwb-store') : null;
             if (!cap || busy) return;
             e.preventDefault();
+            if (cap.getAttribute('data-nz-mode-enabled') === '1' && sheet) { openSheet(cap); return; }
+            legacyToggle(cap);
+        });
+
+        function legacyToggle(cap) {
             var paused = cap.getAttribute('data-nz-store') === 'paused';
             var msg = paused
                 ? '恢复营业？顾客将可以重新对本店下单。'
@@ -262,17 +332,60 @@ body.nz-dispatch-lock { overflow: hidden; }
             if (!window.confirm(msg)) return;
             busy = true; cap.style.opacity = '.6';
             $.get(TOGGLE_URL).done(function () {
-                var nowPaused = !paused;
-                cap.setAttribute('data-nz-store', nowPaused ? 'paused' : 'open');       // 乐观翻转(即时反馈)
-                cap.classList.toggle('paused', nowPaused);
-                cap.innerHTML = '<span class="dot"></span>' + (nowPaused ? '暂停接单' : '营业中');
-                if (window.nzwbRefreshNow) window.nzwbRefreshNow();                      // 立即从服务器 re-sync
-            }).fail(function () {
-                window.alert('切换失败，请重试');
-            }).always(function () {
-                busy = false; cap.style.opacity = '';
+                if (window.nzwbRefreshNow) window.nzwbRefreshNow();
+            }).fail(function () { window.alert('切换失败，请重试'); })
+              .always(function () { busy = false; cap.style.opacity = ''; });
+        }
+
+        function openSheet(cap) {
+            sel.mode = cap.getAttribute('data-nz-store') || 'open';       // 预选当前态
+            if (sel.mode === 'busy') {
+                sel.busyMin = parseInt(cap.getAttribute('data-nz-busy-min'), 10) || 30;
+                sel.reason = cap.getAttribute('data-nz-busy-reason') || 'peak';
+            }
+            paint();
+            sheet.hidden = false;
+        }
+        function closeSheet() { if (sheet) sheet.hidden = true; }
+        function markChips(q, attr, val) {
+            sheet.querySelectorAll(q).forEach(function (c) { c.classList.toggle('on', c.getAttribute(attr) === val); });
+        }
+        function paint() {
+            sheet.querySelectorAll('.nzss-opt').forEach(function (o) { o.classList.toggle('on', o.getAttribute('data-nzss-mode') === sel.mode); });
+            sheet.querySelectorAll('.nzss-sub').forEach(function (s) { s.hidden = s.getAttribute('data-nzss-sub') !== sel.mode; });
+            markChips('[data-nzss-reasons] .nzss-chip', 'data-r', sel.reason);
+            markChips('[data-nzss-busymin] .nzss-chip', 'data-m', String(sel.busyMin));
+            markChips('[data-nzss-pausemin] .nzss-chip', 'data-m', String(sel.pauseMin));
+            var go = sheet.querySelector('[data-nzss-confirm]'); if (go) go.disabled = !sel.mode;
+        }
+        if (sheet) {
+            sheet.addEventListener('click', function (e) {
+                var t = e.target;
+                if (t.closest('[data-nzss-close]') || t === sheet) { closeSheet(); return; }
+                var opt = t.closest('.nzss-opt'); if (opt) { sel.mode = opt.getAttribute('data-nzss-mode'); paint(); return; }
+                var chip = t.closest('.nzss-chip');
+                if (chip) {
+                    if (chip.hasAttribute('data-r')) sel.reason = chip.getAttribute('data-r');
+                    else if (chip.closest('[data-nzss-busymin]')) sel.busyMin = parseInt(chip.getAttribute('data-m'), 10);
+                    else if (chip.closest('[data-nzss-pausemin]')) sel.pauseMin = parseInt(chip.getAttribute('data-m'), 10);
+                    paint(); return;
+                }
+                if (t.closest('[data-nzss-confirm]')) submit();
             });
-        });
+        }
+        function submit() {
+            if (busy || !sel.mode) return;
+            var params = { mode: sel.mode };
+            if (sel.mode === 'busy') { params.minutes = sel.busyMin; params.reason = sel.reason; }
+            if (sel.mode === 'pause') { params.minutes = sel.pauseMin; }
+            busy = true;
+            var go = sheet.querySelector('[data-nzss-confirm]'); if (go) { go.disabled = true; go.textContent = '处理中…'; }
+            $.get(MODE_URL, params).done(function () {
+                closeSheet();
+                if (window.nzwbRefreshNow) window.nzwbRefreshNow();
+            }).fail(function () { window.alert('设置失败，请重试'); })
+              .always(function () { busy = false; if (go) { go.disabled = false; go.textContent = '确定'; } });
+        }
     })();
 
     (function () {

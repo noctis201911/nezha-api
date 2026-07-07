@@ -371,6 +371,7 @@ Route::group(['prefix' => 'withdraw-method', 'as' => 'wallet-method.', 'middlewa
             Route::post('add-schedule', [BusinessSettingsController::class, 'add_schedule'])->name('add-schedule');
             Route::get('remove-schedule/{restaurant_schedule}', [BusinessSettingsController::class, 'remove_schedule'])->name('remove-schedule');
             Route::get('update-active-status', [BusinessSettingsController::class, 'active_status'])->name('update-active-status');
+            Route::get('nezha-store-mode', [BusinessSettingsController::class, 'nezha_store_mode'])->name('nezha-store-mode');
             Route::post('update-setup/{restaurant}', [BusinessSettingsController::class, 'restaurant_setup'])->name('update-setup');
             Route::get('toggle-settings-status/{restaurant}/{status}/{menu}', [BusinessSettingsController::class, 'restaurant_status'])->name('toggle-settings');
             Route::get('site_direction_vendor', [BusinessSettingsController::class, 'site_direction_vendor'])->name('site_direction_vendor');

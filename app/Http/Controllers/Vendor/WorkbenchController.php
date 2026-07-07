@@ -137,12 +137,25 @@ class WorkbenchController extends Controller
             ],
         ];
 
+        // W5: 店态胶囊三档(营业/忙碌/暂停接单)+ 时长。忙碌=仍接单挂横幅; 暂停=nezha_temp_closed(店可见+休息中+拦单)。
+        //   mode_enabled=灰度总闸(关时前端退化为两档营业/暂停·与旧版一致)。
+        $sr = DB::table('restaurants')->where('id', $rid)
+            ->first(['nezha_temp_closed', 'nezha_pause_until', 'nezha_busy_until', 'nezha_busy_min', 'nezha_busy_reason']);
+        $srBusy = $sr && $sr->nezha_busy_until && \Carbon\Carbon::parse($sr->nezha_busy_until)->isFuture();
+        $store = [
+            'temp_closed'  => (bool) ($sr->nezha_temp_closed ?? 0),
+            'busy'         => (bool) $srBusy,
+            'busy_min'     => $srBusy ? (int) $sr->nezha_busy_min : null,
+            'busy_reason'  => $srBusy ? $sr->nezha_busy_reason : null,
+            'pause_until'  => (($sr->nezha_temp_closed ?? 0) && $sr->nezha_pause_until) ? $sr->nezha_pause_until : null,
+            'mode_enabled' => (int) \App\CentralLogics\Helpers::get_business_settings('nezha_busy_mode_status') === 1,
+        ];
+
         return [
             'action'       => $action,
             'queues'       => $queues,
             'rail'         => $rail,
-            // W5: 店态胶囊两档(营业/暂停接单)。暂停=nezha_temp_closed(店可见+休息中+拦单), 与门店页 update-active-status 同源。
-            'store'        => ['temp_closed' => (bool) DB::table('restaurants')->where('id', $rid)->value('nezha_temp_closed')],
+            'store'        => $store,
             'rates'        => ['cny' => $rateCny, 'usd' => $rateUsd],
             'generated_at' => now()->toIso8601String(),
         ];
