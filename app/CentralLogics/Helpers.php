@@ -847,6 +847,12 @@ class Helpers
                 $item['restaurant_status'] = (int) $item->status;
                 // [哪吒 组4] 保证金≤0(开关开时)自动下线: 顾客端复用休息中展示, 不露内部术语; 关闭(switch=0)恒false零开销
                 $item['nezha_deposit_paused'] = (bool) \App\Http\Controllers\Api\V1\OrderController::nezha_store_paused($item);
+                // 哪吒 忙碌模式/定时挂起(灰度关时恒 false/null, 顾客端无变化)
+                $nezhaExtra = self::nezha_store_extra($item);
+                $item['nezha_busy'] = $nezhaExtra['busy'];
+                $item['nezha_busy_min'] = $nezhaExtra['busy_min'];
+                $item['nezha_busy_reason'] = $nezhaExtra['busy_reason'];
+                $item['nezha_pause_resume_at'] = $nezhaExtra['pause_resume_at'];
                 $item['cuisine'] = $item->cuisine;
 
                 if ($item->opening_time) {
@@ -906,6 +912,12 @@ class Helpers
             $data['restaurant_status'] = (int) $data->status;
             // [哪吒 组4] 保证金≤0(开关开时)自动下线: 顾客端复用休息中展示
             $data['nezha_deposit_paused'] = (bool) \App\Http\Controllers\Api\V1\OrderController::nezha_store_paused($data);
+            // 哪吒 忙碌模式/定时挂起(灰度关时恒 false/null, 顾客端无变化)
+            $nezhaExtra = self::nezha_store_extra($data);
+            $data['nezha_busy'] = $nezhaExtra['busy'];
+            $data['nezha_busy_min'] = $nezhaExtra['busy_min'];
+            $data['nezha_busy_reason'] = $nezhaExtra['busy_reason'];
+            $data['nezha_pause_resume_at'] = $nezhaExtra['pause_resume_at'];
             if ($data->opening_time) {
                 $data['available_time_starts'] = $data->opening_time->format('H:i');
                 unset($data['opening_time']);
@@ -971,6 +983,32 @@ class Helpers
         }
 
         return $data;
+    }
+
+    // 哪吒 忙碌模式 / 定时挂起: 顾客端横幅所需的"有效状态"(灰度总闸 nezha_busy_mode_status 关 → 恒空零影响)。
+    //   busy=忙碌中(仍接单·"出餐约需X分钟"横幅); pause_resume_at=定时挂起到期时刻(顾客端倒计时"约X分钟后恢复接单")。
+    //   与 OrderController::nezha_store_paused 的 pause_until 懒判定同思路: 只反映有效状态, 真正清 flag 交给 nezha:store-timer-sweep。
+    public static function nezha_store_extra($restaurant): array
+    {
+        $off = ['busy' => false, 'busy_min' => null, 'busy_reason' => null, 'pause_resume_at' => null];
+        if ((int) self::get_business_settings('nezha_busy_mode_status') !== 1) {
+            return $off;
+        }
+        $get = function ($k) use ($restaurant) {
+            return is_array($restaurant) ? ($restaurant[$k] ?? null) : ($restaurant->$k ?? null);
+        };
+        $busyUntil = $get('nezha_busy_until');
+        $busy = $busyUntil && \Carbon\Carbon::parse($busyUntil)->isFuture();
+        $pauseUntil = $get('nezha_pause_until');
+        $resumeAt = ((int) ($get('nezha_temp_closed') ?? 0) === 1 && $pauseUntil && \Carbon\Carbon::parse($pauseUntil)->isFuture())
+            ? \Carbon\Carbon::parse($pauseUntil)->toIso8601String()
+            : null;
+        return [
+            'busy' => (bool) $busy,
+            'busy_min' => $busy ? (int) $get('nezha_busy_min') : null,
+            'busy_reason' => $busy ? ($get('nezha_busy_reason') ?: null) : null,
+            'pause_resume_at' => $resumeAt,
+        ];
     }
 
     public static function wishlist_data_formatting($data, $multi_data = false)

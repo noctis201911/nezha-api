@@ -2392,7 +2392,13 @@ class OrderController extends Controller
         }
         $tempClosed = is_array($restaurant) ? ($restaurant['nezha_temp_closed'] ?? 0) : ($restaurant->nezha_temp_closed ?? 0);
         if ($tempClosed) {
-            return true;
+            // 哪吒 定时挂起: 暂停带到期时间且已过点 → 懒判定为"已恢复"(即使 nezha_temp_closed flag 还没被 sweep 清)。
+            //   nezha_pause_until 为 null = 无限期手动暂停(现行语义), 维持暂停。上线前无人写 pause_until, 此分支恒等价旧逻辑。
+            $pauseUntil = is_array($restaurant) ? ($restaurant['nezha_pause_until'] ?? null) : ($restaurant->nezha_pause_until ?? null);
+            if (!($pauseUntil && \Carbon\Carbon::parse($pauseUntil)->isPast())) {
+                return true;
+            }
+            // 到期 → 视为已恢复, 继续往下判保证金
         }
         return self::nezha_deposit_below_threshold($restaurant);
     }

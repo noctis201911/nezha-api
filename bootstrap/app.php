@@ -125,6 +125,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('nezha:order-timeout-sweep')->everyMinute()->withoutOverlapping();
         // 哪吒商家版App: 新单报警兜底网(内联只是best-effort, 真正保底靠这里每分钟重试)
         $schedule->command('nezha:vendor-alarm-sweep')->everyMinute()->withoutOverlapping();
+        // 哪吒 忙碌模式/定时挂起到期兜底: 每分钟把到期的定时挂起翻回营业、清到期忙碌态。
+        //   顾客端"有效状态"已由懒判定(nezha_store_paused/nezha_store_extra)保证正确, 这里只让后台 flag 一致。
+        //   总开关 nezha_busy_mode_status(默认0关, 关时命令直接返回)。
+        $schedule->command('nezha:store-timer-sweep')->everyMinute()->withoutOverlapping();
 
         // 哪吒广告计费 T3: 到投放起始日对「已通过+未扣费」广告从商家保证金扣全额(单价×天数)。
         //   L2 资金, 流水类型 advertisement_fee; 总开关 nezha_ad_billing_status(默认0关, 关时命令直接返回零扣费)。

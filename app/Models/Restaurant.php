@@ -64,6 +64,10 @@ class Restaurant extends Model
         'package_id'=>'integer',
         'distance' => 'float',
         'meta_data' => 'array',
+        // 哪吒 忙碌模式/定时挂起
+        'nezha_busy_until' => 'datetime',
+        'nezha_pause_until' => 'datetime',
+        'nezha_busy_min' => 'integer',
     ];
 
     protected $appends = ['gst_status','gst_code','free_delivery_distance_status','free_delivery_distance_value',
