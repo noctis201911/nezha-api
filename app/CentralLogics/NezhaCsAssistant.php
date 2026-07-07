@@ -1160,6 +1160,17 @@ SYS;
         }
 
         $kb = self::merchantKb();
+
+        // 哪吒 Q&A 缓存：同一问题 + 同一版手册 → 命中缓存直接秒回、0 调用省 token。
+        // 🔴 缓存键含手册内容哈希 md5($kb)：手册一更新哈希即变、旧答案自动失效，
+        //    绝不会拿旧版手册的答案误导商家（顾客手册 / 停用功能兜底都在 $kb 里，一并入哈希）。
+        $normQ = preg_replace('/\s+/u', ' ', trim(mb_strtolower($question, 'UTF-8')));
+        $cacheKey = 'nezha_ma_ans:' . md5(md5($kb) . '|' . $normQ);
+        $cached = \Illuminate\Support\Facades\Cache::get($cacheKey);
+        if (is_string($cached) && $cached !== '') {
+            return $cached;
+        }
+
         $system = <<<SYS
 你是「哪吒外卖」的商家助手，帮商家用好商家后台、解答操作问题、还能帮商家把菜品名称/描述写得更好。语气像热心的平台运营同事，简洁、口语、用中文。
 
@@ -1200,7 +1211,12 @@ SYS;
         }
         $json = json_decode($raw, true);
         $content = trim((string) ($json['choices'][0]['message']['content'] ?? ''));
-        return $content !== '' ? $content : '没有得到有效回答，请换个问法试试。';
+        if ($content !== '') {
+            // 只缓存有效答案（错误/限速提示不缓存）；7 天 TTL 兜底，手册变更即因 kbHash 提前失效。
+            \Illuminate\Support\Facades\Cache::put($cacheKey, $content, 604800);
+            return $content;
+        }
+        return '没有得到有效回答，请换个问法试试。';
     }
 
     // 商家助手知识库：以权威的 MERCHANT_GUIDE.md 为准（手册一更新助手即同步）+ 后台补充 + 停用功能强化兜底。
