@@ -58,6 +58,7 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
         // 哪吒 商家助手 (AI)
         Route::get('nezha-assistant', [\App\Http\Controllers\Vendor\NezhaAssistantController::class, 'index'])->name('nezha-assistant.index');
         Route::post('nezha-assistant/ask', [\App\Http\Controllers\Vendor\NezhaAssistantController::class, 'ask'])->name('nezha-assistant.ask');
+        Route::post('nezha-assistant/stream', [\App\Http\Controllers\Vendor\NezhaAssistantController::class, 'stream'])->name('nezha-assistant.stream');
 
 
         Route::group(['prefix' => 'pos', 'as' => 'pos.'], function () {

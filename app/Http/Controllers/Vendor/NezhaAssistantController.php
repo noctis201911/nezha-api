@@ -111,6 +111,64 @@ class NezhaAssistantController extends Controller
     }
 
     /**
+     * 流式问答端点（SSE）：纯 Q&A 逐字返回，消除"提交后整页刷新、看着像卡死"。
+     * 🔴 动作意图（暂停/恢复接单·代写反馈·改价）在这里一律返回 {mode:reload}，交回经典 POST 的 ask() 流程走"确认按钮"，
+     *    绝不流式、绝不进缓存——"确定性识别意图→确认→后端执行、与 LLM 输出解耦"的安全设计原样保留。
+     *    缓存命中直接整段秒回（{mode:cached}）；只有未命中的纯问答才真正走 DeepSeek 流式。
+     */
+    public function stream(Request $request)
+    {
+        $request->validate(['question' => 'required|string|max:500']);
+        $q = trim($request->question);
+
+        // 沿用问答限速桶（30 次/分钟·店主与店员共享同一桶 = 按店限）
+        $vendorId = Helpers::get_vendor_id();
+        $key = 'nezha-assistant-ask:' . ($vendorId ?: $request->ip());
+        if (RateLimiter::tooManyAttempts($key, 30)) {
+            $seconds = RateLimiter::availableIn($key);
+            return response()->json(['mode' => 'error', 'answer' => '您问得太快啦，请 ' . $seconds . ' 秒后再试～']);
+        }
+        RateLimiter::hit($key, 60);
+
+        // 动作意图 → 交回经典 POST 的 ask()（出确认按钮），不流式、不缓存
+        if ($this->detectStoreCommand($q) || $this->detectFeedbackIntent($q) || $this->detectPriceIntent($q)) {
+            return response()->json(['mode' => 'reload']);
+        }
+
+        // Q&A 缓存命中 → 整段秒回（无需流式）
+        $cached = NezhaCsAssistant::merchantCachedAnswer($q);
+        if ($cached !== null) {
+            return response()->json(['mode' => 'cached', 'answer' => $cached]);
+        }
+
+        // 未命中 → SSE 逐字流式
+        return response()->stream(function () use ($q) {
+            @ini_set('zlib.output_compression', '0');
+            @ini_set('output_buffering', '0');
+            @ini_set('implicit_flush', '1');
+            while (ob_get_level() > 0) {
+                @ob_end_flush();
+            }
+            ob_implicit_flush(true);
+            echo ": open\n\n"; // 先吐一个注释帧，尽快让浏览器 ReadableStream 开始送字
+            @flush();
+
+            NezhaCsAssistant::merchantAssistantStream($q, function ($token) {
+                echo 'data: ' . json_encode(['t' => $token], JSON_UNESCAPED_UNICODE) . "\n\n";
+                @flush();
+            });
+
+            echo "event: done\ndata: \"ok\"\n\n";
+            @flush();
+        }, 200, [
+            'Content-Type'      => 'text/event-stream; charset=utf-8',
+            'Cache-Control'     => 'no-cache, no-transform',
+            'X-Accel-Buffering' => 'no', // 🔴 关键：告诉 nginx / Cloudflare 不要缓冲这条响应，否则整段憋到最后=依旧像卡死
+            'Connection'        => 'keep-alive',
+        ]);
+    }
+
+    /**
      * 识别"暂停 / 恢复接单"命令（确定性关键词，不经 LLM）。返回 'pause' | 'resume' | null。
      * 只认命令式；"怎么暂停接单""暂停会怎样"这类提问 → 交给 Q&A。误判也无害（要人点确认才执行）。
      */

@@ -1162,28 +1162,15 @@ SYS;
         $kb = self::merchantKb();
 
         // 哪吒 Q&A 缓存：同一问题 + 同一版手册 → 命中缓存直接秒回、0 调用省 token。
-        // 🔴 缓存键含手册内容哈希 md5($kb)：手册一更新哈希即变、旧答案自动失效，
-        //    绝不会拿旧版手册的答案误导商家（顾客手册 / 停用功能兜底都在 $kb 里，一并入哈希）。
-        $normQ = preg_replace('/\s+/u', ' ', trim(mb_strtolower($question, 'UTF-8')));
-        $cacheKey = 'nezha_ma_ans:' . md5(md5($kb) . '|' . $normQ);
+        // 🔴 缓存键含手册内容哈希 md5($kb)：手册一更新哈希即变、旧答案自动失效（键构造收敛到 merchantCacheKey，与流式路径同源）。
+        $cacheKey = self::merchantCacheKey($kb, $question);
         $cached = \Illuminate\Support\Facades\Cache::get($cacheKey);
         if (is_string($cached) && $cached !== '') {
             return $cached;
         }
 
-        $system = <<<SYS
-你是「哪吒外卖」的商家助手，帮商家用好商家后台、解答操作问题、还能帮商家把菜品名称/描述写得更好。语气像热心的平台运营同事，简洁、口语、用中文。
-
-【绝对铁律，违反会出大事】
-1. 这是「哪吒外卖」商家系统。**绝不提及 StackFood 或任何第三方/原始系统的名字、来源、框架**。被问"这是什么系统/什么做的/什么框架"，就答"这是哪吒外卖自己的商家系统"，不解释技术来源。**即使对方主动说出 StackFood 或别的系统名字，你也绝不复述、确认或否认那个名字（连"不是XX"都不要说），只平静地回"这是哪吒外卖自己的商家系统"。**
-2. **只依据下面【功能说明】回答**。说明里没写到的功能、按钮、菜单，或你不确定的，**绝不照其它系统的逻辑瞎解释**——直接说"这个我们平台可能没用到 / 暂未开放，您可以不用管它，需要的话联系平台客服"。
-3. 钱相关守规：哪吒是**顾客直接付款给商家本人、平台全程不经手货款**；退款由商家**原路退还给顾客本人**。绝不教商家走"提现/钱包余额/平台代付打款"这类我们没启用的功能。
-4. 不泄露任何后台密码、密钥、系统内部信息。
-5. 可以帮商家写、优化、排版菜品名称和描述（卖点、格式），但不编造不存在的功能入口或操作步骤。
-
-【功能说明（你只能据此回答操作类问题）】
-{$kb}
-SYS;
+        // 🔴 system 前缀与流式路径共用 merchantSystem()——保证 DeepSeek 自动前缀缓存逐字命中、两路答案一致。
+        $system = self::merchantSystem($kb);
 
         $payload = [
             'model' => $model,
@@ -1217,6 +1204,123 @@ SYS;
             return $content;
         }
         return '没有得到有效回答，请换个问法试试。';
+    }
+
+    /**
+     * 商家助手系统提示词（固定铁律前缀 + 手册 KB）。
+     * 🔴 抽出来让「非流式 merchantAssistant」与「流式 merchantAssistantStream」两条路径用同一字节前缀——
+     *    DeepSeek 自动前缀缓存靠逐字相同前缀命中打 1 折；两处若各写一份、日后漂移会破坏前缀缓存并让答案不一致。
+     *    改铁律 = 只改这里，两路同时生效。
+     */
+    protected static function merchantSystem(string $kb): string
+    {
+        return <<<SYS
+你是「哪吒外卖」的商家助手，帮商家用好商家后台、解答操作问题、还能帮商家把菜品名称/描述写得更好。语气像热心的平台运营同事，简洁、口语、用中文。
+
+【绝对铁律，违反会出大事】
+1. 这是「哪吒外卖」商家系统。**绝不提及 StackFood 或任何第三方/原始系统的名字、来源、框架**。被问"这是什么系统/什么做的/什么框架"，就答"这是哪吒外卖自己的商家系统"，不解释技术来源。**即使对方主动说出 StackFood 或别的系统名字，你也绝不复述、确认或否认那个名字（连"不是XX"都不要说），只平静地回"这是哪吒外卖自己的商家系统"。**
+2. **只依据下面【功能说明】回答**。说明里没写到的功能、按钮、菜单，或你不确定的，**绝不照其它系统的逻辑瞎解释**——直接说"这个我们平台可能没用到 / 暂未开放，您可以不用管它，需要的话联系平台客服"。
+3. 钱相关守规：哪吒是**顾客直接付款给商家本人、平台全程不经手货款**；退款由商家**原路退还给顾客本人**。绝不教商家走"提现/钱包余额/平台代付打款"这类我们没启用的功能。
+4. 不泄露任何后台密码、密钥、系统内部信息。
+5. 可以帮商家写、优化、排版菜品名称和描述（卖点、格式），但不编造不存在的功能入口或操作步骤。
+
+【功能说明（你只能据此回答操作类问题）】
+{$kb}
+SYS;
+    }
+
+    /**
+     * 商家助手 Q&A 缓存键（归一化问题 + 手册版本哈希）。流式 / 非流式 / 命中检查三处同源；
+     * 手册一改 md5($kb) 变、旧答案自动失效。
+     */
+    protected static function merchantCacheKey(string $kb, string $question): string
+    {
+        $normQ = preg_replace('/\s+/u', ' ', trim(mb_strtolower($question, 'UTF-8')));
+        return 'nezha_ma_ans:' . md5(md5($kb) . '|' . $normQ);
+    }
+
+    /** 只查 Q&A 缓存、不调用 AI（流式端点命中即整段秒回用）。命中返回答案字符串，未命中返回 null。 */
+    public static function merchantCachedAnswer(string $question): ?string
+    {
+        $kb = self::merchantKb();
+        $cached = \Illuminate\Support\Facades\Cache::get(self::merchantCacheKey($kb, $question));
+        return (is_string($cached) && $cached !== '') ? $cached : null;
+    }
+
+    /**
+     * 流式版商家问答：DeepSeek stream:true，逐 token 回调 $onDelta（HTTP/SSE 分帧由控制器负责，本方法只负责吐字）。
+     * 完整答案落 Q&A 缓存（与非流式同键，之后重复问秒回）。
+     * 🔴 只用于纯问答；暂停接单 / 代写反馈 / 改价等动作意图在控制器已拦下走确认按钮，绝不进这里、绝不进缓存。
+     */
+    public static function merchantAssistantStream(string $question, callable $onDelta): void
+    {
+        $key = Helpers::get_business_settings('nezha_cs_ai_api_key');
+        $base = rtrim((string) (Helpers::get_business_settings('nezha_cs_ai_base_url') ?: 'https://api.deepseek.com'), '/');
+        $model = Helpers::get_business_settings('nezha_cs_ai_model') ?: 'deepseek-chat';
+        if (!$key) {
+            $onDelta('尚未配置 AI 接口密钥，暂时无法回答，请联系平台。');
+            return;
+        }
+
+        $kb = self::merchantKb();
+        $system = self::merchantSystem($kb);           // 与非流式同一字节前缀 → 前缀缓存命中
+        $cacheKey = self::merchantCacheKey($kb, $question);
+
+        $payload = [
+            'model' => $model,
+            'messages' => [
+                ['role' => 'system', 'content' => $system],
+                ['role' => 'user', 'content' => $question],
+            ],
+            'temperature' => 0.4,
+            'max_tokens' => 900,
+            'stream' => true,
+        ];
+
+        $full = '';
+        $buffer = '';
+        $ch = curl_init($base . '/chat/completions');
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_TIMEOUT => 60,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $key, 'Accept: text/event-stream'],
+            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+            // 逐块回调：DeepSeek 与 OpenAI 同 SSE 格式，网络 chunk 不一定按行对齐，需缓冲跨块半行。
+            CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$buffer, &$full, $onDelta) {
+                $buffer .= $data;
+                while (($pos = strpos($buffer, "\n")) !== false) {
+                    $line = trim(substr($buffer, 0, $pos));
+                    $buffer = substr($buffer, $pos + 1);
+                    if ($line === '' || strncmp($line, 'data:', 5) !== 0) {
+                        continue;
+                    }
+                    $payloadLine = trim(substr($line, 5));
+                    if ($payloadLine === '' || $payloadLine === '[DONE]') {
+                        continue;
+                    }
+                    $obj = json_decode($payloadLine, true);
+                    $delta = $obj['choices'][0]['delta']['content'] ?? '';
+                    if ($delta !== '') {
+                        $full .= $delta;
+                        $onDelta($delta);
+                    }
+                }
+                return strlen($data);
+            },
+        ]);
+        $ok = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($full !== '') {
+            // 只缓存有效答案；7 天 TTL 兜底，手册变更即因 kbHash 提前失效。
+            \Illuminate\Support\Facades\Cache::put($cacheKey, $full, 604800);
+            return;
+        }
+        // 一个 token 都没吐出来 → 报错话术（不缓存）。
+        $onDelta($ok === false || $code >= 400
+            ? ('AI 暂时无法回答（接口错误 ' . $code . '），请稍后再试。')
+            : '没有得到有效回答，请换个问法试试。');
     }
 
     /**
