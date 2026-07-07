@@ -27,6 +27,18 @@
                     <div class="mt-3 p-3" style="background:#f7f8fa;border-radius:10px;white-space:pre-wrap;line-height:1.6;">{{ session('ma_a') }}</div>
                 @endif
 
+                @if (session('ma_action'))
+                    {{-- Phase1 动作确认：AI 只提议，真正执行要商家点这个按钮（走 auth 商家端点、绑本店） --}}
+                    <form method="POST" action="{{ route('vendor.nezha-assistant.ask') }}" class="mt-2">
+                        @csrf
+                        <input type="hidden" name="confirm_action" value="{{ session('ma_action') }}">
+                        <button class="btn {{ session('ma_action') === 'pause' ? 'btn-danger' : 'btn-success' }}" type="submit">
+                            {{ session('ma_action') === 'pause' ? '✅ 确认暂停接单' : '✅ 确认恢复接单' }}
+                        </button>
+                        <a href="{{ route('vendor.nezha-assistant.index') }}" class="btn btn-soft-secondary btn-sm">{{ translate('取消') }}</a>
+                    </form>
+                @endif
+
                 <div class="mt-3">
                     <small class="text-muted">{{ translate('常见问题：') }}</small>
                     <div class="d-flex flex-wrap" style="gap:8px;margin-top:8px;">
