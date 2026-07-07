@@ -523,6 +523,8 @@ class ProductController extends Controller
         }
         $key = explode(' ', $request->name);
 
+        // 哪吒[搜索精准化]: 搜索建议(自动补全)的菜品只按 菜名 + 译名(仅 name 键) 匹配;
+        // 去掉 tags/allergies/nutritions 及译文 description 的 OR, 与主商品搜索一致(避免建议里冒出无关菜)。
         $foods = Food::active()->whereHas('restaurant', function($q)use($zone_id){
             $q->whereIn('zone_id', $zone_id)->Weekday();
         })
@@ -531,30 +533,9 @@ class ProductController extends Controller
                 $q->orWhere('name', 'like', "%{$value}%");
             }
             $q->orWhereHas('translations',function($query)use($key){
-                $query->where(function($q)use($key){
+                $query->where('key','name')->where(function($q)use($key){
                     foreach ($key as $value) {
                         $q->where('value', 'like', "%{$value}%");
-                    };
-                });
-            });
-            $q->orWhereHas('tags',function($query)use($key){
-                $query->where(function($q)use($key){
-                    foreach ($key as $value) {
-                        $q->where('tag', 'like', "%{$value}%");
-                    };
-                });
-            });
-            $q->orWhereHas('allergies',function($query)use($key){
-                $query->where(function($q)use($key){
-                    foreach ($key as $value) {
-                        $q->where('allergy', 'like', "%{$value}%");
-                    };
-                });
-            });
-            $q->orWhereHas('nutritions',function($query)use($key){
-                $query->where(function($q)use($key){
-                    foreach ($key as $value) {
-                        $q->where('nutrition', 'like', "%{$value}%");
                     };
                 });
             });
