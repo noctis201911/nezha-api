@@ -290,8 +290,11 @@ Route::prefix('m')->as('local-merchant.')
         Route::get('reset/{token}', [\App\Http\Controllers\LocalMerchant\AuthController::class, 'showReset'])->name('reset');
         Route::post('reset', [\App\Http\Controllers\LocalMerchant\AuthController::class, 'reset'])->name('reset.post')->middleware('throttle:30,1');
 
-        // 登录后面板（INC-3 填充预览/编辑/提交待审/历史）
+        // 登录后面板（预览 / 编辑 → 提交待审 / 历史）
         Route::middleware(\App\Http\Middleware\EnsureLocalMerchant::class)->group(function () {
             Route::get('/', [\App\Http\Controllers\LocalMerchant\PanelController::class, 'home'])->name('home');
+            Route::get('edit', [\App\Http\Controllers\LocalMerchant\PanelController::class, 'editForm'])->name('edit');
+            Route::post('edit', [\App\Http\Controllers\LocalMerchant\PanelController::class, 'submit'])->name('submit')->middleware('throttle:40,1');
+            Route::get('history', [\App\Http\Controllers\LocalMerchant\PanelController::class, 'history'])->name('history');
         });
     });
