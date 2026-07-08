@@ -6,6 +6,8 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link href="{{dynamicAsset('assets/admin/css/tags-input.min.css')}}" rel="stylesheet">
     <link href="{{ dynamicAsset('assets/admin/css/AI/animation/product/ai-sidebar.css') }}" rel="stylesheet">
+    {{-- 哪吒 0708(业主): 商家端商品页去掉右下角悬浮「使用AI」侧栏(逐个手动上传·此AI没必要)。仅隐藏悬浮触发,模态/JS保留无副作用,表单内「AI生成商品名/描述」保留;此CSS仅商家商品页加载,超管后台不受影响。 --}}
+    <style>.floating-ai-button{display:none !important;}</style>
 @endpush
 
 @section('content')
