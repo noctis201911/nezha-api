@@ -80,6 +80,9 @@ class TwoFactorController extends Controller
 
         $request->session()->forget('2fa:setup_secret');
         $request->session()->flash('2fa:recovery_plain', $plain);
+        // 刚用有效码启用 = 本会话已过第二因子, 标记它, 否则 AdminMiddleware 硬门会立刻登出
+        // 并把恢复码 flash 吃掉(用户就再也看不到恢复码了)。
+        $request->session()->put('2fa_passed', true);
 
         return redirect()->route('admin.two-factor.setup');
     }
@@ -146,6 +149,8 @@ class TwoFactorController extends Controller
         RateLimiter::clear($key);
         $remember = (bool) $request->session()->get('2fa:remember', false);
         auth('admin')->loginUsingId($admin->id, $remember);
+        // 本会话已通过第二因子: AdminMiddleware 硬门据此放行(下次新会话/新 cookie 仍会重新挑战)。
+        $request->session()->put('2fa_passed', true);
         $request->session()->forget(['2fa:pending_admin_id', '2fa:remember']);
 
         return redirect()->route('admin.dashboard');
