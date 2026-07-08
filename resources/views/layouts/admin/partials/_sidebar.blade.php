@@ -2,40 +2,11 @@
 use App\CentralLogics\Helpers;
 use Illuminate\Support\Facades\Cache;
 
-$order = Cache::rememberForever('order_stats_summary', function () {
-    return \App\Models\Order::Notpos()
-        ->HasSubscriptionToday()
-        ->selectRaw(
-            '
-            COUNT(*) as total,
-            COUNT(CASE WHEN order_type = "dine_in" THEN 1 END) as dine_in,
-            COUNT(CASE WHEN order_status = "delivered" THEN 1 END) as delivered,
-            COUNT(CASE WHEN order_status = "canceled" THEN 1 END) as canceled,
-            COUNT(CASE WHEN order_status = "failed" THEN 1 END) as failed,
-            COUNT(CASE WHEN order_status = "refunded" THEN 1 END) as refunded,
-            COUNT(CASE WHEN order_status = "refund_requested" THEN 1 END) as refund_requested,
-            COUNT(CASE WHEN order_status IN ("confirmed", "processing","handover") THEN 1 END) as processing,
-            COUNT(CASE WHEN created_at <> schedule_at AND scheduled = 1 THEN 1 END) as scheduled
-        ',
-        )
-        ->first();
-});
-
-$order_sch = Cache::rememberForever('order_scheduled_stats', function () {
-    return \App\Models\Order::Notpos()
-        ->HasSubscriptionToday()
-        ->OrderScheduledIn(30)
-        ->selectRaw(
-            '
-            COUNT(CASE WHEN order_status = "pending" THEN 1 END) as pending,
-            COUNT(CASE WHEN order_status = "picked_up" THEN 1 END) as picked_up,
-            COUNT(CASE WHEN order_status IN ("accepted", "confirmed","processing","handover","picked_up") THEN 1 END) as ongoing,
-            COUNT(CASE WHEN delivery_man_id IS NULL  AND order_type = "delivery" AND order_status NOT IN ("delivered", "failed","canceled","refund_requested","refund_request_canceled","refunded") THEN 1 END) as searching_dm,
-            COUNT(CASE WHEN order_status = "accepted" THEN 1 END) as accepted
-        ',
-        )
-        ->first();
-});
+// 哪吒M2-D1: 订单计数改读单一真相源 NezhaAdminCounts(60s缓存·平台全量), 退役 order_stats_summary
+// /order_scheduled_stats 的 rememberForever 永久漂移(修「全部28 vs 列表31」根因)。键不重叠, 一份即可。
+$__nzAdminCounts = \App\CentralLogics\NezhaAdminCounts::all();
+$order = (object) $__nzAdminCounts;
+$order_sch = $order;
 
 /**
  * 哪吒超管M1(D1 侧栏配置数组化 + D3 8组重排)。
@@ -94,7 +65,7 @@ $__navGroups[] = [
                 ['label' => 'messages.payment_failed', 'title' => 'messages.payment_failed_orders', 'route' => route('admin.order.list', ['failed']), 'active' => Request::is('admin/order/list/failed'), 'yield' => 'failed', 'extra_class' => 'text-capitalize', 'badge' => ['value' => $order->failed, 'class' => 'badge-soft-danger']],
                 ['label' => 'messages.refunded', 'title' => 'messages.refunded_orders', 'route' => route('admin.order.list', ['refunded']), 'active' => Request::is('admin/order/list/refunded'), 'yield' => 'refunded', 'badge' => ['value' => $order->refunded, 'class' => 'badge-soft-danger']],
                 ['label' => 'messages.dine_in', 'title' => 'messages.dine_in_orders', 'route' => route('admin.order.list', ['dine_in']), 'active' => Request::is('admin/order/list/dine_in'), 'yield' => 'dine_in', 'badge' => ['value' => $order->dine_in, 'class' => 'badge-soft-info'], 'hide' => true, 'hide_reason' => '哪吒M1藏(§A#2): 堂食从未启用,dine_in订单恒0'],
-                ['label' => 'messages.Offline_Payments', 'title' => 'Offline_Payments', 'route' => route('admin.order.offline_verification_list', ['all']), 'active' => Request::is('admin/order/offline/payment/list*'), 'badge' => ['value' => \App\Models\Order::has('offline_payments')->Notpos()->count(), 'class' => 'badge-soft-danger bg-light']],
+                ['label' => 'messages.Offline_Payments', 'title' => 'Offline_Payments', 'route' => route('admin.order.offline_verification_list', ['all']), 'active' => Request::is('admin/order/offline/payment/list*'), 'badge' => ['value' => $order->offline_payments, 'class' => 'badge-soft-danger bg-light']],
             ],
         ],
         [

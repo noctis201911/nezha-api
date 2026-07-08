@@ -348,12 +348,10 @@ class Order extends Model
     {
         static::addGlobalScope(new ZoneScope);
             static::created(function () {
-                Helpers::deleteCacheData('order_stats_summary');
-                Helpers::deleteCacheData('order_scheduled_stats');
+                \App\CentralLogics\NezhaAdminCounts::forget();
             });
             static::updated(function(){
-                Helpers::deleteCacheData('order_stats_summary');
-                Helpers::deleteCacheData('order_scheduled_stats');
+                \App\CentralLogics\NezhaAdminCounts::forget();
         });
     }
 

@@ -103,7 +103,7 @@
                             <a class="js-hs-unfold-invoker btn btn-icon btn-soft-secondary rounded-circle"
                                 href="{{route('admin.order.list',['status'=>'pending'])}}">
                                 <i class="tio-shopping-cart-outlined"></i>
-                                @php($count=\App\Models\Order::where('order_status' ,'pending' )->count())
+                                @php($count=\App\CentralLogics\NezhaAdminCounts::get('pending'))
                                     @if($count > 0)
                                     <span class="btn-status btn-status-danger">{{ $count > 9 ? '9+' : $count }}</span>
                                     @endif
