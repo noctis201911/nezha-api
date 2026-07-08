@@ -209,3 +209,11 @@
 - 🔴 实施中 verification 逮到真 bug: `NezhaKycScreen::normalize_name` 用 `[^A-Z0-9 ]` 剥中文 → 两个不同中文名都归一化成空串"相等" → 中文商户户名核对形同虚设 → 改 CJK-safe normHolder + 身份指纹(免疫制裁复筛写回)。
 - 迁移 2026_07_03_140000+140100(topup_requests 补退款列); 逐门反例 harness **26/0 PASS**(四处对账 + 每门造反例被挡 + 事务 rollback 零残留)。经 /debate 多实例对抗核验后实施。
 - 遗留: 缴纳付款人第三锚点(缴纳侧补捕获)、clawback 活兜底(抽佣上线的 B 期再单独 /debate)。开关顺序待进 PRELAUNCH_SWITCHES(offboard 未开→refund 不得开)。
+
+### 2026-07-08 安全路线图 T0 — 后台2FA真正强制 + 主机层卫生(S3/S5)
+- 等级 🟡 访问控制/主机层加固(非 L1 机制变更; 平台不碰钱/退款/制裁逻辑均未动)。批准人: 业主 2026-07-08(点名做 2FA + 勾 S3/S5, S4 先排期)。
+- **2FA 真正强制**: 脚手架 0614 已建成+部署(aa9fa45), 但强制只在 LoginController::submit() 一处接线 → 「记住我」cookie 自动登录会绕过它直接进后台。本次 AdminMiddleware 加 2FA 硬门(已登录+开2FA+本会话未过第二因子 → 登出+回挑战页), TwoFactorController enable/verifyChallenge 成功后置 session 2fa_passed。进程内验: NezhaTotp 对 RFC6238 官方向量匹配 / 硬门三态 / 事务 rollback。admin 未 enroll → 上线零行为变化。commit 357920f+05f431e, deploy 05f431e。UI 账号下拉加 2FA 入口。
+- **S3 pure-ftpd**: 关 ufw passive 段 39000:40000(v4+v6) + 停守护进程。⚠️daemon 由 aaPanel(btpanel) 托管会自动重启; 但 21 不在 ufw 放行(default-deny) + passive 已关 → 外网不可达(无实际风险)。彻底移除=aaPanel 卸载 FTP。ufw 备份 /root/nezha-s3-ufw-backup-0708.txt。
+- **S5 头部**: ① 隐藏前端上游 Next.js X-Powered-By(proxy_hide_header 加 proxy/nezha.am 反代 location) ② 去重复 HSTS(api+前端 vhost 弱版 max-age=31536000 注释, 留 extension 强版 63072000+includeSubDomains+preload)。nginx -t 过+reload+curl 复验: x-powered-by 消失/单条强 HSTS/CSP 原样在。⚠️aaPanel 重生成 vhost/反代会冲掉手改(同 CSP 坑); conf 内已注释。备份 *.bak.s5.0708。
+- 回滚: 2FA=revert+redeploy, 应急 php artisan nezha:2fa-disable <email>(已验); 主机层=各 .bak 恢复+nginx reload/ufw 复原。
+- 未做: S2(29928 收窄)+S4(密钥轮换)自锁风险, S4 runbook 已出 docs/S4_KEY_ROTATION_RUNBOOK.md 待业主在场窗口。
