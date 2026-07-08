@@ -68,6 +68,12 @@ return [
             'driver' => 'session',
             'provider' => 'delivery_men',
         ],
+
+        // 本地生活商户轻管理面（自助自维护）—— 独立 session guard，与主站完全隔离
+        'local_merchant' => [
+            'driver' => 'session',
+            'provider' => 'local_merchants',
+        ],
     ],
 
     /*
@@ -111,6 +117,11 @@ return [
         'delivery_men' => [
             'driver' => 'database',
             'table' => 'delivery_men',
+        ],
+
+        'local_merchants' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\LocalLifeMerchantAccount::class,
         ],
     ],
 
@@ -159,6 +170,14 @@ return [
             'provider' => 'delivery_men',
             'table' => 'password_resets',
             'expire' => 60,
+            'throttle' => 60,
+        ],
+
+        // 商户设密/找回：expire 1440(24h) 因初始设密链接经运营微信转发后店主可能延后打开
+        'local_merchants' => [
+            'provider' => 'local_merchants',
+            'table' => 'local_life_merchant_password_resets',
+            'expire' => 1440,
             'throttle' => 60,
         ],
     ],
