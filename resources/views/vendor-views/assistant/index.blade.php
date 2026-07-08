@@ -10,7 +10,7 @@
                 <div class="nzma-ava">💬</div>
                 <div class="nzma-htxt">
                     <b>哪吒商家助手</b><span class="nzma-badge">AI</span>
-                    <div class="nzma-sub">查数据、改菜品、店铺操作——用说的就行；改店铺的操作会先和您确认</div>
+                    <div class="nzma-sub">改菜品、暂停接单、写文案、问操作——用说的就行；改店铺的操作会先和您确认</div>
                 </div>
             </div>
 
@@ -23,9 +23,9 @@
                             <h3>你好，我是哪吒商家助手</h3>
                             <div class="nzma-es">下面这些都可以直接问我：</div>
                             <div class="nzma-cap3">
-                                <div class="nzc"><b>📊 查经营</b><span>“今天卖了多少？”　“这周哪个菜卖得最好？”</span></div>
                                 <div class="nzc"><b>🍳 店铺操作</b><span>“太忙了，先暂停接单”　“把麻辣香锅改成 5800”</span></div>
-                                <div class="nzc"><b>✍️ 帮写文案</b><span>“给麻辣香锅写一段吸引人的描述”</span></div>
+                                <div class="nzc"><b>✍️ 帮写文案</b><span>“给招牌菜写一段吸引人的描述”</span></div>
+                                <div class="nzc"><b>💡 问操作</b><span>“怎么设营业时间？”　“顾客要退款怎么处理？”</span></div>
                             </div>
                         </div>
                     @else
@@ -41,7 +41,7 @@
             <div class="nzma-dock">
                 <div class="nzma-din">
                     <div class="nzma-chips" id="nzmaChips">
-                        @foreach (['今日营收', '暂停接单', '一键售罄', '怎么上传新菜品？', '顾客要退款怎么处理？'] as $eg)
+                        @foreach (['暂停接单', '怎么改菜品价格？', '怎么把菜标售罄？', '怎么上传新菜品？', '顾客要退款怎么处理？'] as $eg)
                             <button type="button" class="nzma-eg">{{ $eg }}</button>
                         @endforeach
                     </div>
@@ -80,8 +80,11 @@
         .nzma-day::before, .nzma-day::after { content:""; flex:1; height:1px; background:var(--nzline); }
         .nzma-row { display:flex; margin-bottom:12px; }
         .nzma-row.me { justify-content:flex-end; }
-        .nzma-b-me { background:var(--nznavy); color:#fff; border-radius:14px 14px 4px 14px; padding:10px 14px; max-width:72%; font-size:14px; line-height:1.7; white-space:pre-wrap; word-break:break-word; }
-        .nzma-b-ai { background:#fff; border:1px solid var(--nzline); border-left:3px solid var(--nznavy); border-radius:4px 14px 14px 14px; padding:10px 14px; max-width:78%; color:var(--nzink); font-size:14px; line-height:1.8; white-space:pre-wrap; word-break:break-word; }
+        .nzma-cell { display:flex; flex-direction:column; max-width:78%; min-width:0; }
+        .nzma-row.me .nzma-cell { max-width:72%; align-items:flex-end; }
+        .nzma-b-me { background:var(--nznavy); color:#fff; border-radius:14px 14px 4px 14px; padding:10px 14px; max-width:100%; font-size:14px; line-height:1.7; white-space:pre-wrap; word-break:break-word; }
+        .nzma-b-ai { background:#fff; border:1px solid var(--nzline); border-left:3px solid var(--nznavy); border-radius:4px 14px 14px 14px; padding:10px 14px; max-width:100%; color:var(--nzink); font-size:14px; line-height:1.8; white-space:pre-wrap; word-break:break-word; }
+        .nzma-time { font-size:11px; color:var(--nzsec); margin-top:4px; padding:0 3px; font-variant-numeric:tabular-nums; }
         .nzma-typing { color:var(--nzsec); }
         .nzma-dots { display:inline-flex; gap:4px; margin-right:8px; vertical-align:middle; }
         .nzma-dots i { width:6px; height:6px; border-radius:50%; background:var(--nzsec); display:inline-block; animation:nzmaBlink 1.2s infinite; }
@@ -129,8 +132,9 @@
         @media (max-width:560px) {
             .nzma-outer { padding:8px 8px 0; }
             #nzmaWrap { height:calc(100vh - 120px); border-radius:12px; }
-            .nzma-b-ai, .nzma-acard { max-width:88%; }
-            .nzma-b-me { max-width:82%; }
+            .nzma-cell { max-width:88%; }
+            .nzma-row.me .nzma-cell { max-width:82%; }
+            .nzma-acard { max-width:88%; }
             .nzma-thread { padding:16px 14px 12px; }
             .nzma-din { padding:10px 14px calc(12px + env(safe-area-inset-bottom, 0px)); }
             .nzma-ibar button { padding:0 20px; }
@@ -165,18 +169,23 @@
             function scrollDown() { chat.scrollTop = chat.scrollHeight; }
             function removeEmpty() { if (empty && empty.parentNode) { empty.parentNode.removeChild(empty); empty = null; } }
 
+            function timeNow() { var d = new Date(); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
             function addUserRow(text) {
                 removeEmpty();
                 var row = document.createElement('div'); row.className = 'nzma-row me';
+                var cell = document.createElement('div'); cell.className = 'nzma-cell';
                 var b = document.createElement('div'); b.className = 'nzma-b-me'; b.textContent = text || '';
-                row.appendChild(b); thread.appendChild(row); scrollDown(); return b;
+                var t = document.createElement('div'); t.className = 'nzma-time'; t.textContent = timeNow();
+                cell.appendChild(b); cell.appendChild(t); row.appendChild(cell); thread.appendChild(row); scrollDown(); return b;
             }
             function addAiRow() {
                 removeEmpty();
                 var row = document.createElement('div'); row.className = 'nzma-row';
+                var cell = document.createElement('div'); cell.className = 'nzma-cell';
                 var b = document.createElement('div'); b.className = 'nzma-b-ai nzma-typing';
                 b.innerHTML = '<span class="nzma-dots"><i></i><i></i><i></i></span>正在回答…';
-                row.appendChild(b); thread.appendChild(row); scrollDown(); return b;
+                var t = document.createElement('div'); t.className = 'nzma-time'; t.textContent = timeNow();
+                cell.appendChild(b); cell.appendChild(t); row.appendChild(cell); thread.appendChild(row); scrollDown(); return b;
             }
             function firstToken(b) { if (b.classList.contains('nzma-typing')) { b.classList.remove('nzma-typing'); b.textContent = ''; } }
 
