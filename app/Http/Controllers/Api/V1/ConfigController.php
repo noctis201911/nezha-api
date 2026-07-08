@@ -449,6 +449,7 @@ class ConfigController extends Controller
             'nezha_usd_to_rmb_rate' => (float)($settings['nezha_usd_to_rmb_rate'] ?? 7.1),
             'nezha_rate_cny_to_amd' => (float)($settings['nezha_rate_cny_to_amd'] ?? 55),
             'nezha_rate_usd_to_amd' => (float)($settings['nezha_rate_usd_to_amd'] ?? 400),
+            'nezha_seedhome_status' => (int) Helpers::get_business_settings('nezha_seedhome_status'),
             'invoice_settings' => $invoiceSettings,
         ]);
     }
