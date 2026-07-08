@@ -30,6 +30,14 @@
         #datatable tr.nz-refund-seg td::before { content: none !important; display: none !important; }
         #datatable tr.nz-refund-seg.segA td { background: #FEECEC; border-left: 3px solid #E5484D; color: #A3121B; }
         #datatable tr.nz-refund-seg.segB td { background: #F1F3F5; border-left: 3px solid #98A2B3; color: #344054; }
+        /* 哪吒: 待退款分区 ⓘ 说明气泡 */
+        .nz-seg-name { font-weight: 700; }
+        .nz-seg-info { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; margin-left:6px; font-size:11px; font-weight:700; font-style:normal; line-height:1; color:#fff; cursor:help; vertical-align:middle; position:relative; top:-1px; -webkit-user-select:none; user-select:none; }
+        .nz-seg-info:focus { outline:2px solid rgba(16,42,76,.35); outline-offset:1px; }
+        .nz-refund-seg.segA .nz-seg-info { background:#E5484D; }
+        .nz-refund-seg.segB .nz-seg-info { background:#98A2B3; }
+        .nz-seg-tooltip .tooltip-inner { background:#102A4C; color:#EAF0F7; max-width:290px; text-align:left; font-size:12.5px; line-height:1.7; padding:10px 13px; border-radius:9px; box-shadow:0 6px 20px rgba(16,24,40,.22); }
+        .nz-seg-tooltip .arrow::before { border-top-color:#102A4C !important; border-bottom-color:#102A4C !important; }
         @media (max-width: 767px) { #datatable tr.nz-refund-seg { display: block; } #datatable tr.nz-refund-seg td { display: block; width: 100% !important; } }
         .nz-print-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid #EDF1F5; background: #FFF7F8; color: #7c1228; font-size: 13px; }
         .nz-print-settings label { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 700; }
@@ -580,9 +588,9 @@
                                 <tr class="nz-refund-seg seg{{ $__rowSeg }}">
                                     <td colspan="10">
                                         @if($__rowSeg === 'A')
-                                            <strong>段A · 已确认收款 · 须退</strong><span style="font-weight:400;font-size:12px;margin-left:8px;">顾客款项已确认收款，请按原路退还给顾客。</span>
+                                            <strong class="nz-seg-name">已收款，请退还顾客</strong><span class="nz-seg-info" tabindex="0" role="button" data-toggle="tooltip" data-placement="bottom" data-boundary="viewport" data-trigger="hover focus" data-template='<div class="tooltip nz-seg-tooltip" role="tooltip"><div class="arrow"></div><div class="tooltip-inner"></div></div>' title="这笔订单您此前已确认收到顾客付款。现在订单已取消，请按原路（微信/支付宝原路退回，或 USDT 退回原地址）退还给顾客，退好后点「标记已退款」。">i</span>
                                         @else
-                                            <strong>段B · 凭证在案 · 先核后退</strong><span style="font-weight:400;font-size:12px;margin-left:8px;">顾客有付款凭证在案，请先核对您的收款账户，确认到账后再退。</span>
+                                            <strong class="nz-seg-name">先核对账户，再退还</strong><span class="nz-seg-info" tabindex="0" role="button" data-toggle="tooltip" data-placement="bottom" data-boundary="viewport" data-trigger="hover focus" data-template='<div class="tooltip nz-seg-tooltip" role="tooltip"><div class="arrow"></div><div class="tooltip-inner"></div></div>' title="顾客已上传付款凭证，但平台尚未确认您收到款。请先登录您的收款账户核对这笔钱是否真的到账：确认到账后，再按原路退还给顾客。">i</span>
                                         @endif
                                     </td>
                                 </tr>
