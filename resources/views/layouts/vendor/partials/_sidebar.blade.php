@@ -19,6 +19,8 @@
         }
         /* 哪吒P1b-E: 「订单」需动作徽标 —— 稳态 V2 红(#E5484D·同订单页需动作tab/段A退款头), 持续积压计数不脉冲 */
         .nz-order-action-badge { background: #E5484D !important; color: #fff !important; font-weight: 800; }
+        /* 哪吒 UX-1 D: 「今天」高频入口 sticky 固定侧栏顶部 — 侧栏滚动/自动定位到 active(如订单页)时不被顶出视野(反馈⑤)。bg 用 --sidebar 变量同侧栏底色防下方内容透出。 */
+        .nz-sticky-today { position: -webkit-sticky; position: sticky; top: 0; z-index: 6; background: var(--sidebar, #fff); box-shadow: 0 1px 0 rgba(0,0,0,.06); }
     </style>
 @endonce
 <div id="sidebarMain" class="d-none">
@@ -69,7 +71,7 @@
             <div class="navbar-vertical-content text-capitalize bg-334257">
                 <ul class="navbar-nav navbar-nav-lg nav-tabs mt-3">
                     {{-- 哪吒作业台: 「今天」入口置顶(§6.1 并存试用·登录默认落点暂不切)。指向 vendor.workbench.index。 --}}
-                    <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/workbench*')?'active':''}}">
+                    <li class="navbar-vertical-aside-has-menu nz-sticky-today {{Request::is('restaurant-panel/workbench*')?'active':''}}">
                         <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{route('vendor.workbench.index')}}" title="今天">
                             <i class="tio-home nav-icon"></i>
                             <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">今天</span>
