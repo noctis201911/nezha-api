@@ -225,15 +225,20 @@ class NezhaAdminDashboard
         $reviewReports = self::safe(function () {
             return (int) DB::table('nezha_review_reports')->where('status', 0)->count();
         });
+        // 本地生活商户自助管理面: 待审的商户资料变更(status=0)。总闸关时该表恒空 → 计数=0 dormant。
+        $merchantChanges = self::safe(function () {
+            return (int) \App\Models\LocalLifeMerchantChange::where('status', \App\Models\LocalLifeMerchantChange::STATUS_PENDING)->count();
+        });
 
         return [
-            'ugc'            => $ugc,
-            'onboarding'     => $onboarding,
-            'ad'             => $ad,
-            'kyc'            => $kyc,
-            'reviews'        => $reviews,
-            'review_reports' => $reviewReports,
-            'total'          => $ugc + $onboarding + $ad + $kyc + $reviews + $reviewReports,
+            'ugc'              => $ugc,
+            'onboarding'       => $onboarding,
+            'ad'               => $ad,
+            'kyc'              => $kyc,
+            'reviews'          => $reviews,
+            'review_reports'   => $reviewReports,
+            'merchant_changes' => $merchantChanges,
+            'total'            => $ugc + $onboarding + $ad + $kyc + $reviews + $reviewReports + $merchantChanges,
         ];
     }
 
@@ -354,6 +359,7 @@ class NezhaAdminDashboard
                 ['key' => 'kyc',        'label' => 'KYC',     'count' => (int) $a['kyc'],        'route' => self::routeOr('admin.nezha-kyc.index')],
                 ['key' => 'reviews',    'label' => '评价',     'count' => (int) ($a['reviews'] ?? 0),        'route' => self::routeOr('admin.food.reviews', ['status_filter' => 'pending'])],
                 ['key' => 'reports',    'label' => '举报',     'count' => (int) ($a['review_reports'] ?? 0),  'route' => self::routeOr('admin.food.reviews', ['status_filter' => 'reported'])],
+                ['key' => 'merchant_changes', 'label' => '商户资料', 'count' => (int) ($a['merchant_changes'] ?? 0), 'route' => self::routeOr('admin.local-life.merchant-changes.list')],
             ], function ($s) {
                 return $s['count'] > 0;
             })),

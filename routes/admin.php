@@ -1260,6 +1260,12 @@ Route::middleware('module:provide_dm_earning')->group(function () {
                 Route::post('account/{id}/email', [LocalLifeMerchantController::class, 'accountUpdateEmail'])->name('account.email');
                 Route::delete('account/{id}', [LocalLifeMerchantController::class, 'accountDelete'])->name('account.delete');
             });
+            // 商户资料复审（自助面提交的待审变更 → 超管 diff 审核）
+            Route::group(['prefix' => 'merchant-changes', 'as' => 'merchant-changes.'], function () {
+                Route::get('/', [\App\Http\Controllers\Admin\LocalLifeMerchantChangeController::class, 'list'])->name('list');
+                Route::post('{id}/approve', [\App\Http\Controllers\Admin\LocalLifeMerchantChangeController::class, 'approve'])->name('approve');
+                Route::post('{id}/reject', [\App\Http\Controllers\Admin\LocalLifeMerchantChangeController::class, 'reject'])->name('reject');
+            });
         });
         // 生活攻略（批2·PGC 攻略 CRUD）
         Route::group(['prefix' => 'guides', 'as' => 'guides.', 'middleware' => ['module:settings']], function () {
