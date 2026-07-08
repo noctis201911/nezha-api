@@ -35,6 +35,11 @@ $countryCode = strtolower($country ?? 'auto');
     <link rel="stylesheet" href="{{dynamicAsset('assets/admin/intltelinput/css/intlTelInput.css')}}">
     @stack('css_or_js')
     <link rel="stylesheet" href="{{ dynamicAsset('assets/admin/css/toastr.css') }}">
+    <style>
+        /* 哪吒M2: 全站字体清晰度 —— 中文字形回退(Inter 无中文字形, 避免落低质通用 sans-serif) + 灰阶抗锯齿(白字压藏青更锐) */
+        body { font-family: "Inter", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Hiragino Sans GB", "Heiti SC", sans-serif; }
+        html, body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    </style>
 </head>
 
 <body class="footer-offset">
