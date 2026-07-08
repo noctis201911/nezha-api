@@ -42,6 +42,7 @@
 
 .nz-today .nzt-row{display:flex;align-items:center;gap:12px;padding:10px 16px;border-top:1px solid #F0F2F5;font-size:12.5px}
 .nz-today .nzt-row:first-of-type{border-top:none}
+.nz-today .nzt-row.over{box-shadow:inset 3px 0 0 var(--red)}
 .nz-today .nzt-ent{font-weight:600;color:var(--ink);width:210px;flex:none}
 .nz-today .nzt-ent small{display:block;font-weight:400;color:var(--ink3);font-size:11px;margin-top:1px}
 .nz-today .nzt-amt{font-family:var(--mono);font-weight:700;color:var(--ink);text-align:right;white-space:nowrap}
@@ -166,10 +167,10 @@
           <a class="nzt-more" href="{{ $wb['exceptions']['more_route'] }}">{{ translate('订单') }} &rarr;</a>
         </div>
         @foreach($wb['exceptions']['rows'] as $r)
-        <div class="nzt-row">
+        <div class="nzt-row{{ $r['tone'] === 'red' ? ' over' : '' }}">
           <span class="nzt-ent">{{ $r['shop'] }}<small>单 #{{ $r['id'] }}</small></span>
           <span class="nzt-chip amb">{{ $r['reason'] }}</span>
-          <span class="nzt-wait {{ $r['tone'] }}">{{ $r['wait_txt'] }}</span>
+          <span class="nzt-wait {{ $r['tone'] }}"@if(!empty($r['wait_title'])) title="{{ $r['wait_title'] }}"@endif>{{ $r['wait_txt'] }}</span>
           <span class="nzt-acts"><a class="nzt-btn ghost" href="{{ $r['route'] }}">{{ translate('处理') }}</a></span>
         </div>
         @endforeach

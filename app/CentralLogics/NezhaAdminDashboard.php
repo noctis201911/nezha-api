@@ -164,12 +164,16 @@ class NezhaAdminDashboard
                     continue;
                 }
                 $ids[] = $o->id;
+                // 哪吒 follow-up: 绝对起算时间用真实阶段时钟起点 clockStart(无可靠列返回 null,绝不臆造);
+                // 运行时 tz=Asia/Yerevan → format() 即埃里温本地,显示层勿再 +4。附加键,铃铛按具名字段读取不受影响。
+                $start = NezhaOrderTimeout::clockStart($o, $phase);
                 // 与原 restaurant_data 一致: 超时行不设上限(铃铛按 total 显全部); 卡③另 array_slice 5 行。
                 $rows[] = [
                     'id'       => $o->id,
                     'reason'   => $d['title'] ?? '订单超时',
                     'wait_min' => $d['elapsed_minutes'] ?? null,
                     'shop'     => optional($o->restaurant)->name,
+                    'abs_at'   => $start ? $start->format('Y-m-d H:i') : null,
                 ];
             }
 
@@ -318,6 +322,8 @@ class NezhaAdminDashboard
                 'reason'     => $r['reason'],
                 'wait_min'   => $r['wait_min'],
                 'wait_txt'   => self::minutesText($r['wait_min']),
+                // hover 绝对时间(埃里温): 真实起算点; 无可靠列时不显 title, 不臆造。
+                'wait_title' => ! empty($r['abs_at']) ? ('自 ' . $r['abs_at'] . ' 起等待 · 埃里温时间') : '',
                 'tone'       => ($r['wait_min'] !== null && $r['wait_min'] >= 120) ? 'red' : 'amb',
                 'route'      => self::orderDetailRoute($r['id']),
             ];

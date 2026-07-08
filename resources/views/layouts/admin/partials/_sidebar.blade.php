@@ -62,7 +62,7 @@ $__navGroups[] = [
             'badge' => ['value' => $order->grp_pending, 'class' => 'badge-soft-info'],
         ],
         [
-            'label' => 'messages.Offline_Payments', 'title' => 'Offline_Payments', 'icon' => 'tio-receipt-outlined', 'route' => route('admin.order.offline_verification_list', ['all']), 'active' => Request::is('admin/order/offline/payment/list*'), 'badge' => ['value' => $order->offline_payments, 'class' => 'badge-soft-danger bg-light']],
+            'label' => '离线付款核验', 'label_raw' => true, 'icon' => 'tio-receipt-outlined', 'route' => route('admin.order.offline_verification_list', ['all']), 'active' => Request::is('admin/order/offline/payment/list*'), 'badge' => ['value' => $order->offline_payments, 'class' => 'badge-soft-danger bg-light']],
         [
             'label' => 'messages.Subscription_orders', 'route' => route('admin.order.subscription.index'), 'icon' => 'tio-appointment',
             'active' => Request::is('admin/order/subscription*'), 'hide' => true, 'hide_reason' => '哪吒M1藏(§A#2): 佣金模式非订阅制(business_model.subscription=0)',
