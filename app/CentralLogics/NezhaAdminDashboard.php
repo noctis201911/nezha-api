@@ -531,7 +531,8 @@ class NezhaAdminDashboard
         if ($ch === 'rmb') {
             return '支付宝';
         }
-        return $ch ? (string) $ch : '原渠道';
+        // 其余(other/空/未知)统一「其他」, 不暴露英文枚举(前端标准: 英文枚举不可接受)
+        return '其他';
     }
 
     protected static function overdueText(?int $hr): string

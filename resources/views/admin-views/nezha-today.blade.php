@@ -42,7 +42,7 @@
 
 .nz-today .nzt-row{display:flex;align-items:center;gap:12px;padding:10px 16px;border-top:1px solid #F0F2F5;font-size:12.5px}
 .nz-today .nzt-row:first-of-type{border-top:none}
-.nz-today .nzt-ent{font-weight:600;color:var(--ink);width:170px;flex:none}
+.nz-today .nzt-ent{font-weight:600;color:var(--ink);width:210px;flex:none}
 .nz-today .nzt-ent small{display:block;font-weight:400;color:var(--ink3);font-size:11px;margin-top:1px}
 .nz-today .nzt-amt{font-family:var(--mono);font-weight:700;color:var(--ink);text-align:right;white-space:nowrap}
 .nz-today .nzt-amt small{display:block;font-weight:400;color:var(--ink3);font-size:10.5px}
