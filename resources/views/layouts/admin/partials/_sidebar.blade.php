@@ -179,7 +179,9 @@ $__navGroups[] = [
             'children' => [
                 ['label' => 'messages.add_new', 'route' => route('admin.food.add-new'), 'active' => Request::is('admin/food/add-new')],
                 ['label' => 'messages.list', 'title' => 'messages.food_list', 'route' => route('admin.food.list'), 'active' => (Request::is('admin/food/list') || Request::is('admin/food/view/*'))],
-                ['label' => 'messages.review', 'title' => 'messages.review_list', 'route' => route('admin.food.reviews'), 'active' => Request::is('admin/food/reviews')],
+                // 补闭环 0708: 评价审核徽标=审核台评价段+举报段 同源(NezhaAdminDashboard·嵌套 audit)。评价待审(status3)+举报待处理(status0)之和; 0→无徽标。三处对账: 侧栏徽标(此和) = 驾驶舱 评价chip+举报chip = 页内 待审tab badge+被举报tab badge。
+                ['label' => 'messages.review', 'title' => 'messages.review_list', 'route' => route('admin.food.reviews'), 'active' => Request::is('admin/food/reviews'),
+                    'badge' => (((int) ($__nzDash['audit']['reviews'] ?? 0) + (int) ($__nzDash['audit']['review_reports'] ?? 0)) > 0) ? ['value' => (int) ($__nzDash['audit']['reviews'] ?? 0) + (int) ($__nzDash['audit']['review_reports'] ?? 0), 'class' => 'badge-soft-danger'] : null],
                 ['label' => 'messages.bulk_import', 'route' => route('admin.food.bulk-import'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/food/bulk-import')],
                 ['label' => 'messages.bulk_export', 'route' => route('admin.food.bulk-export-index'), 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/food/bulk-export')],
             ],
