@@ -15,17 +15,20 @@ class NotificationController extends Controller
 
         Helpers::getZoneIds($request);
 
+        // 对齐前端 limit(原前端要 limit=20 但后端无视·全返15天=列表可能很长·业主0708治本)。默认30·硬顶50·两来源各限。
+        $limit = min(max((int) $request->input('limit', 30), 1), 50);
         $zone_id= json_decode($request->header('zoneId'), true);
         try {
             $notifications = Notification::active()->where('tergat', 'customer')->where(function($q)use($zone_id){
                 $q->whereNull('zone_id')->orWhereIn('zone_id', $zone_id);
-            })->where('updated_at', '>=', \Carbon\Carbon::today()->subDays(15))->get();
+            })->where('updated_at', '>=', \Carbon\Carbon::today()->subDays(15))->latest('updated_at')->limit($limit)->get();
             $notifications->append('data');
 
             $userId = $request?->user()?->id;
             $user_notifications = UserNotification::where('user_id', $userId)
                 ->where('created_at', '>=', \Carbon\Carbon::today()->subDays(15))
                 ->orderByDesc('id')
+                ->limit($limit)
                 ->get();
 
             // 哪吒(数据完整性 req#2/#3): 通知 data.order_id 可能指向已删除/不属于本人的订单
@@ -85,13 +88,14 @@ class NotificationController extends Controller
 
     // 哪吒(系统通知红点 06-22): 个人系统通知(订单更新)未读数 = created_at > system_notif_seen_at,
     // 且与展示一致地过滤孤儿(指向已删/非本人订单的通知)。只数 UserNotification, 不数平台公告(防发公告即骚扰所有人)。
+    // 窗口与前端展示窗一致(5天·业主0708): 徽标只数看得到的·防"红点8但只显3条"假红点。
     public function unread_count(Request $request)
     {
         try {
             $userId = $request?->user()?->id;
             $seenAt = $request->user()?->system_notif_seen_at;
             $rows = UserNotification::where('user_id', $userId)
-                ->where('created_at', '>=', \Carbon\Carbon::today()->subDays(15))
+                ->where('created_at', '>=', \Carbon\Carbon::today()->subDays(5))
                 ->when($seenAt, function ($q) use ($seenAt) {
                     $q->where('created_at', '>', $seenAt);
                 })
