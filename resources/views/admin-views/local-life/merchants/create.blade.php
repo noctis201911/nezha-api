@@ -19,6 +19,48 @@
         <small class="text-muted">商家页是纯信息展示（评分/营业时间/地址/介绍/服务/联系方式），平台不碰钱、不接预订下单。</small>
     </div>
 
+    @if($isEdit)
+    @php $acct = $account ?? null; @endphp
+    <div class="card mb-3" style="border-left:3px solid #102A4C">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">商户自助管理账号</h5>
+            @if($acct)
+                <span class="badge badge-soft-{{ $acct->status ? 'success' : 'danger' }}">{{ $acct->status ? '启用' : '已停用' }}{{ $acct->password ? '' : ' · 未设密' }}</span>
+            @else
+                <span class="badge badge-soft-secondary">未开通</span>
+            @endif
+        </div>
+        <div class="card-body">
+            <small class="text-muted d-block mb-2">给店主一个自助维护店铺信息的账号（邮箱+密码）。店主的所有修改都进平台复审，通过后才更新到顾客端。总开关 <code>nezha_local_merchant_selfserve_status</code> 关闭时店主无法登录。</small>
+            @if(!$acct)
+                <form action="{{ route('admin.local-life.merchants.account.create', $merchant->id) }}" method="post" class="row g-2 align-items-end">
+                    @csrf
+                    <div class="col-md-6"><label class="input-label">店主邮箱</label><input type="email" name="email" class="form-control" required placeholder="owner@example.com"></div>
+                    <div class="col-md-3"><label class="input-label">联系人(可空)</label><input type="text" name="contact_name" class="form-control" maxlength="120"></div>
+                    <div class="col-md-3"><button type="submit" class="btn btn--primary w-100">开通 + 发设密邮件</button></div>
+                </form>
+            @else
+                <div class="mb-2">
+                    <strong>{{ $acct->email }}</strong>@if($acct->contact_name) · {{ $acct->contact_name }}@endif
+                    @if($acct->last_login_at)<small class="text-muted d-block">上次登录：{{ $acct->last_login_at->timezone('Asia/Yerevan')->format('Y-m-d H:i') }}</small>@else<small class="text-muted d-block">尚未登录</small>@endif
+                </div>
+                <div class="d-flex flex-wrap" style="gap:8px">
+                    <form action="{{ route('admin.local-life.merchants.account.send-link', $merchant->id) }}" method="post">@csrf<button type="submit" class="btn btn-sm btn--primary">{{ $acct->password ? '发送重置密码邮件' : '重新发送设密邮件' }}</button></form>
+                    <form action="{{ route('admin.local-life.merchants.account.toggle', $merchant->id) }}" method="post">@csrf<button type="submit" class="btn btn-sm {{ $acct->status ? 'btn-outline-warning' : 'btn-outline-success' }}">{{ $acct->status ? '停用账号' : '启用账号' }}</button></form>
+                    <form action="{{ route('admin.local-life.merchants.account.delete', $merchant->id) }}" method="post" onsubmit="return confirm('确认删除该商户账号？店主将无法登录（不影响店铺条目与历史提交）。');">@csrf @method('DELETE')<button type="submit" class="btn btn-sm btn-outline-danger">删除账号</button></form>
+                </div>
+                <form action="{{ route('admin.local-life.merchants.account.email', $merchant->id) }}" method="post" class="row g-2 align-items-end mt-2">
+                    @csrf
+                    <div class="col-md-8"><label class="input-label">修改绑定邮箱</label><input type="email" name="email" class="form-control form-control-sm" value="{{ $acct->email }}" required></div>
+                    <div class="col-md-4"><button type="submit" class="btn btn-sm btn--reset w-100">更新邮箱</button></div>
+                </form>
+                @if(!$acct->password)<small class="text-warning d-block mt-2">该账号尚未设置密码——店主需点邮件里的链接设密后才能登录。</small>@endif
+            @endif
+            <div class="mt-2"><span class="text-muted" style="font-size:12px">商户登录入口：<code>{{ url('m/login') }}</code>（需总开关开启）</span></div>
+        </div>
+    </div>
+    @endif
+
     <form action="{{ $action }}" method="post" enctype="multipart/form-data">
         @csrf
         <div class="row gx-2 gx-lg-3">

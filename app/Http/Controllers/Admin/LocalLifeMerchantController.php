@@ -6,10 +6,12 @@ use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\LocalLifeCategory;
 use App\Models\LocalLifeMerchant;
+use App\Models\LocalLifeMerchantAccount;
 use App\Models\LocalLifeReport;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Password;
 
 /**
  * 本地生活「商家管理」：运营在后台增/删/改商家（移民/签证/美容美发/按摩/包车出行/本地旅游…）。
@@ -98,7 +100,8 @@ class LocalLifeMerchantController extends Controller
     {
         $merchant = LocalLifeMerchant::findOrFail($id);
         $categories = $this->merchantCategories();
-        return view('admin-views.local-life.merchants.create', compact('merchant', 'categories'));
+        $account = LocalLifeMerchantAccount::where('merchant_id', $merchant->id)->first();
+        return view('admin-views.local-life.merchants.create', compact('merchant', 'categories', 'account'));
     }
 
     public function update(Request $request, $id)
@@ -354,5 +357,82 @@ class LocalLifeMerchantController extends Controller
             $out[] = $item;
         }
         return $out ?: null;
+    }
+
+    /* ---------------- 商户轻管理面账号（C·邮箱+密码·邮箱自助设密/找回） ---------------- */
+
+    /** 为商户开通账号：填店主邮箱 → 建账号(无密码) → 发「设置密码」邮件 */
+    public function accountCreate(Request $request, $id)
+    {
+        $merchant = LocalLifeMerchant::findOrFail($id);
+        $request->validate([
+            'email'        => 'required|email|max:191|unique:local_life_merchant_accounts,email',
+            'contact_name' => 'nullable|string|max:120',
+        ], [
+            'email.unique' => '该邮箱已绑定其他商户账号',
+        ], ['email' => '邮箱']);
+
+        if (LocalLifeMerchantAccount::where('merchant_id', $merchant->id)->exists()) {
+            Toastr::warning('该商户已有账号，请勿重复开通');
+            return back();
+        }
+
+        $account = LocalLifeMerchantAccount::create([
+            'merchant_id'  => $merchant->id,
+            'email'        => strtolower(trim($request->email)),
+            'password'     => null,
+            'contact_name' => $request->contact_name ?: null,
+            'status'       => true,
+        ]);
+
+        $sent = Password::broker('local_merchants')->sendResetLink(['email' => $account->email]);
+        Toastr::success($sent === Password::RESET_LINK_SENT
+            ? '账号已开通，设置密码邮件已发送至 ' . $account->email
+            : '账号已开通，但设置密码邮件发送失败，请用「重新发送」重试');
+        return back();
+    }
+
+    /** 重新发送设置/重置密码邮件 */
+    public function accountSendLink($id)
+    {
+        $account = LocalLifeMerchantAccount::where('merchant_id', $id)->firstOrFail();
+        $sent = Password::broker('local_merchants')->sendResetLink(['email' => $account->email]);
+        Toastr::success($sent === Password::RESET_LINK_SENT
+            ? '设置/重置密码邮件已发送至 ' . $account->email
+            : '邮件发送失败，请稍后重试');
+        return back();
+    }
+
+    /** 停用 / 启用账号（停用后商户无法登录管理面） */
+    public function accountToggle($id)
+    {
+        $account = LocalLifeMerchantAccount::where('merchant_id', $id)->firstOrFail();
+        $account->status = !$account->status;
+        $account->save();
+        Toastr::success($account->status ? '账号已启用' : '账号已停用');
+        return back();
+    }
+
+    /** 修改绑定邮箱（改后需重新发送设置密码邮件） */
+    public function accountUpdateEmail(Request $request, $id)
+    {
+        $account = LocalLifeMerchantAccount::where('merchant_id', $id)->firstOrFail();
+        $request->validate([
+            'email' => 'required|email|max:191|unique:local_life_merchant_accounts,email,' . $account->id,
+        ], ['email.unique' => '该邮箱已绑定其他商户账号'], ['email' => '邮箱']);
+        $account->email = strtolower(trim($request->email));
+        $account->save();
+        Toastr::success('邮箱已更新为 ' . $account->email . '，如需请重新发送设置密码邮件');
+        return back();
+    }
+
+    /** 删除账号（解绑；不删商户条目与历史提交快照） */
+    public function accountDelete($id)
+    {
+        $account = LocalLifeMerchantAccount::where('merchant_id', $id)->firstOrFail();
+        $email = $account->email;
+        $account->delete();
+        Toastr::success('已删除账号 ' . $email);
+        return back();
     }
 }

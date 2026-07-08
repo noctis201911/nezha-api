@@ -1253,6 +1253,12 @@ Route::middleware('module:provide_dm_earning')->group(function () {
                 Route::post('update/{id}', [LocalLifeMerchantController::class, 'update'])->name('update');
                 Route::post('status/{id}', [LocalLifeMerchantController::class, 'statusToggle'])->name('status');
                 Route::delete('delete', [LocalLifeMerchantController::class, 'destroy'])->name('delete');
+                // 商户轻管理面账号（C·邮箱+密码）：开通/发设密邮件/停用启用/改邮箱/删号
+                Route::post('account/{id}/create', [LocalLifeMerchantController::class, 'accountCreate'])->name('account.create');
+                Route::post('account/{id}/send-link', [LocalLifeMerchantController::class, 'accountSendLink'])->name('account.send-link');
+                Route::post('account/{id}/toggle', [LocalLifeMerchantController::class, 'accountToggle'])->name('account.toggle');
+                Route::post('account/{id}/email', [LocalLifeMerchantController::class, 'accountUpdateEmail'])->name('account.email');
+                Route::delete('account/{id}', [LocalLifeMerchantController::class, 'accountDelete'])->name('account.delete');
             });
         });
         // 生活攻略（批2·PGC 攻略 CRUD）
