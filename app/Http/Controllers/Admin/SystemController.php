@@ -30,6 +30,7 @@ class SystemController extends Controller
 
         // ① 超时单(需平台介入) = NezhaOrderTimeout::describe severity=='error'(此档 sweep 已升级通知商家+客服)。
         $abn_timeout_ids = [];
+        $abn_timeout_rows = [];
         try {
             $open = \App\Models\Order::with(['offline_payments'])
                 ->whereIn('order_status', ['pending', 'confirmed', 'processing', 'handover', 'picked_up'])
@@ -42,6 +43,7 @@ class SystemController extends Controller
                 $d = \App\CentralLogics\NezhaOrderTimeout::describe($o);
                 if (! $d || ($d['severity'] ?? 'info') !== 'error') { continue; }
                 $abn_timeout_ids[] = $o->id;
+                $abn_timeout_rows[] = ['id' => $o->id, 'reason' => $d['title'] ?? '订单超时', 'wait_min' => $d['elapsed_minutes'] ?? null];
             }
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('NEZHA_ADMIN_ABN timeout: ' . $e->getMessage());
@@ -50,6 +52,7 @@ class SystemController extends Controller
         // ② 逾期未退款单(需平台介入) = NezhaRefundRecord pending_merchant_refund 未退 且 超过催办阈值小时。
         //    同 RefundOverdueSweep 口径(复用 thresholdHours), 返回订单 id 供浮窗直达订单详情。
         $abn_refund_ids = [];
+        $abn_refund_rows = [];
         try {
             $remindHours = \App\CentralLogics\NezhaRefundOverdue::thresholdHours('nezha_refund_overdue_remind_hours', 'nezha_refund_overdue_remind_days', 12);
             if ($remindHours < 1) { $remindHours = 1; }
@@ -60,6 +63,21 @@ class SystemController extends Controller
                 ->whereRaw(\App\Models\NezhaRefundRecord::OVERDUE_SINCE_SQL . ' <= ?', [$cutoff->toDateTimeString()])
                 ->orderByRaw(\App\Models\NezhaRefundRecord::OVERDUE_SINCE_SQL)
                 ->pluck('order_id')->filter()->unique()->values()->all();
+            $rrecords = \App\Models\NezhaRefundRecord::with('order.restaurant')
+                ->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_NEEDS_ACTION)
+                ->whereNull('merchant_refunded_at')
+                ->whereRaw(\App\Models\NezhaRefundRecord::OVERDUE_SINCE_SQL . ' <= ?', [$cutoff->toDateTimeString()])
+                ->orderByRaw(\App\Models\NezhaRefundRecord::OVERDUE_SINCE_SQL)
+                ->limit(8)->get();
+            foreach ($rrecords as $rr) {
+                $since = $rr->overdue_anchor_at ?? $rr->created_at;
+                $abn_refund_rows[] = [
+                    'order_id'   => $rr->order_id,
+                    'shop'       => optional(optional($rr->order)->restaurant)->name,
+                    'amount'     => $rr->refund_amount ?: $rr->order_amount,
+                    'overdue_hr' => $since ? (int) \Carbon\Carbon::parse($since)->diffInHours(\Carbon\Carbon::now()) : null,
+                ];
+            }
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('NEZHA_ADMIN_ABN refund: ' . $e->getMessage());
         }
@@ -76,6 +94,8 @@ class SystemController extends Controller
                 'abn_refund_total'  => count($abn_refund_ids),
                 'abn_total'         => count($abn_timeout_ids) + count($abn_refund_ids),
                 'abn_first_order'   => $abn_first,
+                'abn_timeout_rows'  => $abn_timeout_rows,
+                'abn_refund_rows'   => $abn_refund_rows,
             ]
         ]);
     }

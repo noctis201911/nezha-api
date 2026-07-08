@@ -97,6 +97,71 @@
                         </div>
                         <!-- End Notification -->
                     </li>
+                    {{-- 哪吒M2-D3: 顶栏通知铃铛(收编异常订单+逾期退款浮窗·数据源 admin.get-restaurant-data·行内跳转不新造端点) --}}
+                    <li class="nav-item d-none d-sm-inline-block mr-4">
+                        <div class="hs-unfold">
+                            <a id="nzBellInvoker" class="js-hs-unfold-invoker btn btn-icon btn-soft-secondary rounded-circle position-relative" href="javascript:;"
+                                data-hs-unfold-options='{"target": "#nzBellDropdown","type": "css-animation"}'>
+                                <i class="tio-notifications-outlined"></i>
+                                <span id="nzBellBadge" class="btn-status btn-status-danger" style="display:none;"></span>
+                            </a>
+                            <div id="nzBellDropdown" class="hs-unfold-content dropdown-unfold dropdown-menu dropdown-menu-right nz-bell-dd">
+                                <div class="nz-bell-top">
+                                    <span class="nz-bell-title">通知</span>
+                                    <a class="nz-bell-link" href="{{ route('admin.order.list', ['grp_pending']) }}">查看订单 ›</a>
+                                </div>
+                                <div id="nzBellBody" class="nz-bell-body">
+                                    <div id="nzBellEmpty" class="nz-bell-empty">暂无待处理异常</div>
+                                </div>
+                            </div>
+                        </div>
+                    </li>
+                    <style>
+                        .nz-bell-dd{width:340px;max-width:92vw;padding:0;}
+                        .nz-bell-top{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #E4E7EC;}
+                        .nz-bell-title{font-weight:600;color:#1A2233;}
+                        .nz-bell-link{font-size:12px;color:#102A4C;text-decoration:none;}
+                        .nz-bell-body{max-height:60vh;overflow-y:auto;}
+                        .nz-bell-empty{text-align:center;color:#8A8F98;padding:30px 16px;font-size:14px;}
+                        .nz-bell-h{font-size:12px;color:#5B6472;font-weight:600;padding:10px 16px 4px;background:#F5F6F8;}
+                        .nz-bell-row{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #F1F3F6;text-decoration:none;color:#1A2233;}
+                        .nz-bell-row:hover{background:#F5F6F8;}
+                        .nz-bell-row__main{flex:1;min-width:0;}
+                        .nz-bell-row__t{font-size:13px;font-weight:600;color:#1A2233;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+                        .nz-bell-row__s{font-size:12px;color:#8A8F98;margin-top:1px;}
+                        .nz-bell-row__s--warn{color:#D97A08;}
+                        .nz-bell-cta{flex-shrink:0;background:#102A4C;color:#fff;border-radius:8px;padding:4px 12px;font-size:12px;font-weight:600;}
+                    </style>
+                    <script>
+                        (function init(){
+                            if(typeof window.jQuery==='undefined'){ return setTimeout(init,200); }
+                            var $=window.jQuery;
+                            var badge=document.getElementById('nzBellBadge'), body=document.getElementById('nzBellBody'), empty=document.getElementById('nzBellEmpty');
+                            if(!body) return;
+                            var detailsBase='{{ url('/admin/order/details') }}', overdueUrl='{{ route('admin.nezha-refund.overdue') }}';
+                            function esc(s){var d=document.createElement('div');d.textContent=(s==null?'':s);return d.innerHTML;}
+                            function humMin(m){ if(m==null)return''; if(m<60)return m+' 分钟'; var h=Math.floor(m/60); return h<48? h+' 小时' : Math.floor(h/24)+' 天'; }
+                            function humHr(h){ if(h==null)return''; return h<48? h+' 小时' : Math.floor(h/24)+' 天'; }
+                            function money(n){ try{return String.fromCharCode(1423)+Number(n).toLocaleString();}catch(e){return n;} }
+                            function render(d){
+                                var t=d.abn_timeout_rows||[], r=d.abn_refund_rows||[], total=d.abn_total||0;
+                                if(badge) badge.style.display= total>0?'block':'none';
+                                body.querySelectorAll('.nz-bell-sec').forEach(function(s){s.remove();});
+                                if(total===0){ if(empty)empty.style.display='block'; return; }
+                                if(empty)empty.style.display='none';
+                                var html='';
+                                if(t.length){ html+='<div class="nz-bell-sec"><div class="nz-bell-h">订单异常 · '+(d.abn_timeout_total||t.length)+'</div>';
+                                    t.forEach(function(o){ html+='<a class="nz-bell-row" href="'+detailsBase+'/'+o.id+'"><div class="nz-bell-row__main"><div class="nz-bell-row__t">#'+esc(o.id)+'</div><div class="nz-bell-row__s">'+esc(o.reason)+' · 卡了 '+humMin(o.wait_min)+'</div></div><span class="nz-bell-cta">处理</span></a>'; });
+                                    html+='</div>'; }
+                                if(r.length){ html+='<div class="nz-bell-sec"><div class="nz-bell-h">逾期退款 · '+(d.abn_refund_total||r.length)+'</div>';
+                                    r.forEach(function(o){ html+='<a class="nz-bell-row" href="'+overdueUrl+'"><div class="nz-bell-row__main"><div class="nz-bell-row__t">'+esc(o.shop||('#'+o.order_id))+' · '+money(o.amount)+'</div><div class="nz-bell-row__s nz-bell-row__s--warn">逾期 '+humHr(o.overdue_hr)+'</div></div><span class="nz-bell-cta">催办</span></a>'; });
+                                    html+='</div>'; }
+                                body.insertAdjacentHTML('beforeend', html);
+                            }
+                            function poll(){ $.get({url:'{{ route('admin.get-restaurant-data') }}',dataType:'json',success:function(resp){ render(resp.data||{}); }}); }
+                            poll(); setInterval(poll,15000);
+                        })();
+                    </script>
                     <li class="nav-item d-none d-sm-inline-block mr-4">
                         <!-- Notification -->
                         <div class="hs-unfold">

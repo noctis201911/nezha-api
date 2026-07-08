@@ -100,6 +100,7 @@ $countryCode = strtolower($country ?? 'auto');
         </div>
 
         <!-- 哪吒[2026-06-22]: 超管「异常订单」非阻塞提示条(超时单+逾期退款单, 响一次不反复弹; 集合清零自动收起) -->
+        @if(false){{-- 哪吒M2-D3: 旧异常订单浮窗已收编进顶栏铃铛通知栈; 封存不删, 回滚=改回 true --}}
         <div id="nz-admin-abn-toast" style="display:none;position:fixed;right:20px;bottom:20px;z-index:100000;background:#fff;border:1px solid #f0f0f0;border-left:4px solid #C4193E;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.15);padding:14px 16px;min-width:260px;max-width:340px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
                 <div>
@@ -110,6 +111,7 @@ $countryCode = strtolower($country ?? 'auto');
             </div>
             <button type="button" id="nz-abn-go" style="margin-top:10px;width:100%;background:#C4193E;color:#fff;border:none;border-radius:8px;padding:9px 0;font-size:14px;font-weight:600;cursor:pointer;">去处理</button>
         </div>
+        @endif
         <div class="modal fade" id="popup-modal-msg">
             <div class="modal-dialog modal-dialog-centered" role="document">
                 <div class="modal-content">
@@ -1065,7 +1067,7 @@ $countryCode = strtolower($country ?? 'auto');
     </script>
 
     <script>
-    @if(\App\CentralLogics\Helpers::module_permission_check('order'))
+    @if(false) {{-- 哪吒M2-D3: 旧异常订单轮询已停(收编顶栏铃铛通知栈); 封存回滚=改回 module_permission_check('order') --}}
         "use strict";
         // 哪吒[2026-06-22]: 超管异常订单提醒(超时单/逾期退款单)。B方案平台不接单故不报新订单;
         // 只报需平台介入异常单, 响一次不反复弹(localStorage seen-set), 集合清零自动收起。
