@@ -59,6 +59,7 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
         Route::get('nezha-assistant', [\App\Http\Controllers\Vendor\NezhaAssistantController::class, 'index'])->name('nezha-assistant.index');
         Route::post('nezha-assistant/ask', [\App\Http\Controllers\Vendor\NezhaAssistantController::class, 'ask'])->name('nezha-assistant.ask');
         Route::post('nezha-assistant/stream', [\App\Http\Controllers\Vendor\NezhaAssistantController::class, 'stream'])->name('nezha-assistant.stream');
+        Route::get('nezha-assistant/history', [\App\Http\Controllers\Vendor\NezhaAssistantController::class, 'history'])->name('nezha-assistant.history'); // UX1-E 只读分页(查看更早)
 
 
         Route::group(['prefix' => 'pos', 'as' => 'pos.'], function () {

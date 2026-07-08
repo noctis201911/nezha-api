@@ -152,6 +152,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // 哪吒 使用埋点维护(方案C): 每日回填加购转化 + 按保留期清理(加购30天/搜索词180天)。
         $schedule->command('nezha:purge-analytics')->dailyAt('03:25')->withoutOverlapping();
+
+        // 哪吒 商家助手会话消息(UX1-E)到期清扫: 默认180天(business_settings.nezha_assistant_retention_days 可调)，含偶发非顾客 PII。
+        $schedule->command('nezha:purge-assistant-messages')->dailyAt('03:22')->withoutOverlapping();
     })
 
     ->create();
