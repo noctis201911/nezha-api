@@ -37,6 +37,12 @@
 
     <script src="{{dynamicAsset('assets/admin/vendor/hs-navbar-vertical-aside/hs-navbar-vertical-aside-mini-cache.js')}}"></script>
     <link rel="stylesheet" href="{{dynamicAsset('assets/admin/css/toastr.css')}}">
+    {{-- 哪吒 UX-1 C: 商家端字体 — 原 style.css --bs-body-font-family=Inter,serif 致中文落宋体发糊(尤其胶囊按钮②)。业主 0708 定:全部(含数字/字母)走华人常用字体。改雅黑/苹方优先栈: Windows→微软雅黑·Mac→苹方,数字字母同字体,֏ 走 Segoe UI/系统兜底防豆腐块。表单/按钮不继承 body 字体故显式覆盖。放 </head> 尾覆盖 style.css。 --}}
+    <style>
+        :root { --bs-body-font-family: "Microsoft YaHei","PingFang SC","Noto Sans SC","Hiragino Sans GB","Heiti SC","Segoe UI",sans-serif; }
+        body, button, input, select, textarea, optgroup, .btn { font-family: var(--bs-body-font-family); }
+        html, body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    </style>
 </head>
 
 <body class="footer-offset">
