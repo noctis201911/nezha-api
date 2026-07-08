@@ -6220,4 +6220,5 @@
   'ratting' => '评分',
   'Incomplete_profile' => '资料未完善',
   'order_data_unavailable' => '订单数据当前不可见（跨分区）',
+  'review_visibility_updated' => '评价显示状态已更新',
 );
