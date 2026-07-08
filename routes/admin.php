@@ -236,6 +236,8 @@ Route::middleware('module:provide_dm_earning')->group(function () {
             Route::get('review-status/{id}/{status}', [FoodController::class, 'reviews_status'])->name('reviews.status');
             Route::get('review-approve/{id}', [FoodController::class, 'review_approve'])->name('reviews.approve');
             Route::post('review-reject/{id}', [FoodController::class, 'review_reject'])->name('reviews.reject');
+            Route::post('review-report-uphold/{id}', [FoodController::class, 'review_report_uphold'])->name('reviews.report-uphold');
+            Route::post('review-report-dismiss/{id}', [FoodController::class, 'review_report_dismiss'])->name('reviews.report-dismiss');
             Route::post('search-restaurant', [FoodController::class, 'search_vendor'])->name('search-restaurant');
             Route::get('reviews', [FoodController::class, 'review_list'])->name('reviews');
             Route::post('update-stock', [FoodController::class, 'updateStock'])->name('updateStock');

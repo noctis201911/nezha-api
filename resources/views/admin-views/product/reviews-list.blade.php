@@ -70,6 +70,7 @@
                     <a href="{{ route('admin.food.reviews', ['status_filter'=>'all']) }}" class="btn btn-sm {{ $sf==='all'?'btn--primary':'btn-outline-secondary' }}">{{ translate('messages.all') }}</a>
                     <a href="{{ route('admin.food.reviews', ['status_filter'=>'pending']) }}" class="btn btn-sm {{ $sf==='pending'?'btn--primary':'btn-outline-secondary' }}">{{ translate('messages.pending_review') }} <span class="badge badge-soft-danger">{{ $pendingCount ?? 0 }}</span></a>
                     <a href="{{ route('admin.food.reviews', ['status_filter'=>'rejected']) }}" class="btn btn-sm {{ $sf==='rejected'?'btn--primary':'btn-outline-secondary' }}">{{ translate('messages.review_rejected') }}</a>
+                    <a href="{{ route('admin.food.reviews', ['status_filter'=>'reported']) }}" class="btn btn-sm {{ $sf==='reported'?'btn--primary':'btn-outline-secondary' }}">被举报 @if(($reportedCount ?? 0) > 0)<span class="badge badge-soft-danger">{{ $reportedCount }}</span>@endif</a>
                 </div>
 
                     <div class="card-body p-0">
@@ -154,6 +155,29 @@
                                             @endif
                                             @if($review->status==3)<span class="badge badge-soft-warning mt-1">{{ translate('messages.pending_review') }}</span>@endif
                                             @if($review->status==4)<span class="badge badge-soft-danger mt-1">{{ translate('messages.review_rejected') }}@if($review->reject_reason): {{ $review->reject_reason }}@endif</span>@endif
+                                            @if(($statusFilter ?? 'all')==='reported' && !empty($reportsByReview[$review->id]))
+                                                <div class="mt-2 p-2" style="background:#FFF7F5;border:1px solid #F6D2CC;border-radius:8px;max-width:340px;">
+                                                    <div class="d-flex align-items-center flex-wrap mb-1" style="gap:4px;">
+                                                        <span class="badge badge-soft-danger">被举报 {{ count($reportsByReview[$review->id]) }} 次</span>
+                                                        @foreach(collect($reportsByReview[$review->id])->pluck('reason')->unique() as $rsn)
+                                                            <span class="badge" style="background:#F1F3F5;color:#5A6069;">{{ ($reasonLabels ?? [])[$rsn] ?? $rsn }}</span>
+                                                        @endforeach
+                                                    </div>
+                                                    <ul class="mb-1" style="font-size:12px;color:#5A6069;padding-left:16px;list-style:disc;">
+                                                        @foreach($reportsByReview[$review->id] as $rp)
+                                                            <li><b>{{ ($reasonLabels ?? [])[$rp['reason']] ?? $rp['reason'] }}</b>@if(!empty($rp['detail'])) — {{ \Illuminate\Support\Str::limit($rp['detail'], 24, '…') }}@endif <span class="text-muted">· {{ $rp['email'] ? \App\CentralLogics\Helpers::mask_email($rp['email']) : '匿名' }}</span></li>
+                                                        @endforeach
+                                                    </ul>
+                                                    <details style="font-size:12px;margin-top:4px;">
+                                                        <summary style="cursor:pointer;color:#3C7EFF;">展开处理详情（完整）</summary>
+                                                        <ul class="mb-0" style="color:#1F2329;padding-left:16px;list-style:disc;margin-top:4px;">
+                                                            @foreach($reportsByReview[$review->id] as $rp)
+                                                                <li><b>{{ ($reasonLabels ?? [])[$rp['reason']] ?? $rp['reason'] }}</b>@if(!empty($rp['detail'])): {{ $rp['detail'] }}@endif<br><span class="text-muted">举报人: {{ $rp['name'] ?: '—' }} · {{ $rp['email'] ?: '匿名' }} · {{ \App\CentralLogics\Helpers::date_format($rp['created_at']) }}</span></li>
+                                                            @endforeach
+                                                        </ul>
+                                                    </details>
+                                                </div>
+                                            @endif
                                         </td>
                                         <td class="text-uppercase">
                                             <div>
@@ -169,7 +193,12 @@
                                                data-original-title="{{ $review?->reply }}">{{ $review->reply?Str::limit(strip_tags($review->reply), 50, '...'): translate('messages.Not_replied_Yet') }}</p>
                                         </td>
                                         <td>
-                                            @if($review->status==3)
+                                            @if(($statusFilter ?? 'all')==='reported')
+                                                <button type="button" class="btn btn-sm btn-outline-danger mb-1 d-block report-uphold-btn" data-id="{{ $review['id'] }}">举报成立·下架</button>
+                                                <form action="{{ route('admin.food.reviews.report-uphold',[$review['id']]) }}" method="post" id="uphold-{{$review['id']}}">@csrf</form>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary mb-1 d-block report-dismiss-btn" data-id="{{ $review['id'] }}">驳回举报</button>
+                                                <form action="{{ route('admin.food.reviews.report-dismiss',[$review['id']]) }}" method="post" id="dismiss-{{$review['id']}}">@csrf</form>
+                                            @elseif($review->status==3)
                                                 <a href="{{ route('admin.food.reviews.approve',[$review['id']]) }}" class="btn btn-sm btn--primary mb-1 d-block">{{ translate('messages.review_btn_pass') }}</a>
                                                 <button type="button" class="btn btn-sm btn-outline-danger mb-1 d-block reject-btn" data-id="{{ $review['id'] }}">{{ translate('messages.review_btn_reject') }}</button>
                                                 <form action="{{ route('admin.food.reviews.reject',[$review['id']]) }}" method="post" id="reject-{{$review['id']}}">
@@ -268,6 +297,46 @@
                 if (result.value !== undefined) {
                     $('#reject-reason-'+id).val(result.value || '');
                     $('#reject-'+id).submit();
+                }
+            })
+        })
+
+        $(".report-uphold-btn").on("click", function (e) {
+            const id = $(this).data('id');
+            e.preventDefault();
+            Swal.fire({
+                title: '举报成立 · 下架该评价',
+                text: '下架后顾客端立即不可见，评分聚合自动重算；该评价名下所有待处理举报一并标记为已处理。',
+                type: 'warning',
+                showCancelButton: true,
+                cancelButtonColor: 'default',
+                confirmButtonColor: '#FC6A57',
+                cancelButtonText: '{{ translate('no') }}',
+                confirmButtonText: '{{ translate('yes') }}',
+                reverseButtons: true
+            }).then((result) => {
+                if (result.value) {
+                    $('#uphold-'+id).submit();
+                }
+            })
+        })
+
+        $(".report-dismiss-btn").on("click", function (e) {
+            const id = $(this).data('id');
+            e.preventDefault();
+            Swal.fire({
+                title: '驳回举报',
+                text: '驳回后该评价名下的举报全部关闭，评价保持公开。',
+                type: 'warning',
+                showCancelButton: true,
+                cancelButtonColor: 'default',
+                confirmButtonColor: '#FC6A57',
+                cancelButtonText: '{{ translate('no') }}',
+                confirmButtonText: '{{ translate('yes') }}',
+                reverseButtons: true
+            }).then((result) => {
+                if (result.value) {
+                    $('#dismiss-'+id).submit();
                 }
             })
         })

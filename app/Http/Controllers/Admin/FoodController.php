@@ -764,6 +764,48 @@ class FoodController extends Controller
         $key = explode(' ', $request['search']);
         $statusFilter = $request->input('status_filter', 'all');
         $pendingCount = Review::where('status', 3)->count();
+        // 补闭环 0708: 顾客举报待处理计数(nezha_review_reports status=0)·「被举报」tab badge·与 D4 举报 chip 同源
+        $reportedCount = (int) DB::table('nezha_review_reports')->where('status', 0)->count();
+        $reportsByReview = [];
+        $reasonLabels = self::reportReasonLabels();
+
+        if ($statusFilter === 'reported') {
+            // 被举报队列: 只列有待处理举报(status=0)的评价·最近举报优先
+            $reportedIds = DB::table('nezha_review_reports')->where('status', 0)
+                ->groupBy('review_id')->pluck('review_id')->all();
+            $reviews = Review::with(['customer', 'food' => function ($q) {
+                $q->withoutGlobalScope(RestaurantScope::class);
+            }])
+                ->whereIn('id', $reportedIds ?: [0])
+                ->when(trim((string) $request['search']) !== '', function ($query) use ($key) {
+                    $query->whereHas('food', function ($query) use ($key) {
+                        foreach ($key as $value) {
+                            $query->where('name', 'like', "%{$value}%");
+                        }
+                    });
+                })
+                ->latest()->paginate(config('default_pagination'));
+            // 每评价的待处理举报明细(列表层脱敏/展开层完整由 blade 用 Helpers::mask_* 处理·裁决4)
+            if (count($reviews)) {
+                $rows = DB::table('nezha_review_reports')
+                    ->whereIn('review_id', $reviews->pluck('id')->all())
+                    ->where('status', 0)->orderBy('created_at')->get();
+                $reporterIds = $rows->pluck('user_id')->filter()->unique()->values()->all();
+                $reporters = $reporterIds ? \App\Models\User::whereIn('id', $reporterIds)->get()->keyBy('id') : collect();
+                foreach ($rows as $r) {
+                    $rep = $reporters->get($r->user_id);
+                    $reportsByReview[$r->review_id][] = [
+                        'reason'     => $r->reason,
+                        'detail'     => $r->detail,
+                        'created_at' => $r->created_at,
+                        'email'      => $rep->email ?? null,
+                        'name'       => $rep ? trim(($rep->f_name ?? '') . ' ' . ($rep->l_name ?? '')) : null,
+                    ];
+                }
+            }
+            return view('admin-views.product.reviews-list', compact('reviews', 'statusFilter', 'pendingCount', 'reportedCount', 'reportsByReview', 'reasonLabels'));
+        }
+
         $reviews = Review::with(['customer', 'food' => function ($q) {
             $q->withoutGlobalScope(RestaurantScope::class);
         }])
@@ -778,7 +820,7 @@ class FoodController extends Controller
             ->when($statusFilter === 'rejected', function ($q) { $q->where('status', 4); })
             ->when($statusFilter === 'published', function ($q) { $q->where('status', 1); })
             ->latest()->paginate(config('default_pagination'));
-        return view('admin-views.product.reviews-list', compact('reviews', 'statusFilter', 'pendingCount'));
+        return view('admin-views.product.reviews-list', compact('reviews', 'statusFilter', 'pendingCount', 'reportedCount', 'reportsByReview', 'reasonLabels'));
     }
 
     public function reviews_status(Request $request)
@@ -833,6 +875,54 @@ class FoodController extends Controller
         $review->save();
         Toastr::success(translate('messages.review_rejected'));
         return back();
+    }
+
+    // 补闭环 0708: 举报成立·下架评价 = 复用 review_reject 语义(status->4·删未过审图·记「举报成立·<类别>」) + 该评价名下待处理举报批量置已处理(status->1·镜像 local-life offlinePost)。无 status guard·1->4 已允许。🔴禁改 gating/删图逻辑。
+    public function review_report_uphold(Request $request, $id)
+    {
+        $review = Review::find($id);
+        if (!$review) { Toastr::error(translate('messages.not_found')); return back(); }
+        $reasons = DB::table('nezha_review_reports')->where('review_id', $id)->where('status', 0)
+            ->distinct()->pluck('reason')->all();
+        $labelMap = self::reportReasonLabels();
+        $cats = array_values(array_unique(array_map(function ($r) use ($labelMap) { return $labelMap[$r] ?? $r; }, $reasons)));
+        $catText = $cats ? implode('/', $cats) : '';
+        $review->status = 4;
+        $review->reject_reason = trim('举报成立·' . $catText, '·');
+        $review->reviewed_at = now();
+        $atts = json_decode($review->attachment, true) ?? [];
+        foreach ($atts as $a) {
+            if ($a && Storage::disk('public')->exists($a)) { Storage::disk('public')->delete($a); }
+        }
+        $review->attachment = json_encode([]);
+        $review->save();
+        DB::table('nezha_review_reports')->where('review_id', $id)->where('status', 0)
+            ->update(['status' => 1, 'updated_at' => now()]);
+        Toastr::success('举报成立·已下架该评价');
+        return back();
+    }
+
+    // 补闭环 0708: 举报不成立·驳回举报 = 该评价名下待处理举报置已驳回(status->2·镜像 local-life dismissReport)。评价本身不动·保持公开。
+    public function review_report_dismiss(Request $request, $id)
+    {
+        $review = Review::find($id);
+        if (!$review) { Toastr::error(translate('messages.not_found')); return back(); }
+        DB::table('nezha_review_reports')->where('review_id', $id)->where('status', 0)
+            ->update(['status' => 2, 'updated_at' => now()]);
+        Toastr::success('已驳回举报·评价保持公开');
+        return back();
+    }
+
+    // 举报理由白名单->中文标签(FE/BE 手动同步: 对齐 Api\V1\RestaurantController::report_review $allowed_reasons + 前端 ReviewReportDrawer REVIEW_REPORT_REASONS)。改一处必改三处, 否则理由显示错位。
+    protected static function reportReasonLabels(): array
+    {
+        return [
+            'spam'      => '垃圾广告',
+            'offensive' => '辱骂或不当内容',
+            'fake'      => '虚假评价',
+            'privacy'   => '泄露隐私',
+            'other'     => '其他',
+        ];
     }
 
     public function bulk_import_index()
