@@ -203,7 +203,7 @@ class NezhaAdminDashboard
         ];
     }
 
-    /** 审核台四段(评价审核后台无功能, 已按业主拍板去除, 另立项 task_ed6425af)。 */
+    /** 审核台六段: UGC/入驻/广告/KYC + 评价待审(status=3) + 举报待处理(review_reports status=0)。评价审核在 FoodController(review_approve/reject), 补闭环 0708 加回。 */
     protected static function computeAudit(): array
     {
         $ugc = self::safe(function () {
@@ -218,13 +218,22 @@ class NezhaAdminDashboard
         $kyc = self::safe(function () {
             return (int) \App\Models\VendorKycProfile::where('kyc_status', 'pending')->count();
         });
+        // 补闭环 0708: 评价待审(带图 status=3, Review 无 STATUS 常量·迁移语义 1公开/3待审/4驳回) + 顾客举报待处理(nezha_review_reports status=0, 无 Model 同写入端走 DB::table)。
+        $reviews = self::safe(function () {
+            return (int) \App\Models\Review::where('status', 3)->count();
+        });
+        $reviewReports = self::safe(function () {
+            return (int) DB::table('nezha_review_reports')->where('status', 0)->count();
+        });
 
         return [
-            'ugc'        => $ugc,
-            'onboarding' => $onboarding,
-            'ad'         => $ad,
-            'kyc'        => $kyc,
-            'total'      => $ugc + $onboarding + $ad + $kyc,
+            'ugc'            => $ugc,
+            'onboarding'     => $onboarding,
+            'ad'             => $ad,
+            'kyc'            => $kyc,
+            'reviews'        => $reviews,
+            'review_reports' => $reviewReports,
+            'total'          => $ugc + $onboarding + $ad + $kyc + $reviews + $reviewReports,
         ];
     }
 
@@ -334,7 +343,7 @@ class NezhaAdminDashboard
             'more_route' => self::routeOr('admin.order.list', ['grp_pending']),
         ];
 
-        // ── ④ 审核台(评价段已去除, 四段: UGC/入驻/广告/KYC) ──
+        // ── ④ 审核台(六段: UGC/入驻/广告/KYC + 评价待审 + 举报待处理; 评价审核在 FoodController, 补闭环 0708 加回) ──
         $a = $c['audit'];
         $audit = [
             'total'    => (int) $c['audit_total'],
@@ -343,6 +352,8 @@ class NezhaAdminDashboard
                 ['key' => 'onboarding', 'label' => '入驻',     'count' => (int) $a['onboarding'], 'route' => self::routeOr('admin.merchant-lead.list')],
                 ['key' => 'ad',         'label' => '广告',     'count' => (int) $a['ad'],         'route' => self::routeOr('admin.advertisement.requestList')],
                 ['key' => 'kyc',        'label' => 'KYC',     'count' => (int) $a['kyc'],        'route' => self::routeOr('admin.nezha-kyc.index')],
+                ['key' => 'reviews',    'label' => '评价',     'count' => (int) ($a['reviews'] ?? 0),        'route' => self::routeOr('admin.food.reviews', ['status_filter' => 'pending'])],
+                ['key' => 'reports',    'label' => '举报',     'count' => (int) ($a['review_reports'] ?? 0),  'route' => self::routeOr('admin.food.reviews', ['status_filter' => 'reported'])],
             ], function ($s) {
                 return $s['count'] > 0;
             })),
