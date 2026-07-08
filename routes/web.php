@@ -270,3 +270,28 @@ Route::get('/image-proxy', function () {
         ->header('Content-Type', $response->header('Content-Type'))
         ->header('Access-Control-Allow-Origin', '*');
 });
+
+/*
+|--------------------------------------------------------------------------
+| 本地生活商户轻管理面（自助自维护）—— 独立 local_merchant guard
+| 总闸 nezha_local_merchant_selfserve_status 默认关；LocalMerchantFeatureGate 关时整组 404。
+| 鉴权自包含，不碰 StackFood 共享 LoginController。
+|--------------------------------------------------------------------------
+*/
+Route::prefix('m')->as('local-merchant.')
+    ->middleware(\App\Http\Middleware\LocalMerchantFeatureGate::class)
+    ->group(function () {
+        // 访客鉴权页（邮箱+密码 / 邮箱自助设密·找回）
+        Route::get('login', [\App\Http\Controllers\LocalMerchant\AuthController::class, 'showLogin'])->name('login');
+        Route::post('login', [\App\Http\Controllers\LocalMerchant\AuthController::class, 'login'])->name('login.post')->middleware('throttle:30,1');
+        Route::post('logout', [\App\Http\Controllers\LocalMerchant\AuthController::class, 'logout'])->name('logout');
+        Route::get('forgot', [\App\Http\Controllers\LocalMerchant\AuthController::class, 'showForgot'])->name('forgot');
+        Route::post('forgot', [\App\Http\Controllers\LocalMerchant\AuthController::class, 'sendReset'])->name('forgot.post')->middleware('throttle:30,1');
+        Route::get('reset/{token}', [\App\Http\Controllers\LocalMerchant\AuthController::class, 'showReset'])->name('reset');
+        Route::post('reset', [\App\Http\Controllers\LocalMerchant\AuthController::class, 'reset'])->name('reset.post')->middleware('throttle:30,1');
+
+        // 登录后面板（INC-3 填充预览/编辑/提交待审/历史）
+        Route::middleware(\App\Http\Middleware\EnsureLocalMerchant::class)->group(function () {
+            Route::get('/', [\App\Http\Controllers\LocalMerchant\PanelController::class, 'home'])->name('home');
+        });
+    });
