@@ -49,25 +49,15 @@ $__navGroups[] = [
     'gate' => Helpers::module_permission_check('order'),
     'subtitle' => '订单', 'subtitle_raw' => true,
     'items' => [
+        // 哪吒M2-D2: 订单 12 状态子项收敛为单条(badge=待处理组 grp_pending)+离线付款核验独立; 页内组 tab 承接状态细分; 旧 admin/order/list/{status} 全保留可达
         [
-            'label' => 'messages.orders', 'icon' => 'tio-file-text-outlined',
-            'active' => Request::is('admin/order*'),
-            'expanded' => Request::is('admin/order*') && (Request::is('admin/order/subscription*') == false && Request::is('admin/order-cancel-reasons') == false),
-            'children' => [
-                ['label' => 'messages.all', 'title' => 'messages.all_orders', 'route' => route('admin.order.list', ['all']), 'active' => Request::is('admin/order/list/all'), 'yield' => 'all_order', 'badge' => ['value' => $order->total, 'class' => 'badge-soft-info']],
-                ['label' => 'messages.scheduled', 'title' => 'messages.scheduled_orders', 'route' => route('admin.order.list', ['scheduled']), 'active' => Request::is('admin/order/list/scheduled'), 'yield' => 'scheduled', 'badge' => ['value' => $order->scheduled, 'class' => 'badge-soft-info']],
-                ['label' => 'messages.pending', 'title' => 'messages.pending_orders', 'route' => route('admin.order.list', ['pending']), 'active' => Request::is('admin/order/list/pending'), 'yield' => 'pending', 'badge' => ['value' => $order_sch->pending, 'class' => 'badge-soft-info']],
-                ['label' => 'messages.accepted', 'title' => 'messages.accepted_orders', 'route' => route('admin.order.list', ['accepted']), 'active' => Request::is('admin/order/list/accepted'), 'yield' => 'accepted', 'badge' => ['value' => $order_sch->accepted, 'class' => 'badge-soft-success']],
-                ['label' => 'messages.processing', 'title' => 'messages.processing_orders', 'route' => route('admin.order.list', ['processing']), 'active' => Request::is('admin/order/list/processing'), 'yield' => 'processing', 'badge' => ['value' => $order->processing, 'class' => 'badge-soft-warning']],
-                ['label' => 'messages.food_On_The_Way', 'title' => 'messages.foodOnTheWay_orders', 'route' => route('admin.order.list', ['food_on_the_way']), 'active' => Request::is('admin/order/list/food_on_the_way'), 'yield' => 'picked_up', 'extra_class' => 'text-capitalize', 'badge' => ['value' => $order_sch->picked_up, 'class' => 'badge-soft-warning']],
-                ['label' => 'messages.delivered', 'title' => 'messages.delivered_orders', 'route' => route('admin.order.list', ['delivered']), 'active' => Request::is('admin/order/list/delivered'), 'yield' => 'delivered', 'badge' => ['value' => $order->delivered, 'class' => 'badge-soft-success']],
-                ['label' => 'messages.canceled', 'title' => 'messages.canceled_orders', 'route' => route('admin.order.list', ['canceled']), 'active' => Request::is('admin/order/list/canceled'), 'yield' => 'canceled', 'badge' => ['value' => $order->canceled, 'class' => 'badge-soft-danger']],
-                ['label' => 'messages.payment_failed', 'title' => 'messages.payment_failed_orders', 'route' => route('admin.order.list', ['failed']), 'active' => Request::is('admin/order/list/failed'), 'yield' => 'failed', 'extra_class' => 'text-capitalize', 'badge' => ['value' => $order->failed, 'class' => 'badge-soft-danger']],
-                ['label' => 'messages.refunded', 'title' => 'messages.refunded_orders', 'route' => route('admin.order.list', ['refunded']), 'active' => Request::is('admin/order/list/refunded'), 'yield' => 'refunded', 'badge' => ['value' => $order->refunded, 'class' => 'badge-soft-danger']],
-                ['label' => 'messages.dine_in', 'title' => 'messages.dine_in_orders', 'route' => route('admin.order.list', ['dine_in']), 'active' => Request::is('admin/order/list/dine_in'), 'yield' => 'dine_in', 'badge' => ['value' => $order->dine_in, 'class' => 'badge-soft-info'], 'hide' => true, 'hide_reason' => '哪吒M1藏(§A#2): 堂食从未启用,dine_in订单恒0'],
-                ['label' => 'messages.Offline_Payments', 'title' => 'Offline_Payments', 'route' => route('admin.order.offline_verification_list', ['all']), 'active' => Request::is('admin/order/offline/payment/list*'), 'badge' => ['value' => $order->offline_payments, 'class' => 'badge-soft-danger bg-light']],
-            ],
+            'label' => '订单', 'label_raw' => true, 'icon' => 'tio-file-text-outlined',
+            'route' => route('admin.order.list', ['grp_pending']),
+            'active' => Request::is('admin/order/list*') || Request::is('admin/order/details*') || Request::is('admin/order-cancel-reasons'),
+            'badge' => ['value' => $order->grp_pending, 'class' => 'badge-soft-info'],
         ],
+        [
+            'label' => 'messages.Offline_Payments', 'title' => 'Offline_Payments', 'icon' => 'tio-receipt-outlined', 'route' => route('admin.order.offline_verification_list', ['all']), 'active' => Request::is('admin/order/offline/payment/list*'), 'badge' => ['value' => $order->offline_payments, 'class' => 'badge-soft-danger bg-light']],
         [
             'label' => 'messages.Subscription_orders', 'route' => route('admin.order.subscription.index'), 'icon' => 'tio-appointment',
             'active' => Request::is('admin/order/subscription*'), 'hide' => true, 'hide_reason' => '哪吒M1藏(§A#2): 佣金模式非订阅制(business_model.subscription=0)',

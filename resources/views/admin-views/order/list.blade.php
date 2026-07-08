@@ -16,12 +16,48 @@
                     <img src="{{ dynamicAsset('assets/admin/img/orders.png') }}" alt="public">
                 </div>
                 <span>
-                    {{ translate(str_replace('_', ' ', $status)) }} {{ translate('messages.orders') }}
+                    @if (Request::is('admin/order/list*'))订单@else{{ translate(str_replace('_', ' ', $status)) }} {{ translate('messages.orders') }}@endif
                 </span>
                 <span class="badge badge-soft-dark ml-2">{{ $total }}</span>
             </h1>
         </div>
         <!-- End Page Header -->
+
+        @if (Request::is('admin/order/list*'))
+        @php
+            $__ac = \App\CentralLogics\NezhaAdminCounts::all();
+            $__activeGroup = $status;
+            if (!array_key_exists($status, \App\CentralLogics\NezhaAdminCounts::GROUP_STATUS_MAP) && $status !== 'all') {
+                foreach (\App\CentralLogics\NezhaAdminCounts::GROUP_STATUS_MAP as $__g => $__sts) {
+                    if (in_array($status, $__sts)) { $__activeGroup = $__g; break; }
+                }
+            }
+            $__tabs = [
+                'grp_pending'   => ['label' => '待处理',    'count' => $__ac['grp_pending']],
+                'grp_ongoing'   => ['label' => '进行中',    'count' => $__ac['grp_ongoing']],
+                'grp_done'      => ['label' => '已完成',    'count' => $__ac['grp_done']],
+                'grp_aftersale' => ['label' => '退款·售后', 'count' => $__ac['grp_aftersale']],
+                'grp_closed'    => ['label' => '已关闭',    'count' => $__ac['grp_closed']],
+                'all'           => ['label' => '全部',      'count' => $__ac['total']],
+            ];
+        @endphp
+        <style>
+            .nz-order-tabs { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+            .nz-order-tab { display:inline-flex; align-items:center; gap:6px; padding:7px 15px; border-radius:10px; background:#F1F3F6; color:#1A2233; font-size:14px; font-weight:500; text-decoration:none; border:1px solid #E4E7EC; transition:.15s; }
+            .nz-order-tab:hover { background:#E8EEF6; color:#102A4C; }
+            .nz-order-tab.active { background:#102A4C; color:#fff; border-color:#102A4C; }
+            .nz-order-tab__badge { background:rgba(0,0,0,.08); border-radius:20px; padding:0 7px; font-size:12px; font-weight:600; min-width:20px; text-align:center; line-height:18px; }
+            .nz-order-tab.active .nz-order-tab__badge { background:rgba(255,255,255,.22); }
+        </style>
+        <div class="nz-order-tabs">
+            @foreach ($__tabs as $__key => $__tab)
+                <a href="{{ route('admin.order.list', [$__key]) }}" class="nz-order-tab {{ $__activeGroup === $__key ? 'active' : '' }}">
+                    {{ $__tab['label'] }}
+                    @if ($__tab['count'] > 0)<span class="nz-order-tab__badge">{{ $__tab['count'] }}</span>@endif
+                </a>
+            @endforeach
+        </div>
+        @endif
 
         <!-- Card -->
         <div class="card">

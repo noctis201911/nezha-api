@@ -30,6 +30,15 @@ class NezhaAdminCounts
 
     protected const CACHE_KEY = 'nezha_admin_order_counts';
 
+    /** D2 组到状态映射(单一真相源·控制器组过滤+组计数共用)。partition: 每单只住一组, 5 组并集=全部。 */
+    public const GROUP_STATUS_MAP = [
+        'grp_pending'   => ['pending'],
+        'grp_ongoing'   => ['confirmed', 'accepted', 'processing', 'handover', 'picked_up'],
+        'grp_done'      => ['delivered'],
+        'grp_aftersale' => ['refund_requested', 'refunded', 'refund_request_canceled'],
+        'grp_closed'    => ['canceled', 'failed'],
+    ];
+
     /** 失效缓存(Order created/updated 时调用; 60s TTL 为兜底)。 */
     public static function forget(): void
     {
@@ -80,7 +89,12 @@ class NezhaAdminCounts
             COUNT(CASE WHEN order_status = "refunded" THEN 1 END) as refunded,
             COUNT(CASE WHEN order_status = "refund_requested" THEN 1 END) as refund_requested,
             COUNT(CASE WHEN order_status IN ("confirmed", "processing","handover") THEN 1 END) as processing,
-            COUNT(CASE WHEN created_at <> schedule_at AND scheduled = 1 THEN 1 END) as scheduled
+            COUNT(CASE WHEN created_at <> schedule_at AND scheduled = 1 THEN 1 END) as scheduled,
+            COUNT(CASE WHEN order_status = "pending" THEN 1 END) as grp_pending,
+            COUNT(CASE WHEN order_status IN ("confirmed","accepted","processing","handover","picked_up") THEN 1 END) as grp_ongoing,
+            COUNT(CASE WHEN order_status = "delivered" THEN 1 END) as grp_done,
+            COUNT(CASE WHEN order_status IN ("refund_requested","refunded","refund_request_canceled") THEN 1 END) as grp_aftersale,
+            COUNT(CASE WHEN order_status IN ("canceled","failed") THEN 1 END) as grp_closed
         ')->first();
 
         // 基座B: 基座A + OrderScheduledIn(30)(到点/已过点排程口径, 与原 $order_sch 一致)
@@ -111,6 +125,11 @@ class NezhaAdminCounts
             'searching_dm'     => (int) ($b->searching_dm ?? 0),
             'accepted'         => (int) ($b->accepted ?? 0),
             'offline_payments' => (int) $offline,
+            'grp_pending'      => (int) ($a->grp_pending ?? 0),
+            'grp_ongoing'      => (int) ($a->grp_ongoing ?? 0),
+            'grp_done'         => (int) ($a->grp_done ?? 0),
+            'grp_aftersale'    => (int) ($a->grp_aftersale ?? 0),
+            'grp_closed'       => (int) ($a->grp_closed ?? 0),
         ];
     }
 }

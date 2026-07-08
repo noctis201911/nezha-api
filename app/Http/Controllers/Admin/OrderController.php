@@ -61,6 +61,9 @@ class OrderController extends Controller
                 });
             })
 
+            ->when(array_key_exists($status, \App\CentralLogics\NezhaAdminCounts::GROUP_STATUS_MAP), function ($query) use ($status) {
+                return $query->whereIn('order_status', \App\CentralLogics\NezhaAdminCounts::GROUP_STATUS_MAP[$status]);
+            })
             ->when($status == 'searching_for_deliverymen', function ($query) {
                 return $query->SearchingForDeliveryman();
             })
@@ -103,7 +106,7 @@ class OrderController extends Controller
             ->when($status == 'dine_in', function ($query) {
                 return $query->where('order_type', 'dine_in');
             })
-            ->when(!in_array($status, ['all', 'scheduled', 'canceled', 'requested', 'refunded', 'delivered', 'failed', 'dine_in']), function ($query) {
+            ->when(!in_array($status, ['all', 'scheduled', 'canceled', 'requested', 'refunded', 'delivered', 'failed', 'dine_in', 'grp_pending', 'grp_ongoing', 'grp_done', 'grp_aftersale', 'grp_closed']), function ($query) {
                 return $query->OrderScheduledIn(30);
             })
             ->when(isset($request->vendor), function ($query) use ($request) {
@@ -149,7 +152,10 @@ class OrderController extends Controller
 
             ->Notpos()
             ->hasSubscriptionToday()
-            ->orderBy('schedule_at', 'desc')
+            ->when($status === 'grp_pending',
+                fn ($q) => $q->orderBy('created_at', 'asc'),
+                fn ($q) => $q->orderBy('schedule_at', 'desc')
+            )
             ->paginate(config('default_pagination'));
 
         $orderstatus = $request?->orderStatus ?? [];
@@ -349,6 +355,9 @@ class OrderController extends Controller
                 return $query->whereHas('restaurant', function ($query) use ($request) {
                     return $query->whereIn('zone_id', $request->zone);
                 });
+            })
+            ->when(array_key_exists($status, \App\CentralLogics\NezhaAdminCounts::GROUP_STATUS_MAP), function ($query) use ($status) {
+                return $query->whereIn('order_status', \App\CentralLogics\NezhaAdminCounts::GROUP_STATUS_MAP[$status]);
             })
             ->when($status == 'searching_for_deliverymen', function ($query) {
                 return $query->SearchingForDeliveryman();
