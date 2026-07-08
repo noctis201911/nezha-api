@@ -34,6 +34,16 @@ class DashboardController extends Controller
         return view('admin-views.dashboard', compact('data', 'total_sell','total_subs' ,'commission', 'params'));
     }
 
+    /**
+     * 哪吒超管 M2-D4「驾驶舱·今天」首屏。登录 admin 即可见(与 dashboard 同级, 无 module 闸, 防误挡员工)。
+     * 数据全部走 NezhaAdminDashboard 单一真相源(只读聚合, 与铃铛/侧栏/列表页同源)。先并存, 默认落点不改。
+     */
+    public function nezhaToday(Request $request)
+    {
+        $wb = \App\CentralLogics\NezhaAdminDashboard::buildSummary();
+        return view('admin-views.nezha-today', compact('wb'));
+    }
+
     public function order(Request $request)
     {
         $params = session('dash_params');

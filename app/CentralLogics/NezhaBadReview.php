@@ -64,4 +64,73 @@ class NezhaBadReview
             'bad_review_to'    => $to,
         ];
     }
+
+    /**
+     * 平台版(超管驾驶舱 M2-D4 用): 全平台最近 N 天 rating<=MAX 未回复差评总数 + 涉及商家数。
+     * 口径与 count()/summary() 逐字一致(rating<=MAX + reply 空 + 同一日期窗), 仅去掉 restaurant_id 过滤
+     * = 单操作员平台的"平台版"(与 NezhaAdminCounts 之于 NezhaOrderCounts 同理), 非另造口径。纯只读。
+     */
+    public static function platformSummary(): array
+    {
+        [$from, $to] = self::window();
+        try {
+            $base = Review::whereHas('food')
+                ->where('rating', '<=', self::MAX_RATING)
+                ->where(function ($q) {
+                    $q->whereNull('reply')->orWhere('reply', '=', '');
+                })
+                ->whereBetween('created_at', [
+                    Carbon::createFromFormat('Y-m-d', $from)->startOfDay(),
+                    Carbon::createFromFormat('Y-m-d', $to)->endOfDay(),
+                ]);
+            $count = (clone $base)->count();
+            $restaurants = (clone $base)->with('food:id,restaurant_id')->get()
+                ->pluck('food.restaurant_id')->filter()->unique()->count();
+            return ['count' => (int) $count, 'restaurants' => (int) $restaurants, 'days' => self::WINDOW_DAYS, 'from' => $from, 'to' => $to];
+        } catch (\Throwable $e) {
+            return ['count' => 0, 'restaurants' => 0, 'days' => self::WINDOW_DAYS, 'from' => $from, 'to' => $to];
+        }
+    }
+
+    /**
+     * 平台版: 未回复差评最多的前 N 家商家 [['id','name','count'], ...](驾驶舱「商家健康」卡行用)。
+     * 同 platformSummary 口径; 按未回复差评条数降序。空/异常返回 []。纯只读。
+     */
+    public static function platformShops(int $limit = 5): array
+    {
+        [$from, $to] = self::window();
+        try {
+            $reviews = Review::whereHas('food')
+                ->where('rating', '<=', self::MAX_RATING)
+                ->where(function ($q) {
+                    $q->whereNull('reply')->orWhere('reply', '=', '');
+                })
+                ->whereBetween('created_at', [
+                    Carbon::createFromFormat('Y-m-d', $from)->startOfDay(),
+                    Carbon::createFromFormat('Y-m-d', $to)->endOfDay(),
+                ])
+                ->with('food:id,restaurant_id')->get();
+            $byRid = [];
+            foreach ($reviews as $rv) {
+                $rid = optional($rv->food)->restaurant_id;
+                if (! $rid) {
+                    continue;
+                }
+                $byRid[$rid] = ($byRid[$rid] ?? 0) + 1;
+            }
+            arsort($byRid);
+            $top = array_slice($byRid, 0, $limit, true);
+            if (! $top) {
+                return [];
+            }
+            $names = \App\Models\Restaurant::whereIn('id', array_keys($top))->pluck('name', 'id');
+            $out = [];
+            foreach ($top as $rid => $cnt) {
+                $out[] = ['id' => (int) $rid, 'name' => $names[$rid] ?? ('商家 #' . $rid), 'count' => (int) $cnt];
+            }
+            return $out;
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
 }

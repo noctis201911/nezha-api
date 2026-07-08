@@ -24,63 +24,14 @@ class SystemController extends Controller
         // 同类修复见 DashboardController::restaurant_data(commit e2633db) 与 QA_PLAYBOOK O 轴。
         $new_order = \App\Models\Order::where('checked', 0)->Notpos()->count();
 
-        // 哪吒[2026-06-22]: 超管「异常订单」面板提醒——B方案平台不接单, 故超管不报新订单(噪音),
-        // 只报【需平台介入】两类: 已升级超时单(商家被催仍未处理) + 逾期未退款单。
-        // 自带「当前态」语义: 商家处理完即从集合消失, 浮窗自动清, 不假挂。零资金/零状态机, 纯只读统计(L3)。
-
-        // ① 超时单(需平台介入) = NezhaOrderTimeout::describe severity=='error'(此档 sweep 已升级通知商家+客服)。
-        $abn_timeout_ids = [];
-        $abn_timeout_rows = [];
-        try {
-            $open = \App\Models\Order::with(['offline_payments'])
-                ->whereIn('order_status', ['pending', 'confirmed', 'processing', 'handover', 'picked_up'])
-                ->Notpos()->get();
-            foreach ($open as $o) {
-                $phase = \App\CentralLogics\NezhaOrderTimeout::phase($o);
-                if (! $phase) { continue; }
-                if ($phase === \App\CentralLogics\NezhaOrderTimeout::PHASE_PROOF
-                    && ! \App\CentralLogics\NezhaOrderTimeout::hasPaymentProof($o)) { continue; }
-                $d = \App\CentralLogics\NezhaOrderTimeout::describe($o);
-                if (! $d || ($d['severity'] ?? 'info') !== 'error') { continue; }
-                $abn_timeout_ids[] = $o->id;
-                $abn_timeout_rows[] = ['id' => $o->id, 'reason' => $d['title'] ?? '订单超时', 'wait_min' => $d['elapsed_minutes'] ?? null];
-            }
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('NEZHA_ADMIN_ABN timeout: ' . $e->getMessage());
-        }
-
-        // ② 逾期未退款单(需平台介入) = NezhaRefundRecord pending_merchant_refund 未退 且 超过催办阈值小时。
-        //    同 RefundOverdueSweep 口径(复用 thresholdHours), 返回订单 id 供浮窗直达订单详情。
-        $abn_refund_ids = [];
-        $abn_refund_rows = [];
-        try {
-            $remindHours = \App\CentralLogics\NezhaRefundOverdue::thresholdHours('nezha_refund_overdue_remind_hours', 'nezha_refund_overdue_remind_days', 12);
-            if ($remindHours < 1) { $remindHours = 1; }
-            $cutoff = \Carbon\Carbon::now()->subHours($remindHours);
-            $abn_refund_ids = \App\Models\NezhaRefundRecord::whereIn('status', \App\Models\NezhaRefundRecord::STATUS_NEEDS_ACTION)
-                ->whereNull('merchant_refunded_at')
-                // 逾期计时锚点(同 RefundOverdueSweep 口径): 争议维持裁决后从裁决时刻起算。
-                ->whereRaw(\App\Models\NezhaRefundRecord::OVERDUE_SINCE_SQL . ' <= ?', [$cutoff->toDateTimeString()])
-                ->orderByRaw(\App\Models\NezhaRefundRecord::OVERDUE_SINCE_SQL)
-                ->pluck('order_id')->filter()->unique()->values()->all();
-            $rrecords = \App\Models\NezhaRefundRecord::with('order.restaurant')
-                ->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_NEEDS_ACTION)
-                ->whereNull('merchant_refunded_at')
-                ->whereRaw(\App\Models\NezhaRefundRecord::OVERDUE_SINCE_SQL . ' <= ?', [$cutoff->toDateTimeString()])
-                ->orderByRaw(\App\Models\NezhaRefundRecord::OVERDUE_SINCE_SQL)
-                ->limit(8)->get();
-            foreach ($rrecords as $rr) {
-                $since = $rr->overdue_anchor_at ?? $rr->created_at;
-                $abn_refund_rows[] = [
-                    'order_id'   => $rr->order_id,
-                    'shop'       => optional(optional($rr->order)->restaurant)->name,
-                    'amount'     => $rr->refund_amount ?: $rr->order_amount,
-                    'overdue_hr' => $since ? (int) \Carbon\Carbon::parse($since)->diffInHours(\Carbon\Carbon::now()) : null,
-                ];
-            }
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('NEZHA_ADMIN_ABN refund: ' . $e->getMessage());
-        }
+        // 哪吒 M2-D4: 异常订单/逾期未退款收编进 NezhaAdminDashboard 单一真相源(60s 缓存, 修此前每次轮询全量重算)。
+        // 与驾驶舱卡①③/侧栏徽标同源(交接包 DoD#1「计数三处对账」); 下面输出 JSON 形状逐字不变, 铃铛前端零改动。
+        // 口径逐字搬进 provider(NezhaOrderTimeout severity=error 超时 + RefundOverdueSweep 逾期), 只加 60s 缓存。
+        $__nzc = \App\CentralLogics\NezhaAdminDashboard::counts();
+        $abn_timeout_ids  = $__nzc['exception_ids']  ?? [];
+        $abn_timeout_rows = $__nzc['exception_rows'] ?? [];
+        $abn_refund_ids   = $__nzc['refund_ids']     ?? [];
+        $abn_refund_rows  = $__nzc['refund_rows']    ?? [];
 
         $abn_first = $abn_timeout_ids[0] ?? ($abn_refund_ids[0] ?? null);
 

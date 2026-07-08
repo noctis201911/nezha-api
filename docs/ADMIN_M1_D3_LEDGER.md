@@ -146,3 +146,12 @@
 
 ## 3 处标记「⚠️判断call」的说明
 §B 映射表原文对 zone(025)/addon(034-036)/email-setup(089)/join-us(105) 四处未给出明确分组指令。均按"就近同域"原则placed(zone→商家基础设施同域;addon→食品配置同域;email-setup→business-setup同簇;join-us→原结构同一父项子项不拆散)。风险低、可逆(单一 config 数组条目挪组),如需调整请回 Fable 复核后我再挪动。
+
+## M2 结构变化台账（D2–D5 后续 · 2026-07-08）
+> 上表是 M1-D3 时点的 116 入口快照；M2 后侧栏发生下列新增/收敛/收编，补记于此（防后续窗口对不上）。
+
+- **新增「今天」驾驶舱**（M2-D4）：`admin/nezha-today`（`admin.nezha-today` → `Admin\DashboardController@nezhaToday`，登录 admin 即可见·无 module 闸）。①今天组**第一项**，数据全走 `App\CentralLogics\NezhaAdminDashboard` 只读聚合单一真相源（逾期退款/订单异常/资金审核/审核台/商家健康 + 今日经营/系统健康/反馈日报/差评预警）。**先并存**：第二项「数据看板」(旧 dashboard) 保留，默认登录落点暂不改（稳定一周后 1 行 commit 切默认）。**非 116 原入口，M2 新增。** 说明：评价审核段后台无对应功能已去除（另立项 task_ed6425af）；TG 未绑行/cron·发信额度健康行无现成数据源按规则不显示。
+- **订单收敛**（M2-D2）：②订单组 12 状态子项 → 单条「订单」(徽标=grp_pending) + 「离线付款核验」独立；页内组 tab 承接状态细分；旧 `admin/order/list/{status}` 全保留可达。
+- **浮窗收编 + 铃铛收编 provider**（M2-D3/D4）：两个漂浮红浮窗（异常订单/逾期退款）收编进顶栏铃铛通知栈（旧浮窗 `@if(false)` 封存）；D4 起铃铛数据源 `SystemController::restaurant_data` 收编读 `NezhaAdminDashboard::counts()`（与驾驶舱卡①③/侧栏徽标同源，60s 缓存·修此前每次轮询重算）。
+- **侧栏新徽标**（M2-D4）：③钱·风控组「逾期未退款」「退款争议裁决」加计数徽标（同源 `NezhaAdminDashboard`，满足 DoD#1「侧栏=卡=列表=铃铛」对账；0 无徽标）。
+- **搜索框接活 + 环境徽章**（M2-D5）：侧栏搜索框过滤菜单；顶栏环境徽章（生产/STAGING）。

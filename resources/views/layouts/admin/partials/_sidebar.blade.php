@@ -8,6 +8,9 @@ $__nzAdminCounts = \App\CentralLogics\NezhaAdminCounts::all();
 $order = (object) $__nzAdminCounts;
 $order_sch = $order;
 
+// 哪吒M2-D4: 驾驶舱队列计数(逾期未退款/争议等)单一真相源, 供侧栏徽标与顶栏铃铛/驾驶舱同源(60s缓存·防御式绝不抛)。
+$__nzDash = \App\CentralLogics\NezhaAdminDashboard::counts();
+
 /**
  * 哪吒超管M1(D1 侧栏配置数组化 + D3 8组重排)。
  * 条目schema: label(可见文本translate键,必填) / label_raw(true=label是字面中文,不走translate) /
@@ -25,11 +28,13 @@ $order_sch = $order;
  */
 $__navGroups = [];
 
-// ==== ①今天(M1占位: 数据看板,M2建驾驶舱才改名) ====
+// ==== ①今天(M2-D4 驾驶舱并存: 第一项「今天」=驾驶舱, 第二项「数据看板」=旧dashboard; 默认落点暂不切, 稳定一周后 1 行切换) ====
 $__navGroups[] = [
     'gate' => true,
     'subtitle' => null,
     'items' => [
+        ['label' => '今天', 'label_raw' => true, 'route' => route('admin.nezha-today'), 'icon' => 'tio-today',
+            'active' => Request::is('admin/nezha-today')],
         ['label' => '数据看板', 'label_raw' => true, 'route' => route('admin.dashboard'), 'icon' => 'tio-dashboard-vs',
             'active' => Request::is('admin')],
     ],
@@ -93,8 +98,11 @@ $__navGroups[] = [
                 ] : [],
                 Helpers::module_permission_check('refund') ? [
                     ['label' => '退款留痕/审核', 'label_raw' => true, 'route' => route('admin.nezha-refund.records'), 'active' => Request::is('admin/nezha-refund/records')],
-                    ['label' => '逾期未退款', 'label_raw' => true, 'route' => route('admin.nezha-refund.overdue'), 'active' => Request::is('admin/nezha-refund/overdue')],
-                    ['label' => '退款争议裁决', 'label_raw' => true, 'route' => route('admin.nezha-refund.disputes'), 'active' => Request::is('admin/nezha-refund/disputes')],
+                    // 哪吒M2-D4: 徽标=驾驶舱钱卡同源(NezhaAdminDashboard), 满足 DoD#1「侧栏=卡=列表」对账; 0→无徽标
+                    ['label' => '逾期未退款', 'label_raw' => true, 'route' => route('admin.nezha-refund.overdue'), 'active' => Request::is('admin/nezha-refund/overdue'),
+                        'badge' => ((int) ($__nzDash['refund_overdue'] ?? 0) > 0) ? ['value' => (int) $__nzDash['refund_overdue'], 'class' => 'badge-soft-danger'] : null],
+                    ['label' => '退款争议裁决', 'label_raw' => true, 'route' => route('admin.nezha-refund.disputes'), 'active' => Request::is('admin/nezha-refund/disputes'),
+                        'badge' => ((int) ($__nzDash['disputes'] ?? 0) > 0) ? ['value' => (int) $__nzDash['disputes'], 'class' => 'badge-soft-warning'] : null],
                 ] : [],
                 Helpers::module_permission_check('kyc') ? [
                     ['label' => '商家KYC', 'label_raw' => true, 'route' => route('admin.nezha-kyc.index'), 'active' => Request::is('admin/nezha-kyc*')],
