@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AddonCategoryController;
 use App\Http\Controllers\Api\V1\AdvertisementController;
 use App\Http\Controllers\Api\V1\MerchantLeadController;
 use App\Http\Controllers\Api\V1\LocalLifeController;
+use App\Http\Controllers\Api\V1\GuideController;
 use App\Http\Controllers\Api\V1\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\V1\Auth\DeliveryManLoginController;
 use App\Http\Controllers\Api\V1\Auth\DMPasswordResetController;
@@ -562,6 +563,11 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         Route::get('categories', [LocalLifeController::class, 'categories']);
         Route::get('merchants', [LocalLifeController::class, 'merchants']);
         Route::get('merchants/{id}', [LocalLifeController::class, 'merchantDetail']);
+        // 生活攻略（批2·公开只读；开关 nezha_guides_status=0 时列表空/详情 closed）
+        Route::get('guides', [GuideController::class, 'index']);
+        Route::get('guides/{slug}', [GuideController::class, 'show']);
+        // 有用 +1（无登录墙·命名 throttle 防刷；前端 localStorage 防重复点）
+        Route::post('guides/{id}/helpful', [GuideController::class, 'helpful'])->middleware('throttle:nezha_guides_helpful')->where('id', '[0-9]+');
     });
 
     // 本地生活 UGC：发帖 / 我的发布（需登录；游客不能发，PII 仅本人可见）

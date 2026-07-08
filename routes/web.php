@@ -44,6 +44,9 @@ Route::get('og-image/restaurant/{id}', [\App\Http\Controllers\OgImageController:
 Route::get('share-poster/restaurant/{id}', [\App\Http\Controllers\OgImageController::class, 'restaurantPoster'])->name('share-poster.restaurant')->where('id', '[0-9]+');
 Route::get('share-poster/food/{id}', [\App\Http\Controllers\OgImageController::class, 'foodPoster'])->name('share-poster.food')->where('id', '[0-9]+');
 Route::get('og-image/food/{id}', [\App\Http\Controllers\OgImageController::class, 'food'])->name('og-image.food')->where('id', '[0-9]+');
+// 本地生活批2 分享品牌卡(1200x630 og:image)：攻略 / 本地生活商家
+Route::get('og-image/guide/{id}', [\App\Http\Controllers\OgImageController::class, 'guide'])->name('og-image.guide')->where('id', '[0-9]+');
+Route::get('og-image/merchant/{id}', [\App\Http\Controllers\OgImageController::class, 'merchant'])->name('og-image.merchant')->where('id', '[0-9]+');
 
 
 Route::view('subscription/payment/view' , 'Subscription_payment_view')->name('subscription_payment_view');

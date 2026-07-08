@@ -22,6 +22,7 @@ use App\Http\Controllers\Admin\MerchantLeadController;
 use App\Http\Controllers\Admin\LocalLifeController as AdminLocalLifeController;
 use App\Http\Controllers\Admin\LocalLifeCategoryController;
 use App\Http\Controllers\Admin\LocalLifeMerchantController;
+use App\Http\Controllers\Admin\GuideController as AdminGuideController;
 use App\Http\Controllers\Admin\ConversationController;
 use App\Http\Controllers\Admin\CouponController;
 use App\Http\Controllers\Admin\CuisineController;
@@ -1253,6 +1254,16 @@ Route::middleware('module:provide_dm_earning')->group(function () {
                 Route::post('status/{id}', [LocalLifeMerchantController::class, 'statusToggle'])->name('status');
                 Route::delete('delete', [LocalLifeMerchantController::class, 'destroy'])->name('delete');
             });
+        });
+        // 生活攻略（批2·PGC 攻略 CRUD）
+        Route::group(['prefix' => 'guides', 'as' => 'guides.', 'middleware' => ['module:settings']], function () {
+            Route::get('list', [AdminGuideController::class, 'list'])->name('list');
+            Route::get('create', [AdminGuideController::class, 'create'])->name('create');
+            Route::post('store', [AdminGuideController::class, 'store'])->name('store');
+            Route::get('edit/{id}', [AdminGuideController::class, 'edit'])->name('edit');
+            Route::post('update/{id}', [AdminGuideController::class, 'update'])->name('update');
+            Route::post('status/{id}', [AdminGuideController::class, 'statusToggle'])->name('status');
+            Route::delete('delete', [AdminGuideController::class, 'destroy'])->name('delete');
         });
         Route::group(['prefix' => 'vehicle', 'as' => 'vehicle.', 'middleware' => ['module:deliveryman']], function () {
             Route::get('list', [VehicleController::class, 'list'])->name('list');

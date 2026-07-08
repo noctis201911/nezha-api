@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\CentralLogics\Helpers;
 use App\Models\Food;
+use App\Models\Guide;
+use App\Models\LocalLifeMerchant;
 use App\Models\Restaurant;
 use BaconQrCode\Common\ErrorCorrectionLevel;
 use BaconQrCode\Encoder\Encoder;
@@ -20,6 +22,9 @@ class OgImageController extends Controller
     const POSTER_VER = '5';
     // 链接预览"品牌卡"版本(改卡片版式 +1 整体重建)
     const CARD_VER = '1';
+    // 本地生活批2 品牌卡版本(攻略/商家分享卡, 改版式 +1 整体重建)
+    const GUIDE_CARD_VER = '1';
+    const MERCHANT_CARD_VER = '1';
     // 德拉姆符号 ֏(U+058F) 在 wqy 中文字体里无字形(显示成方框), 价格行改用含该符号的 FreeSans
     const PRICE_FONT = '/usr/share/fonts/truetype/freefont/FreeSans.ttf';
 
@@ -63,6 +68,62 @@ class OgImageController extends Controller
                 return $this->brandFallback();
             }
             return $this->serveJpg($disk, $srcPath, 'f' . $id);
+        } catch (\Throwable $e) {
+            return $this->brandFallback();
+        }
+    }
+
+    /**
+     * 本地生活「生活攻略」分享品牌卡 (og:image · 1200x630 · 附页⑧上)。
+     * 有封面: 封面裁切铺满 + 底部深色渐变 + 白题; 无封面: 米金渐变底 + 深墨题。
+     * 恒: 左上「哪吒·生活攻略」品牌标 + 左下 题(2 行) + 时效「信息截至 YYYY-MM · 平台整理」。
+     * 攻略开关关 / 不存在 / 未上架 → 兜底品牌图, 绝不 500。
+     */
+    public function guide($id)
+    {
+        try {
+            if (!$this->guidesEnabled()) {
+                return $this->brandFallback();
+            }
+            $g = Guide::where('status', 1)->find($id);
+            if (!$g) {
+                return $this->brandFallback();
+            }
+            $disk = Helpers::getDisk();
+            $coverPath = null;
+            if ($g->cover_url && Storage::disk($disk)->exists('guide/' . $g->cover_url)) {
+                $coverPath = 'guide/' . $g->cover_url;
+            }
+            $asof = $g->info_as_of ? ('信息截至 ' . $g->info_as_of . ' · 平台整理') : '平台整理';
+            return $this->buildGuideCard($disk, $coverPath, $g->title, $asof, 'ogg' . $id);
+        } catch (\Throwable $e) {
+            return $this->brandFallback();
+        }
+    }
+
+    /**
+     * 本地生活商家分享品牌卡 (og:image · 1200x630 · 附页⑧下)。
+     * 暖白底 + logo + 店名 + 类目·区域 + 诚实评分行 + 底行「埃里温华人生活平台 · nezha.am」。
+     * 诚实评分规则(与页内同): 有 Google 显「Google X.X」; 无 Google 有商家分显「★ X.X 评分由商家提供」; 都无整行不出。
+     */
+    public function merchant($id)
+    {
+        try {
+            $m = LocalLifeMerchant::where('status', true)->find($id);
+            if (!$m) {
+                return $this->brandFallback();
+            }
+            $disk = Helpers::getDisk();
+            $logoPath = ($m->logo && Storage::disk($disk)->exists('local-life-merchant/' . $m->logo)) ? 'local-life-merchant/' . $m->logo : null;
+            $sub = implode(' · ', array_filter([$m->category, $m->area]));
+            // 诚实评分
+            $ratingVal = null; $ratingSrc = null;
+            if ($m->google_rating !== null) {
+                $ratingVal = number_format((float) $m->google_rating, 1); $ratingSrc = 'google';
+            } elseif ($m->rating) {
+                $ratingVal = number_format((float) $m->rating, 1); $ratingSrc = 'merchant';
+            }
+            return $this->buildMerchantCard($disk, $logoPath, $m->name, $sub, $ratingVal, $ratingSrc, 'ogm' . $id);
         } catch (\Throwable $e) {
             return $this->brandFallback();
         }
@@ -438,6 +499,237 @@ class OgImageController extends Controller
             $lines[$maxLines - 1] = $last . '…';
         }
         return $lines ?: [''];
+    }
+
+    /** 攻略总开关（business_settings.nezha_guides_status，默认 0 封印） */
+    private function guidesEnabled(): bool
+    {
+        $v = DB::table('business_settings')->where('key', 'nezha_guides_status')->value('value');
+        return (bool) ($v ?? 0);
+    }
+
+    // 竖直渐变填充（顶 rgb1 → 底 rgb2）
+    private function fillVerticalGradient($img, $W, $H, $r1, $g1, $b1, $r2, $g2, $b2)
+    {
+        for ($y = 0; $y < $H; $y++) {
+            $t = $H > 1 ? $y / ($H - 1) : 0;
+            $c = imagecolorallocate(
+                $img,
+                (int) round($r1 + ($r2 - $r1) * $t),
+                (int) round($g1 + ($g2 - $g1) * $t),
+                (int) round($b1 + ($b2 - $b1) * $t)
+            );
+            imagefilledrectangle($img, 0, $y, $W, $y, $c);
+        }
+    }
+
+    // 品牌标: 红「哪」圆角块 + 标签文字。$onDark=true 时先垫半透明白底保证可读。
+    private function drawBrandMark($img, $x, $y, $font, $label, $onDark, $red, $white, $ink)
+    {
+        $box = 40; // 「哪」方块边长
+        $labSize = 26;
+        $lb = imagettfbbox($labSize, 0, $font, $label);
+        $labW = $lb[2] - $lb[0];
+        $totalW = $box + 12 + $labW;
+        if ($onDark) {
+            $bg = imagecolorallocatealpha($img, 255, 255, 255, 55);
+            $this->fillRoundedRect($img, $x - 10, $y - 8, $x + $totalW + 12, $y + $box + 8, 12, $bg);
+        }
+        // 红「哪」块
+        $this->fillRoundedRect($img, $x, $y, $x + $box, $y + $box, 9, $red);
+        $nb = imagettfbbox(22, 0, $font, '哪');
+        $nw = $nb[2] - $nb[0];
+        imagettftext($img, 22, 0, (int) ($x + ($box - $nw) / 2), (int) ($y + $box - 10), $white, $font, '哪');
+        // 标签文字（红色，垂直居中于块）
+        imagettftext($img, $labSize, 0, $x + $box + 12, (int) ($y + $box - 10), $red, $font, $label);
+    }
+
+    // 实心圆角矩形（GD 无原生，四角画圆 + 中间两矩形拼）
+    private function fillRoundedRect($img, $x1, $y1, $x2, $y2, $r, $color)
+    {
+        $r = (int) $r;
+        imagefilledrectangle($img, $x1 + $r, $y1, $x2 - $r, $y2, $color);
+        imagefilledrectangle($img, $x1, $y1 + $r, $x2, $y2 - $r, $color);
+        imagefilledarc($img, $x1 + $r, $y1 + $r, $r * 2, $r * 2, 180, 270, $color, IMG_ARC_PIE);
+        imagefilledarc($img, $x2 - $r, $y1 + $r, $r * 2, $r * 2, 270, 360, $color, IMG_ARC_PIE);
+        imagefilledarc($img, $x1 + $r, $y2 - $r, $r * 2, $r * 2, 90, 180, $color, IMG_ARC_PIE);
+        imagefilledarc($img, $x2 - $r, $y2 - $r, $r * 2, $r * 2, 0, 90, $color, IMG_ARC_PIE);
+    }
+
+    /**
+     * 攻略品牌卡 1200x630（附页⑧上）。有封面=封面铺满+底部渐变+白题；无封面=米金渐变+深墨题。
+     */
+    private function buildGuideCard($disk, $coverPath, $title, $asofText, $keyPrefix)
+    {
+        $mtime = $coverPath ? Storage::disk($disk)->lastModified($coverPath) : 'nocover';
+        $cacheRel = 'og-cache/guidecard-' . $keyPrefix . '-' . substr(md5($coverPath . $mtime . $title . $asofText . self::GUIDE_CARD_VER), 0, 16) . '.jpg';
+        if (Storage::disk($disk)->exists($cacheRel)) {
+            return $this->cachedJpg($disk, $cacheRel);
+        }
+
+        $W = 1200; $H = 630; $pad = 56;
+        $font = self::CJK_FONT;
+        $hasCover = (bool) $coverPath;
+
+        $card = imagecreatetruecolor($W, $H);
+        $white  = imagecolorallocate($card, 255, 255, 255);
+        $red    = imagecolorallocate($card, 196, 25, 62);
+        $ink    = imagecolorallocate($card, 31, 35, 41);      // #1F2329
+        $asofDk = imagecolorallocate($card, 138, 109, 59);    // #8A6D3B (无封面时效)
+        $asofLt = imagecolorallocate($card, 234, 223, 206);   // 封面态时效浅色
+
+        if ($hasCover) {
+            $photo = @imagecreatefromstring(Storage::disk($disk)->get($coverPath));
+            if ($photo) {
+                $sw = imagesx($photo); $sh = imagesy($photo);
+                $scale = max($W / $sw, $H / $sh);
+                $srcW = (int) round($W / $scale); $srcH = (int) round($H / $scale);
+                $srcX = (int) (($sw - $srcW) / 2); $srcY = (int) (($sh - $srcH) / 2);
+                imagecopyresampled($card, $photo, 0, 0, $srcX, $srcY, $W, $H, $srcW, $srcH);
+                imagedestroy($photo);
+            } else {
+                $this->fillVerticalGradient($card, $W, $H, 255, 232, 207, 246, 200, 155);
+            }
+            // 底部深色渐变 scrim（透明→黑）保证白字可读
+            imagealphablending($card, true);
+            $gTop = (int) ($H * 0.42); $gH = $H - $gTop;
+            for ($i = 0; $i < $gH; $i++) {
+                $t = $i / $gH;
+                $al = (int) round(118 - 106 * $t);
+                if ($al < 0) { $al = 0; }
+                $c = imagecolorallocatealpha($card, 0, 0, 0, $al);
+                imagefilledrectangle($card, 0, $gTop + $i, $W, $gTop + $i, $c);
+            }
+        } else {
+            $this->fillVerticalGradient($card, $W, $H, 255, 232, 207, 246, 200, 155); // 米金
+        }
+
+        // 品牌标（左上）
+        $this->drawBrandMark($card, $pad, 40, $font, '哪吒 · 生活攻略', $hasCover, $red, $white, $ink);
+
+        // 题（左下，2 行）；封面态白字、无封面深墨
+        $titleColor = $hasCover ? $white : $ink;
+        $lines = $this->wrapText($font, 46, $title, $W - 2 * $pad, 2);
+        $lineH = 62;
+        $blockH = count($lines) * $lineH;
+        $startY = $H - 78 - $blockH + $lineH - 12; // 底部对齐（时效上方）
+        $ty = $startY;
+        foreach ($lines as $ln) {
+            imagettftext($card, 46, 0, $pad, $ty, $titleColor, $font, $ln);
+            $ty += $lineH;
+        }
+
+        // 时效行（底）
+        imagettftext($card, 26, 0, $pad, $H - 34, $hasCover ? $asofLt : $asofDk, $font, $asofText);
+
+        return $this->outputCard($disk, $card, $cacheRel);
+    }
+
+    /**
+     * 商家品牌卡 1200x630（附页⑧下）。暖白底 + logo + 店名 + 类目·区域 + 诚实评分 + 底行。
+     */
+    private function buildMerchantCard($disk, $logoPath, $name, $sub, $ratingVal, $ratingSrc, $keyPrefix)
+    {
+        $mtime = $logoPath ? Storage::disk($disk)->lastModified($logoPath) : 'nologo';
+        $metaKey = $name . '|' . $sub . '|' . $ratingVal . '|' . $ratingSrc;
+        $cacheRel = 'og-cache/merchantcard-' . $keyPrefix . '-' . substr(md5($logoPath . $mtime . $metaKey . self::MERCHANT_CARD_VER), 0, 16) . '.jpg';
+        if (Storage::disk($disk)->exists($cacheRel)) {
+            return $this->cachedJpg($disk, $cacheRel);
+        }
+
+        $W = 1200; $H = 630; $pad = 56;
+        $font = self::CJK_FONT;
+
+        $card = imagecreatetruecolor($W, $H);
+        $white = imagecolorallocate($card, 255, 255, 255);
+        $red   = imagecolorallocate($card, 196, 25, 62);
+        $ink   = imagecolorallocate($card, 31, 35, 41);
+        $gray  = imagecolorallocate($card, 154, 160, 168);   // #9AA0A8
+        $amber = imagecolorallocate($card, 243, 164, 41);    // #F3A429
+        $gblue = imagecolorallocate($card, 66, 133, 244);    // Google 蓝
+        $gold  = imagecolorallocate($card, 233, 200, 120);
+        $dkbox = imagecolorallocate($card, 24, 24, 26);
+        $bord  = imagecolorallocate($card, 236, 231, 223);
+
+        $this->fillVerticalGradient($card, $W, $H, 255, 253, 250, 244, 237, 226); // 暖白
+
+        // 品牌标（左上）
+        $this->drawBrandMark($card, $pad, 40, $font, '哪吒 · 本地生活', false, $red, $white, $ink);
+
+        // logo（左，160×160）
+        $logoBox = 160; $lx = $pad; $ly = 190;
+        $loaded = false;
+        if ($logoPath) {
+            $limg = @imagecreatefromstring(Storage::disk($disk)->get($logoPath));
+            if ($limg) {
+                $sw = imagesx($limg); $sh = imagesy($limg);
+                $scale = max($logoBox / $sw, $logoBox / $sh);
+                $srcW = (int) round($logoBox / $scale); $srcH = (int) round($logoBox / $scale);
+                $srcX = (int) (($sw - $srcW) / 2); $srcY = (int) (($sh - $srcH) / 2);
+                imagecopyresampled($card, $limg, $lx, $ly, $srcX, $srcY, $logoBox, $logoBox, $srcW, $srcH);
+                imagedestroy($limg);
+                $loaded = true;
+            }
+        }
+        if (!$loaded) {
+            // 无 logo 兜底：深底 + 金字首二字
+            imagefilledrectangle($card, $lx, $ly, $lx + $logoBox, $ly + $logoBox, $dkbox);
+            $ini = mb_substr(preg_replace('/\s+/u', '', (string) $name), 0, 2);
+            $ib = imagettfbbox(40, 0, $font, $ini);
+            $iw = $ib[2] - $ib[0];
+            imagettftext($card, 40, 0, (int) ($lx + ($logoBox - $iw) / 2), (int) ($ly + $logoBox / 2 + 18), $gold, $font, $ini);
+        }
+        // logo 细边
+        imagerectangle($card, $lx, $ly, $lx + $logoBox, $ly + $logoBox, $bord);
+
+        // 文本列
+        $tx = $lx + $logoBox + 34;
+        // 店名（单行省略）
+        $nameLines = $this->wrapText($font, 50, $name, $W - $tx - $pad, 1);
+        imagettftext($card, 50, 0, $tx, $ly + 52, $ink, $font, $nameLines[0]);
+        // 类目·区域
+        if ($sub !== '') {
+            imagettftext($card, 28, 0, $tx, $ly + 104, $gray, $font, $sub);
+        }
+        // 诚实评分行
+        if ($ratingVal !== null) {
+            $ry = $ly + 156;
+            if ($ratingSrc === 'google') {
+                imagettftext($card, 30, 0, $tx, $ry, $gblue, $font, 'Google ' . $ratingVal);
+            } else {
+                $sr = 16;
+                $this->drawStar($card, $tx + $sr, $ry - $sr + 2, $sr, $amber);
+                imagettftext($card, 30, 0, $tx + $sr * 2 + 12, $ry, $ink, $font, $ratingVal);
+                $vb = imagettfbbox(30, 0, $font, $ratingVal);
+                $vw = $vb[2] - $vb[0];
+                imagettftext($card, 22, 0, $tx + $sr * 2 + 12 + $vw + 16, $ry, $gray, $font, '评分由商家提供');
+            }
+        }
+
+        // 底行品牌脚注
+        imagettftext($card, 26, 0, $pad, $H - 40, $gray, $font, '埃里温华人生活平台 · nezha.am');
+
+        return $this->outputCard($disk, $card, $cacheRel);
+    }
+
+    // 编码 + 缓存 + 响应（品牌卡共用）
+    private function outputCard($disk, $card, $cacheRel)
+    {
+        ob_start();
+        imagejpeg($card, null, 85);
+        $bytes = ob_get_clean();
+        imagedestroy($card);
+        Storage::disk($disk)->put($cacheRel, $bytes);
+        return response($bytes, 200, [
+            'Content-Type' => 'image/jpeg', 'Cache-Control' => 'public, max-age=86400', 'Access-Control-Allow-Origin' => '*',
+        ]);
+    }
+
+    private function cachedJpg($disk, $cacheRel)
+    {
+        return response(Storage::disk($disk)->get($cacheRel), 200, [
+            'Content-Type' => 'image/jpeg', 'Cache-Control' => 'public, max-age=86400', 'Access-Control-Allow-Origin' => '*',
+        ]);
     }
 
     private function brandFallback()
