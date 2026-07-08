@@ -1,5 +1,5 @@
 {{-- TaxModule插件+订阅管理 原均嵌套在业务设置组(settings闸)内,原样保留须补回外层闸(D1提交说明已注明) --}}
-                    @if (Helpers::module_permission_check('settings'))
+                    @if (\App\CentralLogics\Helpers::module_permission_check('settings'))
 {{-- TaxModule插件税务模块(addon未安装则恒不可见) 原文件1768-1803行 --}}
                         @if (addon_published_status('TaxModule'))
                             <li class="navbar-vertical-aside-has-menu @yield('taxModule')">
@@ -39,7 +39,7 @@
                         @endif
 {{-- 订阅管理(哪吒M1藏,§A#10: 佣金模式非订阅制业主既定决策,非仅当前business_model.subscription=0的临时态) 原文件1804-1844行 --}}
                         <!-- Subscription-->
-                        @if (false && Helpers::subscription_check() == true && Helpers::module_permission_check('restaurant'))
+                        @if (false && \App\CentralLogics\Helpers::subscription_check() == true && \App\CentralLogics\Helpers::module_permission_check('restaurant'))
                             <li
                                 class="navbar-vertical-aside-has-menu {{ Request::is('admin/subscription*') ? 'active' : '' }}">
                                 <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle"
