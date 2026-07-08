@@ -418,7 +418,7 @@ $__navGroups[] = ['raw_include' => 'layouts.admin.partials._sidebar-raw-taxmodul
                     <div class="search--form-group">
                         <button type="button" class="btn"><i class="tio-search"></i></button>
                         <input type="text" id="search" class="form-control form--control"
-                            placeholder="{{ translate('messages.Search_Menu...') }}">
+                            placeholder="过滤菜单…">
                     </div>
                 </form>
                 <!-- Search Form -->

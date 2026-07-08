@@ -1153,6 +1153,41 @@ $countryCode = strtolower($country ?? 'auto');
             poll(); setInterval(poll,15000);
         })();
         @endif
+
+        // 哪吒M2-D5: 侧栏菜单过滤(布局尾·target 可见侧栏·防 #sidebarMain 模板被主题移动致引用失效; 匹配显示并展开所属组, 清空复原折叠态)
+        (function(){
+            function boot(){
+                var input = document.getElementById('search');
+                if(!input){ return false; }
+                if(input._nzBound){ return true; }
+                var content = input.closest('.navbar-vertical-content');
+                var list = content ? content.querySelector('.navbar-nav') : null;
+                if(!list){ return false; }
+                input._nzBound = true;
+                input.setAttribute('placeholder','过滤菜单…');
+                Array.prototype.forEach.call(list.querySelectorAll('.nav-sub'), function(s){ s.dataset.nzOrig = s.style.display || ''; });
+                function norm(v){ return (v||'').toLowerCase().trim(); }
+                function apply(q){
+                    q = norm(q);
+                    var curSub=null, grpVis=false;
+                    function flush(){ if(curSub){ curSub.style.display = (q===''||grpVis)?'':'none'; } }
+                    Array.prototype.forEach.call(list.children, function(li){
+                        if(li.querySelector('.nav-subtitle')){ flush(); curSub=li; grpVis=false; return; }
+                        var m = (q==='') || norm(li.textContent).indexOf(q)!==-1;
+                        li.style.display = m ? '' : 'none';
+                        if(m){ grpVis=true; }
+                        var sub = li.querySelector('.nav-sub');
+                        if(sub){ if(q!==''&&m){ sub.style.display='block'; } else if(q===''){ sub.style.display = sub.dataset.nzOrig||''; } }
+                    });
+                    flush();
+                }
+                var t;
+                input.addEventListener('input', function(){ clearTimeout(t); t=setTimeout(function(){ apply(input.value); }, 150); });
+                input.addEventListener('search', function(){ apply(input.value); });
+                return true;
+            }
+            var n=0; (function w(){ if(boot()||n++>50){ return; } setTimeout(w, 200); })();
+        })();
     </script>
 </body>
 

@@ -16,6 +16,10 @@
                          alt="image">
                 </a>
                 <!-- End Logo -->
+                {{-- 哪吒M2-D5: 环境徽章(生产/STAGING·顶栏最左) --}}
+                @php($__nzEnv = app()->environment('production'))
+                <span class="nz-env-badge {{ $__nzEnv ? 'nz-env-badge--prod' : 'nz-env-badge--staging' }}">{{ $__nzEnv ? '生产' : 'STAGING' }}</span>
+                <style>.nz-env-badge{display:inline-block;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600;letter-spacing:.5px;line-height:1.4;vertical-align:middle;margin-left:10px;}.nz-env-badge--prod{background:#102A4C;color:#fff;}.nz-env-badge--staging{background:#FCF1E3;color:#D97A08;border:1px solid #D97A08;}</style>
             </div>
 
             <div class="navbar-nav-wrap-content-left d--xl-none">
