@@ -192,7 +192,7 @@
                     <div class="cont" style="padding-bottom:2px">
                         <div class="t">贴追踪链接<span class="nzyx-optional">可选</span></div>
                         <div class="d">在 Yandex Go 点「分享」复制链接贴到这里，顾客就能实时看到骑手位置。</div>
-                        <form id="nzDispatchForm-{{ $order['id'] }}" action="{{ route('vendor.order.mark-dispatched', ['id' => $order['id']]) }}" method="post">
+                        <form id="nzDispatchForm-{{ $order['id'] }}" action="{{ route('vendor.order.mark-dispatched', ['id' => $order['id']]) }}" method="post" data-nz-ajax data-nz-ok-toast="已标记为「配送中」，顾客已看到">
                             @csrf
                             @method('put')
                             <input type="url" name="yandex_tracking_url" id="nzDispatchTrackInput-{{ $order['id'] }}"
@@ -221,7 +221,7 @@
 
             @if ($order->order_status == 'picked_up')
                 <div class="nzyx-note-ok"><b>✅ Yandex 已送达？</b> 顾客收到餐后点下面「已送达」完成本单（顾客也能自己在 App 确认）。约 {{ (int)(\App\CentralLogics\Helpers::get_business_data('nezha_auto_finalize_handover_hours') ?: 3) }} 小时无人确认将自动完成。</div>
-                <form id="nzDeliveredForm-{{ $order['id'] }}" action="{{ route('vendor.order.mark-delivered', ['id' => $order['id']]) }}" method="post" onsubmit="return confirm('确认本单已送达顾客？确认后订单完成、不可撤销。');">
+                <form id="nzDeliveredForm-{{ $order['id'] }}" action="{{ route('vendor.order.mark-delivered', ['id' => $order['id']]) }}" method="post" data-nz-ajax data-nz-confirm="确认本单已送达顾客？确认后订单完成、不可撤销。" data-nz-confirm-danger data-nz-ok-toast="已标记为「已送达」，本单完成">
                     @csrf
                     @method('put')
                 </form>

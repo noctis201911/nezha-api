@@ -590,6 +590,8 @@
     <script src="{{dynamicAsset('assets/admin/js/keyword-highlighted.js')}}"></script>
     {{-- 哪吒 W4: 心跳纯函数(真新单去重)——被 Node 单测覆盖的单一真相源, poll() 调它算 freshIds(未加载则内联回退)。 --}}
     <script src="{{dynamicAsset('assets/admin/js/nz-heartbeat-core.js')}}?v=1"></script>
+    {{-- 哪吒 UX-1 A+B: 统一操作反馈层(nzConfirm/nzToast/data-nz-ajax 不落屏提交)。须在 toastr 之后。 --}}
+    @include('layouts.vendor.partials._nz_ui_kit')
 
 <audio id="myAudio">
     <source src="{{dynamicAsset('assets/admin/sound/new-order-voice.mp3')}}" type="audio/mpeg">

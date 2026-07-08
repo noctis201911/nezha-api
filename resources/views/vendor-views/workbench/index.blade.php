@@ -257,6 +257,7 @@ body.nz-dispatch-lock { overflow: hidden; }
             if (drawer) { drawer.classList.remove('nz-open'); drawer.setAttribute('aria-hidden', 'true'); }
             document.body.classList.remove('nz-dispatch-lock');
         }
+        window.nzwbCloseDrawer = closeDrawer;   // 供 data-nz-ajax 提交成功后先收抽屉再 nzwbRefreshNow(避让心跳换入)
         document.addEventListener('click', function(e){
             var t = e.target;
             if (!t || !t.closest) return;
@@ -329,12 +330,15 @@ body.nz-dispatch-lock { overflow: hidden; }
             var msg = paused
                 ? '恢复营业？顾客将可以重新对本店下单。'
                 : '暂停接单？暂停后顾客无法对本店下单（店铺仍显示、标「休息中」），进行中的订单不受影响。';
-            if (!window.confirm(msg)) return;
-            busy = true; cap.style.opacity = '.6';
-            $.get(TOGGLE_URL).done(function () {
-                if (window.nzwbRefreshNow) window.nzwbRefreshNow();
-            }).fail(function () { window.alert('切换失败，请重试'); })
-              .always(function () { busy = false; cap.style.opacity = ''; });
+            busy = true;   // 先占位防连点(nzConfirm 非阻塞, 与原生 confirm 不同)
+            window.nzConfirm({ body: msg, okText: paused ? '恢复营业' : '暂停接单', danger: !paused }).then(function (ok) {
+                if (!ok) { busy = false; return; }
+                cap.style.opacity = '.6';
+                $.get(TOGGLE_URL).done(function () {
+                    if (window.nzwbRefreshNow) window.nzwbRefreshNow();
+                }).fail(function () { window.nzToast('切换失败，请重试', 'error'); })
+                  .always(function () { busy = false; cap.style.opacity = ''; });
+            });
         }
 
         function openSheet(cap) {
@@ -383,7 +387,7 @@ body.nz-dispatch-lock { overflow: hidden; }
             $.get(MODE_URL, params).done(function () {
                 closeSheet();
                 if (window.nzwbRefreshNow) window.nzwbRefreshNow();
-            }).fail(function () { window.alert('设置失败，请重试'); })
+            }).fail(function () { window.nzToast('设置失败，请重试', 'error'); })
               .always(function () { busy = false; if (go) { go.disabled = false; go.textContent = '确定'; } });
         }
     })();

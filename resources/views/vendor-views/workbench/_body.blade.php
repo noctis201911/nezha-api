@@ -142,7 +142,7 @@
                             @if($r['stage'] === 'handover')
                                 <button type="button" class="nzwb-btn navy nz-dispatch-open" data-nz-dispatch="{{ $r['id'] }}">叫车 / 标记配送中</button>
                             @else
-                                <form action="{{ $r['cta']['route'] ?? $detail($r['id']) }}" method="post" style="margin:0" @if(!empty($r['cta']['confirm'])) onsubmit="return confirm('{{ $r['cta']['confirm'] }}')" @endif>
+                                <form action="{{ $r['cta']['route'] ?? $detail($r['id']) }}" method="post" style="margin:0" data-nz-ajax data-nz-ok-toast="已标为「已送达」，本单完成" @if(!empty($r['cta']['confirm'])) data-nz-confirm="{{ $r['cta']['confirm'] }}" data-nz-confirm-danger @endif>
                                     @csrf @method($r['cta']['method'] ?? 'PUT')
                                     <button type="submit" class="nzwb-btn green">标为「已送达」</button>
                                 </form>

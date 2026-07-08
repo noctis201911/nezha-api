@@ -91,7 +91,7 @@
                     <form action="{{ $nzPrimary['route'] }}" method="post" style="margin:0;flex:0 0 auto;"
                         data-nz-auto-print-invoice="{{ route('vendor.order.generate-invoice', [$order['id']]) }}?nz_auto_print=1"
                         data-nz-auto-print-action="{{ $nzOffPending ? '1' : '0' }}"
-                        @if ($nzPrimary['confirm']) onsubmit="return confirm('{{ $nzPrimary['confirm'] }}');" @endif>
+                        @if ($nzPrimary['confirm']) data-nz-confirm-msg="{{ $nzPrimary['confirm'] }}" @endif>
                         @csrf
                         @method($nzPrimary['method'])
                         <button type="submit" class="btn btn-success btn-sm" style="border-radius:8px;font-weight:700;white-space:nowrap;">{{ $nzPrimary['label'] }}</button>
@@ -109,7 +109,7 @@
                     <span style="font-size:12px;color:#6B7280;">{{ $nzPrimary['note'] }}</span>
                 </div>
                 <form action="{{ $nzPrimary['route'] }}" method="post" style="margin:0;flex:0 0 auto;"
-                    onsubmit="return confirm('{{ $nzPrimary['confirm'] }}');">
+                    data-nz-confirm-msg="{{ $nzPrimary['confirm'] }}" data-nz-confirm-danger>
                     @csrf
                     @method($nzPrimary['method'])
                     <button type="submit" class="btn btn-outline-success btn-sm" style="border-radius:8px;font-weight:700;white-space:nowrap;">✅ {{ $nzPrimary['label'] }}</button>
@@ -557,7 +557,7 @@
                                     <div class="modal fade" id="nzMarkRefunded-{{ $order['id'] }}" tabindex="-1" role="dialog" aria-hidden="true">
                                         <div class="modal-dialog modal-dialog-centered" role="document">
                                             <div class="modal-content" style="border-radius:12px;">
-                                                <form action="{{ route('vendor.order.mark-refunded', ['id' => $order['id']]) }}" method="post" onsubmit="return confirm('请确认：您已在自己的账户按原路退还本单顾客的付款？');">
+                                                <form action="{{ route('vendor.order.mark-refunded', ['id' => $order['id']]) }}" method="post" data-nz-confirm-msg="请确认：您已在自己的账户按原路退还本单顾客的付款？" data-nz-confirm-danger>
                                                     @csrf
                                                     @method('PUT')
                                                     <div class="modal-header"><h5 class="modal-title">标记已退款</h5><button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button></div>
@@ -1039,7 +1039,7 @@
                                         <div style="font-size:12px;color:#a98b54;line-height:1.6;margin-bottom:8px;">提示：若顾客已付款，同意取消后请到「订单 → 待退款」按原路退还顾客（平台不经手此款）。</div>
                                     @endif
                                     <div class="d-flex gap-2 flex-wrap">
-                                        <form action="{{ route('vendor.order.cancel-request-decision', ['id' => $order['id']]) }}" method="post" onsubmit="return confirm('确认同意取消本单？若顾客已付款，需你按原路退还。');">
+                                        <form action="{{ route('vendor.order.cancel-request-decision', ['id' => $order['id']]) }}" method="post" data-nz-confirm="确认同意取消本单？若顾客已付款，需你按原路退还。" data-nz-confirm-danger>
                                             @csrf
                                             @method('put')
                                             <input type="hidden" name="action" value="approve">
@@ -1119,7 +1119,7 @@
                                 <div class="modal fade" id="nzRejectOrder-{{ $order['id'] }}" tabindex="-1" role="dialog" aria-hidden="true">
                                     <div class="modal-dialog modal-dialog-centered" role="document">
                                         <div class="modal-content">
-                                            <form action="{{ route('vendor.order.reject', ['id' => $order['id']]) }}" method="post" onsubmit="return confirm('确认拒单？订单将取消并通知顾客。若顾客已付款，需你按原路退还。');">
+                                            <form action="{{ route('vendor.order.reject', ['id' => $order['id']]) }}" method="post" data-nz-confirm="确认拒单？订单将取消并通知顾客。若顾客已付款，需你按原路退还。" data-nz-confirm-danger>
                                                 @csrf
                                                 @method('put')
                                                 <div class="modal-header"><h5 class="modal-title">无法接单 / 拒单</h5><button type="button" class="close" data-dismiss="modal">&times;</button></div>
@@ -3420,6 +3420,16 @@
         // 原 onsubmit return false (用户点取消) → defaultPrevented=true → 不动
         if (e.defaultPrevented) return;
         e.preventDefault();
+
+        // UX-1 B: 原生 confirm 改藏青 nzConfirm(异步); 确认后 requestSubmit 重入(此时 __nzOk=true 跳过再确认, 保持既有 AJAX+自动打印链路不变)
+        var __cmsg = form.getAttribute('data-nz-confirm-msg');
+        if (__cmsg && window.nzConfirm && !form.__nzOk) {
+            window.nzConfirm({ body: __cmsg, danger: form.hasAttribute('data-nz-confirm-danger') }).then(function(ok){
+                if (ok) { form.__nzOk = true; if (form.requestSubmit) form.requestSubmit(); else form.submit(); }
+            });
+            return;
+        }
+        form.__nzOk = false;
 
         var btn = form.querySelector('button[type="submit"]')
                 || form.querySelector('input[type="submit"]');

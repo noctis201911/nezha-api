@@ -871,7 +871,7 @@
                                         data-nz-invoice-url="{{route('vendor.order.generate-invoice',[$order['id']])}}?nz_auto_print=1"
                                         data-nz-order-id="{{$order['id']}}"
                                         data-nz-auto-print-action="{{ !empty($__qa['auto_print']) ? '1' : '0' }}"
-                                        @if(!empty($__qa['prep_prompt'])) data-nz-prep-default="{{ $__qa['prep_default'] ?? 30 }}" data-nz-prep-title="{{ $__qa['prep_title'] ?? '开始备餐' }}" data-nz-prep-ok="{{ $__qa['prep_ok'] ?? '确认' }}" data-nz-prep-color="{{ $__qa['prep_color'] ?? '#1F6FD0' }}" data-nz-prep-note="{{ $__qa['prep_note'] ?? '' }}" data-nz-prep-confirm="{{ $__qa['confirm'] ?? '' }}"@else onsubmit="return confirm('{{ $__qa['confirm'] }}')"@endif>
+                                        @if(!empty($__qa['prep_prompt'])) data-nz-prep-default="{{ $__qa['prep_default'] ?? 30 }}" data-nz-prep-title="{{ $__qa['prep_title'] ?? '开始备餐' }}" data-nz-prep-ok="{{ $__qa['prep_ok'] ?? '确认' }}" data-nz-prep-color="{{ $__qa['prep_color'] ?? '#1F6FD0' }}" data-nz-prep-note="{{ $__qa['prep_note'] ?? '' }}" data-nz-prep-confirm="{{ $__qa['confirm'] ?? '' }}"@else data-nz-confirm-msg="{{ $__qa['confirm'] }}"@endif>
                                         @csrf @method('PUT')
                                         @if(!empty($__qa['extra']))
                                             @foreach($__qa['extra'] as $__k => $__v)
@@ -1033,7 +1033,7 @@
                 if (!url) return;
                 var w = window.open(url, '_blank', 'noopener');
                 if (!w) {
-                    alert('浏览器拦截了打印窗口，请允许本站弹出窗口后重试。');
+                    window.nzToast('浏览器拦截了打印窗口，请允许本站弹出窗口后重试。', 'warning');
                 }
             }
 
@@ -1219,7 +1219,7 @@
                 function closeReject(){ modal.classList.remove('nz-open'); document.body.style.overflow = ''; }
                 mReject.addEventListener('click', function(){ closeMenu(); openReject(); });
                 modal.addEventListener('click', function(e){ if (e.target === modal || (e.target.hasAttribute && e.target.hasAttribute('data-nz-reject-close'))) closeReject(); });
-                form.addEventListener('submit', function(e){ if (!confirm('确认拒接本单？订单将取消并通知顾客。若顾客已付款，需你按原路退还。')) e.preventDefault(); });
+                form.addEventListener('submit', function(e){ e.preventDefault(); window.nzConfirm({ body: '确认拒接本单？订单将取消并通知顾客。若顾客已付款，需你按原路退还。', danger: true, okText: '拒接本单' }).then(function(ok){ if (ok) form.submit(); }); });
                 document.addEventListener('keydown', function(e){ if (e.key === 'Escape'){ closeMenu(); closeReject(); } });
             }
 
@@ -1427,7 +1427,7 @@
                         var pv = window.prompt((confirmLine ? confirmLine + '\n\n' : '') + '预计出餐时间（分钟）', def);
                         if (pv === null) return;
                         pv = parseInt(pv, 10);
-                        if (!pv || pv < 1) { alert('请填写预计出餐时间（至少 1 分钟）'); return; }
+                        if (!pv || pv < 1) { window.nzToast('请填写预计出餐时间（至少 1 分钟）', 'warning'); return; }
                         setAndGo(Math.min(pv, 1440));
                         return;
                     }
@@ -1488,7 +1488,7 @@
                 if (auto) {
                     auto.addEventListener('change', function(){
                         if (auto.checked && !isPrintReady()) {
-                            alert('请先勾选“已接入并测试打印机”。');
+                            window.nzToast('请先勾选“已接入并测试打印机”。', 'warning');
                             auto.checked = false;
                         }
                         localStorage.setItem(AUTO_KEY, auto.checked ? '1' : '0');
@@ -1498,12 +1498,12 @@
                 if (testBtn) {
                     testBtn.addEventListener('click', function(){
                         if (!isPrintReady()) {
-                            alert('请先确认本机/云打印机已接入。');
+                            window.nzToast('请先确认本机/云打印机已接入。', 'warning');
                             return;
                         }
                         var firstPrint = document.querySelector('a[href*="/generate-invoice/"]');
                         if (!firstPrint) {
-                            alert('当前没有可测试打印的订单。');
+                            window.nzToast('当前没有可测试打印的订单。', 'warning');
                             return;
                         }
                         openInvoiceForPrint(firstPrint.href + (firstPrint.href.indexOf('?') === -1 ? '?nz_auto_print=1&nz_test_print=1' : '&nz_auto_print=1&nz_test_print=1'));
@@ -1530,6 +1530,16 @@
                 if (!form || !form.classList || !form.classList.contains('nz-order-step-form')) return;
                 if (e.defaultPrevented) return;
                 e.preventDefault();
+
+                // UX-1 B: 原生 confirm 改藏青 nzConfirm(异步); 确认后 requestSubmit 重入(此时 __nzOk=true 跳过再确认, 既有 AJAX+自动打印链路不变)
+                var __cmsg = form.getAttribute('data-nz-confirm-msg');
+                if (__cmsg && window.nzConfirm && !form.__nzOk) {
+                    window.nzConfirm({ body: __cmsg, danger: form.hasAttribute('data-nz-confirm-danger') }).then(function(ok){
+                        if (ok) { form.__nzOk = true; if (form.requestSubmit) form.requestSubmit(); else form.submit(); }
+                    });
+                    return;
+                }
+                form.__nzOk = false;
 
                 var btn = form.querySelector('button[type="submit"]');
                 var orig = btn ? btn.innerHTML : '';
@@ -1559,7 +1569,7 @@
                         btn.disabled = false;
                         btn.innerHTML = orig;
                     }
-                    alert('操作失败：' + (err && err.message ? err.message : '网络错误，请重试'));
+                    window.nzToast('操作失败：' + (err && err.message ? err.message : '网络错误，请重试'), 'error');
                 });
             }, false);
         })();
