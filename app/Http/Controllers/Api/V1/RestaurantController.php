@@ -285,7 +285,8 @@ class RestaurantController extends Controller
                 'updated_at' => now(),
             ]);
         }
-        return response()->json(['message' => translate('messages.report_submitted_successfully')], 200);
+        // already_reported: 端点按(review,user,reason)幂等去重, 重复举报仍返 200(非 4xx)。前端据此标区分「举报已提交」vs「您已举报过这条评价」。additive·旧调用方忽略此键无影响。
+        return response()->json(['message' => translate('messages.report_submitted_successfully'), 'already_reported' => $exists], 200);
     }
 
     public function get_coupons(Request $request){
