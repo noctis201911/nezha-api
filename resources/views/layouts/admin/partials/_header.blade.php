@@ -16,10 +16,6 @@
                          alt="image">
                 </a>
                 <!-- End Logo -->
-                {{-- 哪吒M2-D5: 环境徽章(生产/STAGING·顶栏最左) --}}
-                @php($__nzEnv = app()->environment('production'))
-                <span class="nz-env-badge {{ $__nzEnv ? 'nz-env-badge--prod' : 'nz-env-badge--staging' }}">{{ $__nzEnv ? '生产' : 'STAGING' }}</span>
-                <style>.nz-env-badge{display:inline-block;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600;letter-spacing:.5px;line-height:1.4;vertical-align:middle;margin-left:10px;}.nz-env-badge--prod{background:#102A4C;color:#fff;}.nz-env-badge--staging{background:#FCF1E3;color:#D97A08;border:1px solid #D97A08;}</style>
             </div>
 
             <div class="navbar-nav-wrap-content-left d--xl-none">
@@ -38,6 +34,12 @@
             <div class="navbar-nav-wrap-content-right">
                 <!-- Navbar -->
                 <ul class="navbar-nav align-items-center flex-row">
+                    {{-- 哪吒M2-D5: 环境徽章(生产/STAGING) --}}
+                    @php($__nzEnv = app()->environment('production'))
+                    <li class="nav-item d-none d-md-inline-block mr-3">
+                        <span class="nz-env-badge {{ $__nzEnv ? 'nz-env-badge--prod' : 'nz-env-badge--staging' }}">{{ $__nzEnv ? '生产' : 'STAGING' }}</span>
+                    </li>
+                    <style>.nz-env-badge{display:inline-block;padding:4px 11px;border-radius:6px;font-size:12px;font-weight:600;letter-spacing:.5px;line-height:1.4;}.nz-env-badge--prod{background:#102A4C;color:#fff;}.nz-env-badge--staging{background:#FCF1E3;color:#D97A08;border:1px solid #D97A08;}</style>
                     <li class="nav-item max-sm-m-0 w-md-200px">
                         <button type="button" id="modalOpener" class="title-color bg--secondary border-0 rounded justify-content-between w-100 align-items-center py-2 px-2 px-md-3 d-flex gap-1" data-toggle="modal" data-target="#staticBackdrop">
                             <div class="d-flex gap-1 align-items-center">
