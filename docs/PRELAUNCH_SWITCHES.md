@@ -56,6 +56,7 @@
 | `nezha_deposit_mode_status` | 0 | 预存佣金/扣佣模式。一阶段免佣免押。何时开始收佣是商业决策（开=商家要充保证金才能接单）。`nezha_min_deposit_threshold` 现 0。 | L2 |
 | `nezha_notif_async_status` | 0 | 订单通知(SMS/TG/推送)异步化灰度。代码已上线但激活待 /debate + staging 下单 QA + 你签字（关键路径，异步化搞错会漏通知）。见 memory `project_nezha-capacity-queue-redis-staging-isolation`。 | L3-性能 |
 | `nezha_offboard_status` | 0 | 商家退出结算(step4-4/step5 已实装·dormant)。开=商家端「对账中心」底部出现「申请退出平台」入口 + 服务端 `open()` 放行；关=入口不渲染且服务端拒。资金流出路径，审批闸 H(高额净额≥`nezha_offboard_high_amount_amd` 默认 500000֏ 强制审批后 T+1)+制裁实时 re-screen+户名三方核对齐备。**灰度：存量 7 店(6 测试+1 朋友)KYC 未录→退出必落 kyc_pending，无真实退出需求前保持关**；真开前先 staging 单店试跑。超管侧审批队列(`admin/nezha-offboard`)不受本开关限、始终可见。 | 🔴L1-8 |
+| `nezha_local_merchant_selfserve_status` | 0 | 本地生活商户轻管理面**总闸**(dormant·2026-07-08 五增量全上线)。开=已开号商户可登 `api.nezha.am/m/login` 自助维护店铺展示信息(简介/服务/相册/logo/联系方式/营业时间/到店优惠·店名与地址改动重点复核)→**所有提交进超管复审 `admin/local-life/merchant-changes`·通过才更新顾客端**；关=整 `/m` 面板(含登录页)404、驾驶舱「商户资料」chip 恒 0 隐藏。🔴 技术就绪·真开前须：①业主看商户端截图点头(桌面 `商户管理面_*_0708.png`)②后台给≥1 家商户开号(商户编辑页「商户自助管理账号」填邮箱→发设密邮件)③真机走通 设密→登录→改→提交→超管过审→顾客端生效 ④确认 Mailgun 能送达设密邮件。翻此闸须 `php artisan cache:clear`(business_settings 缓存)。入驻仍走运营代录·不放自助注册。 | L3(新商户鉴权面·内容非PII·密码 bcrypt) |
 
 > 〔2026-07-03 自助充值批次 A3 (S1-S4) 全上线·全 dormant。下列开关一起决定"商家自助充值申请流"是否对外亮。复用运营手动入账，平台不碰钱。审核结果通知(TG+顶栏铃铛站内信 S4·随总闸)与余额不足邮件「去充值」直链(S4·随总闸)一并 dormant。〕
 
