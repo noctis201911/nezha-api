@@ -537,6 +537,72 @@ class LocalLifeController extends Controller
         return response()->json(['message' => '已收到举报，感谢反馈'], 200);
     }
 
+    /**
+     * 接口：举报商家（复用帖举报理由白名单 + 每日上限 + 防重，target=merchant）。
+     * POST /api/v1/local-life/merchants/{id}/report  (auth:api)
+     * L1-1：仅举报记录，不碰钱。
+     */
+    public function reportMerchant(Request $request, $id)
+    {
+        $userId = auth('api')->id();
+
+        $merchant = LocalLifeMerchant::where('status', true)->find($id);
+        if (!$merchant) {
+            return response()->json(['errors' => [['code' => 'merchant', 'message' => '商家不存在或已下线']]], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'reason' => ['required', 'string', 'in:' . implode(',', self::REPORT_REASONS)],
+            'detail' => 'nullable|string|max:500',
+        ], [
+            'reason.required' => '请选择举报理由',
+            'reason.in'       => '举报理由不在允许范围',
+            'detail.max'      => '说明最多 500 字',
+        ]);
+        $validator->after(function ($v) use ($request) {
+            if ($request->input('reason') === self::REPORT_REASON_OTHER && !trim((string) $request->input('detail'))) {
+                $v->errors()->add('detail', '选择"其他"时请填写具体说明');
+            }
+        });
+        if ($validator->fails()) {
+            $errs = [];
+            foreach ($validator->errors()->getMessages() as $field => $msgs) {
+                $errs[] = ['code' => $field, 'message' => $msgs[0]];
+            }
+            return response()->json(['errors' => $errs], 422);
+        }
+
+        // 每日举报上限（与帖举报共用同一计数口径）
+        $reportLimit = (int) $this->setting('locallife_report_daily_limit', 20);
+        $reportLimit = $reportLimit > 0 ? $reportLimit : 20;
+        $todayReports = LocalLifeReport::where('user_id', $userId)
+            ->where('created_at', '>=', Carbon::today())
+            ->count();
+        if ($todayReports >= $reportLimit) {
+            return response()->json(['errors' => [['code' => 'limit', 'message' => '今日举报已达上限，请明天再试']]], 429);
+        }
+
+        // 去重：同用户对同商家已有未处理举报 → 友好提示
+        $exists = LocalLifeReport::where('merchant_id', $merchant->id)
+            ->where('user_id', $userId)
+            ->where('status', LocalLifeReport::STATUS_PENDING)
+            ->exists();
+        if ($exists) {
+            return response()->json(['message' => '你已举报过该商家，我们会尽快处理'], 200);
+        }
+
+        LocalLifeReport::create([
+            'merchant_id' => $merchant->id,
+            'post_id'     => null,
+            'user_id'     => $userId,
+            'reason'      => $request->reason,
+            'detail'      => $request->input('detail') ?: null,
+            'status'      => LocalLifeReport::STATUS_PENDING,
+        ]);
+
+        return response()->json(['message' => '已收到举报，感谢反馈'], 200);
+    }
+
     /* =================== 我的发布·生命周期动作(auth:api, 仅本人 UGC 帖) =================== */
 
     /** 仅取当前登录用户自己的 UGC 帖(source=user)——对象级鉴权，防越权改他人帖(IDOR)。 */

@@ -6,6 +6,7 @@ use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\LocalLifeCategory;
 use App\Models\LocalLifeMerchant;
+use App\Models\LocalLifeReport;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -42,7 +43,37 @@ class LocalLifeMerchantController extends Controller
         }
         $merchants = $query->orderBy('sort_order')->orderByDesc('id')->paginate(config('default_pagination'));
         $categories = $this->merchantCategories();
-        return view('admin-views.local-life.merchants.list', compact('merchants', 'categories'));
+        // 各商家待处理举报数（列表徽标）
+        $reportCounts = LocalLifeReport::whereNotNull('merchant_id')
+            ->where('status', LocalLifeReport::STATUS_PENDING)
+            ->whereIn('merchant_id', $merchants->pluck('id'))
+            ->selectRaw('merchant_id, count(*) as c')
+            ->groupBy('merchant_id')->pluck('c', 'merchant_id');
+        return view('admin-views.local-life.merchants.list', compact('merchants', 'categories', 'reportCounts'));
+    }
+
+    /** 某商家的举报列表（待处理在前） */
+    public function reports($id)
+    {
+        $merchant = LocalLifeMerchant::findOrFail($id);
+        $reports = LocalLifeReport::where('merchant_id', $id)
+            ->orderByRaw('FIELD(status, 0, 1, 2)')
+            ->latest()
+            ->paginate(config('default_pagination'));
+        return view('admin-views.local-life.merchants.reports', compact('merchant', 'reports'));
+    }
+
+    /** 隐藏该商家(status=0) + 把其待处理举报标记为已处理 */
+    public function resolveReports($id)
+    {
+        $merchant = LocalLifeMerchant::findOrFail($id);
+        $merchant->status = false;
+        $merchant->save();
+        LocalLifeReport::where('merchant_id', $id)
+            ->where('status', LocalLifeReport::STATUS_PENDING)
+            ->update(['status' => LocalLifeReport::STATUS_HANDLED, 'updated_at' => now()]);
+        Toastr::success('已隐藏该商家并标记相关举报为已处理');
+        return back();
     }
 
     public function create()

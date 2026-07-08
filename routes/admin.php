@@ -1241,6 +1241,8 @@ Route::middleware('module:provide_dm_earning')->group(function () {
                 Route::get('list', [LocalLifeMerchantController::class, 'list'])->name('list');
                 Route::get('create', [LocalLifeMerchantController::class, 'create'])->name('create');
                 Route::post('geocode', [LocalLifeMerchantController::class, 'geocode'])->name('geocode');
+                Route::get('reports/{id}', [LocalLifeMerchantController::class, 'reports'])->name('reports');
+                Route::post('resolve-reports/{id}', [LocalLifeMerchantController::class, 'resolveReports'])->name('resolve-reports');
                 Route::post('store', [LocalLifeMerchantController::class, 'store'])->name('store');
                 Route::get('edit/{id}', [LocalLifeMerchantController::class, 'edit'])->name('edit');
                 Route::post('update/{id}', [LocalLifeMerchantController::class, 'update'])->name('update');

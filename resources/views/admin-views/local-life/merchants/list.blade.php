@@ -49,17 +49,18 @@
                     <tr>
                         <th style="width:6%">排序</th>
                         <th style="width:8%">Logo</th>
-                        <th style="width:24%">商家名</th>
-                        <th style="width:14%">类目</th>
-                        <th style="width:10%">评分</th>
-                        <th style="width:12%">区域</th>
-                        <th class="text-center" style="width:8%">敏感</th>
-                        <th class="text-center" style="width:8%">状态</th>
+                        <th style="width:22%">商家名</th>
+                        <th style="width:13%">类目</th>
+                        <th style="width:9%">评分</th>
+                        <th style="width:11%">区域</th>
+                        <th class="text-center" style="width:7%">敏感</th>
+                        <th class="text-center" style="width:7%">状态</th>
                         <th style="width:10%">操作</th>
                     </tr>
                     </thead>
                     <tbody>
                         @forelse($merchants as $m)
+                        @php $rc = ($reportCounts[$m->id] ?? 0); @endphp
                         <tr>
                             <td>{{ $m->sort_order }}</td>
                             <td>
@@ -69,7 +70,12 @@
                                     <span class="text-muted">—</span>
                                 @endif
                             </td>
-                            <td><strong>{{ $m->name }}</strong></td>
+                            <td>
+                                <strong>{{ $m->name }}</strong>
+                                @if($rc > 0)
+                                    <a href="{{ route('admin.local-life.merchants.reports', $m->id) }}" class="badge badge-danger ml-1" title="有 {{ $rc }} 条待处理举报">举报 {{ $rc }}</a>
+                                @endif
+                            </td>
                             <td><span class="badge badge-soft-secondary">{{ $m->category }}</span></td>
                             <td>★ {{ number_format($m->rating, 1) }}@if($m->google_rating) <small class="text-muted">G {{ number_format($m->google_rating,1) }}</small>@endif</td>
                             <td>{{ $m->area ?: '—' }}</td>
@@ -91,6 +97,7 @@
                             </td>
                             <td>
                                 <div class="d-flex gap-1">
+                                    <a href="{{ route('admin.local-life.merchants.reports', $m->id) }}" class="btn btn-sm {{ $rc > 0 ? 'btn-outline-danger' : 'btn-outline-secondary' }}" title="举报记录"><i class="tio-flag"></i></a>
                                     <a href="{{ route('admin.local-life.merchants.edit', $m->id) }}" class="btn btn-sm btn-outline-primary" title="编辑"><i class="tio-edit"></i></a>
                                     <form action="{{ route('admin.local-life.merchants.delete') }}" method="post"
                                           onsubmit="return confirm('确定删除商家「{{ $m->name }}」？');">
