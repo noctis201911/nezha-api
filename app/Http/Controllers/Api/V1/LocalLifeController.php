@@ -269,6 +269,8 @@ class LocalLifeController extends Controller
             'rating'        => (float) $m->rating,
             'google_rating' => $m->google_rating !== null ? (float) $m->google_rating : null,
             'area'          => $m->area,
+            'latitude'      => $m->latitude !== null ? (float) $m->latitude : null,
+            'longitude'     => $m->longitude !== null ? (float) $m->longitude : null,
             'is_sensitive'  => (bool) $m->is_sensitive,
             'has_offer'     => (bool) $m->has_offer,
             'offer_text'    => $m->offer_text,
