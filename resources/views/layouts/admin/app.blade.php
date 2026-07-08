@@ -1118,6 +1118,36 @@ $countryCode = strtolower($country ?? 'auto');
             setInterval(poll, 12000);
         })();
     @endif
+
+        @if(\App\CentralLogics\Helpers::module_permission_check('order'))
+        // 哪吒M2-D3: 顶栏通知铃铛 poll+render(布局尾·jQuery就位·header已构建; render 每次重查元素防主题移动 header 引用失效)
+        (function(){
+            var detailsBase='{{ url('/admin/order/details') }}', overdueUrl='{{ route('admin.nezha-refund.overdue') }}', dataUrl='{{ route('admin.get-restaurant-data') }}';
+            function esc(s){var d=document.createElement('div');d.textContent=(s==null?'':s);return d.innerHTML;}
+            function humMin(m){ if(m==null)return''; if(m<60)return m+' 分钟'; var h=Math.floor(m/60); return h<48? h+' 小时' : Math.floor(h/24)+' 天'; }
+            function humHr(h){ if(h==null)return''; return h<48? h+' 小时' : Math.floor(h/24)+' 天'; }
+            function money(n){ try{return String.fromCharCode(1423)+Number(n).toLocaleString();}catch(e){return n;} }
+            function render(d){
+                var badge=document.getElementById('nzBellBadge'), body=document.getElementById('nzBellBody'), empty=document.getElementById('nzBellEmpty');
+                if(!body) return;
+                var t=d.abn_timeout_rows||[], r=d.abn_refund_rows||[], total=d.abn_total||0;
+                if(badge) badge.style.display= total>0?'block':'none';
+                body.querySelectorAll('.nz-bell-sec').forEach(function(s){s.remove();});
+                if(total===0){ if(empty)empty.style.display='block'; return; }
+                if(empty)empty.style.display='none';
+                var html='';
+                if(t.length){ html+='<div class="nz-bell-sec"><div class="nz-bell-h">订单异常 · '+(d.abn_timeout_total||t.length)+'</div>';
+                    t.forEach(function(o){ html+='<a class="nz-bell-row" href="'+detailsBase+'/'+o.id+'"><div class="nz-bell-row__main"><div class="nz-bell-row__t">#'+esc(o.id)+'</div><div class="nz-bell-row__s">'+esc(o.reason)+' · 卡了 '+humMin(o.wait_min)+'</div></div><span class="nz-bell-cta">处理</span></a>'; });
+                    html+='</div>'; }
+                if(r.length){ html+='<div class="nz-bell-sec"><div class="nz-bell-h">逾期退款 · '+(d.abn_refund_total||r.length)+'</div>';
+                    r.forEach(function(o){ html+='<a class="nz-bell-row" href="'+overdueUrl+'"><div class="nz-bell-row__main"><div class="nz-bell-row__t">'+esc(o.shop||('#'+o.order_id))+' · '+money(o.amount)+'</div><div class="nz-bell-row__s nz-bell-row__s--warn">逾期 '+humHr(o.overdue_hr)+'</div></div><span class="nz-bell-cta">催办</span></a>'; });
+                    html+='</div>'; }
+                body.insertAdjacentHTML('beforeend', html);
+            }
+            function poll(){ if(typeof window.jQuery==='undefined')return; window.jQuery.get({url:dataUrl,dataType:'json',success:function(resp){ render(resp.data||{}); }}); }
+            poll(); setInterval(poll,15000);
+        })();
+        @endif
     </script>
 </body>
 
