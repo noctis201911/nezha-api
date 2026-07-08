@@ -201,6 +201,11 @@
                                     <span class="text-truncate pr-2" title="Settings">{{translate('messages.settings')}}</span>
                                 </a>
 
+                                {{-- 哪吒: 后台两步验证入口 (原脚手架无 UI 入口, 只能手打 URL) --}}
+                                <a class="dropdown-item" href="{{ route('admin.two-factor.setup') }}">
+                                    <span class="text-truncate pr-2" title="两步验证 (2FA)">🔐 两步验证 (2FA)</span>
+                                </a>
+
                                 <div class="dropdown-divider"></div>
 
                                 <a class="dropdown-item" href="javascript:" onclick="Swal.fire({
