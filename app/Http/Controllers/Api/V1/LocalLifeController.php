@@ -254,6 +254,7 @@ class LocalLifeController extends Controller
         $data['longitude']         = $m->longitude;
         $data['hours_note']        = $m->hours_note;
         $data['google_rating_url'] = $m->google_rating_url;
+        $data['contacts']          = $m->normalizedContacts();
         return response()->json($data, 200);
     }
 

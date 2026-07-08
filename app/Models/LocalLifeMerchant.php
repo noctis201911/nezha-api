@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 class LocalLifeMerchant extends Model
 {
     protected $fillable = [
-        'name', 'category', 'logo', 'images', 'wechat_qr',
+        'name', 'category', 'logo', 'images', 'wechat_qr', 'contacts',
         'rating', 'google_rating', 'google_rating_url',
         'area', 'address', 'latitude', 'longitude',
         'open_days', 'open_time', 'close_time', 'hours_note',
@@ -22,6 +22,7 @@ class LocalLifeMerchant extends Model
 
     protected $casts = [
         'images'        => 'array',
+        'contacts'      => 'array',
         'open_days'     => 'array',
         'services'      => 'array',
         'rating'        => 'float',
@@ -65,5 +66,62 @@ class LocalLifeMerchant extends Model
         $names = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
         $dow   = (int) Carbon::now('Asia/Yerevan')->dayOfWeek;
         return $names[$dow] . '：' . $this->open_time . '-' . $this->close_time;
+    }
+
+    /**
+     * 结构化联系方式（前端可点 deep link 用）。
+     * 返回规范化数组：[{method, value, label, href, copy}]
+     *   - method: wechat|phone|whatsapp|telegram
+     *   - href:   tel: / https://wa.me/<digits> / https://t.me/<user>；微信无 href（走复制+二维码）
+     *   - copy:   微信=号码文本供前端复制；其它为 null
+     * 老数据（contacts 空）返回 []，前端降级到「查看联系方式」。
+     * L1-1：仅展示，不含任何支付/下单。
+     */
+    public function normalizedContacts(): array
+    {
+        $raw = is_array($this->contacts) ? $this->contacts : [];
+        $out = [];
+        foreach ($raw as $c) {
+            $method = strtolower(trim((string) ($c['method'] ?? '')));
+            $value  = trim((string) ($c['value'] ?? ''));
+            if ($value === '' || !in_array($method, ['wechat', 'phone', 'whatsapp', 'telegram'], true)) {
+                continue;
+            }
+            $label = trim((string) ($c['label'] ?? ''));
+            $href  = null;
+            $copy  = null;
+            switch ($method) {
+                case 'phone':
+                    // tel: 保留原始拨号串（可含 +），仅去空格
+                    $href = 'tel:' . preg_replace('/\s+/', '', $value);
+                    break;
+                case 'whatsapp':
+                    // wa.me 需纯数字（去 +、空格、连字符、括号）
+                    $digits = preg_replace('/\D+/', '', $value);
+                    $href = $digits !== '' ? 'https://wa.me/' . $digits : null;
+                    break;
+                case 'telegram':
+                    // t.me/<用户名>，容忍前导 @ 或整段链接
+                    $user = $value;
+                    if (preg_match('~t\.me/([^/?\s]+)~i', $value, $mm)) {
+                        $user = $mm[1];
+                    }
+                    $user = ltrim($user, '@');
+                    $href = $user !== '' ? 'https://t.me/' . $user : null;
+                    break;
+                case 'wechat':
+                    // 微信=复制号 + 二维码（前端弹），无 href
+                    $copy = $value;
+                    break;
+            }
+            $out[] = [
+                'method' => $method,
+                'value'  => $value,
+                'label'  => $label ?: null,
+                'href'   => $href,
+                'copy'   => $copy,
+            ];
+        }
+        return $out;
     }
 }
