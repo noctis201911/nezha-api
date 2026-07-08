@@ -8,6 +8,7 @@ use App\Models\LocalLifeCategory;
 use App\Models\LocalLifeMerchant;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 
 /**
  * 本地生活「商家管理」：运营在后台增/删/改商家（移民/签证/美容美发/按摩/包车出行/本地旅游…）。
@@ -108,6 +109,45 @@ class LocalLifeMerchantController extends Controller
         return redirect()->route('admin.local-life.merchants.list');
     }
 
+    /**
+     * 地址→坐标：服务端 geocode（Google Geocoding API，用 map_api_key_server = 服务器 IP key）。
+     * 只读地理编码，不碰资金。失败一律软返回（前端保留手填经纬度）。
+     * POST admin/local-life/merchants/geocode  body: address
+     */
+    public function geocode(Request $request)
+    {
+        $address = trim((string) $request->input('address', ''));
+        if ($address === '') {
+            return response()->json(['ok' => false, 'message' => '请先填写详细地址'], 422);
+        }
+        $key = Helpers::get_business_settings('map_api_key_server');
+        if (!$key) {
+            return response()->json(['ok' => false, 'message' => '未配置服务端地图密钥，请手填经纬度'], 200);
+        }
+        try {
+            $resp = Http::timeout(8)->get('https://maps.googleapis.com/maps/api/geocode/json', [
+                'address' => $address,
+                'key'     => $key,
+                'region'  => 'am', // 亚美尼亚偏向
+            ]);
+            $json = $resp->json();
+            $status = $json['status'] ?? 'ERR';
+            if ($status === 'OK' && !empty($json['results'][0]['geometry']['location'])) {
+                $loc = $json['results'][0]['geometry']['location'];
+                return response()->json([
+                    'ok'        => true,
+                    'lat'       => round((float) $loc['lat'], 7),
+                    'lng'       => round((float) $loc['lng'], 7),
+                    'formatted' => $json['results'][0]['formatted_address'] ?? null,
+                ], 200);
+            }
+            $msg = $status === 'ZERO_RESULTS' ? '未能解析该地址，请手填经纬度或换更精确地址' : ('地图返回 ' . $status . '，请手填经纬度');
+            return response()->json(['ok' => false, 'message' => $msg], 200);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'message' => '地图服务暂不可用，请手填经纬度'], 200);
+        }
+    }
+
     private function uploadAlbum(Request $request): ?array
     {
         if (!$request->hasFile('images')) {
@@ -142,14 +182,31 @@ class LocalLifeMerchantController extends Controller
             'logo'              => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
             'wechat_qr'         => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
             'images.*'          => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
+            'services'          => 'nullable|array',
+            'services.*.title'  => 'nullable|string|max:120',
+            'services.*.desc'   => 'nullable|string|max:200',
+            'services.*.price_text' => 'nullable|string|max:60',
+            'contacts'          => 'nullable|array',
+            'contacts.*.method' => 'nullable|string|in:wechat,phone,whatsapp,telegram',
+            'contacts.*.value'  => 'nullable|string|max:120',
+            'contacts.*.label'  => 'nullable|string|max:40',
         ], [
             'name.required'     => '商家名必填',
             'category.required' => '请选择类目',
             'category.in'       => '类目不在允许范围（仅商家型类目）',
         ]);
 
+        $services = $this->parseServices($request->input('services'));
+        $contacts = $this->parseContacts($request);
+
         // 硬禁业务词筛查：命中即拒（换汇/加密买卖/医美注射/性服务/赌博/制裁规避等）
-        $screenText = trim($request->name . "\n" . (string) $request->intro . "\n" . (string) $request->offer_text . "\n" . (string) $request->services);
+        $servicesFlat = '';
+        if (is_array($services)) {
+            foreach ($services as $s) {
+                $servicesFlat .= "\n" . ($s['title'] ?? '') . ' ' . ($s['desc'] ?? '') . ' ' . ($s['price_text'] ?? '');
+            }
+        }
+        $screenText = trim($request->name . "\n" . (string) $request->intro . "\n" . (string) $request->offer_text . $servicesFlat);
         if (\App\CentralLogics\NezhaContentScreen::hits($screenText)) {
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'name' => '内容命中禁止经营 / 硬禁业务关键词，该商家不予上线。如确属正规持牌业务，请联系技术调整词库。',
@@ -174,7 +231,8 @@ class LocalLifeMerchantController extends Controller
             'close_time'        => $request->close_time ?: null,
             'hours_note'        => $request->hours_note ?: null,
             'intro'             => $request->intro ?: null,
-            'services'          => $this->parseServices($request->services),
+            'services'          => $services,
+            'contacts'          => $contacts,
             'has_offer'         => $request->boolean('has_offer'),
             'offer_text'        => $request->offer_text ?: null,
             'is_sensitive'      => (bool) $isSensitive,
@@ -194,10 +252,30 @@ class LocalLifeMerchantController extends Controller
         return $days ?: null;
     }
 
-    /** 服务项文本（每行「标题 | 描述 | 价格文字」）→ [{title,desc,price_text}] */
-    private function parseServices(?string $raw): ?array
+    /**
+     * 服务项 → [{title,desc,price_text}]。
+     * 新：动态行数组 services[i][title|desc|price_text]（标题非空才算一项）。
+     * 兼容：旧文本每行「标题 | 描述 | 价格文字」（历史存量/回退）。
+     */
+    private function parseServices($raw): ?array
     {
-        if (!$raw || trim($raw) === '') {
+        if (is_array($raw)) {
+            $items = [];
+            foreach ($raw as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $title = trim((string) ($row['title'] ?? ''));
+                $desc  = trim((string) ($row['desc'] ?? ''));
+                $price = trim((string) ($row['price_text'] ?? ''));
+                if ($title === '') {
+                    continue; // 标题必填才成一项
+                }
+                $items[] = ['title' => $title, 'desc' => $desc, 'price_text' => $price];
+            }
+            return $items ?: null;
+        }
+        if (!is_string($raw) || trim($raw) === '') {
             return null;
         }
         $items = [];
@@ -214,5 +292,36 @@ class LocalLifeMerchantController extends Controller
             ];
         }
         return $items ?: null;
+    }
+
+    /**
+     * 结构化联系方式 → [{method,value,label?}]。
+     * 动态行 contacts[i][method|value|label]；method ∈ wechat|phone|whatsapp|telegram，value 非空才成一条。
+     * L1-1：仅联系方式展示，不含支付/下单。
+     */
+    private function parseContacts(Request $request): ?array
+    {
+        $raw = $request->input('contacts', []);
+        if (!is_array($raw)) {
+            return null;
+        }
+        $out = [];
+        foreach ($raw as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $method = strtolower(trim((string) ($row['method'] ?? '')));
+            $value  = trim((string) ($row['value'] ?? ''));
+            $label  = trim((string) ($row['label'] ?? ''));
+            if ($value === '' || !in_array($method, ['wechat', 'phone', 'whatsapp', 'telegram'], true)) {
+                continue;
+            }
+            $item = ['method' => $method, 'value' => $value];
+            if ($label !== '') {
+                $item['label'] = $label;
+            }
+            $out[] = $item;
+        }
+        return $out ?: null;
     }
 }

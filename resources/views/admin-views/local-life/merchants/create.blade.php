@@ -8,19 +8,15 @@
     $val = fn($field, $default = '') => old($field, $isEdit ? $merchant->$field : $default);
     $openDays = old('open_days', $isEdit && is_array($merchant->open_days) ? $merchant->open_days : []);
     $dayNames = ['0'=>'周日','1'=>'周一','2'=>'周二','3'=>'周三','4'=>'周四','5'=>'周五','6'=>'周六'];
-    $servicesText = '';
-    if ($isEdit && is_array($merchant->services)) {
-        foreach ($merchant->services as $s) {
-            $servicesText .= trim(($s['title'] ?? '').' | '.($s['desc'] ?? '').' | '.($s['price_text'] ?? ''), " |")."\n";
-        }
-    }
-    $servicesText = old('services', $servicesText);
+    $existingServices = old('services', $isEdit && is_array($merchant->services) ? $merchant->services : []);
+    $existingContacts = old('contacts', $isEdit && is_array($merchant->contacts) ? $merchant->contacts : []);
+    $contactMethods = ['phone'=>'电话','whatsapp'=>'WhatsApp','telegram'=>'Telegram','wechat'=>'微信'];
 @endphp
 
 <div class="content container-fluid">
     <div class="page-header mb-1">
         <h1 class="page-header-title fs-24">{{ $isEdit ? '编辑商家' : '新建商家' }}</h1>
-        <small class="text-muted">商家页是纯信息展示（评分/营业时间/地址/介绍/服务），平台不碰钱、不接预订下单。</small>
+        <small class="text-muted">商家页是纯信息展示（评分/营业时间/地址/介绍/服务/联系方式），平台不碰钱、不接预订下单。</small>
     </div>
 
     <form action="{{ $action }}" method="post" enctype="multipart/form-data">
@@ -50,6 +46,7 @@
                             <div class="col-md-12">
                                 <label class="input-label">商家介绍</label>
                                 <textarea name="intro" class="form-control" rows="4" maxlength="3000" placeholder="持牌移民顾问，执业多年……">{{ $val('intro') }}</textarea>
+                                <small class="text-muted">介绍里不用再写联系方式——联系方式请填下方「联系方式」卡（前端做成可点）。</small>
                             </div>
                         </div>
                     </div>
@@ -110,6 +107,11 @@
                                 <label class="input-label">详细地址</label>
                                 <input type="text" name="address" class="form-control" maxlength="255" placeholder="街道门牌" value="{{ $val('address') }}">
                             </div>
+                            <div class="col-md-12">
+                                <button type="button" id="nz-geocode-btn" class="btn btn-sm btn--primary">地址 → 坐标（自动定位）</button>
+                                <span id="nz-geocode-status" class="text-muted ml-2" style="font-size:12px;"></span>
+                                <small class="text-muted d-block mt-1">点一下用地址自动填经纬度；解析不到时可在下方手填。</small>
+                            </div>
                             <div class="col-md-6">
                                 <label class="input-label">纬度 latitude</label>
                                 <input type="text" name="latitude" class="form-control" placeholder="40.1872" value="{{ $val('latitude') }}">
@@ -117,7 +119,7 @@
                             <div class="col-md-6">
                                 <label class="input-label">经度 longitude</label>
                                 <input type="text" name="longitude" class="form-control" placeholder="44.5152" value="{{ $val('longitude') }}">
-                                <small class="text-muted">填了经纬度，顾客点「导航」才会跳地图。</small>
+                                <small class="text-muted">填了经纬度，顾客商家页才显地图缩略图 + 点「导航」跳地图。</small>
                             </div>
                         </div>
                     </div>
@@ -126,9 +128,62 @@
                 <div class="card mb-3">
                     <div class="card-header"><h5 class="mb-0">服务项</h5></div>
                     <div class="card-body">
-                        <label class="input-label">每行一项，格式：标题 | 描述 | 价格文字</label>
-                        <textarea name="services" class="form-control" rows="4" placeholder="工签申请 | 全程一对一办理 | 面议&#10;学签续签 | 材料预审+递交 | 面议">{{ $servicesText }}</textarea>
-                        <small class="text-muted">描述、价格可留空。价格只是展示文字，平台不收款。</small>
+                        <div id="nz-services-rows">
+                            @forelse($existingServices as $s)
+                                <div class="nz-service-row row g-2 mb-2 align-items-center">
+                                    <div class="col-md-4"><input type="text" name="services[{{ $loop->index }}][title]" class="form-control form-control-sm" placeholder="服务名(如 剪发)" value="{{ $s['title'] ?? '' }}"></div>
+                                    <div class="col-md-4"><input type="text" name="services[{{ $loop->index }}][desc]" class="form-control form-control-sm" placeholder="描述(可空)" value="{{ $s['desc'] ?? '' }}"></div>
+                                    <div class="col-md-3"><input type="text" name="services[{{ $loop->index }}][price_text]" class="form-control form-control-sm" placeholder="价格(如 3000dram)" value="{{ $s['price_text'] ?? '' }}"></div>
+                                    <div class="col-md-1 text-center"><button type="button" class="btn btn-sm btn-outline-danger nz-del-row" title="删除">&times;</button></div>
+                                </div>
+                            @empty
+                                <div class="nz-service-row row g-2 mb-2 align-items-center">
+                                    <div class="col-md-4"><input type="text" name="services[0][title]" class="form-control form-control-sm" placeholder="服务名(如 剪发)" value=""></div>
+                                    <div class="col-md-4"><input type="text" name="services[0][desc]" class="form-control form-control-sm" placeholder="描述(可空)" value=""></div>
+                                    <div class="col-md-3"><input type="text" name="services[0][price_text]" class="form-control form-control-sm" placeholder="价格(如 3000dram)" value=""></div>
+                                    <div class="col-md-1 text-center"><button type="button" class="btn btn-sm btn-outline-danger nz-del-row" title="删除">&times;</button></div>
+                                </div>
+                            @endforelse
+                        </div>
+                        <button type="button" class="btn btn-sm btn--primary mt-1" id="nz-add-service">+ 添加服务项</button>
+                        <small class="text-muted d-block mt-1">一价一行，标题必填。描述、价格可留空。价格只是展示文字，平台不收款。</small>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header"><h5 class="mb-0">联系方式（前端做成可点）</h5></div>
+                    <div class="card-body">
+                        <div id="nz-contacts-rows">
+                            @forelse($existingContacts as $ct)
+                                <div class="nz-contact-row row g-2 mb-2 align-items-center">
+                                    <div class="col-md-3">
+                                        <select name="contacts[{{ $loop->index }}][method]" class="form-control form-control-sm">
+                                            @foreach($contactMethods as $mk => $mlabel)
+                                                <option value="{{ $mk }}" {{ ($ct['method'] ?? '') === $mk ? 'selected' : '' }}>{{ $mlabel }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-md-5"><input type="text" name="contacts[{{ $loop->index }}][value]" class="form-control form-control-sm" placeholder="号码/用户名/微信号" value="{{ $ct['value'] ?? '' }}"></div>
+                                    <div class="col-md-3"><input type="text" name="contacts[{{ $loop->index }}][label]" class="form-control form-control-sm" placeholder="备注(可空)" value="{{ $ct['label'] ?? '' }}"></div>
+                                    <div class="col-md-1 text-center"><button type="button" class="btn btn-sm btn-outline-danger nz-del-row" title="删除">&times;</button></div>
+                                </div>
+                            @empty
+                                <div class="nz-contact-row row g-2 mb-2 align-items-center">
+                                    <div class="col-md-3">
+                                        <select name="contacts[0][method]" class="form-control form-control-sm">
+                                            @foreach($contactMethods as $mk => $mlabel)
+                                                <option value="{{ $mk }}">{{ $mlabel }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-md-5"><input type="text" name="contacts[0][value]" class="form-control form-control-sm" placeholder="号码/用户名/微信号" value=""></div>
+                                    <div class="col-md-3"><input type="text" name="contacts[0][label]" class="form-control form-control-sm" placeholder="备注(可空)" value=""></div>
+                                    <div class="col-md-1 text-center"><button type="button" class="btn btn-sm btn-outline-danger nz-del-row" title="删除">&times;</button></div>
+                                </div>
+                            @endforelse
+                        </div>
+                        <button type="button" class="btn btn-sm btn--primary mt-1" id="nz-add-contact">+ 添加联系方式</button>
+                        <small class="text-muted d-block mt-1">电话=可拨号 / WhatsApp=填带国码号(如 +374 43 329475) / Telegram=填用户名(如 @name) / 微信=填微信号(二维码另在右侧「微信二维码」上传)。平台只展示，不代收款。</small>
                     </div>
                 </div>
             </div>
@@ -150,6 +205,7 @@
                                 <div class="mb-1"><img src="{{ \App\CentralLogics\Helpers::get_full_url('local-life-merchant', $merchant->wechat_qr, 'public') }}" style="height:80px;"></div>
                             @endif
                             <input type="file" name="wechat_qr" class="form-control" accept="image/*">
+                            <small class="text-muted">配合上方「微信」联系方式：顾客点微信条目=复制微信号 + 弹此二维码。</small>
                         </div>
                         <div class="form-group">
                             <label class="input-label">相册（可多选）</label>
@@ -197,4 +253,88 @@
         </div>
     </form>
 </div>
+
+<script>
+(function () {
+    var geocodeUrl = "{{ route('admin.local-life.merchants.geocode') }}";
+    function csrf() { var t = document.querySelector('input[name=_token]'); return t ? t.value : ''; }
+
+    // ---- 地址→坐标 geocode ----
+    var geoBtn = document.getElementById('nz-geocode-btn');
+    if (geoBtn) {
+        geoBtn.addEventListener('click', function () {
+            var addrEl = document.querySelector('input[name=address]');
+            var statusEl = document.getElementById('nz-geocode-status');
+            var addr = addrEl ? addrEl.value.trim() : '';
+            if (!addr) { statusEl.className = 'text-danger ml-2'; statusEl.style.fontSize='12px'; statusEl.textContent = '请先填写详细地址'; return; }
+            statusEl.className = 'text-muted ml-2'; statusEl.style.fontSize='12px'; statusEl.textContent = '解析中…';
+            fetch(geocodeUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf(), 'Accept': 'application/json' },
+                body: JSON.stringify({ address: addr })
+            }).then(function (r) { return r.json(); }).then(function (d) {
+                if (d && d.ok) {
+                    var latEl = document.querySelector('input[name=latitude]');
+                    var lngEl = document.querySelector('input[name=longitude]');
+                    if (latEl) latEl.value = d.lat;
+                    if (lngEl) lngEl.value = d.lng;
+                    statusEl.className = 'text-success ml-2'; statusEl.style.fontSize='12px';
+                    statusEl.textContent = '已定位：' + d.lat + ', ' + d.lng + (d.formatted ? ('（' + d.formatted + '）') : '');
+                } else {
+                    statusEl.className = 'text-danger ml-2'; statusEl.style.fontSize='12px';
+                    statusEl.textContent = (d && d.message) ? d.message : '解析失败，请手填经纬度';
+                }
+            }).catch(function () {
+                statusEl.className = 'text-danger ml-2'; statusEl.style.fontSize='12px';
+                statusEl.textContent = '请求失败，请手填经纬度';
+            });
+        });
+    }
+
+    // ---- 动态行：删除（事件委托）----
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest ? e.target.closest('.nz-del-row') : null;
+        if (!btn) return;
+        var row = btn.closest('.nz-service-row') || btn.closest('.nz-contact-row');
+        if (row) row.parentNode.removeChild(row);
+    });
+
+    // ---- 服务项：添加 ----
+    var svcIdx = 1000; // 新增行用高位索引，避免与服务端渲染索引冲突（PHP 按数组收，键不需连续）
+    var addSvc = document.getElementById('nz-add-service');
+    var svcRows = document.getElementById('nz-services-rows');
+    if (addSvc && svcRows) {
+        addSvc.addEventListener('click', function () {
+            var i = svcIdx++;
+            var div = document.createElement('div');
+            div.className = 'nz-service-row row g-2 mb-2 align-items-center';
+            div.innerHTML =
+                '<div class="col-md-4"><input type="text" name="services[' + i + '][title]" class="form-control form-control-sm" placeholder="服务名(如 剪发)"></div>' +
+                '<div class="col-md-4"><input type="text" name="services[' + i + '][desc]" class="form-control form-control-sm" placeholder="描述(可空)"></div>' +
+                '<div class="col-md-3"><input type="text" name="services[' + i + '][price_text]" class="form-control form-control-sm" placeholder="价格(如 3000dram)"></div>' +
+                '<div class="col-md-1 text-center"><button type="button" class="btn btn-sm btn-outline-danger nz-del-row" title="删除">&times;</button></div>';
+            svcRows.appendChild(div);
+        });
+    }
+
+    // ---- 联系方式：添加 ----
+    var ctIdx = 1000;
+    var addCt = document.getElementById('nz-add-contact');
+    var ctRows = document.getElementById('nz-contacts-rows');
+    var methodOptions = '<option value="phone">电话</option><option value="whatsapp">WhatsApp</option><option value="telegram">Telegram</option><option value="wechat">微信</option>';
+    if (addCt && ctRows) {
+        addCt.addEventListener('click', function () {
+            var i = ctIdx++;
+            var div = document.createElement('div');
+            div.className = 'nz-contact-row row g-2 mb-2 align-items-center';
+            div.innerHTML =
+                '<div class="col-md-3"><select name="contacts[' + i + '][method]" class="form-control form-control-sm">' + methodOptions + '</select></div>' +
+                '<div class="col-md-5"><input type="text" name="contacts[' + i + '][value]" class="form-control form-control-sm" placeholder="号码/用户名/微信号"></div>' +
+                '<div class="col-md-3"><input type="text" name="contacts[' + i + '][label]" class="form-control form-control-sm" placeholder="备注(可空)"></div>' +
+                '<div class="col-md-1 text-center"><button type="button" class="btn btn-sm btn-outline-danger nz-del-row" title="删除">&times;</button></div>';
+            ctRows.appendChild(div);
+        });
+    }
+})();
+</script>
 @endsection
