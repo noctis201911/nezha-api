@@ -29,7 +29,29 @@ class RestaurantController extends Controller
     public function edit()
     {
         $shop = Restaurant::withoutGlobalScope('translate')->with('translations')->find(Helpers::get_restaurant_id());
-        return view('vendor-views.shop.edit', compact('shop'));
+
+        // 哪吒: 商家自助改地图定位 — 取本店配送区多边形+中心, 供地图选点器画蓝区并做区内校验
+        $zonePolygon = [];
+        $zoneCenter = null;
+        try {
+            $zone = \App\Models\Zone::withoutGlobalScopes()
+                ->selectRaw('*, ST_AsText(ST_Centroid(`coordinates`)) as center')
+                ->find($shop->zone_id);
+            if ($zone && $zone->coordinates) {
+                $area = json_decode($zone->coordinates[0]->toJson(), true);
+                $zonePolygon = \App\CentralLogics\Helpers::format_coordiantes($area['coordinates']);
+                $parts = explode(' ', trim((string) $zone->center));
+                $zoneCenter = [
+                    'lat' => (float) trim($parts[1] ?? '', 'POINT()'),
+                    'lng' => (float) trim($parts[0] ?? '', 'POINT()'),
+                ];
+            }
+        } catch (\Throwable $e) {
+            $zonePolygon = [];
+            $zoneCenter = null;
+        }
+
+        return view('vendor-views.shop.edit', compact('shop', 'zonePolygon', 'zoneCenter'));
     }
 
     public function update(Request $request)
@@ -60,6 +82,42 @@ class RestaurantController extends Controller
         $shop->phone = $request->contact;
         $shop->logo = $request->has('image') ? Helpers::update(dir: 'restaurant/',old_image:  $shop->logo ,format: 'png', image: $request->file('image')) : $shop->logo;
         $shop->cover_photo = $request->has('photo') ? Helpers::update(dir: 'restaurant/cover/',old_image:  $shop->cover_photo,  format:'png',image:  $request->file('photo')) : $shop->cover_photo;
+
+        // 哪吒: 商家自助改地图定位 — 仅当坐标真的变了才校验+落库(留痕); 变动必须仍落在本店配送区内
+        if ($request->filled('latitude') && $request->filled('longitude') && is_numeric($request->latitude) && is_numeric($request->longitude)) {
+            $newLat = round((float) $request->latitude, 6);
+            $newLng = round((float) $request->longitude, 6);
+            $oldLat = round((float) $shop->latitude, 6);
+            $oldLng = round((float) $shop->longitude, 6);
+            if ($newLat !== $oldLat || $newLng !== $oldLng) {
+                if ($newLat < -90 || $newLat > 90 || $newLng < -180 || $newLng > 180) {
+                    Toastr::error(translate('坐标无效，定位未保存'));
+                    return back();
+                }
+                // 服务端二次校验: 新坐标必须仍在本店当前配送区多边形内(不信任前端几何判断)
+                $inZone = \App\Models\Zone::query()
+                    ->whereContains('coordinates', new \MatanYadaev\EloquentSpatial\Objects\Point($newLat, $newLng, POINT_SRID))
+                    ->where('id', $shop->zone_id)->first();
+                if (!$inZone) {
+                    Toastr::error(translate('图钉超出了你的配送区范围，定位未保存，请把它拖回配送区内'));
+                    return back();
+                }
+                // 留痕: 记录 旧→新 坐标 + 操作者 + 时间(保留最近10条)
+                $ad = json_decode((string) $shop->additional_data, true);
+                if (!is_array($ad)) { $ad = []; }
+                $edits = (isset($ad['location_edits']) && is_array($ad['location_edits'])) ? $ad['location_edits'] : [];
+                $edits[] = [
+                    'from' => ['lat' => (string) $shop->latitude, 'lng' => (string) $shop->longitude],
+                    'to'   => ['lat' => (string) $newLat, 'lng' => (string) $newLng],
+                    'by'   => 'vendor:' . $shop->vendor_id,
+                    'at'   => now()->toDateTimeString(),
+                ];
+                $ad['location_edits'] = array_slice($edits, -10);
+                $shop->additional_data = json_encode($ad, JSON_UNESCAPED_UNICODE);
+                $shop->latitude = $newLat;
+                $shop->longitude = $newLng;
+            }
+        }
         $shop?->save();
         $default_lang = str_replace('_', '-', app()->getLocale());
         foreach($request->lang as $index=>$key)
