@@ -230,9 +230,9 @@ class GuideController extends Controller
             if (!$m) {
                 return null;
             }
-            // 评分：优先 Google，回退商家自填（诚实来源标注交前端；与商家详情页评分口径见交接说明）
-            $rating = $m->google_rating !== null ? (float) $m->google_rating : ((float) $m->rating ?: null);
-            $source = $m->google_rating !== null ? 'google' : ($m->rating ? 'merchant' : null);
+            // 诚实评分：只认 Google 真源（DS§6.12/§8），无 Google 值 → rating/rating_source 都不出（禁商家自填回落）
+            $rating = $m->google_rating !== null ? (float) $m->google_rating : null;
+            $source = $m->google_rating !== null ? 'google' : null;
             return [
                 'n'             => $n,
                 'type'          => 'merchant',

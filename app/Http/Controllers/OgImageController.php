@@ -104,7 +104,7 @@ class OgImageController extends Controller
     /**
      * 本地生活商家分享品牌卡 (og:image · 1200x630 · 附页⑧下)。
      * 暖白底 + logo + 店名 + 类目·区域 + 诚实评分行 + 底行「埃里温华人生活平台 · nezha.am」。
-     * 诚实评分规则(与页内同): 有 Google 显「Google X.X」; 无 Google 有商家分显「★ X.X 评分由商家提供」; 都无整行不出。
+     * 诚实评分规则(与页内同 · DS§6.12/§8): 有 Google 显「Google X.X」; 无 Google 整行不出(商家自填评分不采用)。
      */
     public function merchant($id)
     {
@@ -116,12 +116,10 @@ class OgImageController extends Controller
             $disk = Helpers::getDisk();
             $logoPath = ($m->logo && Storage::disk($disk)->exists('local-life-merchant/' . $m->logo)) ? 'local-life-merchant/' . $m->logo : null;
             $sub = implode(' · ', array_filter([$m->category, $m->area]));
-            // 诚实评分
+            // 诚实评分：只认 Google 真源，无 Google 值 → 整行不显（禁商家自填回落）
             $ratingVal = null; $ratingSrc = null;
             if ($m->google_rating !== null) {
                 $ratingVal = number_format((float) $m->google_rating, 1); $ratingSrc = 'google';
-            } elseif ($m->rating) {
-                $ratingVal = number_format((float) $m->rating, 1); $ratingSrc = 'merchant';
             }
             return $this->buildMerchantCard($disk, $logoPath, $m->name, $sub, $ratingVal, $ratingSrc, 'ogm' . $id);
         } catch (\Throwable $e) {
