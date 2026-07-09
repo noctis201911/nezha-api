@@ -658,7 +658,7 @@
                                         $customer_details = json_decode($order['delivery_address'],true);
                                     ?>
                                     <strong>{{$customer_details['contact_person_name']}}</strong>
-                                    <div class="text-muted">{{\App\CentralLogics\Helpers::mask_phone($customer_details['contact_person_number'] ?? '')}}</div>
+                                    <div class="text-muted">{{\App\CentralLogics\NezhaContactVisibility::phone($customer_details['contact_person_number'] ?? '', $order->created_at ?? null)}}</div>
                                 @elseif($order->customer)
                                     <a class="text-body text-capitalize"
                                         href="{{route('vendor.order.details',['id'=>$order['id']])}}">
@@ -666,7 +666,7 @@
                                                 {{$order->customer['f_name'].' '.$order->customer['l_name']}}
                                         </span>
                                         <span class="d-block text-muted">
-                                                {{\App\CentralLogics\Helpers::mask_phone($order->customer['phone'] ?? '')}}
+                                                {{\App\CentralLogics\NezhaContactVisibility::phone($order->customer['phone'] ?? '', $order->created_at ?? null)}}
                                         </span>
                                     </a>
                                 @else

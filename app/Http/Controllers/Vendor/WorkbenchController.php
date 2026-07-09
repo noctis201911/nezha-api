@@ -385,15 +385,16 @@ class WorkbenchController extends Controller
         return ['has' => (bool) $op, 'label' => $isHash ? '哈希' : '凭证', 'url' => $url];
     }
 
-    /** PII 脱敏顾客标识(浏览类展示; 真实电话/地址在派 Yandex 抽屉保留完整, 此处不 over-mask)。 */
+    /** 顾客标识: 下单 24h 内(nezha_customer_contact_reveal_hours 可调)完整显示便于联系, 超窗打码; 真实电话/地址在派 Yandex 抽屉亦保留完整。见 NezhaContactVisibility。 */
     protected static function maskedCustomer($order): array
     {
         $c = $order->customer;
         $name = $c ? trim(((string) ($c->f_name ?? '')) . ' ' . ((string) ($c->l_name ?? ''))) : '';
+        $nzVisible = \App\CentralLogics\NezhaContactVisibility::visible($order->created_at ?? null);
 
         return [
-            'name'  => $name !== '' ? Helpers::mask_name($name) : '顾客',
-            'phone' => $c && $c->phone ? Helpers::mask_phone($c->phone) : null,
+            'name'  => $name !== '' ? ($nzVisible ? $name : Helpers::mask_name($name)) : '顾客',
+            'phone' => $c && $c->phone ? ($nzVisible ? $c->phone : Helpers::mask_phone($c->phone)) : null,
         ];
     }
 

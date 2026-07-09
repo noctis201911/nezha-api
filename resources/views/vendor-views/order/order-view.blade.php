@@ -547,8 +547,8 @@
                                                 <div style="word-break:break-all;">须退回的原地址：<strong>{{ $nzRefundRec->locked_to_address ?: '原始交易反查未果，请按付款凭证里的来源地址退回' }}</strong></div>
                                             @endif
                                             @if (!empty($nzAddr['contact_person_name']))<div>顾客：{{ $nzAddr['contact_person_name'] }}</div>@endif
-                                            @if (!empty($nzAddr['contact_person_number']))<div>顾客电话（配送填写）：{{ \App\CentralLogics\Helpers::mask_phone($nzAddr['contact_person_number']) }}</div>@endif
-                                            @if (!empty($nzAddr['contact_person_email']))<div>顾客邮箱：{{ \App\CentralLogics\Helpers::mask_email($nzAddr['contact_person_email']) }}</div>@endif
+                                            @if (!empty($nzAddr['contact_person_number']))<div>顾客电话（配送填写）：{{ \App\CentralLogics\NezhaContactVisibility::phone($nzAddr['contact_person_number'], $order->created_at ?? null) }}</div>@endif
+                                            @if (!empty($nzAddr['contact_person_email']))<div>顾客邮箱：{{ \App\CentralLogics\NezhaContactVisibility::email($nzAddr['contact_person_email'], $order->created_at ?? null) }}</div>@endif
                                             <div style="color:#999;">退款如需联系顾客请用站内聊天（顾客邮箱/手机已脱敏保护隐私）。付款人见上方「付款凭证」截图；个人收款码不支持原路退回时，可按凭证里的账号重新转账退回。</div>
                                         </div>
                                         <button type="button" class="btn btn-success btn-sm mt-3" style="border-radius:8px;" data-toggle="modal" data-target="#nzMarkRefunded-{{ $order['id'] }}">标记已退款</button>
@@ -1488,13 +1488,13 @@
                             </span>
                             <span class="d-block">
                                 <strong class="text--title font-semibold">
-                                    {{ \App\CentralLogics\Helpers::mask_phone($order->customer['phone']) }}
+                                    {{ \App\CentralLogics\NezhaContactVisibility::phone($order->customer['phone'], $order->created_at ?? null) }}
                                 </strong>
                             </span>
                             <span class="d-block">
                                 <strong class="text--title font-semibold">
                                 </strong>
-                                {{ \App\CentralLogics\Helpers::mask_email($order->customer['email']) }}
+                                {{ \App\CentralLogics\NezhaContactVisibility::email($order->customer['email'], $order->created_at ?? null) }}
                             </span>
                         </div>
                     </div>
@@ -1530,9 +1530,13 @@
                             <span class="name">{{ translate('messages.name') }}:</span>
                             <span class="info">{{ $address['contact_person_name'] }}</span>
                             <span class="name">{{ translate('messages.contact') }}:</span>
+                            @if (\App\CentralLogics\NezhaContactVisibility::visible($order->created_at ?? null))
                             <a class="info" href="tel:{{ $address['contact_person_number'] }}">
                                 {{ $address['contact_person_number'] }}
                             </a>
+                            @else
+                            <span class="info">{{ \App\CentralLogics\Helpers::mask_phone($address['contact_person_number'] ?? '') }}</span>
+                            @endif
 
                             @if (!in_array($order->order_type, ['dine_in', 'take_away']))
                             @if (isset($address['road']))
@@ -1568,7 +1572,7 @@
                                 </span>
                             @endif
                         </span>
-                        @php($nzCopyText = collect([$address['contact_person_name'] ?? null, !empty($address['contact_person_number']) ? '电话 '.$address['contact_person_number'] : null, $address['address'] ?? null, collect([!empty($address['house']) ? '门牌 '.$address['house'] : null, !empty($address['floor']) ? '楼层 '.$address['floor'] : null, !empty($address['road']) ? '街道 '.$address['road'] : null])->filter()->implode(' · ') ?: null, !empty($address['delivery_note']) ? '备注 '.$address['delivery_note'] : null, !empty($order->order_note) ? '下单备注 '.$order->order_note : null, (!empty($address['latitude']) && !empty($address['longitude'])) ? ($address['latitude'].','.$address['longitude']) : null])->filter()->implode("\n"))
+                        @php($nzCopyText = collect([$address['contact_person_name'] ?? null, !empty($address['contact_person_number']) ? '电话 '.\App\CentralLogics\NezhaContactVisibility::phone($address['contact_person_number'], $order->created_at ?? null) : null, $address['address'] ?? null, collect([!empty($address['house']) ? '门牌 '.$address['house'] : null, !empty($address['floor']) ? '楼层 '.$address['floor'] : null, !empty($address['road']) ? '街道 '.$address['road'] : null])->filter()->implode(' · ') ?: null, !empty($address['delivery_note']) ? '备注 '.$address['delivery_note'] : null, !empty($order->order_note) ? '下单备注 '.$order->order_note : null, (!empty($address['latitude']) && !empty($address['longitude'])) ? ($address['latitude'].','.$address['longitude']) : null])->filter()->implode("\n"))
                         @if (!in_array($order->order_type, ['dine_in', 'take_away']) && trim($nzCopyText) !== '')
                             <textarea id="nzFullAddr-{{ $order['id'] }}" class="nz-fulladdr-src" style="position:absolute;left:-9999px;top:-9999px;opacity:0;height:1px;width:1px;" readonly>{{ $nzCopyText }}</textarea>
                             <button type="button" class="btn btn-primary btn-sm mt-3 nz-copy-addr" data-copy-src="nzFullAddr-{{ $order['id'] }}" style="border-radius:8px;">
