@@ -1785,7 +1785,7 @@
   'If_enabled_Customers_will_be_able_to_select_COD_as_a_payment_method_during_checkout' => '开启后，顾客在结算时可选择货到付款。',
   'By_Turning_ON_Cash_On_Delivery_Option' => '开启货到付款',
   'By_Turning_OFF_Cash_On_Delivery_Option' => '关闭货到付款后，将只能使用线上支付',
-  'Customers_will_not_be_able_to_select_COD_as_a_payment_method_during_checkout._Please_review_your_settings_and_enable_COD_if_you_wish_to_offer_this_payment_option_to_customers.' => '系统将杜绝任何一手交钱一手交货的勾当。所有的钱必须在结账时就死死锁在平台上。',
+  'Customers_will_not_be_able_to_select_COD_as_a_payment_method_during_checkout._Please_review_your_settings_and_enable_COD_if_you_wish_to_offer_this_payment_option_to_customers.' => '关闭后，顾客在结账时将无法选择货到付款；如需向顾客提供该支付方式，请在设置中重新启用。',
   'Customers_will_be_able_to_select_COD_as_a_payment_method_during_checkout.' => '顾客结账时可选择货到付款。',
   'digital payment' => '线上法币支付',
   'If_enabled_Customers_will_be_able_to_select_digital_payment_as_a_payment_method_during_checkout' => '启用后，顾客可在结账时选择线上支付。',
