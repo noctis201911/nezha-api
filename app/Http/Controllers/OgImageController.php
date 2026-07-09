@@ -643,7 +643,6 @@ class OgImageController extends Controller
         $red   = imagecolorallocate($card, 196, 25, 62);
         $ink   = imagecolorallocate($card, 31, 35, 41);
         $gray  = imagecolorallocate($card, 154, 160, 168);   // #9AA0A8
-        $amber = imagecolorallocate($card, 243, 164, 41);    // #F3A429
         $gblue = imagecolorallocate($card, 66, 133, 244);    // Google 蓝
         $gold  = imagecolorallocate($card, 233, 200, 120);
         $dkbox = imagecolorallocate($card, 24, 24, 26);
@@ -689,19 +688,10 @@ class OgImageController extends Controller
         if ($sub !== '') {
             imagettftext($card, 28, 0, $tx, $ly + 104, $gray, $font, $sub);
         }
-        // 诚实评分行
-        if ($ratingVal !== null) {
+        // 诚实评分行（只认 Google 真源，$ratingSrc 恒为 'google'|null）
+        if ($ratingVal !== null && $ratingSrc === 'google') {
             $ry = $ly + 156;
-            if ($ratingSrc === 'google') {
-                imagettftext($card, 30, 0, $tx, $ry, $gblue, $font, 'Google ' . $ratingVal);
-            } else {
-                $sr = 16;
-                $this->drawStar($card, $tx + $sr, $ry - $sr + 2, $sr, $amber);
-                imagettftext($card, 30, 0, $tx + $sr * 2 + 12, $ry, $ink, $font, $ratingVal);
-                $vb = imagettfbbox(30, 0, $font, $ratingVal);
-                $vw = $vb[2] - $vb[0];
-                imagettftext($card, 22, 0, $tx + $sr * 2 + 12 + $vw + 16, $ry, $gray, $font, '评分由商家提供');
-            }
+            imagettftext($card, 30, 0, $tx, $ry, $gblue, $font, 'Google ' . $ratingVal);
         }
 
         // 底行品牌脚注
