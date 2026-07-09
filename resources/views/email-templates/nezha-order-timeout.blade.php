@@ -14,7 +14,7 @@
             @if ($paid)
                 <p style="background:#FFF7E6;padding:12px;border-radius:8px;">
                     顾客此前已直接付款给您。请尽快<strong>按原路退还</strong>顾客（微信/支付宝原路退回，或 USDT 退回原地址），
-                    退款后在「商家后台 → 订单 → 待退款」中标记<strong>已退款</strong>。平台不经手此款。
+                    退款后在「商家后台 → 订单 → 待退款」中标记<strong>已退款</strong>。
                 </p>
             @else
                 <p>该订单顾客未完成付款，无需退款处理。</p>

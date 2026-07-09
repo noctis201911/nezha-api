@@ -509,7 +509,7 @@
                                     <div class="mt-3 p-3" style="background:#FFF7E6;border:1px solid #FFE0A3;border-radius:12px;">
                                         <h6 class="mb-2" style="color:#C4193E;font-weight:700;">待您退款（平台已取消/退款本单）</h6>
                                         <p class="mb-2" style="font-size:13px;color:#8a6d3b;line-height:1.7;">
-                                            请在您自己的收款账户里，按<strong>原路</strong>退还顾客的付款。平台不经手资金、仅记录。退款完成后点下方「标记已退款」。
+                                            请在您自己的收款账户里，按<strong>原路</strong>退还顾客的付款，完成后点下方「标记已退款」。
                                         </p>
                                         @if ($nzDeadlineTs)
                                             <div class="nz-refund-countdown" data-deadline="{{ $nzDeadlineTs }}" data-overdue-on="{{ $nzOverdueOn }}" style="margin:8px 0;padding:8px 10px;border-radius:8px;font-size:13px;font-weight:600;background:#fff;border:1px dashed #FFB02E;color:#8a6d3b;">
@@ -1036,7 +1036,7 @@
                                     <div style="font-weight:800;color:#7c1228;margin-bottom:4px;">⚠️ 顾客申请取消本单</div>
                                     <div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:4px;">顾客理由：{{ $order->nezha_cancel_request_reason ?: '（未填写）' }}</div>
                                     @if ($order->payment_method == 'offline_payment')
-                                        <div style="font-size:12px;color:#a98b54;line-height:1.6;margin-bottom:8px;">提示：若顾客已付款，同意取消后请到「订单 → 待退款」按原路退还顾客（平台不经手此款）。</div>
+                                        <div style="font-size:12px;color:#a98b54;line-height:1.6;margin-bottom:8px;">提示：若顾客已付款，同意取消后请到「订单 → 待退款」按原路退还顾客。</div>
                                     @endif
                                     <div class="d-flex gap-2 flex-wrap">
                                         <form action="{{ route('vendor.order.cancel-request-decision', ['id' => $order['id']]) }}" method="post" data-nz-confirm="确认同意取消本单？若顾客已付款，需你按原路退还。" data-nz-confirm-danger>
