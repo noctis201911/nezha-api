@@ -306,6 +306,15 @@ class LocalLifeController extends Controller
         return $names ?: self::CATEGORIES;
     }
 
+    // 发帖图片上限按类目分档：租房民宿房源需多图(房型/客厅/厨卫/楼体)放宽到 15，其余 6。
+    // 与前端 PostFormDrawer.jsx maxImagesFor 一致；改一处务必同步另一处。
+    private const MAX_IMAGES_DEFAULT = 6;
+    private const MAX_IMAGES_BY_CATEGORY = ['租房民宿' => 15];
+    private function maxImagesFor(?string $category): int
+    {
+        return self::MAX_IMAGES_BY_CATEGORY[trim((string) $category)] ?? self::MAX_IMAGES_DEFAULT;
+    }
+
     /**
      * 接口 C：用户发帖
      * POST /api/v1/local-life/posts  (auth:api)
@@ -332,6 +341,8 @@ class LocalLifeController extends Controller
             return response()->json(['errors' => [['code' => 'limit', 'message' => '今日发帖已达上限（' . $dailyLimit . ' 条），请明天再试']]], 429);
         }
 
+        $maxImages = $this->maxImagesFor($request->input('category'));
+
         $validator = Validator::make($request->all(), [
             'title'          => 'required|string|max:200',
             'category'       => ['required', 'string', 'in:' . implode(',', $this->categoryNames())],
@@ -346,7 +357,7 @@ class LocalLifeController extends Controller
             'is_free'        => 'nullable|boolean',
             'area_label'     => 'nullable|string|max:80',
             'location_label' => 'nullable|string|max:60',
-            'images'         => 'nullable|array|max:6',
+            'images'         => 'nullable|array|max:' . $maxImages,
             'images.*'       => 'image|mimes:jpg,jpeg,png,webp|max:5120',
         ], [
             'title.required'        => '请填写标题',
@@ -355,7 +366,7 @@ class LocalLifeController extends Controller
             'tab.required'          => '请选择频道',
             'tab.in'                => '频道不在允许范围',
             'contact_info.required' => '请填写联系方式，否则别人无法联系你',
-            'images.max'            => '最多上传 6 张图片',
+            'images.max'            => '最多上传 ' . $maxImages . ' 张图片',
             'images.*.image'        => '只能上传图片',
             'images.*.mimes'        => '图片格式仅支持 jpg/png/webp',
             'images.*.max'          => '单张图片不能超过 5MB',
