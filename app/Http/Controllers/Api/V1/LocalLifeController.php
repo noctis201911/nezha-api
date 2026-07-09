@@ -247,7 +247,7 @@ class LocalLifeController extends Controller
         $data = $this->merchantCard($m);
         $data['intro']             = $m->intro;
         $data['services']          = is_array($m->services) ? $m->services : [];
-        $data['images']            = $this->merchantImageUrls($m->images);
+        $data['images']            = $this->merchantImageUrls($this->imagesCoverFirst($m));
         $data['wechat_qr_url']     = $m->wechat_qr ? Helpers::get_full_url(self::MERCHANT_IMG_DIR, $m->wechat_qr, 'public') : null;
         $data['address']           = $m->address;
         $data['latitude']          = $m->latitude;
@@ -266,6 +266,7 @@ class LocalLifeController extends Controller
             'name'          => $m->name,
             'category'      => $m->category,
             'logo_url'      => $m->logo ? Helpers::get_full_url(self::MERCHANT_IMG_DIR, $m->logo, 'public') : null,
+            'cover_image_url' => $this->coverImageUrl($m),
             'rating'        => (float) $m->rating,
             'google_rating' => $m->google_rating !== null ? (float) $m->google_rating : null,
             'area'          => $m->area,
@@ -296,6 +297,40 @@ class LocalLifeController extends Controller
             }
         }
         return $urls;
+    }
+
+    /**
+     * 门面图三位一体（§5）：cover_image 若为相册成员则置于首位、其余原序跟后（去重），
+     * 未设或非成员则原序返回。详情页 hero 首图与 og 分享卡门面(merchantHeroPath)同源。
+     */
+    private function imagesCoverFirst(LocalLifeMerchant $m): array
+    {
+        $imgs = is_array($m->images)
+            ? array_values(array_filter($m->images, fn ($x) => is_string($x) && $x !== ''))
+            : [];
+        $cover = trim((string) ($m->cover_image ?? ''));
+        if ($cover !== '' && in_array($cover, $imgs, true)) {
+            $rest = array_values(array_filter($imgs, fn ($x) => $x !== $cover));
+            return array_merge([$cover], $rest);
+        }
+        return $imgs;
+    }
+
+    /**
+     * 门面图 URL（§5·列表卡缩略图优先用它，回落 logo）。
+     * cover_image 为相册成员时返回其 URL，否则 null（与 og 卡同一守卫，防悬空文件名 404）。
+     */
+    private function coverImageUrl(LocalLifeMerchant $m): ?string
+    {
+        $cover = trim((string) ($m->cover_image ?? ''));
+        if ($cover === '') {
+            return null;
+        }
+        $imgs = is_array($m->images) ? $m->images : [];
+        if (!in_array($cover, $imgs, true)) {
+            return null;
+        }
+        return Helpers::get_full_url(self::MERCHANT_IMG_DIR, basename($cover), 'public');
     }
 
     /** 发帖类目白名单：后台启用中的类目名 ∪ 旧常量（兼容历史帖；表空时回退常量） */
