@@ -81,7 +81,7 @@
     $nzoHouse = data_get($nzoAddr, 'house'); $nzoFloor = data_get($nzoAddr, 'floor'); $nzoRoad = data_get($nzoAddr, 'road');
     $nzoDeliveryNote = data_get($nzoAddr, 'delivery_note') ?: ($order->order_note ?: '');
     $nzoLat = data_get($nzoAddr, 'latitude'); $nzoLng = data_get($nzoAddr, 'longitude');
-    $nzoCopy = collect([$nzoName, $nzoPhone, $nzoRoad, $nzoHouse ? '门牌 ' . $nzoHouse : null, $nzoFloor ? $nzoFloor . ' 层' : null, $nzoAddrText, $nzoDeliveryNote ?: null, ($nzoLat && $nzoLng) ? $nzoLat . ',' . $nzoLng : null])->filter()->implode("\n");
+    $nzoCopy = collect([$nzoName, ($nzoPhone ? \App\CentralLogics\NezhaContactVisibility::phone($nzoPhone, $order->created_at ?? null) : null), $nzoRoad, $nzoHouse ? '门牌 ' . $nzoHouse : null, $nzoFloor ? $nzoFloor . ' 层' : null, $nzoAddrText, $nzoDeliveryNote ?: null, ($nzoLat && $nzoLng) ? $nzoLat . ',' . $nzoLng : null])->filter()->implode("\n");
 
     $nzoProduct = 0; $nzoAddon = 0; $nzoItems = [];
     foreach ($order->details as $nzd) {
@@ -330,8 +330,8 @@
                 <div class="nzo-ch"><h3>顾客信息</h3></div>
                 <div class="nzo-cb">
                     <div class="nzo-row"><span class="k">姓名</span><span class="v">{{ $nzoName }}</span></div>
-                    <div class="nzo-row"><span class="k">电话</span><span class="v">{{ $nzoPhone ? Helpers::mask_phone($nzoPhone) : '—' }}</span></div>
-                    <div class="nzo-row"><span class="k">邮箱</span><span class="v">{{ $nzoEmail ? Helpers::mask_email($nzoEmail) : '—' }}</span></div>
+                    <div class="nzo-row"><span class="k">电话</span><span class="v">{{ $nzoPhone ? \App\CentralLogics\NezhaContactVisibility::phone($nzoPhone, $order->created_at ?? null) : '—' }}</span></div>
+                    <div class="nzo-row"><span class="k">邮箱</span><span class="v">{{ $nzoEmail ? \App\CentralLogics\NezhaContactVisibility::email($nzoEmail, $order->created_at ?? null) : '—' }}</span></div>
                     @if (!is_null($nzoOrders))<div class="nzo-row"><span class="k">下单次数</span><span class="v">{{ $nzoOrders }} 次</span></div>@endif
                 </div>
             </div>
