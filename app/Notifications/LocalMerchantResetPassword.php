@@ -10,6 +10,9 @@ use Illuminate\Notifications\Messages\MailMessage;
  * 本地生活商户面板「设置/重置登录密码」邮件通知。
  * 兼作「首次设密」（admin 建号后触发 sendResetLink）与「忘记密码」——同一链接机制。
  * 链接指向商户面板 /m/reset/{token}（api.nezha.am 同源）。
+ *
+ * 🔴 走哪吒自有品牌中文邮件视图 emails.local-merchant-reset，不用 Laravel 默认 markdown——
+ *    默认 markdown 的头部/落款取 config('app.name')=stackfood…（StackFood 默认名）会泄露且英文混排。
  */
 class LocalMerchantResetPassword extends Notification
 {
@@ -29,16 +32,14 @@ class LocalMerchantResetPassword extends Notification
 
     public function toMail($notifiable): MailMessage
     {
-        $base = rtrim((string) config('app.url'), '/');
-        $url  = $base . '/m/reset/' . $this->token . '?email=' . urlencode($notifiable->getEmailForPasswordReset());
-        $mins = (int) config('auth.passwords.local_merchants.expire', 1440);
+        // 强制 https（站点走 https，config('app.url') 仍是 http 会让邮件链接走一次 301 跳转）
+        $base  = 'https://' . preg_replace('#^https?://#i', '', rtrim((string) config('app.url'), '/'));
+        $url   = $base . '/m/reset/' . $this->token . '?email=' . urlencode($notifiable->getEmailForPasswordReset());
+        $mins  = (int) config('auth.passwords.local_merchants.expire', 1440);
         $hours = max(1, intdiv($mins, 60));
 
         return (new MailMessage)
             ->subject('哪吒商户管理面 · 设置登录密码')
-            ->greeting('您好')
-            ->line('这是哪吒平台本地生活商户管理面的密码设置链接。点击下方按钮设置或重置您的登录密码。')
-            ->action('设置登录密码', $url)
-            ->line('链接在 ' . $hours . ' 小时内有效。若非您本人操作，请忽略本邮件，账号不会有任何变化。');
+            ->view('emails.local-merchant-reset', ['url' => $url, 'hours' => $hours]);
     }
 }
