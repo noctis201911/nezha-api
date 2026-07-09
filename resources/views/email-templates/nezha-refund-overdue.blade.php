@@ -21,7 +21,7 @@
                             <td style="font-size:14px;color:#333;font-weight:bold;">{{ \App\CentralLogics\Helpers::format_currency($refund_amount) }}</td></tr>
                     </table>
 
-                    <p style="font-size:14px;color:#555;margin:0 0 8px;">{{ translate('请尽快通过原支付方式(原路)将款项退还给顾客本人。哪吒为点对点直付, 平台不经手退款, 退款须由您在自己的收款账户原路退回。') }}</p>
+                    <p style="font-size:14px;color:#555;margin:0 0 8px;">{{ translate('请尽快通过原支付方式(原路)将款项退还给顾客本人，退款须在您自己的收款账户中完成原路退回。') }}</p>
                     <p style="font-size:14px;color:#555;margin:0 0 8px;">{{ translate('若您已经退款, 请登录商家后台「订单 → 待退款」, 找到该订单点「标记已退款」, 以免被系统判为逾期。') }}</p>
                     <p style="font-size:14px;color:#C4193E;margin:0 0 16px;">{{ translate('持续逾期不退款将计入您的风控档案, 并可能被平台暂停接单, 请务必及时处理。') }}</p>
 

@@ -83,7 +83,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
   @if(session('status'))<div class="nzp-alert nzp-alert-ok">{{ session('status') }}</div>@endif
   @if(session('error'))<div class="nzp-alert nzp-alert-err">{{ session('error') }}</div>@endif
   @yield('content')
-  <div class="nzp-foot">哪吒平台 · 本地生活商户自助维护 · 平台不碰钱不接单</div>
+  <div class="nzp-foot">哪吒平台 · 本地生活商户自助维护</div>
 </div>
 @stack('scripts')
 </body>

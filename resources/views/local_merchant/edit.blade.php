@@ -79,7 +79,7 @@
             @endforelse
         </div>
         <button type="button" class="nzp-addrow" id="nzp-add-svc">+ 添加服务项</button>
-        <div class="nzp-hint">标题必填，价格仅为展示文字，平台不收款。</div>
+        <div class="nzp-hint">标题必填，价格仅为展示文字。</div>
     </div>
 
     <div class="nzp-card">

@@ -235,7 +235,7 @@
                         @if ($nzoDisputed)
                             <div class="nzo-warn" style="background:#f3f4f6;color:#4b5563;border-color:#e5e7eb;"><i class="tio-time"></i> 该单退款争议审核中{{ $nzoDispute && $nzoDispute->opened_at ? ' · 提交于 ' . $nzoFmt($nzoDispute->opened_at) : '' }}。平台正在核实顾客是否已付款，核实期间暂停本单催办与逾期计时，裁决前暂不可退款。</div>
                         @else
-                            <div class="nzo-warn"><i class="tio-warning"></i> 平台不经手货款，请确认已按原路退款给顾客，再点「确认已退款」。</div>
+                            <div class="nzo-warn"><i class="tio-warning"></i> 请确认已按原路退款给顾客，再点「确认已退款」。</div>
                         @endif
                         <div class="nzo-3">
                             <div class="nzo-sub">
@@ -374,7 +374,7 @@
                 @csrf @method('PUT')
                 <div class="modal-header"><h5 class="modal-title">标记已退款</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div>
                 <div class="modal-body">
-                    <div class="nzo-warn" style="margin-bottom:14px;"><i class="tio-warning"></i> 平台不经手货款，请先在自己的账户按原路退款给顾客，再确认。</div>
+                    <div class="nzo-warn" style="margin-bottom:14px;"><i class="tio-warning"></i> 请先在自己的账户按原路退款给顾客，再确认。</div>
                     <div class="form-group"><label>实际退款金额</label><input type="text" name="actual_refund_amount" class="form-control" value="{{ (int) $nzoRefundAmt }}"></div>
                     @if ($nzoRR->payment_channel == 'usdt')<div class="form-group"><label>链上转账 tx hash（选填）</label><input type="text" name="merchant_refund_tx" class="form-control"></div>@endif
                     <div class="form-group mb-0"><label>备注（选填）</label><input type="text" name="merchant_note" class="form-control" placeholder="如：已退回原支付宝"></div>

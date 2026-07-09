@@ -198,8 +198,8 @@ class NezhaOrderTimeout
         $cfg = self::settings();
         $now = Carbon::now();
 
-        $refundMethod = '联系商家原路退回（平台不经手此款）';
-        $refundEta    = '以商家退款时间为准（平台不经手，无法预估到账）';
+        $refundMethod = '联系商家原路退回';
+        $refundEta    = '以商家退款时间为准';
 
         // 阶段 D/E：配送相关（仅展示，不自动取消）
         if ($phase === self::PHASE_HANDOVER || $phase === self::PHASE_PICKED) {

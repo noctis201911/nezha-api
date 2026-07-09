@@ -289,7 +289,7 @@
         'all' => ['label' => '全部订单', 'hint' => '集中查看当前仍需履约或复核的订单，按下一步操作推进。', 'empty' => '当前没有需要处理的订单。', 'icon' => 'tio-shopping-cart'],
         'customer_nudged' => ['label' => '客户催促', 'hint' => '集中处理顾客已催促、且商家还没完成对应动作的订单。', 'empty' => '暂无客户催促订单。', 'icon' => 'tio-notifications-alert'],
         'offline_pending' => ['label' => '待确认收款', 'hint' => '顾客已提交直付凭证，商家确认自己账户已到账后再出餐。', 'empty' => '暂无待确认收款订单。', 'icon' => 'tio-checkmark-circle'],
-        'refund_pending' => ['label' => '待退款', 'hint' => '平台不经手货款；请商家按原路退还顾客后在此标记已退款。', 'empty' => '暂无待退款订单。', 'icon' => 'tio-receipt-outlined'],
+        'refund_pending' => ['label' => '待退款', 'hint' => '请商家按原路退还顾客后在此标记已退款。', 'empty' => '暂无待退款订单。', 'icon' => 'tio-receipt-outlined'],
         'pending' => ['label' => '待处理', 'hint' => '新订单在这里接单；直付待核验订单请优先到待确认收款处理。', 'empty' => '暂无待处理订单。', 'icon' => 'tio-timer'],
         'confirmed' => ['label' => '已接单', 'hint' => '已确认的订单请尽快开始备餐，避免超时影响体验。', 'empty' => '暂无已接单订单。', 'icon' => 'tio-checkmark-circle-outlined'],
         'cooking' => ['label' => '备餐中', 'hint' => '备餐完成后标记配送中，顾客侧会同步看到进度。', 'empty' => '暂无备餐中订单。', 'icon' => 'tio-restaurant'],

@@ -38,7 +38,7 @@
         <div class="alert alert-info d-flex gap-2" role="alert">
             <i class="tio-info lh-1 mt-1"></i>
             <div>
-                <div class="font-weight-bold mb-1">{{ translate('顾客付款直接进您本人的收款账户，平台不经手任何资金。') }}</div>
+                <div class="font-weight-bold mb-1">{{ translate('顾客付款直接进您本人的收款账户。') }}</div>
                 <div class="fs-13">
                     {{ translate('下面是平台为您登记的收款方式。顾客在结算页选择对应方式时，看到的就是这里的收款码 / 地址，款项直接转给您本人。请核对是否正确——若有错误或需要修改，请联系平台客服处理（为防止误改导致收不到款，商家端暂不支持自行修改）。') }}
                 </div>

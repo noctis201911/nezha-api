@@ -1120,7 +1120,7 @@ class OrderController extends Controller
                     $nezha_zh = stripos(($order->customer?->current_language_key ?: 'zh'), 'zh') === 0;
                     $nezha_ntitle = $nezha_zh ? '订单已取消' : 'Order canceled';
                     $nezha_nmsg = $nezha_zh
-                        ? '你的订单 #' . $order->id . ' 已取消。你此前直接支付给商家的款项，请联系商家按原路退回（平台不经手此款）。'
+                        ? '你的订单 #' . $order->id . ' 已取消。此前直接付给商家的款项，请在订单页点『联系商家』按原路退回。'
                         : 'Your order #' . $order->id . ' is canceled. For the amount paid directly to the restaurant, please contact the restaurant for an original-route refund.';
                     $nezha_fcm = $order->is_guest == 0 ? $order?->customer?->cm_firebase_token : null;
                     $nezha_ndata = Helpers::makeDataForPushNotification(title: $nezha_ntitle, message: $nezha_nmsg, orderId: $order->id, type: 'order_status', orderStatus: 'canceled');
@@ -1376,7 +1376,7 @@ class OrderController extends Controller
         }
         try {
             Helpers::sendTelegramToRestaurant($order->restaurant,
-                "🔔 顾客在催退款\n订单 #{$order->id}\n请您尽快按原路退还顾客付款（平台不经手此款），退款后在商家后台「订单 → 待退款」点「标记已退款」。");
+                "🔔 顾客在催退款\n订单 #{$order->id}\n请您尽快按原路退还顾客付款，退款后在商家后台「订单 → 待退款」点「标记已退款」。");
         } catch (\Throwable $e) {}
         return response()->json(['message' => '已替您提醒商家尽快退款，请稍候'], 200);
     }
@@ -1776,7 +1776,7 @@ class OrderController extends Controller
         if ($order->payment_method == 'offline_payment') {
             return response()->json([
                 'errors' => [
-                    ['code' => 'order', 'message' => '您的款项是直接支付给商家的，退款由商家按您的原付款方式原路退回，平台不经手此款。请联系商家或客服处理。']
+                    ['code' => 'order', 'message' => '您的款项已直接支付给商家，退款请联系商家按原付款方式原路退回。']
                 ]
             ], 410);
         }

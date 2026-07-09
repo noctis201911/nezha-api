@@ -40,7 +40,7 @@ class WalletController extends Controller
         // [哪吒 B方案 L1-1/L1-5 硬闸] 平台不碰钱、提现/打款腿已拔除,商家钱包余额(total_earning)永不入账。
         // 提现入口默认禁用,即使余额因异常>0 也不放行。仅迁移到持牌分账时设 nezha_withdraw_enabled=1 才恢复。
         if ((\App\Models\BusinessSetting::where('key','nezha_withdraw_enabled')->first()?->value ?? 0) != 1) {
-            Toastr::error('B方案下平台不经手提现,商家货款由顾客直付本人账户。');
+            Toastr::error('货款由顾客直付您本人账户，没有提现这一步。');
             return redirect()->back();
         }
         $validator = Validator::make($request->all(), [

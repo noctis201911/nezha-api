@@ -1388,7 +1388,7 @@ class OrderLogic
             $nezha_zh = stripos(($order->customer?->current_language_key ?: 'zh'), 'zh') === 0;
             $title = $nezha_zh ? '订单已取消' : 'Order canceled';
             $msg = $nezha_zh
-                ? '你的订单 #' . $order->id . ' 已取消。你此前直接支付给商家的款项，请联系商家按原路退回（平台不经手此款）。'
+                ? '你的订单 #' . $order->id . ' 已取消。此前直接付给商家的款项，请在订单页点『联系商家』按原路退回。'
                 : 'Your order #' . $order->id . ' is canceled. For the amount paid directly to the restaurant, please contact the restaurant for an original-route refund.';
             $fcm = $order->is_guest == 0 ? $order?->customer?->cm_firebase_token : null;
             $data = Helpers::makeDataForPushNotification(title: $title, message: $msg, orderId: $order->id, type: 'order_status', orderStatus: 'canceled');
