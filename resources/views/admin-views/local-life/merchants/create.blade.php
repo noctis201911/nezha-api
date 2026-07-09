@@ -252,12 +252,20 @@
                         <div class="form-group">
                             <label class="input-label">相册（可多选）</label>
                             @if($isEdit && is_array($merchant->images) && count($merchant->images))
-                                <div class="mb-1">
+                                <small class="text-muted d-block mb-1">选一张作「门面图」（顾客端顶部 + 分享卡背景同用）；不选＝系统自动挑第一张横图。</small>
+                                <div class="mb-1 d-flex flex-wrap" style="gap:10px;">
+                                    <label class="text-center mb-0" style="cursor:pointer;">
+                                        <span style="height:46px;display:flex;align-items:center;justify-content:center;padding:0 10px;border:1px dashed #c9cdd2;border-radius:8px;color:#8a8f98;font-size:12px;">自动</span>
+                                        <input type="radio" name="cover_image" value="" {{ !$merchant->cover_image ? 'checked' : '' }} class="mt-1">
+                                    </label>
                                     @foreach($merchant->images as $im)
-                                        <img src="{{ \App\CentralLogics\Helpers::get_full_url('local-life-merchant', $im, 'public') }}" style="height:46px;border-radius:8px;margin:2px;">
+                                        <label class="text-center mb-0" style="cursor:pointer;">
+                                            <img src="{{ \App\CentralLogics\Helpers::get_full_url('local-life-merchant', $im, 'public') }}" style="height:46px;border-radius:8px;display:block;{{ $merchant->cover_image === $im ? 'outline:3px solid #C4193E;' : '' }}">
+                                            <input type="radio" name="cover_image" value="{{ $im }}" {{ $merchant->cover_image === $im ? 'checked' : '' }} class="mt-1">
+                                        </label>
                                     @endforeach
                                 </div>
-                                <small class="text-muted d-block mb-1">重新上传会替换全部相册图。</small>
+                                <small class="text-muted d-block mb-1">重新上传相册会替换全部图并把门面图重置为「自动」。</small>
                             @endif
                             <input type="file" name="images[]" class="form-control" accept="image/*" multiple>
                         </div>

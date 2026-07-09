@@ -24,7 +24,7 @@ class OgImageController extends Controller
     const CARD_VER = '1';
     // 本地生活批2 品牌卡版本(攻略/商家分享卡, 改版式 +1 整体重建)
     const GUIDE_CARD_VER = '1';
-    const MERCHANT_CARD_VER = '1';
+    const MERCHANT_CARD_VER = '2';
     // 德拉姆符号 ֏(U+058F) 在 wqy 中文字体里无字形(显示成方框), 价格行改用含该符号的 FreeSans
     const PRICE_FONT = '/usr/share/fonts/truetype/freefont/FreeSans.ttf';
 
@@ -114,13 +114,30 @@ class OgImageController extends Controller
                 return $this->brandFallback();
             }
             $disk = Helpers::getDisk();
-            $logoPath = ($m->logo && Storage::disk($disk)->exists('local-life-merchant/' . $m->logo)) ? 'local-life-merchant/' . $m->logo : null;
             $sub = implode(' · ', array_filter([$m->category, $m->area]));
-            // 诚实评分：只认 Google 真源，无 Google 值 → 整行不显（禁商家自填回落）
+            // 服务点睛：取服务项前 4 个标题（剪 / 烫 / 染 / 护理）
+            $svcText = '';
+            if (is_array($m->services)) {
+                $titles = [];
+                foreach ($m->services as $sv) {
+                    $t = trim((string) ($sv['title'] ?? ''));
+                    if ($t !== '') { $titles[] = $t; }
+                    if (count($titles) >= 4) { break; }
+                }
+                $svcText = implode(' / ', $titles);
+            }
+            // 诚实评分：只认 Google 真源，无 Google 值 → 不显（禁商家自填回落）
             $ratingVal = null; $ratingSrc = null;
             if ($m->google_rating !== null) {
                 $ratingVal = number_format((float) $m->google_rating, 1); $ratingSrc = 'google';
             }
+            // 门面图：cover_image(运营指定) → 自动挑第一张横图 → 第一张 → logo
+            $heroPath = $this->merchantHeroPath($disk, $m);
+            if ($heroPath) {
+                return $this->buildMerchantPhotoCard($disk, $heroPath, $m->name, $sub, $svcText, $ratingVal, $ratingSrc, 'ogm' . $id);
+            }
+            // 无任何照片 → 回退旧 logo 卡
+            $logoPath = ($m->logo && Storage::disk($disk)->exists('local-life-merchant/' . $m->logo)) ? 'local-life-merchant/' . $m->logo : null;
             return $this->buildMerchantCard($disk, $logoPath, $m->name, $sub, $ratingVal, $ratingSrc, 'ogm' . $id);
         } catch (\Throwable $e) {
             return $this->brandFallback();
@@ -626,6 +643,133 @@ class OgImageController extends Controller
     /**
      * 商家品牌卡 1200x630（附页⑧下）。暖白底 + logo + 店名 + 类目·区域 + 诚实评分 + 底行。
      */
+    /** 分享卡门面图：cover_image(运营指定) → 自动挑第一张横图(宽≥高) → 第一张 → logo。返回相对路径或 null。 */
+    private function merchantHeroPath($disk, $m): ?string
+    {
+        $dir = 'local-life-merchant/';
+        $imgs = is_array($m->images) ? array_values(array_filter($m->images, fn ($x) => is_string($x) && $x !== '')) : [];
+        // 1) 运营指定门面图
+        $cover = trim((string) ($m->cover_image ?? ''));
+        if ($cover !== '' && in_array($cover, $imgs, true) && Storage::disk($disk)->exists($dir . $cover)) {
+            return $dir . $cover;
+        }
+        // 2) 自动挑第一张横图
+        foreach ($imgs as $name) {
+            $rel = $dir . $name;
+            if (!Storage::disk($disk)->exists($rel)) { continue; }
+            $info = @getimagesizefromstring(Storage::disk($disk)->get($rel));
+            if ($info && $info[0] >= $info[1]) { return $rel; }
+        }
+        // 3) 第一张（任意比例）
+        foreach ($imgs as $name) {
+            if (Storage::disk($disk)->exists($dir . $name)) { return $dir . $name; }
+        }
+        // 4) logo
+        if ($m->logo && Storage::disk($disk)->exists($dir . $m->logo)) { return $dir . $m->logo; }
+        return null;
+    }
+
+    /** 平台方形 logo 角标：白圆角容器 + nezha-logo-sq.png(contain) + 白标签(带阴影)。替代 drawBrandMark 的红「哪」块。 */
+    private function drawSquareLogo($card, $x, $y, $box, $font, $label, $disk, $white)
+    {
+        $this->fillRoundedRect($card, $x, $y, $x + $box, $y + $box, 14, $white);
+        $ipad = (int) round($box * 0.13);
+        $logoRel = 'business/nezha-logo-sq.png';
+        if (Storage::disk($disk)->exists($logoRel)) {
+            $limg = @imagecreatefromstring(Storage::disk($disk)->get($logoRel));
+            if ($limg) {
+                imagealphablending($card, true);
+                $sw = imagesx($limg); $sh = imagesy($limg);
+                $inner = $box - 2 * $ipad;
+                $scale = min($inner / $sw, $inner / $sh);
+                $dw = (int) round($sw * $scale); $dh = (int) round($sh * $scale);
+                $dx = (int) ($x + $ipad + ($inner - $dw) / 2);
+                $dy = (int) ($y + $ipad + ($inner - $dh) / 2);
+                imagecopyresampled($card, $limg, $dx, $dy, 0, 0, $dw, $dh, $sw, $sh);
+                imagedestroy($limg);
+            }
+        }
+        $labSize = 27;
+        $ty = (int) ($y + $box / 2 + 10);
+        $shadow = imagecolorallocatealpha($card, 0, 0, 0, 75);
+        imagettftext($card, $labSize, 0, $x + $box + 20, $ty + 2, $shadow, $font, $label);
+        imagettftext($card, $labSize, 0, $x + $box + 18, $ty, $white, $font, $label);
+    }
+
+    /** 商家分享卡（方案A·照片大图）：照片铺满 + 上下渐变 + 平台方形 logo + 店名 + 类目·区域(+Google评分) + 服务点睛。 */
+    private function buildMerchantPhotoCard($disk, $photoPath, $name, $sub, $svcText, $ratingVal, $ratingSrc, $keyPrefix)
+    {
+        $mtime = Storage::disk($disk)->lastModified($photoPath);
+        $metaKey = $name . '|' . $sub . '|' . $svcText . '|' . $ratingVal . '|' . $ratingSrc;
+        $cacheRel = 'og-cache/merchantphoto-' . $keyPrefix . '-' . substr(md5($photoPath . $mtime . $metaKey . self::MERCHANT_CARD_VER), 0, 16) . '.jpg';
+        if (Storage::disk($disk)->exists($cacheRel)) {
+            return $this->cachedJpg($disk, $cacheRel);
+        }
+
+        $W = 1200; $H = 630; $pad = 56;
+        $font = self::CJK_FONT;
+
+        $card = imagecreatetruecolor($W, $H);
+        $white = imagecolorallocate($card, 255, 255, 255);
+        $soft  = imagecolorallocate($card, 236, 236, 236);
+        $amber = imagecolorallocate($card, 243, 164, 41);
+        $dk    = imagecolorallocate($card, 22, 22, 24);
+        imagefilledrectangle($card, 0, 0, $W, $H, $dk);
+
+        // 照片 cover 裁切铺满
+        $photo = @imagecreatefromstring(Storage::disk($disk)->get($photoPath));
+        if ($photo) {
+            $sw = imagesx($photo); $sh = imagesy($photo);
+            $scale = max($W / $sw, $H / $sh);
+            $srcW = (int) round($W / $scale); $srcH = (int) round($H / $scale);
+            $srcX = (int) (($sw - $srcW) / 2); $srcY = (int) (($sh - $srcH) / 2);
+            imagecopyresampled($card, $photo, 0, 0, $srcX, $srcY, $W, $H, $srcW, $srcH);
+            imagedestroy($photo);
+        }
+
+        imagealphablending($card, true);
+        // 顶部渐变（黑→透明，保证左上 logo/标签可读）
+        $tH = (int) ($H * 0.26);
+        for ($i = 0; $i < $tH; $i++) {
+            $t = $i / $tH;
+            $al = (int) round(72 + 55 * $t);
+            $c = imagecolorallocatealpha($card, 0, 0, 0, min(127, $al));
+            imagefilledrectangle($card, 0, $i, $W, $i, $c);
+        }
+        // 底部渐变（透明→近黑，保证店名/meta 可读）
+        $gTop = (int) ($H * 0.42); $gH = $H - $gTop;
+        for ($i = 0; $i < $gH; $i++) {
+            $t = $i / $gH;
+            $al = (int) round(122 - 114 * $t);
+            if ($al < 0) { $al = 0; }
+            $c = imagecolorallocatealpha($card, 0, 0, 0, $al);
+            imagefilledrectangle($card, 0, $gTop + $i, $W, $gTop + $i, $c);
+        }
+
+        // 平台方形 logo（左上）
+        $this->drawSquareLogo($card, $pad, 40, 74, $font, '哪吒本地生活', $disk, $white);
+
+        // 店名（左下大字）
+        $nameLines = $this->wrapText($font, 54, $name, $W - 2 * $pad, 1);
+        imagettftext($card, 54, 0, $pad, $H - 92, $white, $font, $nameLines[0]);
+
+        // meta 行：[★Google X.X · ] 类目 · 区域 · 服务点睛
+        $metaStr = implode(' · ', array_filter([$sub, $svcText]));
+        $metaY = $H - 42; $mx = $pad;
+        if ($ratingVal !== null && $ratingSrc === 'google') {
+            $this->drawStar($card, $pad + 12, $metaY - 10, 12, $amber);
+            $rt = 'Google ' . $ratingVal . '   ·   ';
+            imagettftext($card, 27, 0, $pad + 30, $metaY, $white, $font, $rt);
+            $rb = imagettfbbox(27, 0, $font, $rt);
+            $mx = $pad + 30 + ($rb[2] - $rb[0]);
+        }
+        if ($metaStr !== '') {
+            $metaLine = $this->wrapText($font, 27, $metaStr, $W - $mx - $pad, 1);
+            imagettftext($card, 27, 0, $mx, $metaY, $soft, $font, $metaLine[0]);
+        }
+
+        return $this->outputCard($disk, $card, $cacheRel);
+    }
     private function buildMerchantCard($disk, $logoPath, $name, $sub, $ratingVal, $ratingSrc, $keyPrefix)
     {
         $mtime = $logoPath ? Storage::disk($disk)->lastModified($logoPath) : 'nologo';

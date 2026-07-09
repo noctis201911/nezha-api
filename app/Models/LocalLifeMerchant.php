@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 class LocalLifeMerchant extends Model
 {
     protected $fillable = [
-        'name', 'category', 'logo', 'images', 'wechat_qr', 'contacts',
+        'name', 'category', 'logo', 'images', 'cover_image', 'wechat_qr', 'contacts',
         'rating', 'google_rating', 'google_rating_url',
         'area', 'address', 'latitude', 'longitude',
         'open_days', 'open_time', 'close_time', 'hours_note',

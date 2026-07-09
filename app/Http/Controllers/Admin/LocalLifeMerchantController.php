@@ -117,6 +117,10 @@ class LocalLifeMerchantController extends Controller
         }
         if ($request->hasFile('images')) {
             $data['images'] = $this->uploadAlbum($request);
+            $data['cover_image'] = null; // 相册重传→门面重置自动
+        } else {
+            $pick = trim((string) $request->input('cover_image'));
+            $data['cover_image'] = ($pick !== '' && is_array($merchant->images) && in_array($pick, $merchant->images, true)) ? $pick : null;
         }
         $merchant->update($data);
         Toastr::success('商家已更新');
@@ -216,6 +220,7 @@ class LocalLifeMerchantController extends Controller
             'logo'              => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
             'wechat_qr'         => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
             'images.*'          => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
+            'cover_image'       => 'nullable|string|max:191',
             'services'          => 'nullable|array',
             'services.*.title'  => 'nullable|string|max:120',
             'services.*.desc'   => 'nullable|string|max:200',
