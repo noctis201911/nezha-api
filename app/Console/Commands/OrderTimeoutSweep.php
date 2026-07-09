@@ -282,7 +282,7 @@ class OrderTimeoutSweep extends Command
             $id = $order->id;
             switch ($type) {
                 case 'cancel_refund':
-                    $text = "⚠️ 哪吒通知｜订单 #{$id} 因超时已被系统自动取消。顾客此前直付给你的款项，请按原路尽快退回（平台不经手此款）。";
+                    $text = "⚠️ 哪吒通知｜订单 #{$id} 因超时已被系统自动取消。顾客此前直付给你的款项，请按原路尽快退回。";
                     break;
                 case 'prep_overtime':
                     $text = "🍳 哪吒提醒｜订单 #{$id} 备餐已超时约 {$minutes} 分钟，请尽快出餐，避免顾客久等。";
@@ -334,7 +334,7 @@ class OrderTimeoutSweep extends Command
         $title = $zh ? '订单已取消' : 'Order canceled';
         if ($paid) {
             $msg = $zh
-                ? '商家接单超时，订单 #' . $order->id . ' 已自动取消。你此前直付商家的款项，平台将通知商家联系你按原路退回（平台不经手此款）。'
+                ? '商家接单超时，订单 #' . $order->id . ' 已自动取消。你此前直付商家的款项，平台将通知商家联系你按原路退回。'
                 : 'The restaurant did not respond in time, so order #' . $order->id . ' was canceled. For the amount paid directly to the restaurant, the platform will ask the restaurant to refund you via the original method (the platform does not handle this money).';
         } else {
             $msg = $zh

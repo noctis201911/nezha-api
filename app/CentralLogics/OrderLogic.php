@@ -656,7 +656,7 @@ class OrderLogic
             'order_amount'    => (float) $order->order_amount,
             'currency_symbol' => $symbol,
             'payee'           => $order->restaurant?->name,   // 收款方=商家(B方案直付商家)
-            'platform_note'   => '平台不经手款项，本收据仅供核对；款项直接支付给商家本人账户。',
+            'platform_note'   => '本收据仅供核对；款项直接支付给商家本人账户。',
             'masked_fields'   => $masked_fields,
         ];
     }
