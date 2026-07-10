@@ -100,3 +100,5 @@
 - **新增任何"默认关、待激活/待决策"的开关都要加进本表**（尤其资金/合规/性能灰度类），别让它散落在各 memory 里等上线时漏掉。
 - 改了任何开关的真实值 → 同步更新本表的"现值"列。
 - 定期（或每次跑上线 QA 时）用一条查询核对本表现值 vs 生产 `business_settings` 真实值，防表与实漂移。
+- **核对命令 `php artisan nezha:switches-verify` 已实装（M3）**：三方对账（注册表 `config/nezha_switches.php` ↔ 本表 ↔ 生产 `business_settings`），输出 🔴偏离预期 / 🟡文档现值过期 / 🟢一致（退出码 0/1/2）。QA 例行（`QA_MASTER §五 T0/T1`）跑一次，也可随时手动跑。
+- **开关台账只读页** `admin/nezha-switches`（超管后台 ⑧系统 → 开关台账）：把本表实时可视化，偏离预期红色置顶；🔴纯只读，翻闸仍来各自设置页（本表与页面同源于注册表，改开关清单＝改 `config/nezha_switches.php` 并同步本表）。
