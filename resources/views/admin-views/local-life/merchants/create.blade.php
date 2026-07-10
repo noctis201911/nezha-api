@@ -111,6 +111,11 @@
                                 <input type="number" step="0.1" min="0" max="5" name="google_rating" class="form-control" placeholder="4.9" value="{{ $val('google_rating') }}">
                             </div>
                             <div class="col-md-4">
+                                <label class="input-label">Google 评价条数</label>
+                                <input type="number" step="1" min="0" name="google_rating_count" class="form-control" placeholder="132" value="{{ $val('google_rating_count') }}">
+                                <small class="text-muted">顾客端显「4.8 · 132 条评价」；留空只显分值。与评分同为人工核录、月度校核。</small>
+                            </div>
+                            <div class="col-md-4">
                                 <label class="input-label">Google 评分链接</label>
                                 <input type="text" name="google_rating_url" class="form-control" maxlength="255" placeholder="https://..." value="{{ $val('google_rating_url') }}">
                             </div>
@@ -184,6 +189,7 @@
                                         <div class="col-md-3"><input type="text" name="services[{{ $i }}][price_text]" class="form-control form-control-sm" placeholder="价格(如 350000֏ /月 起)" value="{{ $s['price_text'] ?? '' }}"></div>
                                         <div class="col-md-1 text-center"><button type="button" class="btn btn-sm btn-outline-danger nz-del-row" title="删除">&times;</button></div>
                                     </div>
+                                    <div class="row g-2 mt-1"><div class="col-12"><label style="font-size:12px;margin:0;cursor:pointer"><input type="checkbox" name="services[{{ $i }}][featured]" value="1" {{ !empty($s['featured']) ? 'checked' : '' }}> <b style="color:#B26A00">招牌</b>（顾客端加「招牌」标 + 组内置顶，每店最多 3 个）</label></div></div>
                                     <div class="row g-2 mt-1 align-items-start" style="background:#faf9f7;border-radius:6px;padding:6px 4px">
                                         <div class="col-12"><small class="text-muted">房型卡（租房民宿选填 · 其他类目留空即为现状文字行）</small></div>
                                         <div class="col-md-3">
@@ -403,6 +409,7 @@
                 '<div class="col-md-3"><input type="text" name="services[' + i + '][price_text]" class="form-control form-control-sm" placeholder="价格(如 350000֏ /月 起)"></div>' +
                 '<div class="col-md-1 text-center"><button type="button" class="btn btn-sm btn-outline-danger nz-del-row" title="删除">&times;</button></div>' +
                 '</div>' +
+                '<div class="row g-2 mt-1"><div class="col-12"><label style="font-size:12px;margin:0;cursor:pointer"><input type="checkbox" name="services[' + i + '][featured]" value="1"> <b style="color:#B26A00">招牌</b>（顾客端加「招牌」标 + 组内置顶，每店最多 3 个）</label></div></div>' +
                 '<div class="row g-2 mt-1 align-items-start" style="background:#faf9f7;border-radius:6px;padding:6px 4px">' +
                 '<div class="col-12"><small class="text-muted">房型卡（租房民宿选填 · 其他类目留空即为现状文字行）</small></div>' +
                 '<div class="col-md-3"><label class="text-muted" style="font-size:11px">房型图</label><input type="file" name="services[' + i + '][image]" accept="image/*" class="form-control form-control-sm"></div>' +

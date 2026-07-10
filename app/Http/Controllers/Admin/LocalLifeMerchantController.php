@@ -206,6 +206,7 @@ class LocalLifeMerchantController extends Controller
             'category'          => ['required', 'string', 'in:' . implode(',', $catNames)],
             'rating'            => 'nullable|numeric|min:0|max:5',
             'google_rating'     => 'nullable|numeric|min:0|max:5',
+            'google_rating_count' => 'nullable|integer|min:0|max:100000000',
             'google_rating_url' => 'nullable|string|max:255',
             'area'              => 'nullable|string|max:60',
             'address'           => 'nullable|string|max:255',
@@ -225,6 +226,8 @@ class LocalLifeMerchantController extends Controller
             'services.*.title'  => 'nullable|string|max:120',
             'services.*.desc'   => 'nullable|string|max:200',
             'services.*.price_text' => 'nullable|string|max:60',
+            // 招牌标（v3 §④-4）：勾选写进 JSON featured，前端加「招牌」tag + 组内置顶（每店 ≤3 由前端渲染截断）
+            'services.*.featured' => 'nullable|boolean',
             // 房型卡(§2b)：每项可选图 + attrs 子集(户型/面积/设施)。仅租房民宿类目用；其他类目留空回落文字行。
             'services.*.image'             => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
             'services.*.existing_image'    => 'nullable|string|max:191',
@@ -267,6 +270,7 @@ class LocalLifeMerchantController extends Controller
             'category'          => $request->category,
             'rating'            => $request->filled('rating') ? (float) $request->rating : 5.0,
             'google_rating'     => $request->filled('google_rating') ? (float) $request->google_rating : null,
+            'google_rating_count' => $request->filled('google_rating_count') ? (int) $request->google_rating_count : null,
             'google_rating_url' => $request->google_rating_url ?: null,
             'area'              => $request->area ?: null,
             'address'           => $request->address ?: null,
@@ -396,6 +400,10 @@ class LocalLifeMerchantController extends Controller
             }
             if ($attrs) {
                 $item['attrs'] = $attrs;
+            }
+            // 招牌标（v3 §④-4）：checkbox 勾选 → featured=true（缺失键不写，保持 JSON 精简）
+            if (filter_var($row['featured'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+                $item['featured'] = true;
             }
             $items[] = $item;
         }

@@ -308,6 +308,10 @@ class LocalLifeController extends Controller
             if (isset($s['attrs']) && is_array($s['attrs']) && !empty($s['attrs'])) {
                 $item['attrs'] = $s['attrs'];
             }
+            // 招牌标（v3 §④-4）：透传 featured 布尔，前端加「招牌」tag + 组内置顶（缺失=无 tag）
+            if (!empty($s['featured'])) {
+                $item['featured'] = true;
+            }
             $out[] = $item;
         }
         return $out;
@@ -324,6 +328,7 @@ class LocalLifeController extends Controller
             'cover_image_url' => $this->coverImageUrl($m),
             'rating'        => (float) $m->rating,
             'google_rating' => $m->google_rating !== null ? (float) $m->google_rating : null,
+            'google_rating_count' => $m->google_rating_count !== null ? (int) $m->google_rating_count : null,
             'area'          => $m->area,
             'latitude'      => $m->latitude !== null ? (float) $m->latitude : null,
             'longitude'     => $m->longitude !== null ? (float) $m->longitude : null,
@@ -334,7 +339,53 @@ class LocalLifeController extends Controller
             'today_hours'   => $this->todayHoursFor($m),
             // 瀑布流商户伪帖卡「X 起」价(§2b)：取 services 第一个可解析项 → {amount,suffix}；无则 null(价格区留空)
             'price_from'    => $this->firstServicePrice($m),
+            // 好店列表卡服务锚点(v3 §④-5)：招牌优先/前 2 项可解析价目 [{title,amount,suffix}]；无可解析项则 []
+            'service_anchors' => $this->serviceAnchors($m),
         ];
+    }
+
+    /**
+     * 好店列表卡「服务锚点行」(v3 §④-5)：最多 2 项 {title,amount,suffix}。
+     * 只取 price_text 可解析(前导数字)的服务；featured 优先(稳定序)、否则原序前 2。
+     * 全不可解析(如雅顺全"面议") → 空数组，前端整行隐。
+     */
+    private function serviceAnchors(LocalLifeMerchant $m): array
+    {
+        $services = is_array($m->services) ? $m->services : [];
+        $parseable = [];
+        foreach ($services as $idx => $s) {
+            if (!is_array($s)) {
+                continue;
+            }
+            $pt = trim((string) ($s['price_text'] ?? ''));
+            if ($pt === '' || !preg_match('/^\s*([\d,]+)/', $pt, $mm)) {
+                continue;
+            }
+            $amount = (int) str_replace(',', '', $mm[1]);
+            if ($amount <= 0) {
+                continue;
+            }
+            $suffix = trim(preg_replace('/^\s*(֏|AMD|amd|դր\.?|драм)\s*/iu', '', trim(substr($pt, strlen($mm[0])))));
+            $suffix = trim(preg_replace('/\s*起(订)?\s*$/u', '', $suffix));
+            $parseable[] = [
+                'title'    => trim((string) ($s['title'] ?? '')),
+                'amount'   => $amount,
+                'suffix'   => $suffix,
+                'featured' => !empty($s['featured']),
+                'idx'      => $idx,
+            ];
+        }
+        // 招牌优先，其余保持原序（稳定）
+        usort($parseable, function ($a, $b) {
+            if ($a['featured'] !== $b['featured']) {
+                return $b['featured'] <=> $a['featured'];
+            }
+            return $a['idx'] <=> $b['idx'];
+        });
+        return array_map(
+            fn ($x) => ['title' => $x['title'], 'amount' => $x['amount'], 'suffix' => $x['suffix']],
+            array_slice($parseable, 0, 2)
+        );
     }
 
     /**
