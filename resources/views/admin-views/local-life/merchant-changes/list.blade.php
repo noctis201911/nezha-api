@@ -20,6 +20,43 @@
         }
         return mb_strlen((string)$v) > 80 ? mb_substr((string)$v, 0, 80) . '…' : (string)$v;
     };
+    // 房型卡富渲染(仅 services 字段)：title/price 一行 + 户型/面积/设施 label 行 + 图缩略图，让复审台真能看出图/attrs 变化
+    $svcLayouts = ['studio'=>'开间','1b1l'=>'一室一厅','2b1l'=>'两室一厅','3b1l'=>'三室一厅','4plus'=>'四室及以上'];
+    $svcAmen = ['furniture'=>'家具','washer'=>'洗衣机','fridge'=>'冰箱','ac'=>'空调','heating'=>'暖气','elevator'=>'电梯','parking'=>'停车位','balcony'=>'阳台','private_bath'=>'独立卫浴','kitchen'=>'可做饭'];
+    $svcImgUrl = fn($f) => \App\CentralLogics\Helpers::get_full_url('local-life-merchant', basename((string)$f), 'public');
+    $fmtServices = function ($v) use ($svcLayouts, $svcAmen, $svcImgUrl) {
+        if (!is_array($v) || !count($v)) return '<span class="text-muted">（空）</span>';
+        $out = '';
+        foreach ($v as $s) {
+            if (!is_array($s)) continue;
+            $title = e(trim((string) ($s['title'] ?? '')));
+            $price = e(trim((string) ($s['price_text'] ?? '')));
+            $out .= '<div class="mb-1" style="border-bottom:1px dashed #eee;padding-bottom:4px">';
+            $out .= '<div>' . $title . ($price !== '' ? ' ｜ ' . $price : '') . '</div>';
+            $attrs = is_array($s['attrs'] ?? null) ? $s['attrs'] : [];
+            if ($attrs) {
+                $bits = [];
+                if (!empty($attrs['layout']) && isset($svcLayouts[$attrs['layout']])) {
+                    $bits[] = $svcLayouts[$attrs['layout']];
+                }
+                if (!empty($attrs['area_label'])) {
+                    $bits[] = e($attrs['area_label']);
+                }
+                if (!empty($attrs['amenities']) && is_array($attrs['amenities'])) {
+                    $bits[] = implode('/', array_map(fn ($a) => e($svcAmen[$a] ?? $a), $attrs['amenities']));
+                }
+                if ($bits) {
+                    $out .= '<div class="text-muted" style="font-size:11.5px">' . implode(' · ', $bits) . '</div>';
+                }
+            }
+            $img = trim((string) ($s['image'] ?? ''));
+            if ($img !== '') {
+                $out .= '<img src="' . e($svcImgUrl($img)) . '" style="height:40px;border-radius:6px;margin-top:2px">';
+            }
+            $out .= '</div>';
+        }
+        return $out !== '' ? $out : '<span class="text-muted">（空）</span>';
+    };
     $changed = function ($c) use ($labels) {
         $p = (array)$c->payload; $b = (array)$c->base_snapshot; $rows = [];
         foreach ($labels as $k => $label) {
@@ -57,8 +94,13 @@
                                 @foreach($rows as $r)
                                     <tr class="{{ in_array($r['k'], ['name','address']) ? 'table-warning' : '' }}">
                                         <td>{{ $r['label'] }}@if(in_array($r['k'], ['name','address']))<span class="badge badge-soft-danger ml-1">重点</span>@endif</td>
-                                        <td class="text-muted">{{ $fmt($b[$r['k']] ?? null, $r['k']) }}</td>
-                                        <td><strong>{{ $fmt($p[$r['k']] ?? null, $r['k']) }}</strong></td>
+                                        @if($r['k'] === 'services')
+                                            <td class="text-muted">{!! $fmtServices($b[$r['k']] ?? null) !!}</td>
+                                            <td><strong>{!! $fmtServices($p[$r['k']] ?? null) !!}</strong></td>
+                                        @else
+                                            <td class="text-muted">{{ $fmt($b[$r['k']] ?? null, $r['k']) }}</td>
+                                            <td><strong>{{ $fmt($p[$r['k']] ?? null, $r['k']) }}</strong></td>
+                                        @endif
                                     </tr>
                                 @endforeach
                                 </tbody>

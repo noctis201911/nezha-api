@@ -20,6 +20,8 @@ class PanelController extends Controller
 {
     private const GUARD   = 'local_merchant';
     private const IMG_DIR = 'local-life-merchant/';
+    /** 与 Api\V1\LocalLifeController::RENTAL_CATEGORY 同步（该处为 private 拿不到，镜像一份） */
+    private const RENTAL_CATEGORY = '租房民宿';
 
     private function account()
     {
@@ -82,8 +84,9 @@ class PanelController extends Controller
         $pending = $this->pendingChange($merchant->id);
         // 有待审就在待审基础上继续改；否则用线上现值
         $prefill = $pending ? array_merge($this->liveEditable($merchant), (array) $pending->payload) : $this->liveEditable($merchant);
+        $isRental = ($merchant->category === self::RENTAL_CATEGORY);
 
-        return view('local_merchant.edit', compact('merchant', 'prefill', 'pending'));
+        return view('local_merchant.edit', compact('merchant', 'prefill', 'pending', 'isRental'));
     }
 
     public function submit(Request $request)
@@ -98,7 +101,8 @@ class PanelController extends Controller
         // 图片基线：现有待审快照优先，否则线上现值（不传新图=保留现状）
         $baseline = $pending ? array_merge($this->liveEditable($merchant), (array) $pending->payload) : $this->liveEditable($merchant);
 
-        $payload = $this->buildPayload($request, $baseline);
+        $isRental = ($merchant->category === self::RENTAL_CATEGORY);
+        $payload = $this->buildPayload($request, $baseline, $isRental);
 
         // 建/替换 该商户唯一待审快照
         $data = [
@@ -137,7 +141,7 @@ class PanelController extends Controller
 
     /* ---------------- 校验 + 组装（仅自改白名单字段） ---------------- */
 
-    private function buildPayload(Request $request, array $baseline): array
+    private function buildPayload(Request $request, array $baseline, bool $isRental): array
     {
         $request->validate([
             'name'                  => 'required|string|max:120',
@@ -154,6 +158,13 @@ class PanelController extends Controller
             'services.*.title'      => 'nullable|string|max:120',
             'services.*.desc'       => 'nullable|string|max:200',
             'services.*.price_text' => 'nullable|string|max:60',
+            // 房型卡(仅租房民宿类目用；非租房服务端 gate 一律不采纳，见 buildRentalServices 调用点)
+            'services.*.image'             => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
+            'services.*.existing_image'    => 'nullable|string|max:191',
+            'services.*.attrs.layout'      => 'nullable|in:studio,1b1l,2b1l,3b1l,4plus',
+            'services.*.attrs.area_label'  => 'nullable|string|max:20',
+            'services.*.attrs.amenities'   => 'nullable|array|max:10',
+            'services.*.attrs.amenities.*' => 'in:furniture,washer,fridge,ac,heating,elevator,parking,balcony,private_bath,kitchen',
             'contacts'              => 'nullable|array|max:20',
             'contacts.*.method'     => 'nullable|string|in:wechat,phone,whatsapp,telegram',
             'contacts.*.value'      => 'nullable|string|max:120',
@@ -164,7 +175,10 @@ class PanelController extends Controller
             'name.required' => '店名必填',
         ], ['name' => '店名', 'address' => '地址', 'intro' => '介绍']);
 
-        $services = $this->parseServices($request->input('services'), is_array($baseline['services'] ?? null) ? $baseline['services'] : []);
+        // 类目门（服务端，非 UI 摆设）：租房走房型卡解析(吃 image/attrs)；非租房走现状(忽略请求里任何 image/attrs，按 title 保留 baseline)
+        $services = $isRental
+            ? $this->buildRentalServices($request)
+            : $this->parseServices($request->input('services'), is_array($baseline['services'] ?? null) ? $baseline['services'] : []);
         $contacts = $this->parseContacts($request);
 
         // 硬禁业务词筛查（换汇/加密买卖/医美注射/性服务/赌博/制裁规避等）——命中即拒
@@ -227,9 +241,69 @@ class PanelController extends Controller
     }
 
     /**
+     * 房型卡(仅租房民宿类目)：抄 Admin\LocalLifeMerchantController::buildServicesWithMedia() ——
+     * 图新传优先/否则 existing_image 隐藏域回填 basename；attrs(layout/area_label/amenities)按白名单剥离未知值。
+     * 与 admin 逻辑保持一致，白名单变更须两处同步改。
+     */
+    private function buildRentalServices(Request $request): array
+    {
+        $rows = $request->input('services');
+        if (!is_array($rows)) {
+            return [];
+        }
+        $layoutAllow = ['studio', '1b1l', '2b1l', '3b1l', '4plus'];
+        $amenAllow   = ['furniture', 'washer', 'fridge', 'ac', 'heating', 'elevator', 'parking', 'balcony', 'private_bath', 'kitchen'];
+        $items = [];
+        foreach ($rows as $i => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $title = trim((string) ($row['title'] ?? ''));
+            if ($title === '') {
+                continue;
+            }
+            $item = [
+                'title'      => $title,
+                'desc'       => trim((string) ($row['desc'] ?? '')),
+                'price_text' => trim((string) ($row['price_text'] ?? '')),
+            ];
+            $file = $request->file("services.$i.image");
+            if ($file) {
+                $item['image'] = Helpers::upload(self::IMG_DIR, 'webp', $file);
+            } else {
+                $existing = trim((string) ($row['existing_image'] ?? ''));
+                if ($existing !== '') {
+                    $item['image'] = basename($existing);
+                }
+            }
+            $rawAttrs = is_array($row['attrs'] ?? null) ? $row['attrs'] : [];
+            $attrs = [];
+            $layout = trim((string) ($rawAttrs['layout'] ?? ''));
+            if (in_array($layout, $layoutAllow, true)) {
+                $attrs['layout'] = $layout;
+            }
+            $area = trim((string) ($rawAttrs['area_label'] ?? ''));
+            if ($area !== '') {
+                $attrs['area_label'] = mb_substr($area, 0, 20);
+            }
+            if (is_array($rawAttrs['amenities'] ?? null)) {
+                $am = array_values(array_unique(array_filter($rawAttrs['amenities'], fn ($x) => in_array($x, $amenAllow, true))));
+                if ($am) {
+                    $attrs['amenities'] = $am;
+                }
+            }
+            if ($attrs) {
+                $item['attrs'] = $attrs;
+            }
+            $items[] = $item;
+        }
+        return $items;
+    }
+
+    /**
      * 服务项动态行 → [{title,desc,price_text}]（标题非空才成一项）。
-     * 房型卡(§2b)：/m 本期不编辑 image+attrs，但必须按 title 从 baseline 保留它们，
-     * 否则商户一自助改就会抹掉后台录入的房型图/attrs（数据丢失）。image+attrs 编辑升级拆下一小批。
+     * 非租房类目：不编辑 image+attrs，但必须按 title 从 baseline 保留它们（含请求里混入的任何 image/attrs 一律不采纳），
+     * 否则商户一自助改就会抹掉后台录入的房型图/attrs（数据丢失），或让非租房商户越权注入 attrs。
      */
     private function parseServices($raw, array $baseline = []): array
     {

@@ -9,6 +9,9 @@
     $svcs = old('services', is_array($prefill['services'] ?? null) ? $prefill['services'] : []);
     $cts = old('contacts', is_array($prefill['contacts'] ?? null) ? $prefill['contacts'] : []);
     $methods = ['phone'=>'电话','whatsapp'=>'WhatsApp','telegram'=>'Telegram','wechat'=>'微信'];
+    // 房型卡（仅租房民宿类目）：enum label 映射，与 Admin\LocalLifeMerchantController::create.blade / Api\V1\LocalLifeController 白名单一致
+    $svcLayouts = ['studio'=>'开间','1b1l'=>'一室一厅','2b1l'=>'两室一厅','3b1l'=>'三室一厅','4plus'=>'四室及以上'];
+    $svcAmenities = ['furniture'=>'家具','washer'=>'洗衣机','fridge'=>'冰箱','ac'=>'空调','heating'=>'暖气','elevator'=>'电梯','parking'=>'停车位','balcony'=>'阳台','private_bath'=>'独立卫浴','kitchen'=>'可做饭'];
 @endphp
 @section('content')
 
@@ -59,8 +62,84 @@
     </div>
 
     <div class="nzp-card">
-        <h2>服务项</h2>
+        <h2>服务项{{ $isRental ? '（房型）' : '' }}</h2>
         <div id="nzp-svc-rows">
+        @if($isRental)
+            @forelse($svcs as $i => $s)
+                @php
+                    $sAttrs = is_array($s['attrs'] ?? null) ? $s['attrs'] : [];
+                    $sAmen = is_array($sAttrs['amenities'] ?? null) ? $sAttrs['amenities'] : [];
+                    $sImg = trim((string) ($s['image'] ?? ''));
+                @endphp
+                <div class="nzp-svc-card" style="border:1px solid rgba(0,0,0,.08);border-radius:10px;padding:10px;margin-bottom:10px">
+                    <div class="nzp-row nzp-svc-row">
+                        <input type="text" name="services[{{ $i }}][title]" class="nzp-input" placeholder="房型名(如 一室一厅·精装)" value="{{ $s['title'] ?? '' }}">
+                        <button type="button" class="nzp-delrow nzp-del">&times;</button>
+                    </div>
+                    <div class="nzp-field"><input type="text" name="services[{{ $i }}][desc]" class="nzp-input" placeholder="描述(可空)" value="{{ $s['desc'] ?? '' }}"></div>
+                    <div class="nzp-field"><input type="text" name="services[{{ $i }}][price_text]" class="nzp-input" placeholder="价格(如 350000֏ /月 起)" value="{{ $s['price_text'] ?? '' }}"></div>
+                    <div class="nzp-field">
+                        <label>房型图</label>
+                        @if($sImg !== '')
+                            <div class="nzp-thumbs"><img src="{{ $img($sImg) }}" alt="房型图"></div>
+                            <input type="hidden" name="services[{{ $i }}][existing_image]" value="{{ $sImg }}">
+                        @endif
+                        <input type="file" name="services[{{ $i }}][image]" class="nzp-input" accept="image/*">
+                    </div>
+                    <div class="nzp-field">
+                        <label>户型</label>
+                        <select name="services[{{ $i }}][attrs][layout]" class="nzp-select">
+                            <option value="">—</option>
+                            @foreach($svcLayouts as $lk => $lv)<option value="{{ $lk }}" {{ ($sAttrs['layout'] ?? '') === $lk ? 'selected' : '' }}>{{ $lv }}</option>@endforeach
+                        </select>
+                    </div>
+                    <div class="nzp-field">
+                        <label>面积</label>
+                        <input type="text" name="services[{{ $i }}][attrs][area_label]" class="nzp-input" placeholder="如 35㎡" value="{{ $sAttrs['area_label'] ?? '' }}">
+                    </div>
+                    <div class="nzp-field">
+                        <label>设施</label>
+                        <div style="display:flex;flex-wrap:wrap;gap:4px 12px">
+                            @foreach($svcAmenities as $ak => $av)
+                                <label style="font-size:12.5px;font-weight:normal;display:inline-flex;align-items:center;gap:4px"><input type="checkbox" name="services[{{ $i }}][attrs][amenities][]" value="{{ $ak }}" {{ in_array($ak, $sAmen, true) ? 'checked' : '' }}>{{ $av }}</label>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+            @empty
+                <div class="nzp-svc-card" style="border:1px solid rgba(0,0,0,.08);border-radius:10px;padding:10px;margin-bottom:10px">
+                    <div class="nzp-row nzp-svc-row">
+                        <input type="text" name="services[0][title]" class="nzp-input" placeholder="房型名(如 一室一厅·精装)">
+                        <button type="button" class="nzp-delrow nzp-del">&times;</button>
+                    </div>
+                    <div class="nzp-field"><input type="text" name="services[0][desc]" class="nzp-input" placeholder="描述(可空)"></div>
+                    <div class="nzp-field"><input type="text" name="services[0][price_text]" class="nzp-input" placeholder="价格(如 350000֏ /月 起)"></div>
+                    <div class="nzp-field">
+                        <label>房型图</label>
+                        <input type="file" name="services[0][image]" class="nzp-input" accept="image/*">
+                    </div>
+                    <div class="nzp-field">
+                        <label>户型</label>
+                        <select name="services[0][attrs][layout]" class="nzp-select">
+                            <option value="">—</option>
+                            @foreach($svcLayouts as $lk => $lv)<option value="{{ $lk }}">{{ $lv }}</option>@endforeach
+                        </select>
+                    </div>
+                    <div class="nzp-field">
+                        <label>面积</label>
+                        <input type="text" name="services[0][attrs][area_label]" class="nzp-input" placeholder="如 35㎡">
+                    </div>
+                    <div class="nzp-field">
+                        <label>设施</label>
+                        <div style="display:flex;flex-wrap:wrap;gap:4px 12px">
+                            @foreach($svcAmenities as $ak => $av)
+                                <label style="font-size:12.5px;font-weight:normal;display:inline-flex;align-items:center;gap:4px"><input type="checkbox" name="services[0][attrs][amenities][]" value="{{ $ak }}">{{ $av }}</label>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+            @endforelse
+        @else
             @forelse($svcs as $i => $s)
                 <div class="nzp-row nzp-svc-row">
                     <input type="text" name="services[{{ $i }}][title]" class="nzp-input" placeholder="服务名(如 剪发)" value="{{ $s['title'] ?? '' }}">
@@ -77,9 +156,10 @@
                     <button type="button" class="nzp-delrow nzp-del">&times;</button>
                 </div>
             @endforelse
+        @endif
         </div>
-        <button type="button" class="nzp-addrow" id="nzp-add-svc">+ 添加服务项</button>
-        <div class="nzp-hint">标题必填，价格仅为展示文字。</div>
+        <button type="button" class="nzp-addrow" id="nzp-add-svc">+ 添加{{ $isRental ? '房型' : '服务项' }}</button>
+        <div class="nzp-hint">标题必填，价格仅为展示文字。@if($isRental) 房型图/户型/面积/设施仅用于展示，平台不收款；照片含人物入镜请确认已获同意。@endif</div>
     </div>
 
     <div class="nzp-card">
@@ -149,6 +229,9 @@
 @push('scripts')
 <script>
 (function () {
+    var NZP_IS_RENTAL = @json($isRental);
+    var NZP_SVC_LAYOUTS = @json($svcLayouts);
+    var NZP_SVC_AMENITIES = @json($svcAmenities);
     // 星期 chip 视觉切换
     var days = document.getElementById('nzp-days');
     if (days) days.addEventListener('click', function (e) {
@@ -160,20 +243,38 @@
         }, 0);
     });
 
-    // 删除动态行（事件委托）
+    // 删除动态行（事件委托）——房型卡先找整卡(svc-card)，否则退回单行(svc-row/ct-row)
     document.addEventListener('click', function (e) {
         var btn = e.target.closest ? e.target.closest('.nzp-del') : null;
         if (!btn) return;
-        var row = btn.closest('.nzp-svc-row') || btn.closest('.nzp-ct-row');
+        var row = btn.closest('.nzp-svc-card') || btn.closest('.nzp-svc-row') || btn.closest('.nzp-ct-row');
         if (!row) return;
-        // 服务项：连带其下的描述行（同 svc-row 紧邻）一起删——简单起见只删本行
         row.parentNode.removeChild(row);
     });
 
-    // 添加服务项
+    // 添加服务项/房型
     var svcIdx = 1000, addSvc = document.getElementById('nzp-add-svc'), svcRows = document.getElementById('nzp-svc-rows');
     if (addSvc && svcRows) addSvc.addEventListener('click', function () {
-        var i = svcIdx++, d = document.createElement('div');
+        var i = svcIdx++;
+        if (NZP_IS_RENTAL) {
+            var layoutOpts = '<option value="">—</option>';
+            Object.keys(NZP_SVC_LAYOUTS).forEach(function (k) { layoutOpts += '<option value="' + k + '">' + NZP_SVC_LAYOUTS[k] + '</option>'; });
+            var amenBoxes = '';
+            Object.keys(NZP_SVC_AMENITIES).forEach(function (k) { amenBoxes += '<label style="font-size:12.5px;font-weight:normal;display:inline-flex;align-items:center;gap:4px"><input type="checkbox" name="services[' + i + '][attrs][amenities][]" value="' + k + '">' + NZP_SVC_AMENITIES[k] + '</label>'; });
+            var card = document.createElement('div');
+            card.className = 'nzp-svc-card';
+            card.style.cssText = 'border:1px solid rgba(0,0,0,.08);border-radius:10px;padding:10px;margin-bottom:10px';
+            card.innerHTML = '<div class="nzp-row nzp-svc-row"><input type="text" name="services[' + i + '][title]" class="nzp-input" placeholder="房型名(如 一室一厅·精装)"><button type="button" class="nzp-delrow nzp-del">&times;</button></div>' +
+                '<div class="nzp-field"><input type="text" name="services[' + i + '][desc]" class="nzp-input" placeholder="描述(可空)"></div>' +
+                '<div class="nzp-field"><input type="text" name="services[' + i + '][price_text]" class="nzp-input" placeholder="价格(如 350000֏ /月 起)"></div>' +
+                '<div class="nzp-field"><label>房型图</label><input type="file" name="services[' + i + '][image]" class="nzp-input" accept="image/*"></div>' +
+                '<div class="nzp-field"><label>户型</label><select name="services[' + i + '][attrs][layout]" class="nzp-select">' + layoutOpts + '</select></div>' +
+                '<div class="nzp-field"><label>面积</label><input type="text" name="services[' + i + '][attrs][area_label]" class="nzp-input" placeholder="如 35㎡"></div>' +
+                '<div class="nzp-field"><label>设施</label><div style="display:flex;flex-wrap:wrap;gap:4px 12px">' + amenBoxes + '</div></div>';
+            svcRows.appendChild(card);
+            return;
+        }
+        var d = document.createElement('div');
         d.className = 'nzp-row nzp-svc-row';
         d.innerHTML = '<input type="text" name="services[' + i + '][title]" class="nzp-input" placeholder="服务名(如 剪发)">' +
             '<input type="text" name="services[' + i + '][price_text]" class="nzp-input" placeholder="价格(如 3000dram)" style="flex:0 0 40%">' +
