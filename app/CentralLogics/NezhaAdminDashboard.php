@@ -402,6 +402,11 @@ class NezhaAdminDashboard
             'route' => self::badReviewRoute(),
         ];
 
+        // ── 右⑤ 开关台账快照卡(M2 欠账, M3 补) —— 与台账页顶条同一 provider 方法, 对账验收 ──
+        $switchSnap = self::safe(function () {
+            return NezhaSwitchLedger::summary();
+        }, ['dormant' => 0, 'live' => 0, 'deviation' => 0, 'total' => 0, 'route' => '#', 'deviation_keys' => []]);
+
         return [
             'pulse'      => $pulse,
             'money'      => $money,
@@ -413,6 +418,7 @@ class NezhaAdminDashboard
             'sys'        => $sys,
             'digest'     => $digest,
             'bad_review' => $badReview,
+            'switch_snapshot' => $switchSnap,
             'rates'      => ['cny' => $rateCny],
             'has_any'    => ($money['total'] + $funds['total'] + $exceptions['count'] + $audit['total'] + $merchant['total']) > 0,
         ];
@@ -524,6 +530,11 @@ class NezhaAdminDashboard
         }, -1);
         if ($backlog >= 0) {
             $rows[] = ['label' => '队列积压', 'value' => (string) $backlog, 'ok' => $backlog < 100];
+        }
+        // 哪吒 M3-D4 安全态行: 后台锁 basic auth(手工登记) + 后台 2FA(live 读 admins.two_factor_enabled)。
+        // securityRow() 返回同 {label,value,ok} 形状, 直接并入系统健康卡; 无源行(如 2FA 查询失败)自动不显。
+        foreach (NezhaSwitchLedger::securityRow() as $sr) {
+            $rows[] = $sr;
         }
         return ['rows' => $rows];
     }

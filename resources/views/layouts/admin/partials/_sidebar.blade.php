@@ -324,6 +324,10 @@ $__navGroups[] = [
         Helpers::module_permission_check('audit') ? [
             ['label' => '安全审计日志', 'label_raw' => true, 'route' => route('admin.nezha-audit.logs'), 'icon' => 'tio-file-lock', 'active' => Request::is('admin/nezha-audit*')],
         ] : [],
+        // 哪吒M3: 开关台账(只读·全部灰度/合规开关一屏+偏离预期告警; 翻闸仍去各自设置页)
+        Helpers::module_permission_check('settings') ? [
+            ['label' => '开关台账', 'label_raw' => true, 'route' => route('admin.nezha-switches'), 'icon' => 'tio-toggle-on', 'active' => Request::is('admin/nezha-switches*')],
+        ] : [],
         Helpers::module_permission_check('settings') ? [[
             'label' => '装配', 'label_raw' => true, 'icon' => 'tio-puzzle',
             'active' => (Request::is('admin/business-settings/theme-settings*') || Request::is('admin/file-manager*') || Request::is('admin/login-settings*') || Request::is('admin/business-settings/invoice-setup*') || Request::is('admin/business-settings/social-media') || Request::is('admin/business-settings/registration-page/react*') || Request::is('admin/business-settings/app-settings*') || Request::is('admin/page-meta-data*') || Request::is('admin/addon-activation*') || Request::is('admin/react-landing-page*') || Request::is('admin/landing-page*')),

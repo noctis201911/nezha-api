@@ -44,6 +44,18 @@ class DashboardController extends Controller
         return view('admin-views.nezha-today', compact('wb'));
     }
 
+    /**
+     * 哪吒超管 M3「开关台账」只读页。数据走 NezhaSwitchLedger 单一真相源(与驾驶舱快照卡 / verify 命令同源, 对账验收)。
+     * 🔴 纯只读: 页面无任何写动作、无开关控件——翻闸仍去各自设置页(集中遥控=新误触面, 已裁决不做)。gate=module:settings。
+     */
+    public function nezhaSwitches(Request $request)
+    {
+        $rows       = \App\CentralLogics\NezhaSwitchLedger::rows();
+        $summary    = \App\CentralLogics\NezhaSwitchLedger::summary();
+        $lastVerify = \Illuminate\Support\Facades\Cache::get('nezha_switches_verify_last');   // verify 命令跑后写入; 无则显"未跑过"
+        return view('admin-views.nezha-switches', compact('rows', 'summary', 'lastVerify'));
+    }
+
     public function order(Request $request)
     {
         $params = session('dash_params');

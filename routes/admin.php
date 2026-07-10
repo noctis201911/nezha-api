@@ -116,6 +116,8 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
         Route::get('/', [DashboardController::class, 'dashboard'])->name('dashboard');
         // 哪吒超管 M2-D4 驾驶舱「今天」(登录 admin 即可见, 无 module 闸; 先并存, 默认落点仍是 dashboard)
         Route::get('nezha-today', [DashboardController::class, 'nezhaToday'])->name('nezha-today');
+        // 哪吒超管 M3「开关台账」只读页(settings 权限门·纯只读: 无写动作/无开关控件, 翻闸仍去各设置页)
+        Route::get('nezha-switches', [DashboardController::class, 'nezhaSwitches'])->name('nezha-switches')->middleware('module:settings');
         Route::get('landing-page', [SystemController::class, 'landing_page'])->name('landing-page');
 
         Route::middleware('module:account')->group(function () {

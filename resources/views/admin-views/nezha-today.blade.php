@@ -84,6 +84,15 @@
 .nz-today .nzt-dot.g{background:var(--green)} .nz-today .nzt-dot.a{background:var(--amber)}
 .nz-today .nzt-hline .nzt-hv{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--ink)}
 .nz-today .nzt-digest{margin-top:9px;font-size:12px;color:var(--ink2);line-height:1.85;background:var(--nzbg);border-radius:8px;padding:10px 12px}
+/* 右⑤ 开关台账快照卡(M3) */
+.nz-today .nzt-swsnap.dev{border-color:#F3C2C4;box-shadow:0 0 0 1px var(--red-tint)}
+.nz-today .nzt-swgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:11px}
+.nz-today .nzt-swcell{text-align:center;background:var(--nzbg);border-radius:8px;padding:9px 4px}
+.nz-today .nzt-swcell.r{background:var(--red-tint)}
+.nz-today .nzt-swn{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--ink)}
+.nz-today .nzt-swn.g{color:var(--green)}
+.nz-today .nzt-swcell.r .nzt-swn{color:var(--red)}
+.nz-today .nzt-swk{font-size:10.5px;color:var(--ink2);margin-top:1px}
 </style>
 @endpush
 
@@ -268,6 +277,19 @@
           @endif
         </div>
       </div>
+
+      {{-- 右⑤ 开关台账快照(M3·补 M2 欠账) —— 与台账页顶条同一 provider 方法 NezhaSwitchLedger::summary, 对账验收 --}}
+      @php($nzsw = $wb['switch_snapshot'] ?? null)
+      @if($nzsw)
+      <div class="nzt-rcard nzt-swsnap {{ ($nzsw['deviation'] ?? 0) > 0 ? 'dev' : '' }}">
+        <div class="nzt-rt">{{ translate('开关台账') }}<a class="nzt-more" href="{{ $nzsw['route'] ?: '#' }}">{{ translate('查看') }} &rarr;</a></div>
+        <div class="nzt-swgrid">
+          <div class="nzt-swcell"><div class="nzt-swn">{{ $nzsw['dormant'] }}</div><div class="nzt-swk">{{ translate('dormant 关') }}</div></div>
+          <div class="nzt-swcell"><div class="nzt-swn g">{{ $nzsw['live'] }}</div><div class="nzt-swk">{{ translate('LIVE 开') }}</div></div>
+          <div class="nzt-swcell {{ ($nzsw['deviation'] ?? 0) > 0 ? 'r' : '' }}"><div class="nzt-swn">{{ $nzsw['deviation'] }}</div><div class="nzt-swk">{{ translate('偏离预期') }}</div></div>
+        </div>
+      </div>
+      @endif
     </div>
   </div>
 </div>
