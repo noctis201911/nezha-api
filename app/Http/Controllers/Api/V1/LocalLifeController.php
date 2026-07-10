@@ -357,8 +357,9 @@ class LocalLifeController extends Controller
             if ($amount <= 0) {
                 continue;
             }
-            // 去掉前导金额 + 货币符，剩「/月」「/晚 起」等后缀
+            // 去掉前导金额 + 货币符，剩「/月」「/晚」等；再剥尾部「起/起订」(前端统一补「起」，避免"/月 起 起")
             $suffix = trim(preg_replace('/^\s*(֏|AMD|amd|դր\.?|драм)\s*/iu', '', trim(substr($pt, strlen($mm[0])))));
+            $suffix = trim(preg_replace('/\s*起(订)?\s*$/u', '', $suffix));
             return ['amount' => $amount, 'suffix' => $suffix];
         }
         return null;
