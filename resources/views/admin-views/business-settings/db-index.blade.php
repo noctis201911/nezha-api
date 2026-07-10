@@ -25,7 +25,12 @@
         <div class="card">
             <div class="card-body pt-2">
                 <form action="{{ route('admin.business-settings.clean-db') }}" method="post"
-                    enctype="multipart/form-data">
+                    enctype="multipart/form-data"
+                    data-nz-danger="input"
+                    data-nz-title="{{ translate('清空所选数据表') }}"
+                    data-nz-consequence="{{ translate('将逐表清空所勾选的数据表，不可恢复。请再次确认勾选范围。') }}"
+                    data-nz-phrase="清空数据库"
+                    data-nz-confirm="{{ translate('确认清空') }}">
                     @csrf
                     <div class="check--item-wrapper clean--database-checkgroup">
                         @foreach ($tables as $key => $table)
@@ -164,27 +169,7 @@
         return false;
     }
 
-        $("form").on('submit', function(e) {
-            e.preventDefault();
-            Swal.fire({
-                title: '{{ translate('Are_you_sure?') }}',
-                text: "{{ translate('Sensitive_data_!_Make_sure_before_changing.') }}",
-                type: 'warning',
-                showCancelButton: true,
-                cancelButtonColor: 'default',
-                confirmButtonColor: '#FC6A57',
-                cancelButtonText: '{{ translate('no') }}',
-                confirmButtonText: '{{ translate('yes') }}',
-                reverseButtons: true
-            }).then((result) => {
-                if (result.value) {
-                    this.submit();
-                } else {
-                    e.preventDefault();
-                    toastr.success("{{ translate('Cancelled') }}");
-                    location.reload();
-                }
-            })
-        });
+        {{-- 哪吒M3: 清空确认升级为「输入确认」三档组件(输"清空数据库"四字放行), 替换原 yes/no Swal --}}
     </script>
+    @include('admin-views.partials._nz-danger-confirm')
 @endpush

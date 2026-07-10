@@ -57,6 +57,9 @@ class DatabaseSettingController extends Controller
             return back();
         }
 
+        // 哪吒M3: 输入确认动作写审计("谁"从此有源)
+        \App\Models\AdminAuditLog::record('db_clean', 'database', null, ['tables' => array_values($tables)], ['cleaned_count' => count($tables)]);
+
         Toastr::success(translate('messages.updated_successfully'));
         return back();
     }

@@ -196,14 +196,18 @@ class NezhaRefundController extends Controller
             Toastr::warning(translate('停接单建议小时数不能小于催办小时数, 已自动取催办小时数。'));
             $suspend = $remind;
         }
-        foreach ([
+        $newVals = [
             'nezha_refund_overdue_status'        => (string) ((int) $request->nezha_refund_overdue_status),
             'nezha_refund_overdue_auto_suspend'  => (string) ((int) $request->input('nezha_refund_overdue_auto_suspend', 0)),
             'nezha_refund_overdue_remind_hours'  => (string) $remind,
             'nezha_refund_overdue_suspend_hours' => (string) $suspend,
-        ] as $key => $val) {
+        ];
+        // 哪吒M3: 强确认动作写审计(改前→改后 diff, "谁"从此有源)
+        $auditBefore = \App\Models\BusinessSetting::whereIn('key', array_keys($newVals))->pluck('value', 'key')->toArray();
+        foreach ($newVals as $key => $val) {
             \App\Models\BusinessSetting::updateOrCreate(['key' => $key], ['value' => $val]);
         }
+        \App\Models\AdminAuditLog::record('refund_overdue_settings_update', 'business_settings', null, $auditBefore, $newVals);
         if ((int) $request->nezha_refund_overdue_status === 1) {
             $autoOn = (int) $request->input('nezha_refund_overdue_auto_suspend', 0) === 1;
             Toastr::success(translate($autoOn
@@ -287,6 +291,14 @@ class NezhaRefundController extends Controller
             $rec->save();
         });
         \App\CentralLogics\NezhaOrderCounts::forgetByOrderId($dispute->order_id);
+        // 哪吒M3: 输入确认动作写审计(裁决=L1-2 邻区·"谁"从此有源)
+        \App\Models\AdminAuditLog::record(
+            'refund_dispute_resolve',
+            'nezha_refund_record',
+            $rec->id,
+            ['dispute_id' => $dispute->id, 'order_id' => $dispute->order_id, 'prev_status' => 'disputed'],
+            ['resolution' => $resolution, 'new_status' => ($resolution === 'upheld' ? 'pending_merchant_refund' : 'closed_no_payment')]
+        );
         Toastr::success($resolution === 'upheld'
             ? translate('已裁决: 维持退款义务。商家须原路退款给顾客, 逾期计时从此刻恢复。')
             : translate('已裁决: 核实未收款。该单已留痕关闭, 商家无需退款(记录保留可审计)。'));

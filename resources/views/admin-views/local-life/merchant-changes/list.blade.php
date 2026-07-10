@@ -111,7 +111,12 @@
                     @endif
 
                     <div class="d-flex flex-wrap align-items-start" style="gap:10px">
-                        <form action="{{ route('admin.local-life.merchant-changes.approve', $c->id) }}" method="post" onsubmit="return confirm('确认通过并更新到顾客端？');">
+                        {{-- 哪吒M3: 通过=普通确认(后果句), 统一走三档组件 --}}
+                        <form action="{{ route('admin.local-life.merchant-changes.approve', $c->id) }}" method="post"
+                            data-nz-danger="normal"
+                            data-nz-title="{{ translate('通过并应用商户资料变更') }}"
+                            data-nz-consequence="{{ translate('通过后立即更新到顾客端展示（店铺资料/服务/相册等按上方 diff 生效）。') }}"
+                            data-nz-confirm="{{ translate('确认通过并应用') }}">
                             @csrf
                             <button type="submit" class="btn btn-sm btn--primary">通过并应用</button>
                         </form>
@@ -151,4 +156,5 @@
         </div>
     </div>
 </div>
+@include('admin-views.partials._nz-danger-confirm')
 @endsection

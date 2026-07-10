@@ -20,7 +20,13 @@
         <div class="card mb-3">
             <div class="card-header"><h5 class="card-header-title">{{ translate('逾期未退款 · 阈值与总开关设置') }}</h5></div>
             <div class="card-body">
-                <form method="POST" action="{{ route('admin.nezha-refund.overdue.settings') }}">
+                <form method="POST" action="{{ route('admin.nezha-refund.overdue.settings') }}"
+                    data-nz-danger="strong"
+                    data-nz-title="{{ translate('保存逾期未退款设置') }}"
+                    data-nz-consequence="{{ translate('开启后：系统每小时自动扫描逾期未退款订单、自动催办商家、计入风控并告警——这是对商家的真实约束。') }}"
+                    data-nz-impact="{{ translate('影响全部逾期未退款订单的商家；停接单方式按上方选择（手动/自动）。') }}"
+                    data-nz-rollback="{{ translate('回本页把「兜底总开关」改回「关闭」并保存即停止。') }}"
+                    data-nz-confirm="{{ translate('确认保存并生效') }}">
                     @csrf
                     <div class="row align-items-end">
                         <div class="col-sm-3 form-group mb-2">
@@ -174,4 +180,6 @@
             <div class="card-footer">{{ $records->links() }}</div>
         </div>
     </div>
+    {{-- 哪吒M3: 逾期未退款设置保存=强确认(后果+影响面+回滚) --}}
+    @include('admin-views.partials._nz-danger-confirm')
 @endsection

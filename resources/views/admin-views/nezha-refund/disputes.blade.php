@@ -43,14 +43,20 @@
                                 <td style="max-width:300px;"><div class="text-wrap" style="white-space:normal;">{{ $d->merchant_statement }}</div></td>
                                 <td class="text-nowrap">{{ $d->opened_at }}</td>
                                 <td>
-                                    <form method="POST" action="{{ route('admin.nezha-refund.disputes.resolve', $d->id) }}">
+                                    {{-- 哪吒M3: 裁决两动作=输入确认+L1-2 现场标注(各按钮差异化后果/复述串) --}}
+                                    <form method="POST" action="{{ route('admin.nezha-refund.disputes.resolve', $d->id) }}"
+                                        data-nz-danger="input" data-nz-l1="{{ translate('退款只原路退回——裁决决定这笔钱是否必须退，直接触及此条。') }}">
                                         @csrf
                                         <textarea name="operator_reason" class="form-control form-control-sm mb-2" rows="2" required maxlength="1000" placeholder="{{ translate('裁决理由(必填, 留痕存档)') }}"></textarea>
                                         <div class="d-flex" style="gap:6px;">
                                             <button type="submit" name="resolution" value="upheld" class="btn btn-sm btn-warning"
-                                                onclick="return confirm('{{ translate('确认维持退款义务? 该单将回到「待退款」, 商家须原路退还顾客。') }}');">{{ translate('维持退款义务') }}</button>
+                                                data-nz-title="{{ translate('维持退款义务') }}"
+                                                data-nz-consequence="{{ translate('该单将回到「待退款」，商家须原路退还顾客，逾期计时从此刻重算。') }}"
+                                                data-nz-phrase="维持退款" data-nz-confirm="{{ translate('确认维持退款义务') }}">{{ translate('维持退款义务') }}</button>
                                             <button type="submit" name="resolution" value="closed_no_payment" class="btn btn-sm btn-outline-secondary"
-                                                onclick="return confirm('{{ translate('确认核实顾客未付款? 该单将留痕关闭, 商家无需退款。此操作不可撤销。') }}');">{{ translate('核实未收款') }}</button>
+                                                data-nz-title="{{ translate('核实未收款 · 关闭') }}"
+                                                data-nz-consequence="{{ translate('确认顾客未付款：该单留痕关闭，商家无需退款。此操作不可撤销。') }}"
+                                                data-nz-phrase="确认未收款" data-nz-confirm="{{ translate('确认未收款并关闭') }}">{{ translate('核实未收款') }}</button>
                                         </div>
                                     </form>
                                 </td>
@@ -103,4 +109,5 @@
             </div>
         </div>
     </div>
+    @include('admin-views.partials._nz-danger-confirm')
 @endsection
