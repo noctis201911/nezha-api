@@ -11,6 +11,10 @@
     $existingServices = old('services', $isEdit && is_array($merchant->services) ? $merchant->services : []);
     $existingContacts = old('contacts', $isEdit && is_array($merchant->contacts) ? $merchant->contacts : []);
     $contactMethods = ['phone'=>'电话','whatsapp'=>'WhatsApp','telegram'=>'Telegram','wechat'=>'微信'];
+    // 房型卡(HANDOFF §2b)：services 每项可选 image + attrs(户型/面积/设施)。租房民宿类目用；其他类目留空即回落现状文字行。
+    $svcRows = count($existingServices) ? $existingServices : [[]];
+    $svcLayouts = ['studio'=>'开间','1b1l'=>'一室一厅','2b1l'=>'两室一厅','3b1l'=>'三室一厅','4plus'=>'四室及以上'];
+    $svcAmenities = ['furniture'=>'家具','washer'=>'洗衣机','fridge'=>'冰箱','ac'=>'空调','heating'=>'暖气','elevator'=>'电梯','parking'=>'停车位','balcony'=>'阳台','private_bath'=>'独立卫浴','kitchen'=>'可做饭'];
 @endphp
 
 <div class="content container-fluid">
@@ -171,24 +175,52 @@
                     <div class="card-header"><h5 class="mb-0">服务项</h5></div>
                     <div class="card-body">
                         <div id="nz-services-rows">
-                            @forelse($existingServices as $s)
-                                <div class="nz-service-row row g-2 mb-2 align-items-center">
-                                    <div class="col-md-4"><input type="text" name="services[{{ $loop->index }}][title]" class="form-control form-control-sm" placeholder="服务名(如 剪发)" value="{{ $s['title'] ?? '' }}"></div>
-                                    <div class="col-md-4"><input type="text" name="services[{{ $loop->index }}][desc]" class="form-control form-control-sm" placeholder="描述(可空)" value="{{ $s['desc'] ?? '' }}"></div>
-                                    <div class="col-md-3"><input type="text" name="services[{{ $loop->index }}][price_text]" class="form-control form-control-sm" placeholder="价格(如 3000dram)" value="{{ $s['price_text'] ?? '' }}"></div>
-                                    <div class="col-md-1 text-center"><button type="button" class="btn btn-sm btn-outline-danger nz-del-row" title="删除">&times;</button></div>
+                            @foreach($svcRows as $i => $s)
+                                @php $sAttrs = is_array($s['attrs'] ?? null) ? $s['attrs'] : []; $sAmen = is_array($sAttrs['amenities'] ?? null) ? $sAttrs['amenities'] : []; $sImg = trim((string)($s['image'] ?? '')); @endphp
+                                <div class="nz-service-row border rounded p-2 mb-2">
+                                    <div class="row g-2 align-items-center">
+                                        <div class="col-md-4"><input type="text" name="services[{{ $i }}][title]" class="form-control form-control-sm" placeholder="房型名(如 一室一厅·精装)" value="{{ $s['title'] ?? '' }}"></div>
+                                        <div class="col-md-4"><input type="text" name="services[{{ $i }}][desc]" class="form-control form-control-sm" placeholder="描述(可空)" value="{{ $s['desc'] ?? '' }}"></div>
+                                        <div class="col-md-3"><input type="text" name="services[{{ $i }}][price_text]" class="form-control form-control-sm" placeholder="价格(如 350000֏ /月 起)" value="{{ $s['price_text'] ?? '' }}"></div>
+                                        <div class="col-md-1 text-center"><button type="button" class="btn btn-sm btn-outline-danger nz-del-row" title="删除">&times;</button></div>
+                                    </div>
+                                    <div class="row g-2 mt-1 align-items-start" style="background:#faf9f7;border-radius:6px;padding:6px 4px">
+                                        <div class="col-12"><small class="text-muted">房型卡（租房民宿选填 · 其他类目留空即为现状文字行）</small></div>
+                                        <div class="col-md-3">
+                                            <label class="text-muted" style="font-size:11px">房型图</label>
+                                            @if($sImg !== '')
+                                                <div class="mb-1"><img src="{{ \App\CentralLogics\Helpers::get_full_url('local-life-merchant', basename($sImg), 'public') }}" style="height:40px;border-radius:6px"></div>
+                                                <input type="hidden" name="services[{{ $i }}][existing_image]" value="{{ $sImg }}">
+                                            @endif
+                                            <input type="file" name="services[{{ $i }}][image]" accept="image/*" class="form-control form-control-sm">
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="text-muted" style="font-size:11px">户型</label>
+                                            <select name="services[{{ $i }}][attrs][layout]" class="form-control form-control-sm">
+                                                <option value="">—</option>
+                                                @foreach($svcLayouts as $lk => $lv)
+                                                    <option value="{{ $lk }}" {{ ($sAttrs['layout'] ?? '') === $lk ? 'selected' : '' }}>{{ $lv }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="text-muted" style="font-size:11px">面积</label>
+                                            <input type="text" name="services[{{ $i }}][attrs][area_label]" class="form-control form-control-sm" placeholder="如 35㎡" value="{{ $sAttrs['area_label'] ?? '' }}">
+                                        </div>
+                                        <div class="col-md-5">
+                                            <label class="text-muted" style="font-size:11px">设施</label>
+                                            <div class="d-flex flex-wrap" style="gap:2px 10px">
+                                                @foreach($svcAmenities as $ak => $av)
+                                                    <label style="font-size:11px;margin:0"><input type="checkbox" name="services[{{ $i }}][attrs][amenities][]" value="{{ $ak }}" {{ in_array($ak, $sAmen, true) ? 'checked' : '' }}> {{ $av }}</label>
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                            @empty
-                                <div class="nz-service-row row g-2 mb-2 align-items-center">
-                                    <div class="col-md-4"><input type="text" name="services[0][title]" class="form-control form-control-sm" placeholder="服务名(如 剪发)" value=""></div>
-                                    <div class="col-md-4"><input type="text" name="services[0][desc]" class="form-control form-control-sm" placeholder="描述(可空)" value=""></div>
-                                    <div class="col-md-3"><input type="text" name="services[0][price_text]" class="form-control form-control-sm" placeholder="价格(如 3000dram)" value=""></div>
-                                    <div class="col-md-1 text-center"><button type="button" class="btn btn-sm btn-outline-danger nz-del-row" title="删除">&times;</button></div>
-                                </div>
-                            @endforelse
+                            @endforeach
                         </div>
-                        <button type="button" class="btn btn-sm btn--primary mt-1" id="nz-add-service">+ 添加服务项</button>
-                        <small class="text-muted d-block mt-1">一价一行，标题必填。描述、价格可留空。价格只是展示文字，平台不收款。</small>
+                        <button type="button" class="btn btn-sm btn--primary mt-1" id="nz-add-service">+ 添加服务项/房型</button>
+                        <small class="text-muted d-block mt-1">标题必填。房型卡（图/户型/面积/设施）仅租房民宿类目需要，其他类目留空即渲染为现状文字价目行。价格只是展示文字，平台不收款。</small>
                     </div>
                 </div>
 
@@ -354,15 +386,30 @@
     var addSvc = document.getElementById('nz-add-service');
     var svcRows = document.getElementById('nz-services-rows');
     if (addSvc && svcRows) {
+        var svcLayouts = {'studio':'开间','1b1l':'一室一厅','2b1l':'两室一厅','3b1l':'三室一厅','4plus':'四室及以上'};
+        var svcAmen = {'furniture':'家具','washer':'洗衣机','fridge':'冰箱','ac':'空调','heating':'暖气','elevator':'电梯','parking':'停车位','balcony':'阳台','private_bath':'独立卫浴','kitchen':'可做饭'};
         addSvc.addEventListener('click', function () {
             var i = svcIdx++;
+            var layoutOpts = '<option value="">—</option>';
+            Object.keys(svcLayouts).forEach(function (k) { layoutOpts += '<option value="' + k + '">' + svcLayouts[k] + '</option>'; });
+            var amenBoxes = '';
+            Object.keys(svcAmen).forEach(function (k) { amenBoxes += '<label style="font-size:11px;margin:0"><input type="checkbox" name="services[' + i + '][attrs][amenities][]" value="' + k + '"> ' + svcAmen[k] + '</label>'; });
             var div = document.createElement('div');
-            div.className = 'nz-service-row row g-2 mb-2 align-items-center';
+            div.className = 'nz-service-row border rounded p-2 mb-2';
             div.innerHTML =
-                '<div class="col-md-4"><input type="text" name="services[' + i + '][title]" class="form-control form-control-sm" placeholder="服务名(如 剪发)"></div>' +
+                '<div class="row g-2 align-items-center">' +
+                '<div class="col-md-4"><input type="text" name="services[' + i + '][title]" class="form-control form-control-sm" placeholder="房型名(如 一室一厅·精装)"></div>' +
                 '<div class="col-md-4"><input type="text" name="services[' + i + '][desc]" class="form-control form-control-sm" placeholder="描述(可空)"></div>' +
-                '<div class="col-md-3"><input type="text" name="services[' + i + '][price_text]" class="form-control form-control-sm" placeholder="价格(如 3000dram)"></div>' +
-                '<div class="col-md-1 text-center"><button type="button" class="btn btn-sm btn-outline-danger nz-del-row" title="删除">&times;</button></div>';
+                '<div class="col-md-3"><input type="text" name="services[' + i + '][price_text]" class="form-control form-control-sm" placeholder="价格(如 350000֏ /月 起)"></div>' +
+                '<div class="col-md-1 text-center"><button type="button" class="btn btn-sm btn-outline-danger nz-del-row" title="删除">&times;</button></div>' +
+                '</div>' +
+                '<div class="row g-2 mt-1 align-items-start" style="background:#faf9f7;border-radius:6px;padding:6px 4px">' +
+                '<div class="col-12"><small class="text-muted">房型卡（租房民宿选填 · 其他类目留空即为现状文字行）</small></div>' +
+                '<div class="col-md-3"><label class="text-muted" style="font-size:11px">房型图</label><input type="file" name="services[' + i + '][image]" accept="image/*" class="form-control form-control-sm"></div>' +
+                '<div class="col-md-2"><label class="text-muted" style="font-size:11px">户型</label><select name="services[' + i + '][attrs][layout]" class="form-control form-control-sm">' + layoutOpts + '</select></div>' +
+                '<div class="col-md-2"><label class="text-muted" style="font-size:11px">面积</label><input type="text" name="services[' + i + '][attrs][area_label]" class="form-control form-control-sm" placeholder="如 35㎡"></div>' +
+                '<div class="col-md-5"><label class="text-muted" style="font-size:11px">设施</label><div class="d-flex flex-wrap" style="gap:2px 10px">' + amenBoxes + '</div></div>' +
+                '</div>';
             svcRows.appendChild(div);
         });
     }

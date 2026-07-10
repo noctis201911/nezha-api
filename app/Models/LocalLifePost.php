@@ -35,8 +35,10 @@ class LocalLifePost extends Model
         'is_free',
         'area_label',
         'location_label',
+        'attrs',
         'is_urgent',
         'want_count',
+        'views',
         'contact_info',
         'contact_method',
         'contact_value',
@@ -55,6 +57,7 @@ class LocalLifePost extends Model
         'is_urgent'  => 'boolean',
         'legal_hold' => 'boolean',
         'images'     => 'array',
+        'attrs'      => 'array',
         'expires_at' => 'datetime',
     ];
 

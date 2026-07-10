@@ -164,7 +164,7 @@ class PanelController extends Controller
             'name.required' => '店名必填',
         ], ['name' => '店名', 'address' => '地址', 'intro' => '介绍']);
 
-        $services = $this->parseServices($request->input('services'));
+        $services = $this->parseServices($request->input('services'), is_array($baseline['services'] ?? null) ? $baseline['services'] : []);
         $contacts = $this->parseContacts($request);
 
         // 硬禁业务词筛查（换汇/加密买卖/医美注射/性服务/赌博/制裁规避等）——命中即拒
@@ -226,11 +226,25 @@ class PanelController extends Controller
         )));
     }
 
-    /** 服务项动态行 → [{title,desc,price_text}]（标题非空才成一项） */
-    private function parseServices($raw): array
+    /**
+     * 服务项动态行 → [{title,desc,price_text}]（标题非空才成一项）。
+     * 房型卡(§2b)：/m 本期不编辑 image+attrs，但必须按 title 从 baseline 保留它们，
+     * 否则商户一自助改就会抹掉后台录入的房型图/attrs（数据丢失）。image+attrs 编辑升级拆下一小批。
+     */
+    private function parseServices($raw, array $baseline = []): array
     {
         if (!is_array($raw)) {
             return [];
+        }
+        // 按 title 建 baseline 房型卡媒体索引
+        $keep = [];
+        foreach ($baseline as $b) {
+            if (is_array($b) && trim((string) ($b['title'] ?? '')) !== '') {
+                $keep[trim((string) $b['title'])] = [
+                    'image' => $b['image'] ?? null,
+                    'attrs' => (is_array($b['attrs'] ?? null) && !empty($b['attrs'])) ? $b['attrs'] : null,
+                ];
+            }
         }
         $items = [];
         foreach ($raw as $row) {
@@ -241,11 +255,20 @@ class PanelController extends Controller
             if ($title === '') {
                 continue;
             }
-            $items[] = [
+            $item = [
                 'title'      => $title,
                 'desc'       => trim((string) ($row['desc'] ?? '')),
                 'price_text' => trim((string) ($row['price_text'] ?? '')),
             ];
+            if (isset($keep[$title])) {
+                if (!empty($keep[$title]['image'])) {
+                    $item['image'] = $keep[$title]['image'];
+                }
+                if (!empty($keep[$title]['attrs'])) {
+                    $item['attrs'] = $keep[$title]['attrs'];
+                }
+            }
+            $items[] = $item;
         }
         return $items;
     }

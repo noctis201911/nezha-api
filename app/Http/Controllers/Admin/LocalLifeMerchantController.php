@@ -225,6 +225,13 @@ class LocalLifeMerchantController extends Controller
             'services.*.title'  => 'nullable|string|max:120',
             'services.*.desc'   => 'nullable|string|max:200',
             'services.*.price_text' => 'nullable|string|max:60',
+            // 房型卡(§2b)：每项可选图 + attrs 子集(户型/面积/设施)。仅租房民宿类目用；其他类目留空回落文字行。
+            'services.*.image'             => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
+            'services.*.existing_image'    => 'nullable|string|max:191',
+            'services.*.attrs.layout'      => 'nullable|in:studio,1b1l,2b1l,3b1l,4plus',
+            'services.*.attrs.area_label'  => 'nullable|string|max:20',
+            'services.*.attrs.amenities'   => 'nullable|array|max:10',
+            'services.*.attrs.amenities.*' => 'in:furniture,washer,fridge,ac,heating,elevator,parking,balcony,private_bath,kitchen',
             'contacts'          => 'nullable|array',
             'contacts.*.method' => 'nullable|string|in:wechat,phone,whatsapp,telegram',
             'contacts.*.value'  => 'nullable|string|max:120',
@@ -235,7 +242,7 @@ class LocalLifeMerchantController extends Controller
             'category.in'       => '类目不在允许范围（仅商家型类目）',
         ]);
 
-        $services = $this->parseServices($request->input('services'));
+        $services = $this->buildServicesWithMedia($request);
         $contacts = $this->parseContacts($request);
 
         // 硬禁业务词筛查：命中即拒（换汇/加密买卖/医美注射/性服务/赌博/制裁规避等）
@@ -329,6 +336,68 @@ class LocalLifeMerchantController extends Controller
                 'desc'       => $parts[1] ?? '',
                 'price_text' => $parts[2] ?? '',
             ];
+        }
+        return $items ?: null;
+    }
+
+    /**
+     * 服务项(房型)含媒体版(§2b)：在 title/desc/price_text 基础上，按行索引解析可选 image(新传或保留)
+     * 与 attrs 子集(layout/area_label/amenities，白名单过滤未知键剥离)。标题非空才成一项。
+     * 非数组(旧文本格式) → 回退 parseServices。
+     */
+    private function buildServicesWithMedia(Request $request): ?array
+    {
+        $rows = $request->input('services');
+        if (!is_array($rows)) {
+            return $this->parseServices($rows);
+        }
+        $layoutAllow = ['studio', '1b1l', '2b1l', '3b1l', '4plus'];
+        $amenAllow   = ['furniture', 'washer', 'fridge', 'ac', 'heating', 'elevator', 'parking', 'balcony', 'private_bath', 'kitchen'];
+        $items = [];
+        foreach ($rows as $i => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $title = trim((string) ($row['title'] ?? ''));
+            if ($title === '') {
+                continue;
+            }
+            $item = [
+                'title'      => $title,
+                'desc'       => trim((string) ($row['desc'] ?? '')),
+                'price_text' => trim((string) ($row['price_text'] ?? '')),
+            ];
+            // 房型图：新上传优先，否则保留隐藏域回填的原文件名
+            $file = $request->file("services.$i.image");
+            if ($file) {
+                $item['image'] = Helpers::upload(self::IMG_DIR, 'webp', $file);
+            } else {
+                $existing = trim((string) ($row['existing_image'] ?? ''));
+                if ($existing !== '') {
+                    $item['image'] = basename($existing);
+                }
+            }
+            // attrs 子集白名单
+            $rawAttrs = is_array($row['attrs'] ?? null) ? $row['attrs'] : [];
+            $attrs = [];
+            $layout = trim((string) ($rawAttrs['layout'] ?? ''));
+            if (in_array($layout, $layoutAllow, true)) {
+                $attrs['layout'] = $layout;
+            }
+            $area = trim((string) ($rawAttrs['area_label'] ?? ''));
+            if ($area !== '') {
+                $attrs['area_label'] = mb_substr($area, 0, 20);
+            }
+            if (is_array($rawAttrs['amenities'] ?? null)) {
+                $am = array_values(array_unique(array_filter($rawAttrs['amenities'], fn ($x) => in_array($x, $amenAllow, true))));
+                if ($am) {
+                    $attrs['amenities'] = $am;
+                }
+            }
+            if ($attrs) {
+                $item['attrs'] = $attrs;
+            }
+            $items[] = $item;
         }
         return $items ?: null;
     }

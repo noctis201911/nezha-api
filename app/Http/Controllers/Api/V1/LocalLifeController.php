@@ -10,17 +10,32 @@ use App\Models\LocalLifeMerchant;
 use App\Models\LocalLifeReport;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 class LocalLifeController extends Controller
 {
     // 列表接口对外暴露的字段（不含 contact_info / expires_at / user_id 等内部字段）
+    // attrs 纳入：列表卡摘要行「户型 · 面积 · 区」需 attrs.layout（§3.3）。
     private const LIST_FIELDS = [
         'id', 'title', 'category', 'tab', 'cover_emoji', 'cover_color', 'images',
-        'price_amd', 'price_suffix', 'is_free', 'area_label', 'location_label',
+        'price_amd', 'price_suffix', 'is_free', 'area_label', 'location_label', 'attrs',
         'is_urgent', 'want_count', 'created_at',
     ];
+
+    // ── 租房民宿结构化字段（HANDOFF §2）：enum 存英文 key，中文 label 在前端 llRentalAttrs.js。
+    //    改这里的枚举务必同步前端常量表（同 maxImagesFor 惯例）。
+    private const RENTAL_CATEGORY = '租房民宿';
+    private const RENT_TYPES   = ['whole', 'shared', 'short'];
+    private const LAYOUTS      = ['studio', '1b1l', '2b1l', '3b1l', '4plus'];
+    private const HOUSE_TYPES  = ['apartment', 'house', 'other'];
+    private const DEPOSITS     = ['none', 'one_month', 'nego'];
+    private const AVAILABLES   = ['now', 'date'];
+    private const BILLS        = ['water', 'electric', 'gas', 'internet', 'hoa'];
+    private const AMENITIES    = ['furniture', 'washer', 'fridge', 'ac', 'heating', 'elevator', 'parking', 'balcony', 'private_bath', 'kitchen'];
+    private const TENANT_REQS  = ['no_smoking', 'pets_ok', 'female_only', 'male_only', 'registration_ok'];
+    private const LANGUAGES    = ['zh', 'en', 'ru', 'hy'];
 
     // 图片存储目录（与 Helpers::upload 一致）
     private const IMG_DIR = 'local-life';
@@ -143,6 +158,9 @@ class LocalLifeController extends Controller
             return response()->json(['errors' => [['code' => 'post', 'message' => '帖子不存在或已下线']]], 404);
         }
 
+        // 真实浏览计数(§2/岔口③)：同 IP 6h 去重、从 1 次即显示。计数失败不影响详情展示。
+        $this->bumpViews($post, 'post');
+
         $data = $post->toArray();
         $data['image_urls'] = $this->imageUrls($post->images);
         unset($data['user_id'], $data['reject_reason']); // 不对外暴露内部字段
@@ -244,9 +262,13 @@ class LocalLifeController extends Controller
         if (!$m) {
             return response()->json(['errors' => [['code' => 'merchant', 'message' => '商家不存在或已下线']]], 404);
         }
+        // 真实浏览计数(§2b)：与帖子完全同套(同 IP 6h 去重 · 从 1 显示)。
+        $this->bumpViews($m, 'merchant');
+
         $data = $this->merchantCard($m);
         $data['intro']             = $m->intro;
-        $data['services']          = is_array($m->services) ? $m->services : [];
+        // 房型卡(§2b)：services 每项可选 image(→URL) + attrs(layout/area_label/amenities 子集)；未填的项前端回落文字行。
+        $data['services']          = $this->decorateServices($m->services);
         $data['images']            = $this->merchantImageUrls($this->imagesCoverFirst($m));
         $data['wechat_qr_url']     = $m->wechat_qr ? Helpers::get_full_url(self::MERCHANT_IMG_DIR, $m->wechat_qr, 'public') : null;
         $data['address']           = $m->address;
@@ -255,7 +277,40 @@ class LocalLifeController extends Controller
         $data['hours_note']        = $m->hours_note;
         $data['google_rating_url'] = $m->google_rating_url;
         $data['contacts']          = $m->normalizedContacts();
+        $data['views']             = (int) $m->views;
         return response()->json($data, 200);
+    }
+
+    /**
+     * services 展示装饰(§2b 房型卡)：保留 title/desc/price_text 原样，
+     * 若某项含 image(文件名) → 附 image_url；若含 attrs(layout/area_label/amenities) → 原样透传(前端映射中文)。
+     * 未含 image/attrs 的项 = 原状文字行(零迁移)。
+     */
+    private function decorateServices($services): array
+    {
+        if (!is_array($services)) {
+            return [];
+        }
+        $out = [];
+        foreach ($services as $s) {
+            if (!is_array($s)) {
+                continue;
+            }
+            $item = [
+                'title'      => $s['title'] ?? null,
+                'desc'       => $s['desc'] ?? null,
+                'price_text' => $s['price_text'] ?? null,
+            ];
+            $img = trim((string) ($s['image'] ?? ''));
+            if ($img !== '') {
+                $item['image_url'] = Helpers::get_full_url(self::MERCHANT_IMG_DIR, basename($img), 'public');
+            }
+            if (isset($s['attrs']) && is_array($s['attrs']) && !empty($s['attrs'])) {
+                $item['attrs'] = $s['attrs'];
+            }
+            $out[] = $item;
+        }
+        return $out;
     }
 
     /** 商家卡片公共字段（列表 + 详情共用） */
@@ -276,8 +331,50 @@ class LocalLifeController extends Controller
             'has_offer'     => (bool) $m->has_offer,
             'offer_text'    => $m->offer_text,
             'is_open'       => $m->isOpenNow(),
-            'today_hours'   => $m->todayHoursLabel(),
+            'today_hours'   => $this->todayHoursFor($m),
+            // 瀑布流商户伪帖卡「X 起」价(§2b)：取 services 第一个可解析项 → {amount,suffix}；无则 null(价格区留空)
+            'price_from'    => $this->firstServicePrice($m),
         ];
+    }
+
+    /**
+     * services 第一个「可解析」项的起价(§2b 伪帖卡)。price_text 前导数字才算可解析(如"350000֏ /月")，
+     * 返回 ['amount'=>int,'suffix'=>string]；"面议"等无数字 → 跳过；全不可解析 → null(前端留空)。
+     * 运营 SOP：把主推房型放第一位（ADMIN_GUIDE）。
+     */
+    private function firstServicePrice(LocalLifeMerchant $m): ?array
+    {
+        $services = is_array($m->services) ? $m->services : [];
+        foreach ($services as $s) {
+            if (!is_array($s)) {
+                continue;
+            }
+            $pt = trim((string) ($s['price_text'] ?? ''));
+            if ($pt === '' || !preg_match('/^\s*([\d,]+)/', $pt, $mm)) {
+                continue;
+            }
+            $amount = (int) str_replace(',', '', $mm[1]);
+            if ($amount <= 0) {
+                continue;
+            }
+            // 去掉前导金额 + 货币符，剩「/月」「/晚 起」等后缀
+            $suffix = trim(preg_replace('/^\s*(֏|AMD|amd|դր\.?|драм)\s*/iu', '', trim(substr($pt, strlen($mm[0])))));
+            return ['amount' => $amount, 'suffix' => $suffix];
+        }
+        return null;
+    }
+
+    /**
+     * 营业时间行文字(§2b 治理)：租房民宿类目且完全无营业时间数据(open/close/hours_note 皆空) → null，
+     * 前端整行不显(§8 无数据不显·租房房源本无"营业时间"概念)。其他类目沿用现状兜底文案，不受影响。
+     */
+    private function todayHoursFor(LocalLifeMerchant $m): ?string
+    {
+        if (trim((string) $m->category) === self::RENTAL_CATEGORY
+            && empty($m->open_time) && empty($m->close_time) && empty($m->hours_note)) {
+            return null;
+        }
+        return $m->todayHoursLabel();
     }
 
     private function merchantImageUrls($images): array
@@ -377,6 +474,8 @@ class LocalLifeController extends Controller
         }
 
         $maxImages = $this->maxImagesFor($request->input('category'));
+        // 租房民宿类目：所在区(location_label)升为必填（HANDOFF §2）；其他类目保持选填。
+        $isRental = trim((string) $request->input('category')) === self::RENTAL_CATEGORY;
 
         $validator = Validator::make($request->all(), [
             'title'          => 'required|string|max:200',
@@ -391,7 +490,7 @@ class LocalLifeController extends Controller
             'price_suffix'   => 'nullable|string|max:20',
             'is_free'        => 'nullable|boolean',
             'area_label'     => 'nullable|string|max:80',
-            'location_label' => 'nullable|string|max:60',
+            'location_label' => ($isRental ? 'required|' : 'nullable|') . 'string|max:60',
             'images'         => 'nullable|array|max:' . $maxImages,
             'images.*'       => 'image|mimes:jpg,jpeg,png,webp|max:5120',
         ], [
@@ -400,6 +499,7 @@ class LocalLifeController extends Controller
             'category.in'           => '分类不在允许范围',
             'tab.required'          => '请选择频道',
             'tab.in'                => '频道不在允许范围',
+            'location_label.required' => '请选择所在区',
             'contact_info.required' => '请填写联系方式，否则别人无法联系你',
             'images.max'            => '最多上传 ' . $maxImages . ' 张图片',
             'images.*.image'        => '只能上传图片',
@@ -452,6 +552,13 @@ class LocalLifeController extends Controller
             return response()->json(['errors' => [['code' => 'agree_pii', 'message' => '请阅读并同意《个人数据处理通知》后再发布']]], 422);
         }
 
+        // 租房结构化字段(attrs)：仅租房民宿类目接受(其他类目剥离不存)；enum 白名单/数组项白名单+max/
+        // available=date 须附合法日期/街道过违禁词。非法即 422（§3.2/§6）。
+        [$attrs, $attrsErr] = $this->buildRentalAttrs($request);
+        if ($attrsErr) {
+            return response()->json(['errors' => $attrsErr], 422);
+        }
+
         $isFree = $request->boolean('is_free');
 
         // 图片上传（jpg/png 自动转 webp）；仅存文件名数组
@@ -474,6 +581,7 @@ class LocalLifeController extends Controller
             'is_free'        => $isFree,
             'area_label'     => $request->area_label,
             'location_label' => $request->location_label,
+            'attrs'          => $attrs,
             'is_urgent'      => false,
             'want_count'     => 0,
             'contact_info'   => $contactInfo,
@@ -865,5 +973,108 @@ class LocalLifeController extends Controller
     {
         $v = DB::table('business_settings')->where('key', $key)->value('value');
         return $v === null ? $default : $v;
+    }
+
+    /**
+     * 校验并构建租房结构化字段(attrs)。仅 category=租房民宿 接受，其他类目返回 [null,null](剥离不存)。
+     * 返回 [attrs(?array), errorPayload(?array)]；errorPayload 非空 = 422（非法 enum/超长数组/日期缺失/街道违禁）。
+     * attrs 前端以 JSON 字符串提交（multipart 同表单夹带图片，嵌套数组易走样）；也容忍已解析数组。
+     */
+    private function buildRentalAttrs(Request $request): array
+    {
+        if (trim((string) $request->input('category')) !== self::RENTAL_CATEGORY) {
+            return [null, null]; // 非租房类目：不存 attrs
+        }
+        $raw = $request->input('attrs');
+        if (is_string($raw)) {
+            $raw = json_decode($raw, true);
+        }
+        if (!is_array($raw)) {
+            return [null, null];
+        }
+
+        $v = Validator::make($raw, [
+            'rent_type'      => 'nullable|in:' . implode(',', self::RENT_TYPES),
+            'layout'         => 'nullable|in:' . implode(',', self::LAYOUTS),
+            'house_type'     => 'nullable|in:' . implode(',', self::HOUSE_TYPES),
+            'deposit'        => 'nullable|in:' . implode(',', self::DEPOSITS),
+            'available'      => 'nullable|in:' . implode(',', self::AVAILABLES),
+            'available_date' => 'nullable|date_format:Y-m-d',
+            'bills'          => 'nullable|array|max:5',
+            'bills.*'        => 'in:' . implode(',', self::BILLS),
+            'amenities'      => 'nullable|array|max:10',
+            'amenities.*'    => 'in:' . implode(',', self::AMENITIES),
+            'tenant_reqs'    => 'nullable|array|max:5',
+            'tenant_reqs.*'  => 'in:' . implode(',', self::TENANT_REQS),
+            'languages'      => 'nullable|array|max:4',
+            'languages.*'    => 'in:' . implode(',', self::LANGUAGES),
+            'street'         => 'nullable|string|max:60',
+        ], [
+            'in'                         => '房源信息含无效选项',
+            'array'                      => '房源信息格式不正确',
+            'max'                        => '房源信息所选项过多',
+            'available_date.date_format' => '入住日期格式不正确',
+            'street.max'                 => '街道最多 60 字',
+        ]);
+        $v->after(function ($val) use ($raw) {
+            if (($raw['available'] ?? null) === 'date' && trim((string) ($raw['available_date'] ?? '')) === '') {
+                $val->errors()->add('available_date', '选择指定日期时请填写入住日期');
+            }
+        });
+        if ($v->fails()) {
+            $errs = [];
+            foreach ($v->errors()->getMessages() as $field => $msgs) {
+                $errs[] = ['code' => 'attrs.' . $field, 'message' => $msgs[0]];
+            }
+            return [null, $errs];
+        }
+
+        // 街道是自由文本新入口 → 过违禁词(§4 红线)
+        $street = trim((string) ($raw['street'] ?? ''));
+        if ($street !== '' && $this->hitsBannedWord($street)) {
+            return [null, [['code' => 'banned', 'message' => '内容含违规词，请修改后再发布']]];
+        }
+
+        // 只落白名单键、去空；数组去重去非法项
+        $out = [];
+        foreach (['rent_type', 'layout', 'house_type', 'deposit', 'available'] as $k) {
+            $val = trim((string) ($raw[$k] ?? ''));
+            if ($val !== '') {
+                $out[$k] = $val;
+            }
+        }
+        if (($out['available'] ?? null) === 'date' && trim((string) ($raw['available_date'] ?? '')) !== '') {
+            $out['available_date'] = trim((string) $raw['available_date']);
+        }
+        foreach (['bills' => self::BILLS, 'amenities' => self::AMENITIES, 'tenant_reqs' => self::TENANT_REQS, 'languages' => self::LANGUAGES] as $k => $allow) {
+            if (!empty($raw[$k]) && is_array($raw[$k])) {
+                $arr = array_values(array_unique(array_filter($raw[$k], fn ($x) => in_array($x, $allow, true))));
+                if ($arr) {
+                    $out[$k] = $arr;
+                }
+            }
+        }
+        if ($street !== '') {
+            $out['street'] = $street;
+        }
+
+        return [$out ?: null, null];
+    }
+
+    /**
+     * 真实浏览计数(§2/§2b)：同 IP 6h 去重(redis Cache::add 原子占位)，命中才 +1；从 1 次即显示。
+     * $prefix = post|merchant。计数失败(缓存不可用等)静默跳过，绝不影响详情展示。
+     */
+    private function bumpViews($model, string $prefix): void
+    {
+        try {
+            $ipHash = substr(sha1((string) request()->ip()), 0, 16);
+            $key = "ll_view:{$prefix}:{$model->id}:{$ipHash}";
+            if (Cache::add($key, 1, now()->addHours(6))) {
+                $model->increment('views');
+            }
+        } catch (\Throwable $e) {
+            // no-op：计数是锦上添花，不阻断详情
+        }
     }
 }
