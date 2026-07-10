@@ -6,6 +6,7 @@
 @section('content')
 <div class="content container-fluid">
 @php $sensitiveCats = \App\Models\LocalLifeCategory::sensitiveNames(); @endphp
+@php $moveCatOptions = \App\Models\LocalLifeCategory::activeNames(); @endphp
 
     {{-- 用户发帖入口总开关（真实影响开关，默认关） --}}
     <div class="card mt-2">
@@ -111,6 +112,21 @@
                             <td>{{$post->category}}
                                 @if(in_array($post->category, $sensitiveCats, true))
                                     <span class="badge badge-warning ml-1" title="敏感类目，请重点审核"><i class="tio-warning"></i> 敏感</span>
+                                @endif
+                                @if(count($moveCatOptions))
+                                    {{-- 一键改类目：选错金刚区快捷挪到正确类目（业主0710）--}}
+                                    <form action="{{route('admin.local-life.move-category',$post->id)}}" method="post" class="mt-1 mb-0">
+                                        @csrf
+                                        <select name="category" class="form-control form-control-sm" style="max-width:150px;font-size:12px" title="选错类目？快捷改到正确类目"
+                                            onchange="if(this.value&&confirm('把此帖改到类目「'+this.value+'」？')){this.form.submit()}else{this.selectedIndex=0}">
+                                            <option value="" disabled selected>改类目…</option>
+                                            @foreach($moveCatOptions as $mc)
+                                                @if($mc !== $post->category)
+                                                    <option value="{{$mc}}">{{$mc}}</option>
+                                                @endif
+                                            @endforeach
+                                        </select>
+                                    </form>
                                 @endif
                             </td>
                             <td>{{$post->tab}}</td>

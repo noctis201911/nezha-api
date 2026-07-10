@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\LocalLifeCategory;
 use App\Models\LocalLifePost;
 use App\Models\LocalLifeReport;
 use Brian2694\Toastr\Facades\Toastr;
@@ -163,6 +164,30 @@ class LocalLifeController extends Controller
         $post->reject_reason = $request->reject_reason ?: '内容不符合本地生活信息墙规则';
         $post->save();
         Toastr::warning('已驳回该帖');
+        return back();
+    }
+
+    // 一键改类目：选错金刚区类目时，审核/列表处快捷把帖挪到正确类目（业主0710）。同步 tab，不改内容不重扫违禁词。
+    public function moveCategory(Request $request, $id)
+    {
+        $request->validate(['category' => 'required|string|max:60']);
+        $post = LocalLifePost::findOrFail($id);
+        $new = trim((string) $request->category);
+        if (!in_array($new, LocalLifeCategory::activeNames(), true)) {
+            Toastr::error('目标类目无效或未启用');
+            return back();
+        }
+        $old = $post->category;
+        if ($new === $old) {
+            return back();
+        }
+        $post->category = $new;
+        $cat = LocalLifeCategory::where('name', $new)->first();
+        if ($cat && !empty($cat->tab)) {
+            $post->tab = $cat->tab;
+        }
+        $post->save();
+        Toastr::success("已改类目：{$old} → {$new}");
         return back();
     }
 
