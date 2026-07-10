@@ -189,18 +189,7 @@ return [
             'prereq' => 'step4-4/step5 实装 dormant·资金流出路径·灰度存量 7 店 KYC 未录→保持关·真开前 staging 单店试跑',
             'settings_route' => 'admin.nezha-offboard.index', 'ops_note' => "{$OPS_FORGET}。超管审批队列 admin/nezha-offboard 不受本闸限、始终可见",
         ],
-        [
-            'key' => 'nezha_local_merchant_selfserve_status', 'label' => '本地生活商户轻管理面总闸', 'section' => 'D', 'level' => 'L3',
-            'expected' => 0, 'value_type' => 'bool',
-            'prereq' => '五增量 dormant·真开须业主看截图点头 + 后台开号 + 真机走通设密→登录→改→过审→生效',
-            'settings_route' => null, 'ops_note' => "翻此闸须 php artisan cache:clear(business_settings 缓存)。关=整 /m 面板 404·驾驶舱商户资料 chip 恒 0 隐藏",
-        ],
-        [
-            'key' => 'nezha_merchant_notes_status', 'label' => '商家页笔记内容层总闸', 'section' => 'D', 'level' => 'L1-1',
-            'l1_clause' => $L1['L1-1'] . '(纯信息墙)', 'expected' => 0, 'value_type' => 'bool',
-            'prereq' => '批N dormant·真开须业主看前端截图点头 + 产出≥1 篇过审笔记(否则整卡不显)',
-            'settings_route' => null, 'ops_note' => $OPS_FORGET,
-        ],
+        // 〔selfserve / merchant_notes 原在 D·2026-07-10 业主拍板 reclassify 至 F 已开(已放量)——见文件末 F 区〕
         [
             'key' => 'nezha_topup_status', 'label' => '自助充值申请总闸', 'section' => 'D', 'level' => 'L2',
             'expected' => 0, 'value_type' => 'bool',
@@ -255,6 +244,19 @@ return [
         ],
 
         /* ═══ F. 已开着的其它(仅记录·无预期) ═══ */
+        // 〔原 D·2026-07-10 业主拍板已放量归 F：商户轻管理面 0709 有意翻开、笔记总闸 0710 翻开〕
+        [
+            'key' => 'nezha_local_merchant_selfserve_status', 'label' => '本地生活商户轻管理面总闸', 'section' => 'F', 'level' => 'L3',
+            'expected' => null, 'value_type' => 'bool',
+            'prereq' => '五增量 live·2026-07-09 业主翻开·/m/login 已 live(改→过审→顾客端生效)',
+            'settings_route' => null, 'ops_note' => "翻此闸须 php artisan cache:clear(business_settings 缓存)。关=整 /m 面板 404·驾驶舱商户资料 chip 恒 0 隐藏",
+        ],
+        [
+            'key' => 'nezha_merchant_notes_status', 'label' => '商家页笔记内容层总闸', 'section' => 'F', 'level' => 'L1-1',
+            'l1_clause' => $L1['L1-1'] . '(纯信息墙)', 'expected' => null, 'value_type' => 'bool',
+            'prereq' => '批N·2026-07-10 翻开·过审笔记在商家页「笔记」卡展示(前端卡待补时整卡不显·不影响开关语义)',
+            'settings_route' => null, 'ops_note' => $OPS_FORGET,
+        ],
         [
             'key' => 'nezha_feedback_digest_status', 'label' => '反馈日报', 'section' => 'F', 'level' => 'L3',
             'expected' => null, 'value_type' => 'bool', 'prereq' => '已开', 'settings_route' => null, 'ops_note' => null,
