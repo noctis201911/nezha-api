@@ -563,6 +563,8 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         Route::get('categories', [LocalLifeController::class, 'categories']);
         Route::get('merchants', [LocalLifeController::class, 'merchants']);
         Route::get('merchants/{id}', [LocalLifeController::class, 'merchantDetail']);
+        // 商家笔记列表（批N·公开只读；总闸 nezha_merchant_notes_status=0 时空列表）
+        Route::get('merchants/{id}/notes', [LocalLifeController::class, 'merchantNotes']);
         // 生活攻略（批2·公开只读；开关 nezha_guides_status=0 时列表空/详情 closed）
         Route::get('guides', [GuideController::class, 'index']);
         Route::get('guides/{slug}', [GuideController::class, 'show']);
@@ -576,6 +578,9 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         Route::get('my-posts', [LocalLifeController::class, 'myPosts']);
         Route::post('posts/{id}/report', [LocalLifeController::class, 'reportPost']);
         Route::post('merchants/{id}/report', [LocalLifeController::class, 'reportMerchant']);
+        // 商家笔记（批N·写笔记 / 举报笔记；需登录，游客写→前端 AuthModal）
+        Route::post('merchants/{id}/notes', [LocalLifeController::class, 'storeNote']);
+        Route::post('notes/{id}/report', [LocalLifeController::class, 'reportNote']);
         // 我的发布·生命周期动作(仅本人 UGC 帖，控制器内 ownedPost 对象级鉴权)
         Route::post('posts/{id}/mark-sold', [LocalLifeController::class, 'markSold']);
         Route::post('posts/{id}/take-down', [LocalLifeController::class, 'takeDown']);

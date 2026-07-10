@@ -77,6 +77,38 @@ class NezhaContentScreen
     }
 
     /**
+     * 文本是否疑似含联系方式（批N 笔记禁联系方式 §②-4）。
+     * 命中电话号(7 位以上连续数字)/微信·QQ 号/@handle/网址/wa.me/t.me → true。
+     * 单一来源：本地生活笔记 API(storeNote) 与 /m 商户面(notesStore) 共用，避免两处规则漂移。
+     * 保守匹配，宁可偶尔误伤个别数字串，也不放联系方式绕过人工审。
+     */
+    public static function looksLikeContact(?string $text): bool
+    {
+        $t = trim((string) $text);
+        if ($t === '') {
+            return false;
+        }
+        // 网址 / 深链
+        if (preg_match('~https?://|wa\.me/|t\.me/|\.com|\.net|\.org~i', $t)) {
+            return true;
+        }
+        // 微信/vx/weixin/wechat/QQ + 号（含变体）
+        if (preg_match('~(微信|加微|vx|v\s*x|weixin|wechat|扣扣|qq)\s*[:：]?\s*[0-9a-zA-Z_-]{4,}~iu', $t)) {
+            return true;
+        }
+        // @handle（Telegram / IG 等用户名）
+        if (preg_match('~@[0-9a-zA-Z_]{4,}~', $t)) {
+            return true;
+        }
+        // 电话号：去掉常见分隔后出现 7 位以上连续数字
+        $digits = preg_replace('/[\s\-\(\)\+\.]/', '', $t);
+        if (preg_match('/\d{7,}/', $digits)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * 文本是否命中违禁词（子串、不区分大小写）。不回显命中词，避免被试探绕过。
      */
     public static function hits(?string $text): bool

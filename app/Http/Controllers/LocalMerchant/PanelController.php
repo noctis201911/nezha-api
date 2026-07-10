@@ -6,6 +6,7 @@ use App\CentralLogics\Helpers;
 use App\CentralLogics\NezhaContentScreen;
 use App\Http\Controllers\Controller;
 use App\Models\LocalLifeMerchantChange;
+use App\Models\LocalLifeMerchantNote;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -18,8 +19,9 @@ use Illuminate\Validation\ValidationException;
  */
 class PanelController extends Controller
 {
-    private const GUARD   = 'local_merchant';
-    private const IMG_DIR = 'local-life-merchant/';
+    private const GUARD    = 'local_merchant';
+    private const IMG_DIR   = 'local-life-merchant/';
+    private const NOTE_DIR  = 'local-life-note/'; // 笔记图（批N·与 H5/admin 同目录）
     /** 与 Api\V1\LocalLifeController::RENTAL_CATEGORY 同步（该处为 private 拿不到，镜像一份） */
     private const RENTAL_CATEGORY = '租房民宿';
 
@@ -137,6 +139,106 @@ class PanelController extends Controller
             ->orderByDesc('id')->paginate(15);
 
         return view('local_merchant.history', compact('merchant', 'changes'));
+    }
+
+    /* ---------------- 笔记（批N · 图文内容层，全复审） ---------------- */
+
+    /** 我的笔记：列本商户所有笔记（各状态可见），含驳回理由回显。 */
+    public function notesList(Request $request)
+    {
+        $merchant = $this->merchant();
+        if (!$merchant) {
+            abort(404);
+        }
+        $notes = LocalLifeMerchantNote::where('merchant_id', $merchant->id)
+            ->orderByDesc('id')->paginate(15);
+        return view('local_merchant.notes_list', compact('merchant', 'notes'));
+    }
+
+    /** 写笔记表单。 */
+    public function notesCreate(Request $request)
+    {
+        $merchant = $this->merchant();
+        if (!$merchant) {
+            abort(404);
+        }
+        return view('local_merchant.notes_create', compact('merchant'));
+    }
+
+    /** 提交笔记 → status=0 待审（进同一超管审核队列）。author_type=merchant，user_id=null。 */
+    public function notesStore(Request $request)
+    {
+        $merchant = $this->merchant();
+        if (!$merchant) {
+            abort(404);
+        }
+
+        $request->validate([
+            'title'    => 'nullable|string|max:30',
+            'body'     => 'required|string|max:500',
+            'images'   => 'required|array|min:1|max:9',
+            'images.*' => 'image|mimes:jpg,jpeg,png,webp|max:5120',
+        ], [
+            'body.required'   => '请填写笔记正文',
+            'body.max'        => '正文最多 500 字',
+            'title.max'       => '标题最多 30 字',
+            'images.required' => '请至少上传 1 张图片',
+            'images.min'      => '请至少上传 1 张图片',
+            'images.max'      => '最多上传 9 张图片',
+            'images.*.image'  => '只能上传图片',
+            'images.*.mimes'  => '图片格式仅支持 jpg/png/webp',
+            'images.*.max'    => '单张图片不能超过 5MB',
+        ]);
+
+        $scan = trim((string) $request->title . "\n" . (string) $request->body);
+
+        // 联系方式拦截(§②-4，与 H5 同一套规则)：笔记内禁联系方式
+        if (NezhaContentScreen::looksLikeContact($scan)) {
+            throw ValidationException::withMessages([
+                'body' => '笔记内请勿填写联系方式（电话/微信/链接等），联系请让顾客走店铺联系卡。',
+            ]);
+        }
+        // 硬禁业务词筛查——命中即拒
+        if (NezhaContentScreen::hits($scan)) {
+            throw ValidationException::withMessages([
+                'body' => '内容命中平台禁止/违规关键词，请修改后再提交。',
+            ]);
+        }
+
+        $imageNames = [];
+        foreach ((array) $request->file('images') as $file) {
+            if ($file) {
+                $imageNames[] = Helpers::upload(self::NOTE_DIR, 'webp', $file);
+            }
+        }
+
+        LocalLifeMerchantNote::create([
+            'merchant_id' => $merchant->id,
+            'author_type' => LocalLifeMerchantNote::AUTHOR_MERCHANT,
+            'user_id'     => null,
+            'title'       => trim((string) $request->title) ?: null,
+            'body'        => trim((string) $request->body),
+            'images'      => $imageNames,
+            'status'      => LocalLifeMerchantNote::STATUS_PENDING,
+        ]);
+
+        return redirect()->route('local-merchant.notes')
+            ->with('status', '已提交，等待平台审核。审核通过后会在店铺页「笔记」展示。');
+    }
+
+    /** 删除自己的笔记（merchant_id 作用域 = 结构性防越权删他店笔记）。 */
+    public function notesDelete(Request $request, $id)
+    {
+        $merchant = $this->merchant();
+        if (!$merchant) {
+            abort(404);
+        }
+        $note = LocalLifeMerchantNote::where('merchant_id', $merchant->id)->find($id);
+        if ($note) {
+            $note->delete();
+            return redirect()->route('local-merchant.notes')->with('status', '已删除该笔记。');
+        }
+        return redirect()->route('local-merchant.notes')->with('error', '笔记不存在或无权操作。');
     }
 
     /* ---------------- 校验 + 组装（仅自改白名单字段） ---------------- */

@@ -1232,6 +1232,17 @@ Route::middleware('module:provide_dm_earning')->group(function () {
             Route::post('offline/{id}', [AdminLocalLifeController::class, 'offlinePost'])->name('offline');
             Route::post('report-dismiss/{reportId}', [AdminLocalLifeController::class, 'dismissReport'])->name('report-dismiss');
             Route::delete('delete', [AdminLocalLifeController::class, 'destroy'])->name('delete');
+            // 笔记审核（批N·商家页图文笔记；商家/m 与客户 H5 提交都进此队列）
+            Route::group(['prefix' => 'notes', 'as' => 'notes.'], function () {
+                Route::get('list', [\App\Http\Controllers\Admin\LocalLifeNoteController::class, 'list'])->name('list');
+                Route::post('approve/{id}', [\App\Http\Controllers\Admin\LocalLifeNoteController::class, 'approve'])->name('approve');
+                Route::post('reject/{id}', [\App\Http\Controllers\Admin\LocalLifeNoteController::class, 'reject'])->name('reject');
+                Route::post('offline/{id}', [\App\Http\Controllers\Admin\LocalLifeNoteController::class, 'offline'])->name('offline');
+                Route::post('toggle', [\App\Http\Controllers\Admin\LocalLifeNoteController::class, 'toggle'])->name('toggle');
+                Route::get('reports/{id}', [\App\Http\Controllers\Admin\LocalLifeNoteController::class, 'reports'])->name('reports');
+                Route::post('report-dismiss/{reportId}', [\App\Http\Controllers\Admin\LocalLifeNoteController::class, 'dismissReport'])->name('report-dismiss');
+                Route::delete('delete', [\App\Http\Controllers\Admin\LocalLifeNoteController::class, 'destroy'])->name('delete');
+            });
             // 类目管理（金刚区类目，后台可增删改排序）
             Route::group(['prefix' => 'categories', 'as' => 'categories.'], function () {
                 Route::get('list', [LocalLifeCategoryController::class, 'list'])->name('list');

@@ -229,6 +229,13 @@ class NezhaAdminDashboard
         $merchantChanges = self::safe(function () {
             return (int) \App\Models\LocalLifeMerchantChange::where('status', \App\Models\LocalLifeMerchantChange::STATUS_PENDING)->count();
         });
+        // 批N 商家页笔记: 待审笔记(status=0) + 待处理笔记举报(local_life_reports note_id 非空 status=0)。总闸关时前台不展示但审核台恒计数。
+        $notes = self::safe(function () {
+            return (int) \App\Models\LocalLifeMerchantNote::where('status', \App\Models\LocalLifeMerchantNote::STATUS_PENDING)->count();
+        });
+        $noteReports = self::safe(function () {
+            return (int) \App\Models\LocalLifeReport::whereNotNull('note_id')->where('status', 0)->count();
+        });
 
         return [
             'ugc'              => $ugc,
@@ -238,7 +245,9 @@ class NezhaAdminDashboard
             'reviews'          => $reviews,
             'review_reports'   => $reviewReports,
             'merchant_changes' => $merchantChanges,
-            'total'            => $ugc + $onboarding + $ad + $kyc + $reviews + $reviewReports + $merchantChanges,
+            'notes'            => $notes,
+            'note_reports'     => $noteReports,
+            'total'            => $ugc + $onboarding + $ad + $kyc + $reviews + $reviewReports + $merchantChanges + $notes + $noteReports,
         ];
     }
 
@@ -360,6 +369,8 @@ class NezhaAdminDashboard
                 ['key' => 'reviews',    'label' => '评价',     'count' => (int) ($a['reviews'] ?? 0),        'route' => self::routeOr('admin.food.reviews', ['status_filter' => 'pending'])],
                 ['key' => 'reports',    'label' => '举报',     'count' => (int) ($a['review_reports'] ?? 0),  'route' => self::routeOr('admin.food.reviews', ['status_filter' => 'reported'])],
                 ['key' => 'merchant_changes', 'label' => '商户资料', 'count' => (int) ($a['merchant_changes'] ?? 0), 'route' => self::routeOr('admin.local-life.merchant-changes.list')],
+                ['key' => 'notes',      'label' => '笔记',     'count' => (int) ($a['notes'] ?? 0),          'route' => self::routeOr('admin.local-life.notes.list', ['status' => 0])],
+                ['key' => 'note_reports', 'label' => '笔记举报', 'count' => (int) ($a['note_reports'] ?? 0),   'route' => self::routeOr('admin.local-life.notes.list')],
             ], function ($s) {
                 return $s['count'] > 0;
             })),

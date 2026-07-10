@@ -25,6 +25,9 @@
                 <a href="{{ route('admin.local-life.settings') }}" class="btn btn--secondary">
                     <i class="tio-settings"></i> 护栏与文案设置
                 </a>
+                <a href="{{ route('admin.local-life.notes.list') }}" class="btn btn--secondary">
+                    <i class="tio-comment"></i> 笔记审核
+                </a>
                 <form action="{{ route('admin.local-life.ugc-toggle') }}" method="post">
                     @csrf
                     <input type="hidden" name="enable" value="{{ $ugcEnabled ? 0 : 1 }}">

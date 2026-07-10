@@ -296,5 +296,10 @@ Route::prefix('m')->as('local-merchant.')
             Route::get('edit', [\App\Http\Controllers\LocalMerchant\PanelController::class, 'editForm'])->name('edit');
             Route::post('edit', [\App\Http\Controllers\LocalMerchant\PanelController::class, 'submit'])->name('submit')->middleware('throttle:40,1');
             Route::get('history', [\App\Http\Controllers\LocalMerchant\PanelController::class, 'history'])->name('history');
+            // 笔记（批N·商户自助发布图文笔记，进同一超管审核队列）
+            Route::get('notes', [\App\Http\Controllers\LocalMerchant\PanelController::class, 'notesList'])->name('notes');
+            Route::get('notes/create', [\App\Http\Controllers\LocalMerchant\PanelController::class, 'notesCreate'])->name('notes.create');
+            Route::post('notes', [\App\Http\Controllers\LocalMerchant\PanelController::class, 'notesStore'])->name('notes.store')->middleware('throttle:40,1');
+            Route::delete('notes/{id}', [\App\Http\Controllers\LocalMerchant\PanelController::class, 'notesDelete'])->name('notes.delete');
         });
     });

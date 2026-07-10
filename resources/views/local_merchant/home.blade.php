@@ -70,6 +70,9 @@
     <a href="{{ route('local-merchant.edit') }}" class="nzp-btn block">{{ $pending ? '继续编辑（有待审）' : '编辑店铺信息' }}</a>
 </div>
 <div class="nzp-btnrow" style="margin-top:10px">
+    <a href="{{ route('local-merchant.notes') }}" class="nzp-btn ghost block">✎ 笔记（店内动态/作品）</a>
+</div>
+<div class="nzp-btnrow" style="margin-top:10px">
     <a href="{{ route('local-merchant.history') }}" class="nzp-btn ghost block">提交记录@if($history->count()) · {{ $history->count() }}@endif</a>
 </div>
 

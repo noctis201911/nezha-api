@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\LocalLifePost;
 use App\Models\LocalLifeCategory;
 use App\Models\LocalLifeMerchant;
+use App\Models\LocalLifeMerchantNote;
 use App\Models\LocalLifeReport;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -40,6 +41,7 @@ class LocalLifeController extends Controller
     // 图片存储目录（与 Helpers::upload 一致）
     private const IMG_DIR = 'local-life';
     private const MERCHANT_IMG_DIR = 'local-life-merchant';
+    private const NOTE_IMG_DIR = 'local-life-note'; // 笔记图（批N·走 posts 同一上传管线，独立目录便于区分）
 
     // 发帖可选 tab / category 白名单（与前端表单一致）
     private const TABS = ['推荐', '租房', '招聘', '二手', '免费', '服务'];
@@ -278,7 +280,32 @@ class LocalLifeController extends Controller
         $data['google_rating_url'] = $m->google_rating_url;
         $data['contacts']          = $m->normalizedContacts();
         $data['views']             = (int) $m->views;
+        // 笔记预览(批N §④-8)：最新 4 条过审笔记 + 总数。总闸关 / 无过审 → 空(前端整卡不渲染)。
+        $data['notes_preview']     = $this->notesPreviewFor($m);
         return response()->json($data, 200);
+    }
+
+    /**
+     * 笔记预览(批N)：详情页笔记卡用。返回 {total, items:[最新4条过审]}。
+     * 总闸 nezha_merchant_notes_status=0 或无过审笔记 → {total:0, items:[]}（前端整卡隐）。
+     */
+    private function notesPreviewFor(LocalLifeMerchant $m): array
+    {
+        if (!$this->notesEnabled()) {
+            return ['total' => 0, 'items' => []];
+        }
+        $total = LocalLifeMerchantNote::where('merchant_id', $m->id)
+            ->where('status', LocalLifeMerchantNote::STATUS_APPROVED)->count();
+        if ($total === 0) {
+            return ['total' => 0, 'items' => []];
+        }
+        $items = LocalLifeMerchantNote::where('merchant_id', $m->id)
+            ->where('status', LocalLifeMerchantNote::STATUS_APPROVED)
+            ->with('user:id,f_name,l_name,image')
+            ->orderByDesc('created_at')->orderByDesc('id')
+            ->limit(4)->get()
+            ->map(fn ($n) => $this->notePublicPayload($n, $m))->all();
+        return ['total' => $total, 'items' => $items];
     }
 
     /**
@@ -809,6 +836,254 @@ class LocalLifeController extends Controller
         ]);
 
         return response()->json(['message' => '已收到举报，感谢反馈'], 200);
+    }
+
+    /* ============================ 笔记（批N · 图文内容层） ============================ */
+
+    /**
+     * 接口：某商家的笔记列表（公开只读，分页 10）。
+     * GET /api/v1/local-life/merchants/{id}/notes?page=1
+     * 只返回 status=1(过审)，过审时间倒序。总闸关 → 空列表。绝不返回待审/驳回/下架笔记。
+     */
+    public function merchantNotes(Request $request, $id)
+    {
+        $m = LocalLifeMerchant::where('status', true)->find($id);
+        if (!$m) {
+            return response()->json(['errors' => [['code' => 'merchant', 'message' => '商家不存在或已下线']]], 404);
+        }
+        if (!$this->notesEnabled()) {
+            return response()->json(['notes' => [], 'total' => 0, 'page' => 1, 'has_more' => false], 200);
+        }
+        $page    = max(1, (int) $request->input('page', 1));
+        $perPage = 10;
+        $total   = LocalLifeMerchantNote::where('merchant_id', $m->id)
+            ->where('status', LocalLifeMerchantNote::STATUS_APPROVED)->count();
+        $rows = LocalLifeMerchantNote::where('merchant_id', $m->id)
+            ->where('status', LocalLifeMerchantNote::STATUS_APPROVED)
+            ->with('user:id,f_name,l_name,image')
+            ->orderByDesc('created_at')->orderByDesc('id')
+            ->forPage($page, $perPage)->get();
+        $notes = $rows->map(fn ($n) => $this->notePublicPayload($n, $m))->all();
+        return response()->json([
+            'notes'    => $notes,
+            'total'    => $total,
+            'page'     => $page,
+            'has_more' => $page * $perPage < $total,
+        ], 200);
+    }
+
+    /**
+     * 接口：客户写笔记。
+     * POST /api/v1/local-life/merchants/{id}/notes  (auth:api)
+     * 落库 status=0(待审)、author_type=customer、user_id=当前用户。人工审核后展示。
+     * 护栏顺序：总开关 → 每用户每商家每日上限(命名·作用域计数) → 字段校验(图≥1) → 联系方式拦截 → 违禁词。
+     * L1-1：仅信息，无任何交易字段。§②-4：笔记内禁联系方式（表单提示 + 本层模式拦截 + 违禁词 + 人工审）。
+     */
+    public function storeNote(Request $request, $id)
+    {
+        $userId = auth('api')->id();
+
+        if (!$this->notesEnabled()) {
+            return response()->json(['errors' => [['code' => 'closed', 'message' => '笔记功能暂未开放']]], 403);
+        }
+
+        $m = LocalLifeMerchant::where('status', true)->find($id);
+        if (!$m) {
+            return response()->json(['errors' => [['code' => 'merchant', 'message' => '商家不存在或已下线']]], 404);
+        }
+
+        // 命名 throttle：每用户每商家每日 ≤2（作用域全限定计数，不与其它 throttle 共用 key）
+        $todayCount = LocalLifeMerchantNote::where('user_id', $userId)
+            ->where('merchant_id', $m->id)
+            ->where('author_type', LocalLifeMerchantNote::AUTHOR_CUSTOMER)
+            ->where('created_at', '>=', Carbon::today())
+            ->count();
+        if ($todayCount >= 2) {
+            return response()->json(['errors' => [['code' => 'limit', 'message' => '今日笔记次数已达上限，请明天再试']]], 429);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'title'    => 'nullable|string|max:30',
+            'body'     => 'required|string|max:500',
+            'images'   => 'required|array|min:1|max:9',
+            'images.*' => 'image|mimes:jpg,jpeg,png,webp|max:5120',
+        ], [
+            'body.required'   => '请填写笔记正文',
+            'body.max'        => '正文最多 500 字',
+            'title.max'       => '标题最多 30 字',
+            'images.required' => '请至少上传 1 张图片',
+            'images.min'      => '请至少上传 1 张图片',
+            'images.max'      => '最多上传 9 张图片',
+            'images.*.image'  => '只能上传图片',
+            'images.*.mimes'  => '图片格式仅支持 jpg/png/webp',
+            'images.*.max'    => '单张图片不能超过 5MB',
+        ]);
+        if ($validator->fails()) {
+            $errs = [];
+            foreach ($validator->errors()->getMessages() as $field => $msgs) {
+                $errs[] = ['code' => $field, 'message' => $msgs[0]];
+            }
+            return response()->json(['errors' => $errs], 422);
+        }
+
+        $scan = trim((string) $request->title . "\n" . (string) $request->body);
+
+        // 联系方式拦截(§②-4)：笔记内禁联系方式（电话/微信号/@handle/wa.me/t.me/网址）——命中即拒
+        if ($this->looksLikeContact($scan)) {
+            return response()->json(['errors' => [['code' => 'contact', 'message' => '笔记内请勿填写联系方式（电话/微信/链接等），联系请走商家联系卡']]], 422);
+        }
+
+        // 违禁词过滤（命中即拒，不转待审）
+        if ($this->hitsBannedWord($scan)) {
+            return response()->json(['errors' => [['code' => 'banned', 'message' => '内容含违规词，请修改后再发布']]], 422);
+        }
+
+        // 图片上传（jpg/png 自动转 webp）；仅存文件名数组。图 1–9 张，至少 1 张。
+        $imageNames = [];
+        foreach ($request->file('images') as $file) {
+            $imageNames[] = Helpers::upload(self::NOTE_IMG_DIR . '/', 'webp', $file);
+        }
+
+        LocalLifeMerchantNote::create([
+            'merchant_id' => $m->id,
+            'author_type' => LocalLifeMerchantNote::AUTHOR_CUSTOMER,
+            'user_id'     => $userId,
+            'title'       => $request->filled('title') ? trim((string) $request->title) : null,
+            'body'        => trim((string) $request->body),
+            'images'      => $imageNames,
+            'status'      => LocalLifeMerchantNote::STATUS_PENDING,
+        ]);
+
+        return response()->json(['message' => '已提交，审核通过后会展示在商家页'], 200);
+    }
+
+    /**
+     * 接口：举报某条笔记（复用帖举报理由白名单 + 每日上限 + 防重，target=note）。
+     * POST /api/v1/local-life/notes/{id}/report  (auth:api)
+     */
+    public function reportNote(Request $request, $id)
+    {
+        $userId = auth('api')->id();
+
+        $note = LocalLifeMerchantNote::where('status', LocalLifeMerchantNote::STATUS_APPROVED)->find($id);
+        if (!$note) {
+            return response()->json(['errors' => [['code' => 'note', 'message' => '笔记不存在或已下架']]], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'reason' => ['required', 'string', 'in:' . implode(',', self::REPORT_REASONS)],
+            'detail' => 'nullable|string|max:500',
+        ], [
+            'reason.required' => '请选择举报理由',
+            'reason.in'       => '举报理由不在允许范围',
+            'detail.max'      => '说明最多 500 字',
+        ]);
+        $validator->after(function ($v) use ($request) {
+            if ($request->input('reason') === self::REPORT_REASON_OTHER && !trim((string) $request->input('detail'))) {
+                $v->errors()->add('detail', '选择"其他"时请填写具体说明');
+            }
+        });
+        if ($validator->fails()) {
+            $errs = [];
+            foreach ($validator->errors()->getMessages() as $field => $msgs) {
+                $errs[] = ['code' => $field, 'message' => $msgs[0]];
+            }
+            return response()->json(['errors' => $errs], 422);
+        }
+
+        // 每日举报上限（与帖/商家举报共用同一计数口径）
+        $reportLimit = (int) $this->setting('locallife_report_daily_limit', 20);
+        $reportLimit = $reportLimit > 0 ? $reportLimit : 20;
+        $todayReports = LocalLifeReport::where('user_id', $userId)
+            ->where('created_at', '>=', Carbon::today())
+            ->count();
+        if ($todayReports >= $reportLimit) {
+            return response()->json(['errors' => [['code' => 'limit', 'message' => '今日举报已达上限，请明天再试']]], 429);
+        }
+
+        // 去重：同用户对同笔记已有未处理举报 → 友好提示
+        $exists = LocalLifeReport::where('note_id', $note->id)
+            ->where('user_id', $userId)
+            ->where('status', LocalLifeReport::STATUS_PENDING)
+            ->exists();
+        if ($exists) {
+            return response()->json(['message' => '你已举报过该笔记，我们会尽快处理'], 200);
+        }
+
+        LocalLifeReport::create([
+            'note_id'     => $note->id,
+            'post_id'     => null,
+            'merchant_id' => null,
+            'user_id'     => $userId,
+            'reason'      => $request->reason,
+            'detail'      => $request->input('detail') ?: null,
+            'status'      => LocalLifeReport::STATUS_PENDING,
+        ]);
+
+        return response()->json(['message' => '已收到举报，感谢反馈'], 200);
+    }
+
+    /** 笔记总闸（批N）：business_settings.nezha_merchant_notes_status=1 才开放。默认关。 */
+    private function notesEnabled(): bool
+    {
+        return (string) $this->setting('nezha_merchant_notes_status', '0') === '1';
+    }
+
+    /**
+     * 笔记对外展示体（详情卡预览 + 全量列表 + 详情抽屉共用同一结构）。
+     * 作者透明(§②-5)：商家笔记→显商家名+logo+author_type=merchant（前端加「商家」chip）；
+     *   客户笔记→显昵称+头像；用户已注销(硬删)→「用户已注销」+ 头像 null（前端回落 3D 小哪吒）。
+     */
+    private function notePublicPayload(LocalLifeMerchantNote $n, LocalLifeMerchant $m): array
+    {
+        if ($n->author_type === LocalLifeMerchantNote::AUTHOR_MERCHANT) {
+            $authorName   = $m->name;
+            $authorAvatar = $m->logo ? Helpers::get_full_url(self::MERCHANT_IMG_DIR, $m->logo, 'public') : null;
+        } else {
+            $u = $n->user; // 注销后为 null
+            $authorName   = $u ? trim(($u->f_name ?? '') . ' ' . ($u->l_name ?? '')) : '';
+            if ($authorName === '') {
+                $authorName = $u ? '哪吒用户' : '用户已注销';
+            }
+            $authorAvatar = ($u && $u->image) ? $u->image_full_url : null;
+        }
+        $images = $this->noteImageUrls($n->images);
+        return [
+            'id'            => $n->id,
+            'title'         => $n->title,
+            'body'          => $n->body,
+            'images'        => $images,
+            'cover_url'     => $images[0] ?? null,
+            'author_type'   => $n->author_type,
+            'author_name'   => $authorName,
+            'author_avatar' => $authorAvatar,
+            'created_at'    => optional($n->created_at)->toIso8601String(),
+            'created_label' => optional($n->created_at)->timezone('Asia/Yerevan')->format('Y-m-d'),
+        ];
+    }
+
+    /** 笔记图文件名数组 → 完整 URL 数组。 */
+    private function noteImageUrls($images): array
+    {
+        if (!is_array($images)) {
+            return [];
+        }
+        $out = [];
+        foreach ($images as $name) {
+            $name = trim((string) $name);
+            if ($name !== '') {
+                $out[] = Helpers::get_full_url(self::NOTE_IMG_DIR, basename($name), 'public');
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * 联系方式启发式拦截(§②-4)：笔记禁联系方式。委托共享筛查器，与 /m 商户面同一套规则（防漂移）。
+     */
+    private function looksLikeContact(?string $text): bool
+    {
+        return \App\CentralLogics\NezhaContentScreen::looksLikeContact($text);
     }
 
     /* =================== 我的发布·生命周期动作(auth:api, 仅本人 UGC 帖) =================== */
