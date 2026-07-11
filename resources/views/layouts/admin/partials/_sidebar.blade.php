@@ -220,6 +220,7 @@ $__navGroups[] = [
             ['label' => '本地生活类目', 'label_raw' => true, 'route' => route('admin.local-life.categories.list'), 'icon' => 'tio-folder-labeled', 'active' => Request::is('admin/local-life/categories*'), 'gate' => Helpers::module_permission_check('settings')],
             ['label' => '本地生活商家', 'label_raw' => true, 'route' => route('admin.local-life.merchants.list'), 'icon' => 'tio-shop-outlined', 'active' => Request::is('admin/local-life/merchants*'), 'gate' => Helpers::module_permission_check('settings')],
             ['label' => '商户资料复审', 'label_raw' => true, 'route' => route('admin.local-life.merchant-changes.list'), 'icon' => 'tio-verified', 'active' => Request::is('admin/local-life/merchant-changes*'), 'gate' => Helpers::module_permission_check('settings')],
+            ['label' => '笔记审核', 'label_raw' => true, 'route' => route('admin.local-life.notes.list'), 'icon' => 'tio-comment-text-outlined', 'active' => Request::is('admin/local-life/notes*'), 'gate' => Helpers::module_permission_check('settings')],
             ['label' => '生活攻略', 'label_raw' => true, 'route' => route('admin.guides.list'), 'icon' => 'tio-book-opened', 'active' => Request::is('admin/guides*'), 'gate' => Helpers::module_permission_check('settings')],
             ['label' => '举报商家', 'label_raw' => true, 'route' => route('admin.restaurant-report.list'), 'icon' => 'tio-flag', 'active' => Request::is('admin/restaurant-report*'), 'gate' => Helpers::module_permission_check('settings') && Helpers::module_permission_check('restaurant')],
         ],

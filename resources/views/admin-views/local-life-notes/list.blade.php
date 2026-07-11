@@ -90,16 +90,19 @@
                                 @endif
                             </td>
                             <td style="white-space:normal">
-                                @if($note->title)<strong>{{Str::limit($note->title,30)}}</strong><br>@endif
-                                <span class="text-muted" style="font-size:12.5px">{{Str::limit($note->body,80)}}</span>
+                                <a href="javascript:" data-toggle="modal" data-target="#note-view-{{$note->id}}" class="text-dark" style="text-decoration:none" title="点击查看完整笔记">
+                                    @if($note->title)<strong>{{Str::limit($note->title,30)}}</strong><br>@endif
+                                    <span class="text-muted" style="font-size:12.5px">{{Str::limit($note->body,80)}}</span>
+                                </a>
                                 @if(is_array($note->images) && count($note->images))
                                     <div class="d-flex flex-wrap gap-1 mt-1">
                                         @foreach(array_slice($note->images,0,5) as $im)
-                                            <a href="{{$noteImg($im)}}" target="_blank"><img src="{{$noteImg($im)}}" alt="图" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid #eee"></a>
+                                            <a href="javascript:" data-toggle="modal" data-target="#note-view-{{$note->id}}"><img src="{{$noteImg($im)}}" alt="图" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid #eee"></a>
                                         @endforeach
                                         @if(count($note->images) > 5)<span class="text-muted" style="font-size:12px;align-self:center">+{{count($note->images)-5}}</span>@endif
                                     </div>
                                 @endif
+                                <div class="mt-1"><a href="javascript:" data-toggle="modal" data-target="#note-view-{{$note->id}}" class="small text-primary"><i class="tio-visible-outlined"></i> 查看完整笔记</a></div>
                                 @if($rc > 0)
                                     <a href="{{route('admin.local-life.notes.reports',$note->id)}}" class="badge badge-danger mt-1" title="查看举报"><i class="tio-flag"></i> 举报 {{$rc}}</a>
                                 @endif
@@ -147,6 +150,54 @@
                                         </div>
                                     </form>
                                 @endif
+
+                                {{-- 笔记完整预览模态框：审核前看清全部标题/正文/图片，避免盲审 --}}
+                                <div class="modal fade text-left" id="note-view-{{$note->id}}" tabindex="-1" role="dialog" aria-hidden="true">
+                                    <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">笔记预览
+                                                    @if($note->author_type === 'merchant')
+                                                        <span class="badge badge-soft-primary ml-1">商家</span>
+                                                    @else
+                                                        <span class="badge badge-soft-info ml-1">客户</span>
+                                                    @endif
+                                                </h5>
+                                                <button type="button" class="btn-close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <div class="text-muted small mb-3">
+                                                    商家：{{ optional($note->merchant)->name ?: '（已删除）' }}
+                                                    · 作者：{{ $note->author_type === 'merchant' ? (optional($note->merchant)->name ?: '商家') : (optional($note->user)->f_name ? trim($note->user->f_name.' '.$note->user->l_name) : ($note->user_id ? '用户已注销' : '匿名')) }}
+                                                    · 提交：{{ optional($note->created_at)->timezone('Asia/Yerevan')->format('Y-m-d H:i') }}
+                                                </div>
+                                                @if($note->title)<h4 class="mb-3">{{ $note->title }}</h4>@endif
+                                                <div style="white-space:pre-wrap;line-height:1.75;font-size:14px">{{ $note->body }}</div>
+                                                @if(is_array($note->images) && count($note->images))
+                                                    <div class="d-flex flex-wrap gap-2 mt-3">
+                                                        @foreach($note->images as $im)
+                                                            <a href="{{$noteImg($im)}}" target="_blank" title="点击看原图">
+                                                                <img src="{{$noteImg($im)}}" alt="图" style="width:128px;height:128px;object-fit:cover;border-radius:8px;border:1px solid #eee">
+                                                            </a>
+                                                        @endforeach
+                                                    </div>
+                                                @endif
+                                                @if($note->status == 2 && $note->reject_reason)
+                                                    <div class="alert alert-soft-danger py-2 small mt-3 mb-0">驳回理由：{{ $note->reject_reason }}</div>
+                                                @endif
+                                            </div>
+                                            <div class="modal-footer">
+                                                @if($note->status == 0)
+                                                    <form action="{{route('admin.local-life.notes.approve',$note->id)}}" method="post" class="d-inline">
+                                                        @csrf
+                                                        <button type="submit" class="btn btn--success"><i class="tio-checkmark-circle"></i> 通过并展示</button>
+                                                    </form>
+                                                @endif
+                                                <button type="button" class="btn btn--secondary" data-dismiss="modal">关闭</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                         @endforeach
