@@ -42,10 +42,6 @@ class PaymentController extends Controller
     }
     public function payment(Request $request)
     {
-        if ($request->has('callback')) {
-            Order::where(['id' => $request->order_id])->update(['callback' => $request['callback']]);
-        }
-
         session()->put('customer_id', $request['customer_id']);
         session()->put('payment_platform', $request['payment_platform']);
         session()->put('order_id', $request->order_id);
@@ -54,6 +50,16 @@ class PaymentController extends Controller
 
         if(!$order){
             return response()->json(['errors' => ['code' => 'order-payment', 'message' => 'Data not found']], 403);
+        }
+
+        // 哪吒安全(2026-07-11 NZ-SEC-004): callback 只写入已通过 id+user_id 归属校验的本单, 且必须过站内白名单。
+        //   原实现两处漏洞: ①跨单污染——在归属校验前按 order_id 单键 update 任意订单的 callback(免登录可写他人单);
+        //                 ②开放跳转——success/fail/cancel 直跳 $order->callback 无 scheme/host 校验(可跳钓鱼站/deep link)。
+        //   合法 callback 恒为 window.location.origin 下的站内地址(见前端 CheckoutPage), 故白名单=站内 host 或相对路径。
+        $safeCallback = ($request->has('callback') && $this->isSafeCallback($request['callback'])) ? $request['callback'] : null;
+        if ($safeCallback !== null) {
+            $order->callback = $safeCallback;
+            $order->save();
         }
 
         //guest user check
@@ -113,7 +119,7 @@ class PaymentController extends Controller
                 receiver_id: '100',
                 additional_data: $additional_data,
                 payment_amount: $order_amount,
-                external_redirect_link: $request->has('callback')?$request['callback']:session('callback'),
+                external_redirect_link: $safeCallback ?: session('callback'),
                 attribute: 'order',
                 attribute_id: $order->id
             );
@@ -145,7 +151,7 @@ class PaymentController extends Controller
     public function success()
     {
         $order = Order::where(['id' => session('order_id'), 'user_id'=>session('customer_id')])->first();
-        if (isset($order) && $order->callback != null) {
+        if (isset($order) && $order->callback != null && $this->isSafeCallback($order->callback)) {
             return redirect($order->callback . '&status=success');
         }
         return response()->json(['message' => 'Payment succeeded'], 200);
@@ -154,7 +160,7 @@ class PaymentController extends Controller
     public function fail()
     {
         $order = Order::where(['id' => session('order_id'), 'user_id'=>session('customer_id')])->first();
-        if (isset($order) && $order->callback != null) {
+        if (isset($order) && $order->callback != null && $this->isSafeCallback($order->callback)) {
             return redirect($order->callback . '&status=fail');
         }
         return response()->json(['message' => 'Payment failed'], 403);
@@ -162,10 +168,43 @@ class PaymentController extends Controller
     public function cancel(Request $request)
     {
         $order = Order::where(['id' => session('order_id'), 'user_id'=>session('customer_id')])->first();
-        if (isset($order) && $order->callback != null) {
+        if (isset($order) && $order->callback != null && $this->isSafeCallback($order->callback)) {
             return redirect($order->callback . '&status=fail');
         }
         return response()->json(['message' => 'Payment failed'], 403);
+    }
+
+    /**
+     * 哪吒安全(2026-07-11 NZ-SEC-004): 支付回调 URL 白名单——防开放跳转/头注入。
+     * 仅放行: ①站内相对路径(单 / 开头, 非 // 协议相对) ②http(s) 且 host 属本平台。
+     * 拒绝: 外部 host / javascript:/data:/vbscript: / 协议相对 // / 含 CR-LF 或控制字符 / 超长。
+     */
+    private function isSafeCallback($url): bool
+    {
+        if (!is_string($url) || $url === '' || strlen($url) > 512) {
+            return false;
+        }
+        if (preg_match('/[\x00-\x1f\x7f]|\s/', $url)) {
+            return false;
+        }
+        $lower = strtolower($url);
+        if (str_starts_with($lower, 'javascript:') || str_starts_with($lower, 'data:') || str_starts_with($lower, 'vbscript:')) {
+            return false;
+        }
+        // 站内相对路径 (排除 // 协议相对)
+        if (str_starts_with($url, '/') && !str_starts_with($url, '//')) {
+            return true;
+        }
+        $parts = parse_url($url);
+        if ($parts === false || empty($parts['scheme']) || empty($parts['host'])) {
+            return false;
+        }
+        if (!in_array(strtolower($parts['scheme']), ['http', 'https'], true)) {
+            return false;
+        }
+        $host = strtolower($parts['host']);
+        $allowed = ['nezha.am', 'www.nezha.am', 'api.nezha.am'];
+        return in_array($host, $allowed, true);
     }
 
 }
