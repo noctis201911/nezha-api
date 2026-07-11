@@ -1180,11 +1180,16 @@
             if (goBtn) { goBtn.addEventListener('click', function(){ location.href = listBase + currentTarget; }); }
             if (closeBtn) { closeBtn.addEventListener('click', function(){ dismissed = true; hideToast(); }); }
 
+            // 哪吒 P3 接单机模式: 断连检测。poll 成功即更新时戳; watchdog 每 10s 查, ≥60s 无成功 → 顶部红条(接单机可能收不到新单)。
+            var nzLastPollOk = Date.now();
+            function nzDiscBar(show){ var b = document.getElementById('nzDisconnectBar'); if (b) b.style.display = show ? 'block' : 'none'; }
+            setInterval(function(){ nzDiscBar(Date.now() - nzLastPollOk >= 60000); }, 10000);
             function poll(){
                 $.get({
                     url: '{{route('vendor.get-restaurant-data')}}',
                     dataType: 'json',
                     success: function (response) {
+                        nzLastPollOk = Date.now(); nzDiscBar(false);   // 哪吒 P3: 轮询成功 → 清断连红条
                         var data = response.data || {};
                         updateTimeoutToast(data);
                         updateDelivToast(data);
@@ -1423,6 +1428,33 @@
 
 </script>
 
+
+    {{-- 哪吒 P3 接单机模式: 断连横幅(轮询≥60s 无成功) + 屏幕常亮状态胶囊(仅作业台显·JS 控制) --}}
+    <div id="nzDisconnectBar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:13000;background:#F9EAE8;color:#AE4840;font-size:13.5px;font-weight:600;text-align:center;padding:9px 14px;border-bottom:2px solid #AE4840;font-family:'Noto Sans Armenian','Segoe UI','Microsoft YaHei','PingFang SC',sans-serif;">
+        ⚠️ 接单机已断连，可能收不到新单——请检查网络 / WiFi
+    </div>
+    <div id="nzWlChip" style="display:none;position:fixed;right:12px;bottom:12px;z-index:12500;align-items:center;gap:5px;background:#E5F1EA;color:#2B7A57;font-size:12px;font-weight:600;border-radius:999px;padding:6px 12px;border:1px solid #CFE6DA;box-shadow:0 2px 8px rgba(23,28,38,.10);font-family:'Noto Sans Armenian','Segoe UI','Microsoft YaHei','PingFang SC',sans-serif;">
+        📱 屏幕常亮
+    </div>
+    <script>
+    // 哪吒 P3 接单机模式: 作业台屏幕常亮(Screen Wake Lock)。仅作业台页 + 页面可见时请求; tab 隐藏/锁屏自动释放, 回到前台重申。
+    (function(){
+        var nzWL = null;
+        function nzWLWanted(){ return location.pathname.indexOf('/restaurant-panel/workbench') !== -1 && !document.hidden; }
+        function nzWLChip(on){ var c = document.getElementById('nzWlChip'); if (c) c.style.display = on ? 'inline-flex' : 'none'; }
+        function nzWLAcquire(){
+            if (!('wakeLock' in navigator) || !nzWLWanted()) { return; }
+            navigator.wakeLock.request('screen').then(function(s){
+                nzWL = s; nzWLChip(true);
+                s.addEventListener('release', function(){ nzWL = null; if (!nzWLWanted()) nzWLChip(false); });
+            }).catch(function(){ nzWL = null; nzWLChip(false); });
+        }
+        document.addEventListener('visibilitychange', function(){
+            if (document.hidden) { nzWLChip(false); } else { nzWLAcquire(); }   // 隐藏时锁自动释放; 回前台重申
+        });
+        if (document.readyState !== 'loading') { nzWLAcquire(); } else { document.addEventListener('DOMContentLoaded', nzWLAcquire); }
+    })();
+    </script>
 
     {{-- 哪吒商家版App: 在场感知心跳 + FCM token 上报 + 停报警(仅在 App 内激活, 普通浏览器零副作用) --}}
     <script src="{{ dynamicAsset('assets/admin/nezha-app-bridge.js') }}?v=1"></script>

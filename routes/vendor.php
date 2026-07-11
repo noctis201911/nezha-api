@@ -129,6 +129,8 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
             Route::get('summary', [WorkbenchController::class, 'summary'])->name('summary');
             // W4: 可刷新分区 HTML 片段(并入全局 6s 心跳, 不另开轮询)。只读, 与 index/summary 同 buildSummary 契约。
             Route::get('refresh', [WorkbenchController::class, 'refresh'])->name('refresh');
+            // 哪吒 P3 接单机模式: 图文指引页(纯静态说明)。
+            Route::get('guide', [WorkbenchController::class, 'guide'])->name('guide');
         });
 
         Route::group(['prefix' => 'dashboard', 'as' => 'dashboard.'], function () {

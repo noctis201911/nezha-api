@@ -58,6 +58,14 @@ class WorkbenchController extends Controller
     }
 
     /**
+     * 哪吒 P3 接单机模式: 图文指引页(把闲置手机/平板设成常开接单机)。纯静态说明, 仅父级 vendor 鉴权, 无写路径/无副作用。
+     */
+    public function guide(Request $request)
+    {
+        return view('vendor-views.workbench.guide');
+    }
+
+    /**
      * W4: 作业台可刷新分区(_body)的 HTML 片段。并入全局 6s 心跳(app.blade poll)刷新, 不另开轮询。
      * 与 index() 共用 buildSummary() + dispatchOrdersFor() 同一契约; 返回无 layout 的 _body partial(供 JS 换入 #nzwbRefresh)。
      * 纯只读: 与 summary/index 同源, 不写 checked / 不改状态 / 无副作用。
