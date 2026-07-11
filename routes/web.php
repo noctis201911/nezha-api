@@ -67,11 +67,12 @@ Route::get('logout', [LoginController::class, 'logout'])->name('logout');
 Route::get('two-factor-challenge', [\App\Http\Controllers\Admin\TwoFactorController::class, 'challenge'])->name('admin.2fa.challenge');
 Route::post('two-factor-challenge', [\App\Http\Controllers\Admin\TwoFactorController::class, 'verifyChallenge'])->name('admin.2fa.verify');
 Route::get('/reload-captcha', [HomeController::class, 'reloadCaptcha'])->name('reload-captcha');
-Route::get('/reset-password', [LoginController::class, 'reset_password_request'])->name('reset-password');
-Route::post('/vendor-reset-password', [LoginController::class, 'vendor_reset_password_request'])->name('vendor-reset-password');
+Route::get('/reset-password', [LoginController::class, 'reset_password_request'])->name('reset-password')->middleware('throttle:5,1');
+Route::post('/vendor-reset-password', [LoginController::class, 'vendor_reset_password_request'])->name('vendor-reset-password')->middleware('throttle:5,1');
 Route::get('/password-reset', [LoginController::class, 'reset_password'])->name('change-password');
-Route::post('verify-otp', [LoginController::class, 'verify_token'])->name('verify-otp');
-Route::post('reset-password-submit', [LoginController::class, 'reset_password_submit'])->name('reset-password-submit');
+// 哪吒安全(2026-07-11 N-04): web 密码重置流加 per-IP 限速——补齐 API 侧已有的 OTP 锁定缺口(verify-otp 5位OTP无锁定/reset-submit token/reset 请求防 OTP·邮件 spam)。低危(邮件 Str::random(60) 令牌才是真门), 属纵深硬化。
+Route::post('verify-otp', [LoginController::class, 'verify_token'])->name('verify-otp')->middleware('throttle:8,1');
+Route::post('reset-password-submit', [LoginController::class, 'reset_password_submit'])->name('reset-password-submit')->middleware('throttle:8,1');
 Route::get('otp-resent', [LoginController::class, 'otp_resent'])->name('otp_resent');
 
 

@@ -218,7 +218,12 @@ class AdvertisementController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
 
         }
-        $advertisement =Advertisement::where('id',$id)->first();
+        // 哪吒安全(2026-07-11 N-07): IDOR——只允许编辑本店广告(同 show/destroy/status 的 restaurant_id 作用域·防跨店改他人广告或把已批广告打回 pending 下线)。
+        $restaurant_id = $request?->vendor?->restaurants[0]?->id;
+        $advertisement = Advertisement::where('id',$id)->where('restaurant_id', $restaurant_id)->first();
+        if (!$advertisement) {
+            return response()->json(['errors' => [['code' => 'advertisement', 'message' => translate('messages.not_found')]]], 404);
+        }
 
         $advertisement->title = $data[0]['value'];
         $advertisement->description = $data[1]['value'];
