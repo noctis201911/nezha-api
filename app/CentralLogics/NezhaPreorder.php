@@ -139,12 +139,20 @@ class NezhaPreorder
         return $v > 0 ? $v : 3;
     }
 
+    /** 送达时间点步长分钟(L2·后台可调·默认 20·业主 2026-07-11 定)。窗口内按本值铺离散送达点(像美团 10:00/10:20/10:40)。 */
+    public static function pointStepMin(): int
+    {
+        $v = (int) (BusinessSetting::where('key', 'nezha_preorder_point_step_min')->first()->value ?? 20);
+        return $v > 0 ? $v : 20;
+    }
+
     /**
      * 校验一张预约单的 schedule_at 是否与所选窗口自洽 + 落在可约区间(纯函数·可单测)。返回中文错误串或 null(通过)。
-     * 债辩纠正①:delivery 预约现只拦「不能约过去」, min_lead/max_days 是**净新增服务端硬校验**, 别当已复用。
-     * 校验:不约过去 → 星期匹配窗口 day → 时刻等于窗口起始 → ≥ now+minLead → ≤ now+maxDays。
+     * 🔴 单点模型(业主 2026-07-11 定·推翻窗口起始唯一): 顾客在窗口 [start,end] 内选一个 step(默认20min)对齐的**精确送达点**,
+     *    不再只能选窗口起始。故时刻校验从「==windowStart」改为「∈[windowStart,windowEnd] 且按 step 对齐」。
+     * 校验:不约过去 → 星期匹配窗口 day → 时刻在窗口内且 step 对齐 → ≥ now+minLead → ≤ now+maxDays。
      */
-    public static function validateWindowTiming(Carbon $scheduleAt, int $windowDay, string $windowStart, Carbon $now, int $minLeadHours, int $maxDays): ?string
+    public static function validateWindowTiming(Carbon $scheduleAt, int $windowDay, string $windowStart, string $windowEnd, Carbon $now, int $minLeadHours, int $maxDays, int $stepMin): ?string
     {
         if ($scheduleAt->lt($now)) {
             return '不能预约过去的时段';
@@ -152,10 +160,14 @@ class NezhaPreorder
         if ((int) $scheduleAt->dayOfWeek !== $windowDay) {
             return '所选日期与配送时段不匹配';
         }
-        $ws = self::hmToMinutes($windowStart);
+        $ws  = self::hmToMinutes($windowStart);
+        $we  = self::hmToMinutes($windowEnd);
         $sat = (int) $scheduleAt->format('H') * 60 + (int) $scheduleAt->format('i');
-        if ($ws === null || $sat !== $ws) {
-            return '所选时间与配送时段不匹配';
+        if ($ws === null || $we === null || $sat < $ws || $sat > $we) {
+            return '所选时间不在配送时段内';
+        }
+        if ($stepMin > 0 && ($sat - $ws) % $stepMin !== 0) {
+            return '所选送达时间无效';
         }
         if ($scheduleAt->lt($now->copy()->addHours($minLeadHours))) {
             return '需至少提前 ' . $minLeadHours . ' 小时预约';
@@ -254,12 +266,15 @@ class NezhaPreorder
     }
 
     /**
-     * 顾客选配送时段:把 active 窗口按「今日起 max_days 天」铺成 {days, earliest}(纯函数·可单测·$now 注入)。
-     * 每 slot 带 schedule_at('Y-m-d H:i:s' = 该日期 + 窗口起始, 与 place_order/validateWindowTiming 自洽)+ selectable(受 min_lead/max_days/不约过去过滤)。
-     * $windows: 可迭代, 每项数组可 [] 取 id/day/start_time/end_time(day=0-6 周日..周六)。有窗口的 weekday 才出该天(空天不出 tab)。
+     * 顾客选配送时段:把 active 窗口按「今日起 max_days 天」铺成离散**送达时间点** {days, earliest}(纯函数·可单测·$now 注入)。
+     * 🔴 单点模型(业主 2026-07-11·推翻整窗口一 slot): 每个窗口 [start,end] 按 step(默认20min)铺离散点(像美团 10:00/10:20/10:40),
+     *    顾客选一个精确送达点。每 point 带 schedule_at('Y-m-d H:i:s'=该日期+点时刻, 与 place_order/validateWindowTiming 自洽)
+     *    + selectable(受 min_lead/max_days/不约过去过滤)。相邻窗口共享边界点按时刻去重。有点的 weekday 才出该天(空天不出 tab)。
+     * $windows: 可迭代, 每项数组可 [] 取 id/day/start_time/end_time(day=0-6 周日..周六)。
      */
-    public static function buildSlotDays(iterable $windows, Carbon $now, int $minLeadHours, int $maxDays): array
+    public static function buildSlotDays(iterable $windows, Carbon $now, int $minLeadHours, int $maxDays, int $stepMin = 20): array
     {
+        $stepMin     = $stepMin > 0 ? $stepMin : 20;
         $earliestSel = $now->copy()->addHours($minLeadHours);
         $latestSel   = $now->copy()->addDays($maxDays);
 
@@ -279,38 +294,46 @@ class NezhaPreorder
             $dayWins = $byDay[$wd];
             usort($dayWins, fn($a, $b) => strcmp((string) ($a['start_time'] ?? ''), (string) ($b['start_time'] ?? '')));
 
-            $slots = [];
-            $hasSel = false;
+            // 当天所有窗口按 step 铺离散送达点, 以分钟为键去重(相邻窗口共享边界点只留一个·先到先得)。
+            $pointsByMin = [];
             foreach ($dayWins as $w) {
-                $startHm = substr((string) ($w['start_time'] ?? ''), 0, 5);
-                $endHm   = substr((string) ($w['end_time'] ?? ''), 0, 5);
-                if (!preg_match('/^\d{2}:\d{2}$/', $startHm) || !preg_match('/^\d{2}:\d{2}$/', $endHm)) {
+                $sMin = self::hmToMinutes(substr((string) ($w['start_time'] ?? ''), 0, 5));
+                $eMin = self::hmToMinutes(substr((string) ($w['end_time'] ?? ''), 0, 5));
+                if ($sMin === null || $eMin === null || $sMin >= $eMin) {
                     continue;
                 }
-                $sat = Carbon::parse($date->format('Y-m-d') . ' ' . $startHm . ':00');
-                $selectable = $sat->gte($earliestSel) && $sat->lte($latestSel) && $sat->gt($now);
-                if ($selectable) { $hasSel = true; }
-                $slots[] = [
-                    'window_id'   => (int) ($w['id'] ?? 0),
-                    'start'       => $startHm,
-                    'end'         => $endHm,
-                    'period'      => self::periodLabel($startHm),
-                    'schedule_at' => $sat->format('Y-m-d H:i:s'),
-                    'selectable'  => $selectable,
-                ];
-                if ($selectable && ($earliest === null || $sat->lt(Carbon::parse($earliest['schedule_at'])))) {
-                    $earliest = [
+                for ($m = $sMin; $m <= $eMin; $m += $stepMin) {
+                    if (isset($pointsByMin[$m])) { continue; }
+                    $hm  = sprintf('%02d:%02d', intdiv($m, 60), $m % 60);
+                    $sat = Carbon::parse($date->format('Y-m-d') . ' ' . $hm . ':00');
+                    $selectable = $sat->gte($earliestSel) && $sat->lte($latestSel) && $sat->gt($now);
+                    $pointsByMin[$m] = [
                         'window_id'   => (int) ($w['id'] ?? 0),
+                        'time'        => $hm,
                         'schedule_at' => $sat->format('Y-m-d H:i:s'),
-                        'date'        => $date->format('Y-m-d'),
-                        'day_label'   => self::dayLabel($date, $now),
-                        'start'       => $startHm,
-                        'end'         => $endHm,
+                        'selectable'  => $selectable,
                     ];
                 }
             }
-            if (!$slots) {
+            if (!$pointsByMin) {
                 continue;
+            }
+            ksort($pointsByMin);   // 按时刻(分钟)升序
+            $points = array_values($pointsByMin);
+
+            $hasSel = false;
+            foreach ($points as $p) {
+                if (!$p['selectable']) { continue; }
+                $hasSel = true;
+                if ($earliest === null || Carbon::parse($p['schedule_at'])->lt(Carbon::parse($earliest['schedule_at']))) {
+                    $earliest = [
+                        'window_id'   => $p['window_id'],
+                        'schedule_at' => $p['schedule_at'],
+                        'date'        => $date->format('Y-m-d'),
+                        'day_label'   => self::dayLabel($date, $now),
+                        'time'        => $p['time'],
+                    ];
+                }
             }
             $days[] = [
                 'date'           => $date->format('Y-m-d'),
@@ -318,7 +341,7 @@ class NezhaPreorder
                 'weekday'        => $wd,
                 'weekday_label'  => self::weekdayLabel($wd),
                 'has_selectable' => $hasSel,
-                'slots'          => $slots,
+                'points'         => $points,
             ];
         }
 
@@ -338,6 +361,6 @@ class NezhaPreorder
             ->map(fn($w) => ['id' => (int) $w->id, 'day' => (int) $w->day, 'start_time' => (string) $w->start_time, 'end_time' => (string) $w->end_time])
             ->all();
 
-        return self::buildSlotDays($windows, $now, self::minLeadHours(), self::maxDaysAhead());
+        return self::buildSlotDays($windows, $now, self::minLeadHours(), self::maxDaysAhead(), self::pointStepMin());
     }
 }

@@ -199,8 +199,9 @@ class OrderController extends Controller
                 return response()->json(['errors' => [['code' => 'schedule_at', 'message' => '所选配送时段不可用']]], 403);
             }
             $nz_err = \App\CentralLogics\NezhaPreorder::validateWindowTiming(
-                $schedule_at, (int) $nz_win->day, (string) $nz_win->start_time, now(),
-                \App\CentralLogics\NezhaPreorder::minLeadHours(), \App\CentralLogics\NezhaPreorder::maxDaysAhead()
+                $schedule_at, (int) $nz_win->day, (string) $nz_win->start_time, (string) $nz_win->end_time, now(),
+                \App\CentralLogics\NezhaPreorder::minLeadHours(), \App\CentralLogics\NezhaPreorder::maxDaysAhead(),
+                \App\CentralLogics\NezhaPreorder::pointStepMin()
             );
             if ($nz_err) {
                 return response()->json(['errors' => [['code' => 'schedule_at', 'message' => $nz_err]]], 403);
@@ -1993,9 +1994,10 @@ class OrderController extends Controller
             'accept_mode'            => $acceptMode,   // instant / instant_preorder / preorder_only
             'min_lead_hours'         => \App\CentralLogics\NezhaPreorder::minLeadHours(),
             'max_days_ahead'         => \App\CentralLogics\NezhaPreorder::maxDaysAhead(),
+            'point_step_min'         => \App\CentralLogics\NezhaPreorder::pointStepMin(),   // 单点模型: 送达点步长(分钟·默认20)
             'free_cancel_lead_hours' => \App\CentralLogics\NezhaPreorder::freeCancelLeadHours(),
             'earliest'               => $slots['earliest'],
-            'days'                   => $slots['days'],
+            'days'                   => $slots['days'],   // 每 day 现带 points:[{time,window_id,schedule_at,selectable}](单点·非窗口区间)
         ]);
     }
 
