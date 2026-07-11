@@ -184,6 +184,12 @@ return [
             'settings_route' => null, 'ops_note' => "{$OPS_FORGET}。金丝雀 REVERT=0 清缓存(见 memory project_nezha-capacity-queue-redis-staging-isolation)",
         ],
         [
+            'key' => 'nezha_timeout_escalate_status', 'label' => '超时无人接单·业主 TG 升级', 'section' => 'D', 'level' => 'L1-1邻',
+            'l1_clause' => $L1['L1-1'] . '(邻区·仅并联通知跳·不碰取消/退款/状态动作)', 'expected' => 0, 'value_type' => 'bool',
+            'prereq' => '批次1(TG双管)代码已上线 dormant·真开=业主批准+≥1商家绑 telegram_chat_id+亲测升级到达。开=超时 sweep 在 email_merchant(10min)级除既有商家 TG 催单/邮件外, 并联向业主 TG(nezha_risk_admin_chat_id)发店名/单号/挂时/商家电话(禁顾客 PII)。见 fable-brief/PLAN_merchant_order_alert_reliability.md §5',
+            'settings_route' => null, 'ops_note' => "无专用后台 UI(DB flag)。{$OPS_FORGET}。=0 业主升级跳静默(既有商家 TG 催单/邮件不受影响)",
+        ],
+        [
             'key' => 'nezha_offboard_status', 'label' => '商家退出结算', 'section' => 'D', 'level' => 'L1-8',
             'l1_clause' => $L1['L1-8'], 'expected' => 0, 'value_type' => 'bool',
             'prereq' => 'step4-4/step5 实装 dormant·资金流出路径·灰度存量 7 店 KYC 未录→保持关·真开前 staging 单店试跑',
