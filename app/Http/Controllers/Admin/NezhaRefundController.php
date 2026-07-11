@@ -130,7 +130,12 @@ class NezhaRefundController extends Controller
             ->orderByDesc('nezha_suspended_at')
             ->get(['id', 'name', 'nezha_order_suspended', 'nezha_suspend_reason', 'nezha_suspended_at']);
 
-        return view('admin-views.nezha-refund.overdue', compact('records', 'suspended', 'remindHours', 'suspendHours', 'status', 'autoSuspend'));
+        // 哪吒 自动下线(长期不确认订单被自动停接单): 与退款逾期挂起独立的另一批被暂停接单的店, 运营可在此恢复。
+        $autoOffline = \App\Models\Restaurant::where('nezha_auto_offline', 1)
+            ->orderByDesc('nezha_auto_offline_at')
+            ->get(['id', 'name', 'nezha_auto_offline', 'nezha_auto_offline_reason', 'nezha_auto_offline_at']);
+
+        return view('admin-views.nezha-refund.overdue', compact('records', 'suspended', 'autoOffline', 'remindHours', 'suspendHours', 'status', 'autoSuspend'));
     }
 
     /** 运营手动: 据某退款留痕暂停该商家接单(非资金, 留人工复核口子)。 */
@@ -157,6 +162,17 @@ class NezhaRefundController extends Controller
             Toastr::success(translate('已解除该商家接单暂停。'));
         } else {
             Toastr::warning(translate('找不到该商家'));
+        }
+        return back();
+    }
+
+    /** 哪吒 自动下线: 运营手动恢复某商家接单(清 nezha_auto_offline·独立于退款逾期挂起, 各管各的)。 */
+    public function overdueAutoOfflineRecover(Request $request, $restaurant)
+    {
+        if (\App\CentralLogics\NezhaAutoOffline::recover((int) $restaurant, 'ops')) {
+            Toastr::success(translate('已恢复该商家接单(自动下线)。'));
+        } else {
+            Toastr::warning(translate('该商家未处于自动下线状态'));
         }
         return back();
     }

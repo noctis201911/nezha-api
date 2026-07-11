@@ -132,6 +132,8 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
             Route::get('refresh', [WorkbenchController::class, 'refresh'])->name('refresh');
             // 哪吒 P3 接单机模式: 图文指引页(纯静态说明)。
             Route::get('guide', [WorkbenchController::class, 'guide'])->name('guide');
+            // 哪吒 自动下线: 商家「恢复接单」一键自助(POST·清本店 nezha_auto_offline 标记·仅本店作用域)。
+            Route::post('autooffline-recover', [WorkbenchController::class, 'recoverAutoOffline'])->name('autooffline-recover');
         });
 
         Route::group(['prefix' => 'dashboard', 'as' => 'dashboard.'], function () {

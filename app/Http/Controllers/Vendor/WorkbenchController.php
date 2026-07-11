@@ -68,6 +68,19 @@ class WorkbenchController extends Controller
     }
 
     /**
+     * 哪吒 自动下线: 商家作业台「恢复接单」一键(自助)。清本店 nezha_auto_offline 标记(与钱无关·独立于退款逾期挂起)。
+     * 点这个动作本身即证明商家已在场; 恢复后立即恢复接新单。仅父级 vendor 鉴权, 只清本店标记(作用域=当前登录店)。
+     */
+    public function recoverAutoOffline(Request $request)
+    {
+        $rid = (int) Helpers::get_restaurant_id();
+        if ($rid) {
+            \App\CentralLogics\NezhaAutoOffline::recover($rid, 'self');
+        }
+        return redirect()->route('vendor.workbench.index')->with('success', '已恢复接单，顾客现在可以正常下单了。');
+    }
+
+    /**
      * W4: 作业台可刷新分区(_body)的 HTML 片段。并入全局 6s 心跳(app.blade poll)刷新, 不另开轮询。
      * 与 index() 共用 buildSummary() + dispatchOrdersFor() 同一契约; 返回无 layout 的 _body partial(供 JS 换入 #nzwbRefresh)。
      * 纯只读: 与 summary/index 同源, 不写 checked / 不改状态 / 无副作用。
@@ -155,7 +168,7 @@ class WorkbenchController extends Controller
         // W5: 店态胶囊三档(营业/忙碌/暂停接单)+ 时长。忙碌=仍接单挂横幅; 暂停=nezha_temp_closed(店可见+休息中+拦单)。
         //   mode_enabled=灰度总闸(关时前端退化为两档营业/暂停·与旧版一致)。
         $sr = DB::table('restaurants')->where('id', $rid)
-            ->first(['nezha_temp_closed', 'nezha_pause_until', 'nezha_busy_until', 'nezha_busy_min', 'nezha_busy_reason']);
+            ->first(['nezha_temp_closed', 'nezha_pause_until', 'nezha_busy_until', 'nezha_busy_min', 'nezha_busy_reason', 'nezha_auto_offline', 'nezha_auto_offline_reason', 'nezha_auto_offline_at']);
         $srBusy = $sr && $sr->nezha_busy_until && \Carbon\Carbon::parse($sr->nezha_busy_until)->isFuture();
         $store = [
             'temp_closed'  => (bool) ($sr->nezha_temp_closed ?? 0),
@@ -164,6 +177,13 @@ class WorkbenchController extends Controller
             'busy_reason'  => $srBusy ? $sr->nezha_busy_reason : null,
             'pause_until'  => (($sr->nezha_temp_closed ?? 0) && $sr->nezha_pause_until) ? $sr->nezha_pause_until : null,
             'mode_enabled' => (int) \App\CentralLogics\Helpers::get_business_settings('nezha_busy_mode_status') === 1,
+        ];
+
+        // 哪吒 自动下线(长期不确认订单被自动停接单): 作业台顶部红条 + 商家一键恢复。与忙碌/暂停三档独立(各用各列)。
+        $autoOffline = [
+            'on'     => (bool) ($sr->nezha_auto_offline ?? 0),
+            'reason' => $sr->nezha_auto_offline_reason ?? null,
+            'at'     => $sr->nezha_auto_offline_at ?? null,
         ];
 
         // screen05: 预约分区。总闸 nezha_preorder_status 关(dormant 常态)→ enabled() 短路→ 只 ['enabled'=>false], 零额外查询、整区块不渲染。
@@ -175,6 +195,7 @@ class WorkbenchController extends Controller
             'preorder'     => $preorder,
             'rail'         => $rail,
             'store'        => $store,
+            'auto_offline' => $autoOffline,
             'rates'        => ['cny' => $rateCny, 'usd' => $rateUsd],
             'generated_at' => now()->toIso8601String(),
         ];

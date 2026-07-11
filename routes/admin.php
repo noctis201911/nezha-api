@@ -580,6 +580,8 @@ Route::middleware('module:provide_dm_earning')->group(function () {
             Route::get('overdue', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'overdue'])->name('overdue');
             Route::post('overdue/suspend/{id}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'overdueSuspend'])->name('overdue.suspend');
             Route::post('overdue/unsuspend/{restaurant}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'overdueUnsuspend'])->name('overdue.unsuspend');
+            // 哪吒 自动下线(长期不确认订单): 运营手动恢复某商家接单(独立于退款逾期挂起)。
+            Route::post('overdue/autooffline-recover/{restaurant}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'overdueAutoOfflineRecover'])->name('overdue.autooffline-recover');
             Route::post('overdue/resolve/{id}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'overdueResolve'])->name('overdue.resolve');
             Route::post('overdue/settings', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'overdueSettings'])->name('overdue.settings');
             // 哪吒 denied凭证争议流 R3: 退款争议裁决队列 + 裁决(维持退款义务/核实未收款)

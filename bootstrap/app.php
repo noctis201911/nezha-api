@@ -132,6 +132,11 @@ return Application::configure(basePath: dirname(__DIR__))
         //   总开关 nezha_busy_mode_status(默认0关, 关时命令直接返回)。
         $schedule->command('nezha:store-timer-sweep')->everyMinute()->withoutOverlapping();
 
+        // 哪吒 B方案 商家自动下线兜底: 滚动窗口内商家责任超时取消达阈值且期间无成功接单(不在场) → 自动停接单,
+        //   保护顾客不被继续喂给失联/不响应的商家。恢复靠商家自助一键/运营后台(无冷却自动恢复·业主 2026-07-11 拍板)。
+        //   总开关 business_settings.nezha_autooffline_status(默认0关 dormant), 关时命令直接返回。每分钟扫。
+        $schedule->command('nezha:merchant-autooffline-sweep')->everyMinute()->withoutOverlapping();
+
         // 哪吒广告计费 T3: 到投放起始日对「已通过+未扣费」广告从商家保证金扣全额(单价×天数)。
         //   L2 资金, 流水类型 advertisement_fee; 总开关 nezha_ad_billing_status(默认0关, 关时命令直接返回零扣费)。
         //   幂等(paid_at IS NULL 防重闸+事务内 lockForUpdate), 每小时跑一次, 起始日到达后尽快扣费; 余额不足跳过并提醒充值。

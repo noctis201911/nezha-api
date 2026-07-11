@@ -95,6 +95,40 @@
             </div>
         </div>
 
+        {{-- 哪吒 当前被「自动下线」(长期不确认订单)停接单的商家。与退款逾期挂起独立(各用各列), 各自恢复。 --}}
+        <div class="card mb-3">
+            <div class="card-header"><h5 class="card-header-title">{{ translate('当前因长期不确认订单被自动停接单的商家') }} ({{ count($autoOffline ?? []) }})</h5></div>
+            <div class="table-responsive">
+                <table class="table table-borderless table-thead-bordered table-align-middle card-table mb-0">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>{{ translate('商家') }}</th>
+                            <th>{{ translate('原因') }}</th>
+                            <th>{{ translate('下线时间') }}</th>
+                            <th>{{ translate('操作') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse (($autoOffline ?? []) as $a)
+                            <tr>
+                                <td>{{ $a->name }} <span class="text-muted">#{{ $a->id }}</span></td>
+                                <td class="text-muted">{{ $a->nezha_auto_offline_reason }}</td>
+                                <td>{{ $a->nezha_auto_offline_at }}</td>
+                                <td>
+                                    <form method="POST" action="{{ route('admin.nezha-refund.overdue.autooffline-recover', $a->id) }}" onsubmit="return confirm('{{ translate('确定恢复该商家接单吗?') }}');">
+                                        @csrf
+                                        <button type="submit" class="btn btn-sm btn-outline-success">{{ translate('恢复接单') }}</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="4" class="text-center text-muted py-3">{{ translate('当前没有因长期不确认订单被自动停接单的商家。') }}</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         {{-- 待退款留痕列表 --}}
         <div class="card">
             <div class="card-header"><h5 class="card-header-title">{{ translate('待商家原路退款的留痕(按生成时间升序, 越久越靠前)') }}</h5></div>

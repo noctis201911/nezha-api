@@ -2506,6 +2506,7 @@ class OrderController extends Controller
         // 开关关闭(一阶段免佣免押)时 $nezha_deposit_low 恒为 false, 不影响接单。
         $nezha_deposit_low = self::nezha_store_paused($restaurant);
         $nezha_order_suspended = \App\CentralLogics\NezhaRefundOverdue::is_suspended($restaurant); // 哪吒: 退款逾期被运营暂停接单(非资金)
+        $nezha_auto_offline = \App\CentralLogics\NezhaAutoOffline::is_offline($restaurant); // 哪吒: 长期不确认订单被自动停接单(非资金·独立于退款逾期挂起)
 
         $response = match (true) {
             !$restaurant => [
@@ -2524,6 +2525,11 @@ class OrderController extends Controller
                 'status' => 403
             ],
             $nezha_order_suspended => [
+                'code' => 'restaurant',
+                'message' => translate('该商家暂时停止接单，请稍后再试或更换其他商家'),
+                'status' => 403
+            ],
+            $nezha_auto_offline => [
                 'code' => 'restaurant',
                 'message' => translate('该商家暂时停止接单，请稍后再试或更换其他商家'),
                 'status' => 403
@@ -2718,6 +2724,7 @@ class OrderController extends Controller
         // [哪吒 B方案/组4 预存佣金扣佣] 结算预检同样拦预存佣金不足的餐馆(开关关闭时恒 false)。
         $nezha_deposit_low = self::nezha_store_paused($restaurant);
         $nezha_order_suspended = \App\CentralLogics\NezhaRefundOverdue::is_suspended($restaurant); // 哪吒: 退款逾期被运营暂停接单(非资金)
+        $nezha_auto_offline = \App\CentralLogics\NezhaAutoOffline::is_offline($restaurant); // 哪吒: 长期不确认订单被自动停接单(非资金·独立于退款逾期挂起)
 
         $response = match (true) {
             !$restaurant => [
@@ -2737,6 +2744,11 @@ class OrderController extends Controller
                 'status' => 403
             ],
             $nezha_order_suspended => [
+                'code' => 'restaurant',
+                'message' => translate('该商家暂时停止接单，请稍后再试或更换其他商家'),
+                'status' => 403
+            ],
+            $nezha_auto_offline => [
                 'code' => 'restaurant',
                 'message' => translate('该商家暂时停止接单，请稍后再试或更换其他商家'),
                 'status' => 403

@@ -73,6 +73,25 @@ return [
             'settings_route' => 'admin.guides.list',
             'ops_note' => "翻 1 后读不到新值: {$OPS_FORGET} + kill -USR2 \$(FPM master)。=0 时列表空/详情走空态不 404/入口条不渲染",
         ],
+        [
+            'key' => 'nezha_autooffline_status', 'label' => '商家长期不确认订单自动停接单', 'section' => 'A', 'level' => 'L2',
+            'expected' => null, 'value_type' => 'bool',
+            'prereq' => '上线激活: 滚动窗口内商家责任超时取消达 N 单且期间无成功接单(不在场)→自动停接单; 商家自助一键/运营后台恢复(无冷却自动恢复·业主 2026-07-11)。先亲测通知真送达 + 阈值确认',
+            'settings_route' => null,
+            'ops_note' => 'sweep 每 cron 直接读 DB(无进程内 static/缓存), 翻值下一分钟即生效, 无需 cache:clear/USR2。=0 时命令直接返回零动作。与退款逾期挂起 nezha_order_suspended 独立(各用各列)',
+        ],
+        [
+            'key' => 'nezha_autooffline_strike_count', 'label' => '自动停接单触发单数(N)', 'section' => 'A', 'level' => 'L2',
+            'expected' => null, 'value_type' => 'param', 'default' => 3,
+            'prereq' => '参数非布尔·后台可调(默认 3)。滚动窗口内商家责任超时取消(cancel_paid_refund)达 N 单才触发。空/0=回落默认 3',
+            'settings_route' => null, 'ops_note' => '无专用后台 UI(DB 数值)。sweep 直接读 DB, 改后下一分钟生效',
+        ],
+        [
+            'key' => 'nezha_autooffline_window_hours', 'label' => '自动停接单滚动窗口(小时H)', 'section' => 'A', 'level' => 'L2',
+            'expected' => null, 'value_type' => 'param', 'default' => 2,
+            'prereq' => '参数非布尔·后台可调(默认 2)。统计 strike 的滚动窗口小时数。空/0=回落默认 2',
+            'settings_route' => null, 'ops_note' => '无专用后台 UI(DB 数值)。sweep 直接读 DB, 改后下一分钟生效',
+        ],
 
         /* ═══ B. 必须【保持开启】的安全轨(expected=1, ≠1 即红) ═══ */
         [

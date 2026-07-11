@@ -36,6 +36,20 @@
         && (($qn['total'] ?? 0) == 0) && (($qr['total'] ?? 0) == 0);
 @endphp
 
+    {{-- 哪吒 自动下线: 长期不确认订单被自动停接单 → 顶部红条 + 商家一键恢复(自助·点击即证明在场)。未下线/总闸关时整条不渲染。 --}}
+    @php $nzAO = $wb['auto_offline'] ?? ['on' => false]; @endphp
+    @if(!empty($nzAO['on']))
+    <div style="margin:0 0 12px;padding:13px 15px;border-radius:12px;background:#FDECEC;border:1px solid #F1B0AC;color:#B4231F;font-size:13.5px;line-height:1.6">
+        <div style="font-weight:700;font-size:14.5px;margin-bottom:3px">⛔ 你的店已被系统暂停接单</div>
+        <div style="color:#8A2E2A">近期有多单超时未处理、且期间没有成功接单，为免继续影响顾客，已暂时停止接新单。<b>你已回到岗位的话，点下方按钮即可立即恢复。</b></div>
+        <form action="{{ route('vendor.workbench.autooffline-recover') }}" method="post" style="margin:11px 0 0"
+              onsubmit="var b=this.querySelector('button');b.disabled=true;b.textContent='恢复中…';">
+            @csrf
+            <button type="submit" style="border:0;border-radius:9px;background:#0AA66E;color:#fff;font-weight:700;font-size:14px;padding:9px 22px;cursor:pointer">✅ 我已就位 · 恢复接单</button>
+        </form>
+    </div>
+    @endif
+
     {{-- 顶部: 店态胶囊(W5 变交互·W2 静态) + 今日单量 --}}
     <div class="nzwb-top">
         <span class="nzwb-title">今天 · 作业台</span>
