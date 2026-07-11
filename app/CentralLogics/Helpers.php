@@ -2188,35 +2188,44 @@ class Helpers
     public static function sendTelegramToRestaurant($restaurant, $text)
     {
         // 哪吒: Telegram 异步化 —— 甩到 worker, 不吊住请求(原 3s+4s curl 超时)。发送逻辑见 telegramSyncSend()。
-        self::enqueueTelegram($restaurant?->telegram_chat_id, $text);
+        return self::enqueueTelegram($restaurant?->telegram_chat_id, $text);
     }
 
-    /** 统一 Telegram 入队入口: 空 chatId/text 不入队; redis 挂则兜底同步。 */
+    /**
+     * 统一 Telegram 入队入口: 空 chatId/text 不入队; redis 挂则兜底同步。
+     * P0 返回真值: 同步模式=telegramSyncSend 的送达真值(true/false); 异步模式=入队成功 true
+     * (送达真值+重试改由 SendTelegramMessageJob tries=3+backoff 负责), 入队失败回落同步返回其真值;
+     * 空 chatId/text 返回 false。调用方据此决定是否保留幂等标记(见 sendTelegramOrderAlert/escalateOwner)。
+     */
     public static function enqueueTelegram($chatId, $text)
     {
         if (!$chatId || !$text) {
-            return;
+            return false;
         }
         // 灰度开关 nezha_notif_async_status(默认 0=关): 关=内联同步发送(异步化前行为)。
         if ((int) self::get_business_settings('nezha_notif_async_status') !== 1) {
-            self::telegramSyncSend($chatId, $text);
-            return;
+            return self::telegramSyncSend($chatId, $text);
         }
         try {
             \App\Jobs\SendTelegramMessageJob::dispatch((string) $chatId, (string) $text);
+            return true; // 已入队: 送达真值与重试由 Job 负责(tries=3+backoff)
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('telegram enqueue failed, fallback sync: '.$e->getMessage());
-            self::telegramSyncSend($chatId, $text);
+            return self::telegramSyncSend($chatId, $text);
         }
     }
 
-    /** 真正的 Telegram 发送(worker 内执行, 或 redis 挂时兜底)。逻辑与异步化前一致。 */
+    /**
+     * 真正的 Telegram 发送(worker 内执行, 或 redis 挂时兜底)。
+     * P0: 读 HTTP 码 + 解析响应 JSON `ok` 字段, 返回送达真值(true=ok / false=失败/超时/传输错)。
+     * 失败 Log::warning 记 chat_id 尾4位 + HTTP/错误码 + TG 描述(🔴 禁整 token/整 chat 入日志)。
+     */
     public static function telegramSyncSend($chatId, $text)
     {
         try {
             $token = self::get_business_settings('telegram_bot_token', false);
             if (!$token || !is_string($token) || !$chatId || !$text) {
-                return;
+                return false;
             }
             $ch = curl_init('https://api.telegram.org/bot' . $token . '/sendMessage');
             curl_setopt_array($ch, [
@@ -2230,10 +2239,28 @@ class Helpers
                     'disable_web_page_preview' => true,
                 ]),
             ]);
-            curl_exec($ch);
+            $raw = curl_exec($ch);
+            $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlErrNo = curl_errno($ch);
+            $curlErr = $curlErrNo ? curl_error($ch) : '';
             curl_close($ch);
+
+            $tail = substr((string) $chatId, -4);
+            if ($curlErrNo !== 0 || $raw === false) {
+                \Illuminate\Support\Facades\Log::warning('telegram send transport fail: chat=…' . $tail . ' curlErrno=' . $curlErrNo . ' ' . $curlErr);
+                return false;
+            }
+            $resp = json_decode((string) $raw, true);
+            if (is_array($resp) && ($resp['ok'] ?? false) === true) {
+                return true;
+            }
+            $errCode = is_array($resp) ? ($resp['error_code'] ?? $httpCode) : $httpCode;
+            $desc = is_array($resp) ? ($resp['description'] ?? '') : '';
+            \Illuminate\Support\Facades\Log::warning('telegram send not ok: chat=…' . $tail . ' http=' . $httpCode . ' err=' . $errCode . ' ' . $desc);
+            return false;
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('telegram msg failed: ' . $e->getMessage());
+            return false;
         }
     }
 
@@ -2241,8 +2268,8 @@ class Helpers
     // 发到 nezha_risk_admin_chat_id(后台配); 未配=静默降级(只落库不告警, 不阻断主流程、不报错)。
     public static function sendTelegramToAdmin($text)
     {
-        // 哪吒: Telegram 异步化 —— 同上甩到 worker。chatId = 风控 admin chat。
-        self::enqueueTelegram(self::get_business_settings('nezha_risk_admin_chat_id', false), $text);
+        // 哪吒: Telegram 异步化 —— 同上甩到 worker。chatId = 风控 admin chat。P0: 透传 enqueueTelegram 真值。
+        return self::enqueueTelegram(self::get_business_settings('nezha_risk_admin_chat_id', false), $text);
     }
 
     // 哪吒 阶段D: 解析转人工/双向用的超管 chat_id(优先 nezha_cs_handoff_chat_id, 回退风控 admin chat)。
@@ -2330,7 +2357,9 @@ class Helpers
             if ((int) ($order->restaurant->timeout_notify_telegram ?? 1) === 0) {
                 return;
             }
-            if (!\Illuminate\Support\Facades\Cache::add('tg_alert_' . $order->id, 1, now()->addDay())) {
+            // P0-2 幂等: 先占位「每单一次」防重复入队/重复发; 发送硬失败再 forget, 让后续触发自然重试。
+            $alertKey = 'tg_alert_' . $order->id;
+            if (!\Illuminate\Support\Facades\Cache::add($alertKey, 1, now()->addDay())) {
                 return;
             }
             $typeMap = ['delivery' => '配送', 'take_away' => '自取', 'dine_in' => '堂食'];
@@ -2349,26 +2378,23 @@ class Helpers
                 $itemStr = '';
             }
             $total = number_format((float) $order->order_amount, 0);
-            $time = $order->created_at ? $order->created_at->format('H:i') : '';
+            // 🔴 P0 真值修: Order::getCreatedAtAttribute 全局返回字符串(date(...))非 Carbon,
+            //    原 ->format() 会 100% 抛「format() on string」→整条 alert 未发即被 catch 吞掉(0 绑定时被 !$chatId 早退掩盖)。
+            //    绑定后每单必炸=永不送达。改 date(H:i) 直接吃字符串, 输出的「时间：HH:MM」文案一字不变(仅传输层修复)。
+            $time = $order->created_at ? date('H:i', strtotime((string) $order->created_at)) : '';
             $text = "🔔 哪吒新订单\n单号 #{$order->id}\n类型：{$otype}\n合计：{$total}֏\n"
                 . ($itemStr ? "商品：{$itemStr}\n" : '')
                 . ($time ? "时间：{$time}\n" : '')
                 . "—— 详情请登录商家后台查看";
-            $ch = curl_init('https://api.telegram.org/bot' . $token . '/sendMessage');
-            curl_setopt_array($ch, [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_CONNECTTIMEOUT => 3,
-                CURLOPT_TIMEOUT => 4,
-                CURLOPT_POST => true,
-                CURLOPT_POSTFIELDS => http_build_query([
-                    'chat_id' => $chatId,
-                    'text' => $text,
-                    'disable_web_page_preview' => true,
-                ]),
-            ]);
-            curl_exec($ch);
-            curl_close($ch);
+            // P0-3: 走统一入队出口(异步模式甩 worker, 消除下单请求路径内 ~7s 同步外呼); 送达真值+重试由 Job 负责。
+            // P0-2: 硬失败(同步模式送达失败 / 异步入队且回落同步也失败) 清幂等标记, 让后续触发重试。
+            if (!self::enqueueTelegram($chatId, $text)) {
+                \Illuminate\Support\Facades\Cache::forget($alertKey);
+            }
         } catch (\Throwable $e) {
+            if (isset($alertKey)) {
+                \Illuminate\Support\Facades\Cache::forget($alertKey);
+            }
             \Illuminate\Support\Facades\Log::warning('telegram order alert failed: ' . $e->getMessage());
         }
     }

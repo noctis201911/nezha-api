@@ -341,8 +341,14 @@ class OrderTimeoutSweep extends Command
             $shopName  = $restaurant?->name ?: ('餐厅 #' . ($order->restaurant_id ?? '?'));
             $shopPhone = $restaurant?->phone ?: ($restaurant?->vendor?->phone ?: '未登记');
             $text = "🚨 哪吒升级｜「{$shopName}」订单 #{$order->id} 已挂约 {$age} 分钟无人接单/处理，请联系商家催单。\n商家电话：{$shopPhone}";
-            Helpers::sendTelegramToAdmin($text);
-            Log::info('NEZHA_TIMEOUT_OWNER_ESCALATE 已升级业主 TG · order#' . $order->id . ' · ' . $age . 'min');
+            // P0-2 幂等后置(§0.5③): sendTelegramToAdmin 现返送达真值(异步=入队成功 true·送达+重试归 Job tries=3;
+            // 同步=真实送达真值)。硬失败则清「已升级」标记, 靠下一分钟 sweep 重升(20min 取消前尚有重试窗)。
+            if (Helpers::sendTelegramToAdmin($text)) {
+                Log::info('NEZHA_TIMEOUT_OWNER_ESCALATE 已升级业主 TG · order#' . $order->id . ' · ' . $age . 'min');
+            } else {
+                Cache::forget('nezha_owner_escalate_' . $order->id);
+                Log::warning('NEZHA_TIMEOUT_OWNER_ESCALATE 业主 TG 升级发送失败, 已清幂等标记待下轮 sweep 重试 · order#' . $order->id);
+            }
         } catch (\Throwable $e) {
             Log::warning('NEZHA_TIMEOUT escalateOwner order#' . $order->id . ': ' . $e->getMessage());
         }
