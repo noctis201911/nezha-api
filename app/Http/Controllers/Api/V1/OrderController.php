@@ -1090,6 +1090,14 @@ class OrderController extends Controller
             })
             ->with('details')
             ->Notpos()->first();
+        // 哪吒 11-6(业主 2026-07-11 批): 已确认(confirmed)预约单, 窗口前 ≥ freeCancelLead 小时且未备货 → 允许顾客自助免费取消(走既有原路退款)。
+        //   🔴 总闸关时 enabled()=false → 短路 → 本标记恒 false → cancel_order 逐字回退 M3 行为(零回归)。$order 可能 null(下方 404), 故 $order && 前置。
+        $nz_freeCancelLead = \App\CentralLogics\NezhaPreorder::freeCancelLeadHours();
+        $nz_preorder_selfcancel = $order
+            && \App\CentralLogics\NezhaPreorder::enabled()
+            && \App\CentralLogics\NezhaPreorder::confirmedSelfCancelAllowed(
+                (int) $order->scheduled, (string) $order->order_status, $order->schedule_at, now(), $nz_freeCancelLead
+            );
         if(!$order){
             return response()->json([
                 'errors' => [
@@ -1097,7 +1105,7 @@ class OrderController extends Controller
                 ]
             ], 404);
         }
-        else if ($order->order_status == 'pending' || $order->order_status == 'failed' || $order->order_status == 'canceled'  ) {
+        else if ($order->order_status == 'pending' || $order->order_status == 'failed' || $order->order_status == 'canceled' || $nz_preorder_selfcancel  ) {
 
             // 哪吒(幂等守卫 2026-06-22 QA辩论): 已是 canceled 的单重复调用 cancel_order → 直接幂等返回,
             //   不再二次 decreaseSellCount / 重复 send_order_notification / 重复 increment_order_count(防销量被错误下扣、重复推送)。
@@ -1122,9 +1130,14 @@ class OrderController extends Controller
             // 哪吒 M3 边界①: 加订单行锁 + 锁内复核状态再 save, 防与商家 status() 并发 last-write-wins(照 OrderTimeoutSweep:203 范式,
             // 保留 save/observer 语义)。输了竞态(状态已被商家改走, 如刚被 confirm)→ 返回冲突, 不做任何副作用/退款留痕。业主 2026-07-11 已批。
             $nz_cancel_ok = true;
-            DB::transaction(function () use ($order, &$nz_cancel_ok) {
+            DB::transaction(function () use ($order, &$nz_cancel_ok, $nz_preorder_selfcancel, $nz_freeCancelLead) {
                 $nz_fresh = Order::where('id', $order->id)->lockForUpdate()->first();
-                if (!$nz_fresh || !in_array($nz_fresh->order_status, ['pending', 'failed'], true)) {
+                // 锁内以 fresh 状态权威复核:普通取消须仍 pending/failed;11-6 须 fresh 仍满足 confirmed 预约自助取消谓词
+                // (若锁前已被商家转 processing 备货 / 已过窗口前 2h, fresh 复核即拒 → 输竞态返 409, 不覆盖对方写入)。
+                $nz_ok = $nz_fresh && (in_array($nz_fresh->order_status, ['pending', 'failed'], true)
+                    || ($nz_preorder_selfcancel && \App\CentralLogics\NezhaPreorder::confirmedSelfCancelAllowed(
+                        (int) $nz_fresh->scheduled, (string) $nz_fresh->order_status, $nz_fresh->schedule_at, now(), $nz_freeCancelLead)));
+                if (!$nz_ok) {
                     $nz_cancel_ok = false;
                     return;
                 }

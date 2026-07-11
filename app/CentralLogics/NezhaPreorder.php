@@ -165,4 +165,25 @@ class NezhaPreorder
         }
         return null;
     }
+
+    /** 预约单窗口前"免费自助取消"的提前量小时数(L2·后台可调·默认 2·业主 2026-07-11 定)。 */
+    public static function freeCancelLeadHours(): int
+    {
+        $v = (int) (BusinessSetting::where('key', 'nezha_preorder_free_cancel_lead_hours')->first()->value ?? 2);
+        return $v > 0 ? $v : 2;
+    }
+
+    /**
+     * 11-6:已确认(confirmed)预约单是否允许顾客自助免费取消(纯谓词·可单测)。业主 2026-07-11 批。
+     * 条件:scheduled=1 且 order_status==confirmed(=已接单但未备货, processing 起就不算) 且 窗口起始 ≥ now + freeCancelLead 小时。
+     * 🔴 调用方须另外用 NezhaPreorder::enabled() 门控(总闸关时整条 11-6 不生效)。$scheduleAt 接受 Carbon 或字符串或空。
+     */
+    public static function confirmedSelfCancelAllowed(int $scheduled, string $orderStatus, $scheduleAt, Carbon $now, int $freeCancelLeadHours): bool
+    {
+        if ($scheduled !== 1 || $orderStatus !== 'confirmed' || empty($scheduleAt)) {
+            return false;
+        }
+        $sat = $scheduleAt instanceof Carbon ? $scheduleAt : Carbon::parse($scheduleAt);
+        return $now->copy()->addHours($freeCancelLeadHours)->lte($sat);
+    }
 }

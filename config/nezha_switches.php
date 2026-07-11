@@ -173,6 +173,12 @@ return [
             'settings_route' => null, 'ops_note' => "无专用后台 UI(DB 数值)。改后须 {$OPS_FORGET}",
         ],
         [
+            'key' => 'nezha_preorder_free_cancel_lead_hours', 'label' => '预约免费取消提前量(小时)', 'section' => 'D', 'level' => 'L2',
+            'expected' => null, 'value_type' => 'param', 'default' => 2,
+            'prereq' => '参数非布尔·后台可调(默认 2·业主 2026-07-11 定)。11-6:已确认预约单在窗口起始前 ≥ 本值小时且未备货时, 顾客可自助免费取消(走既有原路退款)。空/0=回落默认 2',
+            'settings_route' => null, 'ops_note' => "无专用后台 UI(DB 数值)。改后须 {$OPS_FORGET}。总闸关时 11-6 整条不生效",
+        ],
+        [
             'key' => 'nezha_preorder_timeout_lead_min', 'label' => '预约超时时钟提前量(分钟)', 'section' => 'D', 'level' => 'L2',
             'expected' => null, 'value_type' => 'param', 'default' => 0,
             'prereq' => '参数非布尔·后台可调(默认 0)。M2 窗口锚定时钟:预约单在 now < schedule_at − 本值分钟 时对超时清扫 dormant(补登记·此前 M2 未入表)。空=回落默认 0',
