@@ -119,22 +119,22 @@
                                     @if($note->status == 0)
                                         <form action="{{route('admin.local-life.notes.approve',$note->id)}}" method="post" class="d-inline">
                                             @csrf
-                                            <button type="submit" title="通过并展示" class="btn btn-sm btn--success btn-outline-success action-btn"><i class="tio-checkmark-circle"></i> 通过</button>
+                                            <button type="submit" title="通过并展示" class="btn btn-sm btn-success"><i class="tio-checkmark-circle"></i> 通过</button>
                                         </form>
-                                        <a class="btn btn-sm btn--warning btn-outline-warning action-btn" href="javascript:" title="驳回"
+                                        <a class="btn btn-sm btn-outline-warning" href="javascript:" title="驳回"
                                             onclick="document.getElementById('note-reject-{{$note->id}}').classList.toggle('d-none')"><i class="tio-clear-circle"></i> 驳回</a>
                                     @endif
                                     @if($note->status == 1)
                                         <form action="{{route('admin.local-life.notes.offline',$note->id)}}" method="post" class="d-inline"
                                             onsubmit="return confirm('下架该笔记？前台将不再展示。')">
                                             @csrf
-                                            <button type="submit" title="下架" class="btn btn-sm btn--warning btn-outline-warning action-btn"><i class="tio-archive-outlined"></i> 下架</button>
+                                            <button type="submit" title="下架" class="btn btn-sm btn-outline-warning"><i class="tio-archive-outlined"></i> 下架</button>
                                         </form>
                                     @endif
                                     @if($rc > 0)
-                                        <a title="查看举报 ({{$rc}})" class="btn btn-sm btn--danger btn-outline-danger action-btn" href="{{route('admin.local-life.notes.reports',$note->id)}}"><i class="tio-flag"></i> {{$rc}}</a>
+                                        <a title="查看举报 ({{$rc}})" class="btn btn-sm btn-outline-danger" href="{{route('admin.local-life.notes.reports',$note->id)}}"><i class="tio-flag"></i> 举报 {{$rc}}</a>
                                     @endif
-                                    <a class="btn btn-sm btn--danger btn-outline-danger action-btn form-alert" href="javascript:"
+                                    <a class="btn btn-sm btn-outline-danger action-btn form-alert" href="javascript:"
                                         data-id="note-{{$note->id}}" data-message="确定删除这条笔记吗？" title="删除"><i class="tio-delete-outlined"></i></a>
                                     <form action="{{route('admin.local-life.notes.delete')}}" method="post" id="note-{{$note->id}}">
                                         <input type="hidden" name="id" value="{{$note->id}}">
@@ -190,10 +190,10 @@
                                                 @if($note->status == 0)
                                                     <form action="{{route('admin.local-life.notes.approve',$note->id)}}" method="post" class="d-inline">
                                                         @csrf
-                                                        <button type="submit" class="btn btn--success"><i class="tio-checkmark-circle"></i> 通过并展示</button>
+                                                        <button type="submit" class="btn btn-success"><i class="tio-checkmark-circle"></i> 通过并展示</button>
                                                     </form>
                                                 @endif
-                                                <button type="button" class="btn btn--secondary" data-dismiss="modal">关闭</button>
+                                                <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
                                             </div>
                                         </div>
                                     </div>
