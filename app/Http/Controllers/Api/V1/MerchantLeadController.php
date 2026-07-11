@@ -67,10 +67,17 @@ class MerchantLeadController extends Controller
                 . "登录后台「商家入驻」查看与跟进。";
 
             Mail::raw($body, function ($message) use ($to, $lead) {
-                $message->to($to)->subject('【哪吒】新商家入驻申请 - ' . $lead->store_name);
+                $message->to($to)->subject('【哪吒】新商家入驻申请 - ' . $this->stripHeaderInput($lead->store_name));
             });
         } catch (\Throwable $th) {
             info('merchant lead mail failed: ' . $th->getMessage());
         }
+    }
+
+    // 哪吒安全(2026-07-11 N-10): 去除进入邮件头(Subject)的 CR/LF 及控制字符, 防邮件头注入。
+    //   补 P4 遗漏(方案点名 merchant-lead 但 5fc2993 只改了 SupportMailTicketController); 同款实现; 根治=升 symfony/mime(P9)。
+    private function stripHeaderInput($v): string
+    {
+        return is_string($v) ? trim(preg_replace('/[\x00-\x1f\x7f]/u', '', $v)) : '';
     }
 }
