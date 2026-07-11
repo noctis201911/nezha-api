@@ -1434,7 +1434,7 @@
         ⚠️ 后台已断开连接，可能收不到新单——请检查网络 / WiFi
     </div>
     <div id="nzWlChip" style="display:none;position:fixed;right:12px;bottom:12px;z-index:12500;align-items:center;gap:5px;background:#E5F1EA;color:#2B7A57;font-size:12px;font-weight:600;border-radius:999px;padding:6px 12px;border:1px solid #CFE6DA;box-shadow:0 2px 8px rgba(23,28,38,.10);font-family:'Noto Sans Armenian','Segoe UI','Microsoft YaHei','PingFang SC',sans-serif;">
-        📱 屏幕常亮
+        屏幕常亮
     </div>
     <script>
     // 哪吒 P3 接单机模式: 作业台屏幕常亮(Screen Wake Lock)。仅作业台页 + 页面可见时请求; tab 隐藏/锁屏自动释放, 回到前台重申。
