@@ -44,7 +44,7 @@ class SupportMailTicketController extends Controller
 
         $categoryLabel = $request->input('category_label') ?: $request->input('category');
         $orderId = $request->input('order_id');
-        $subject = '客服工单 - ' . $categoryLabel . ($orderId ? ' - 订单#' . $orderId : '');
+        $subject = $this->stripHeaderInput('客服工单 - ' . $categoryLabel . ($orderId ? ' - 订单#' . $orderId : ''));
         $submittedAt = now()->format('Y-m-d H:i:s');
 
         $messageLines = [
@@ -111,7 +111,7 @@ class SupportMailTicketController extends Controller
                 $mail->to($recipient, $businessName)->subject($subject);
 
                 if ($request->filled('email')) {
-                    $mail->replyTo($request->input('email'), $request->input('name'));
+                    $mail->replyTo($request->input('email'), $this->stripHeaderInput($request->input('name')));
                 }
 
                 foreach ($attachments as $file) {
@@ -134,6 +134,13 @@ class SupportMailTicketController extends Controller
             'message' => '已提交，我们会通过邮箱或电话尽快联系您。',
             'ticket_id' => $contact->id,
         ], 200);
+    }
+
+    // 哪吒安全(2026-07-11 P4·邮件头注入): 去除进入邮件头(Subject / Reply-To 显示名)的 CR/LF 及控制字符,
+    //   纵深防御(根治=升 symfony/mime CVE-2026-45067)。email 已过 email 校验;body 不过滤(内容非头)。
+    private function stripHeaderInput($v): string
+    {
+        return is_string($v) ? trim(preg_replace('/[\x00-\x1f\x7f]/u', '', $v)) : '';
     }
 
     private function supportMailbox(): ?string
