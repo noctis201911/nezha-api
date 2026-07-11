@@ -15,7 +15,7 @@ class LocalLifeMerchant extends Model
 {
     protected $fillable = [
         'name', 'category', 'logo', 'images', 'cover_image', 'wechat_qr', 'contacts',
-        'rating', 'google_rating', 'google_rating_url',
+        'rating', 'google_rating', 'google_rating_count', 'google_rating_url',
         'area', 'address', 'latitude', 'longitude',
         'open_days', 'open_time', 'close_time', 'hours_note',
         'intro', 'services', 'video_links', 'has_offer', 'offer_text',
