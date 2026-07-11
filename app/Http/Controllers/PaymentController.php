@@ -52,6 +52,12 @@ class PaymentController extends Controller
             return response()->json(['errors' => ['code' => 'order-payment', 'message' => 'Data not found']], 403);
         }
 
+        // 哪吒安全(2026-07-11 N-09): digital_payment 开关门——数字支付关时不铸造 PaymentRequest, 断免签名网关回调的伪造链上游。启用数字支付前必须先给各网关 callback 补支付商签名校验(硬前置)。
+        $nz_dp = \App\CentralLogics\Helpers::get_business_settings('digital_payment');
+        if (!is_array($nz_dp) || ($nz_dp['status'] ?? 0) != 1) {
+            return response()->json(['errors' => ['code' => 'digital_payment', 'message' => 'Digital payment is not available']], 403);
+        }
+
         // 哪吒安全(2026-07-11 NZ-SEC-004): callback 只写入已通过 id+user_id 归属校验的本单, 且必须过站内白名单。
         //   原实现两处漏洞: ①跨单污染——在归属校验前按 order_id 单键 update 任意订单的 callback(免登录可写他人单);
         //                 ②开放跳转——success/fail/cancel 直跳 $order->callback 无 scheme/host 校验(可跳钓鱼站/deep link)。
