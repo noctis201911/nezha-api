@@ -670,10 +670,17 @@ class FoodController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        $review = Review::findOrFail($request->id);
+        // 哪吒安全(2026-07-11 N-08): IDOR——只允许回复本店商品的评价(作用域走 food.restaurant_id, 同 ReviewController@index/NezhaBadReview)。
+        //   原实现 findOrFail(任意 id) + 把评价 restaurant_id 改到自己店 = 可劫持他店评价并篡改归属; 现跨店评价→404。
+        $vendor_restaurant_id = $request['vendor']?->restaurants[0]?->id;
+        $review = Review::where('id', $request->id)
+            ->whereHas('food', function ($q) use ($vendor_restaurant_id) {
+                $q->where('restaurant_id', $vendor_restaurant_id);
+            })
+            ->firstOrFail();
         $review->reply = $request->reply;
         $review->reply_at = $review->reply_at ?? Carbon::now();
-        $review->restaurant_id = $request['vendor']?->restaurants[0]?->id;
+        $review->restaurant_id = $vendor_restaurant_id;
         $review->save();
 
         return response()->json(['message'=>translate('messages.review_reply_updated_successfully')], 200);
