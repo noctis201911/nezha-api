@@ -218,3 +218,10 @@
 - **S5 头部**: ① 隐藏前端上游 Next.js X-Powered-By(proxy_hide_header 加 proxy/nezha.am 反代 location) ② 去重复 HSTS(api+前端 vhost 弱版 max-age=31536000 注释, 留 extension 强版 63072000+includeSubDomains+preload)。nginx -t 过+reload+curl 复验: x-powered-by 消失/单条强 HSTS/CSP 原样在。⚠️aaPanel 重生成 vhost/反代会冲掉手改(同 CSP 坑); conf 内已注释。备份 *.bak.s5.0708。
 - 回滚: 2FA=revert+redeploy, 应急 php artisan nezha:2fa-disable <email>(已验); 主机层=各 .bak 恢复+nginx reload/ufw 复原。
 - 未做: S2(29928 收窄)+S4(密钥轮换)自锁风险, S4 runbook 已出 docs/S4_KEY_ROTATION_RUNBOOK.md 待业主在场窗口。
+### 2026-07-10 安全路线图 S2 — aaPanel 面板 29928 收窄(不再对全网开放)
+- 等级 🟡 主机层加固。批准人: 业主 2026-07-10(选 SSH 隧道方案·Hetzner 云控制台逃生舱已确认可登)。
+- 动作: `ufw delete allow 29928/tcp`(删 v4+v6 两条 ALLOW Anywhere)。仅删 29928 一条, 未碰 22/80/443/VPN(2083/8443), 未 reset。默认策略 deny(incoming) → 删规则即公网不可达。
+- 验证(权威): iptables ufw-user-input 无 29928 ACCEPT + iptables -S 全局无 29928 + 无 aaPanel 自建 iptables 规则 → 外网接口 DROP。SSH 22 保活、面板 127.0.0.1:29928 仍服务(302)。
+- ⚠️ 业主本机 Test-NetConnection 29928=True: 因业主挂着服务器自建 VPN(出口=服务器本机), 流量经 loopback 回到 29928 绕过外网接口 block = 业主私有路径, 非公网可达(公网仍 DROP; 业主手机蜂窝关VPN 自验超时)。
+- 访问: ①桌面 `打开aaPanel面板(安全隧道).bat`(ssh -L 29928:127.0.0.1:29928, 任何网络) ②挂VPN时也可直开原URL。更严(仅隧道)可把 aaPanel listen 改 127.0.0.1(未做, 更侵入+aaPanel可能重置)。
+- 回滚: `ufw allow 29928/tcp` 恢复。ufw 备份 /root/nezha-s2-ufw-backup-0710.txt。
