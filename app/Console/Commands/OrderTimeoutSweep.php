@@ -38,6 +38,10 @@ class OrderTimeoutSweep extends Command
     /** 哪吒 批次1(TG双管·L3): 业主 TG 升级 dormant 开关(nezha_timeout_escalate_status, 默认 0)。 */
     private bool $ownerEscalate = false;
 
+    /** 哪吒 P2-8: 业主升级独立阈值分钟(nezha_timeout_escalate_owner_min, 默认 5·L2 可调)。
+     *  不复用 remind/email_merchant, 免把作业台提醒节奏与业主升级焊死(§0.5④)。仅 dormant 开关开时生效。 */
+    private int $ownerEscalateMin = 5;
+
     public function handle()
     {
         $this->dry = (bool) $this->option('dry-run');
@@ -50,6 +54,9 @@ class OrderTimeoutSweep extends Command
 
         // 哪吒 批次1: 无人接单时向业主 TG 升级的 dormant 开关(默认关=升级跳静默, 既有商家 TG 催单/邮件不受影响)。
         $this->ownerEscalate = (int) Helpers::get_business_settings('nezha_timeout_escalate_status') === 1;
+        // 哪吒 P2-8: 业主升级独立阈值(默认 5·20min 取消前留 ~15min 挽回窗)。仅在上面 dormant 开关开时才被用到。
+        $ownerMin = (int) Helpers::get_business_settings('nezha_timeout_escalate_owner_min');
+        $this->ownerEscalateMin = $ownerMin > 0 ? $ownerMin : 5;
 
         $now = Carbon::now();
         $acted = 0;
@@ -75,11 +82,14 @@ class OrderTimeoutSweep extends Command
             }
 
             // 有凭证图：可能已付待商家核对
+            $this->escalateOwnerUnbound($order, $age); // 哪吒 P2-9: 商家未绑 TG(收不到催单)→ 不等阈值, 首次 sweep 即升级业主(dormant·共享幂等)
             if ($age >= $cfg['email_merchant']) {
                 $acted += $this->fireOnce($order->id, 'email_merchant', function () use ($order, $age) {
                     $this->remindMerchant($order, $age, true);
                 }, "有凭证超时 {$age}min 邮件商家") ? 1 : 0;
-                $this->escalateOwner($order, $age); // 哪吒 批次1: 并联业主 TG 升级(dormant·独立幂等)
+            }
+            if ($age >= $this->ownerEscalateMin) {
+                $this->escalateOwner($order, $age); // 哪吒 P2-8: 业主 TG 升级挪到独立阈值 T+5(原并列 email_merchant 10min·dormant·独立幂等)
             }
             if ($age >= $cfg['cancel']) {
                 $acted += $this->fireOnce($order->id, 'cancel_paid_refund', function () use ($order) {
@@ -97,11 +107,14 @@ class OrderTimeoutSweep extends Command
             if (!$start) { continue; }
             $age = (int) floor($start->diffInSeconds($now) / 60);
 
+            $this->escalateOwnerUnbound($order, $age); // 哪吒 P2-9: 商家未绑 TG → 不等阈值, 首次 sweep 即升级业主(dormant·共享幂等)
             if ($age >= $cfg['email_merchant']) {
                 $acted += $this->fireOnce($order->id, 'email_merchant', function () use ($order, $age) {
                     $this->remindMerchant($order, $age, true);
                 }, "待接单超时 {$age}min 邮件商家") ? 1 : 0;
-                $this->escalateOwner($order, $age); // 哪吒 批次1: 并联业主 TG 升级(dormant·独立幂等)
+            }
+            if ($age >= $this->ownerEscalateMin) {
+                $this->escalateOwner($order, $age); // 哪吒 P2-8: 业主 TG 升级挪到独立阈值 T+5(dormant·独立幂等)
             }
             if ($age >= $cfg['cancel']) {
                 $acted += $this->fireOnce($order->id, 'cancel_paid_refund', function () use ($order) {
@@ -326,31 +339,65 @@ class OrderTimeoutSweep extends Command
             $this->line("  [DRY] order#{$order->id} owner_escalate :: 业主 TG 升级(已挂 {$age}min)");
             return;
         }
-        // 每单一次(独立于 email_merchant 幂等账本; TTL 一天足够覆盖 10→20min 自动取消窗口内的重复 sweep)
+        $restaurant = $order->restaurant;
+        $shopName  = $restaurant?->name ?: ('餐厅 #' . ($order->restaurant_id ?? '?'));
+        $shopPhone = $restaurant?->phone ?: ($restaurant?->vendor?->phone ?: '未登记');
+        $text = "🚨 哪吒升级｜「{$shopName}」订单 #{$order->id} 已挂约 {$age} 分钟无人接单/处理，请联系商家催单。\n商家电话：{$shopPhone}";
+        $this->ownerEscalateDispatch($order, $text, 'stuck');
+    }
+
+    /**
+     * 哪吒 P2-9: 商家【未绑 TG】的新单 → 不等 T+5 阈值, 首次 sweep 即升级业主(该店收不到催单, 再等无意义)。
+     * 与常规 escalateOwner 共享 nezha_owner_escalate_<id> 幂等键(二选一先到先得·不重复打扰); 仅未绑店触发, 已绑走常规。
+     * 🔴 纯通知(店名/单号/商家电话·禁顾客 PII), 不碰任何 L1 取消/退款/状态动作。dormant 开关 nezha_timeout_escalate_status 门控。
+     * 注: 「商家已绑但 P0 送达失败」的早升级需持久投递记录(P4 outbox)才能可靠判定, 现由常规 T+5 escalateOwner 兜底, 不在本轮。
+     */
+    private function escalateOwnerUnbound(Order $order, int $age): void
+    {
+        if (!$this->ownerEscalate) {
+            return;
+        }
+        $restaurant = $order->restaurant;
+        if (!$restaurant || ($restaurant->telegram_chat_id ?? null)) {
+            return; // 已绑 TG(能收催单) → 走常规 T+5 escalateOwner, 不早升级
+        }
+        if ($this->dry) {
+            $this->line("  [DRY] order#{$order->id} owner_escalate_unbound :: 商家未绑 TG 早升级(挂 {$age}min)");
+            return;
+        }
+        $shopName  = $restaurant?->name ?: ('餐厅 #' . ($order->restaurant_id ?? '?'));
+        $shopPhone = $restaurant?->phone ?: ($restaurant?->vendor?->phone ?: '未登记');
+        $text = "🚨 哪吒升级｜「{$shopName}」订单 #{$order->id} 已到店，但该店未绑 TG 提醒（收不到新单推送），请尽快电话联系商家接单。\n商家电话：{$shopPhone}";
+        $this->ownerEscalateDispatch($order, $text, 'unbound');
+    }
+
+    /**
+     * 哪吒 P0/P2 共享: 向业主 TG 发升级。每单一次幂等(nezha_owner_escalate_<id>·TTL 1 天覆盖取消窗口内重复 sweep);
+     * 送达真值由 P0 加固的 sendTelegramToAdmin 提供——硬失败清幂等标记, 靠下一分钟 sweep 重升(20min 取消前尚有重试窗)。
+     * 业主 chat 未绑=明确记一行不静默(§5-№4)。best-effort: 任何异常只记日志不抛, 不阻断 sweep 主流程。
+     */
+    private function ownerEscalateDispatch(Order $order, string $text, string $tag): void
+    {
+        // 每单一次(独立于 email_merchant 幂等账本)
         if (!Cache::add('nezha_owner_escalate_' . $order->id, 1, now()->addDay())) {
             return;
         }
         try {
             $chatId = Helpers::get_business_settings('nezha_risk_admin_chat_id', false);
             if (!$chatId) {
-                // 🔴 升级路径不许静默(§5-№4): 业主 chat 未绑时明确记一行, 区别于 enqueueTelegram 空 chatId 的结构性静默 return
-                Log::warning('NEZHA_TIMEOUT_OWNER_ESCALATE 业主 TG 未绑(nezha_risk_admin_chat_id 空), 订单 #' . $order->id . ' 升级未送达, 请补配业主 chat_id');
+                // 🔴 升级路径不许静默(§5-№4): 业主 chat 未绑时明确记一行
+                Log::warning('NEZHA_TIMEOUT_OWNER_ESCALATE[' . $tag . '] 业主 TG 未绑(nezha_risk_admin_chat_id 空), 订单 #' . $order->id . ' 升级未送达, 请补配业主 chat_id');
                 return;
             }
-            $restaurant = $order->restaurant;
-            $shopName  = $restaurant?->name ?: ('餐厅 #' . ($order->restaurant_id ?? '?'));
-            $shopPhone = $restaurant?->phone ?: ($restaurant?->vendor?->phone ?: '未登记');
-            $text = "🚨 哪吒升级｜「{$shopName}」订单 #{$order->id} 已挂约 {$age} 分钟无人接单/处理，请联系商家催单。\n商家电话：{$shopPhone}";
-            // P0-2 幂等后置(§0.5③): sendTelegramToAdmin 现返送达真值(异步=入队成功 true·送达+重试归 Job tries=3;
-            // 同步=真实送达真值)。硬失败则清「已升级」标记, 靠下一分钟 sweep 重升(20min 取消前尚有重试窗)。
+            // P0-2 幂等后置(§0.5③): sendTelegramToAdmin 返送达真值(异步=入队成功 true·送达+重试归 Job tries=3; 同步=真实真值)。
             if (Helpers::sendTelegramToAdmin($text)) {
-                Log::info('NEZHA_TIMEOUT_OWNER_ESCALATE 已升级业主 TG · order#' . $order->id . ' · ' . $age . 'min');
+                Log::info('NEZHA_TIMEOUT_OWNER_ESCALATE[' . $tag . '] 已升级业主 TG · order#' . $order->id);
             } else {
                 Cache::forget('nezha_owner_escalate_' . $order->id);
-                Log::warning('NEZHA_TIMEOUT_OWNER_ESCALATE 业主 TG 升级发送失败, 已清幂等标记待下轮 sweep 重试 · order#' . $order->id);
+                Log::warning('NEZHA_TIMEOUT_OWNER_ESCALATE[' . $tag . '] 发送失败, 已清幂等标记待下轮 sweep 重试 · order#' . $order->id);
             }
         } catch (\Throwable $e) {
-            Log::warning('NEZHA_TIMEOUT escalateOwner order#' . $order->id . ': ' . $e->getMessage());
+            Log::warning('NEZHA_TIMEOUT ownerEscalateDispatch[' . $tag . '] order#' . $order->id . ': ' . $e->getMessage());
         }
     }
 

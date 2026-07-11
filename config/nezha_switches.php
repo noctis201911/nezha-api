@@ -196,6 +196,12 @@ return [
             'settings_route' => null, 'ops_note' => "无专用后台 UI(DB flag)。{$OPS_FORGET}。=0 影子抄送跳静默(不影响商家 TG/邮件/风控告警)",
         ],
         [
+            'key' => 'nezha_timeout_escalate_owner_min', 'label' => '业主超时升级阈值(分钟)', 'section' => 'D', 'level' => 'L2',
+            'expected' => null, 'value_type' => 'param', 'default' => 5,
+            'prereq' => '参数非布尔·后台可调(默认 5)。仅在 nezha_timeout_escalate_status 开时生效——业主 TG 升级挪到 T+5(不复用 remind/email_merchant·§0.5④)·20min 自动取消前留 ~15min 挽回窗。见 fable-brief/PLAN_merchant_order_alert_reliability.md §5-8/§9-2',
+            'settings_route' => null, 'ops_note' => "无专用后台 UI(DB 数值)。改后须 {$OPS_FORGET}。空/0=回落默认 5",
+        ],
+        [
             'key' => 'nezha_offboard_status', 'label' => '商家退出结算', 'section' => 'D', 'level' => 'L1-8',
             'l1_clause' => $L1['L1-8'], 'expected' => 0, 'value_type' => 'bool',
             'prereq' => 'step4-4/step5 实装 dormant·资金流出路径·灰度存量 7 店 KYC 未录→保持关·真开前 staging 单店试跑',
