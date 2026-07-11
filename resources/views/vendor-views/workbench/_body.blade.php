@@ -117,7 +117,7 @@
                                         <button type="button" class="nzpo-btn nzpo-reveal" data-nzpo-reveal>转入配送（{{ count($g['dispatch_ids']) }}）</button>
                                     @endif
                                 </div>
-                                <div class="nzpo-acap">「转入配送」不批量派车：点开后请对每单叫 Yandex 并粘贴跟踪链接（平台不代派车、不会批量把顾客状态翻「配送中」）。</div>
+                                <div class="nzpo-acap">点「转入配送」后逐单叫 Yandex、贴跟踪链接；顾客在你为该单真叫车后才看到「配送中」。</div>
                             @endif
                         </div>
                     </details>
