@@ -8,6 +8,12 @@
     {{-- 手机端(<768px)把订单表格重排为卡片, 操作按钮直接露出; PC/平板(>=768px)不命中本媒体查询, 表格原样不变 --}}
     <style>
         .nz-order-table-card { border: 1px solid #E6EAF0; border-radius: 10px; box-shadow: 0 1px 4px rgba(16,24,40,.04); overflow: hidden; }
+        /* 哪吒: 订单列表吸顶 —— 表格区自成有界滚动框(max-height 由 JS 按视口自适应), 表头 sticky 钉框顶;
+           工具栏(card-header)+分页(card-footer)在框外常驻。仅 >=768px; 手机端卡片布局(thead 隐藏)不受影响。 */
+        @media (min-width: 768px) {
+            .nz-order-table-card .table-responsive.datatable-custom { overflow: auto; }
+            .nz-order-table-card #datatable thead.thead-light th { position: sticky; top: 0; z-index: 6; background: #F5F7FA; box-shadow: inset 0 -1px 0 #E6EAF0; }
+        }
         .nz-order-table-card .card-header { border-bottom: 1px solid #EDF1F5; background: #fff; }
         .nz-order-table-card #datatable { table-layout: fixed; min-width: 1180px; }
         .nz-order-toolbar { display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%; }
@@ -1580,6 +1586,25 @@
                     window.nzToast('操作失败：' + (err && err.message ? err.message : '网络错误，请重试'), 'error');
                 });
             }, false);
+        })();
+
+        // 哪吒: 订单表格吸顶 —— 表格区高度按视口自适应(有界滚动框, 避免 magic number + 双滚动条; 仅 >=768px)
+        (function () {
+            function nzFitOrderTable() {
+                var tr = document.querySelector('.nz-order-table-card .table-responsive.datatable-custom');
+                if (!tr) return;
+                if (window.innerWidth < 768) { tr.style.maxHeight = ''; return; }   // 手机端卡片布局, 不限高
+                var card = tr.closest('.nz-order-table-card');
+                var footer = card ? card.querySelector('.card-footer') : null;
+                var footerH = footer ? footer.offsetHeight : 0;
+                var top = tr.getBoundingClientRect().top;                            // 表格区距视口顶 = 上方 chrome 高
+                var avail = window.innerHeight - top - footerH - 16;                 // 留出页脚分页 + 余量
+                tr.style.maxHeight = Math.max(240, Math.round(avail)) + 'px';        // 短屏保底 240
+            }
+            window.nzFitOrderTable = nzFitOrderTable;
+            if (document.readyState !== 'loading') nzFitOrderTable(); else document.addEventListener('DOMContentLoaded', nzFitOrderTable);
+            window.addEventListener('load', nzFitOrderTable);
+            window.addEventListener('resize', nzFitOrderTable);
         })();
 
         $(document).on('ready', function () {
