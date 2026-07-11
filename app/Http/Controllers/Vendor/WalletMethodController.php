@@ -54,7 +54,9 @@ class WalletMethodController extends Controller
 
     public function default(Request $request)
     {
-        $method = DisbursementWithdrawalMethod::find($request->id);
+        // 哪吒安全(2026-07-11 N-06): IDOR——只操作本店收款方式(restaurant_id 作用域)。
+        $method = DisbursementWithdrawalMethod::where('id', $request->id)->where('restaurant_id', Helpers::get_restaurant_id())->first();
+        if (!$method) { Toastr::error(translate('messages.not_found')); return back(); }
         $method->is_default = $request->default;
         $method->save();
         DisbursementWithdrawalMethod::whereNot('id', $request->id)->where('restaurant_id',Helpers::get_restaurant_id())->update(['is_default' => 0]);
@@ -64,7 +66,9 @@ class WalletMethodController extends Controller
 
     public function delete(Request $request)
     {
-        $method = DisbursementWithdrawalMethod::find($request->id);
+        // 哪吒安全(2026-07-11 N-06): IDOR——只删本店收款方式(restaurant_id 作用域)。
+        $method = DisbursementWithdrawalMethod::where('id', $request->id)->where('restaurant_id', Helpers::get_restaurant_id())->first();
+        if (!$method) { Toastr::error(translate('messages.not_found')); return back(); }
           if($method->is_default == 1){
             Toastr::error('Default withdrawal method can not be deleted!');
             return back();
@@ -78,7 +82,9 @@ class WalletMethodController extends Controller
 
     public function status_update(Request $request)
     {
-        $withdrawal_method = DisbursementWithdrawalMethod::where('id', $request->id)->first();
+        // 哪吒安全(2026-07-11 N-06): IDOR——只操作本店收款方式(restaurant_id 作用域)。
+        $withdrawal_method = DisbursementWithdrawalMethod::where('id', $request->id)->where('restaurant_id', Helpers::get_restaurant_id())->first();
+        if (!$withdrawal_method) { return response()->json(['success' => 0, 'message' => translate('messages.not_found')], 404); }
 
         $withdrawal_method->is_active = !$withdrawal_method->is_active;
         if($withdrawal_method->is_default == 1  && $withdrawal_method->is_active == 0){
@@ -96,7 +102,9 @@ class WalletMethodController extends Controller
         public function default_status_update(Request $request)
     {
 
-        $withdrawal_method = DisbursementWithdrawalMethod::where('id', $request->id)->first();
+        // 哪吒安全(2026-07-11 N-06): IDOR——只操作本店收款方式(restaurant_id 作用域)。
+        $withdrawal_method = DisbursementWithdrawalMethod::where('id', $request->id)->where('restaurant_id', Helpers::get_restaurant_id())->first();
+        if (!$withdrawal_method) { return response()->json(['success' => 0, 'message' => translate('messages.not_found')], 404); }
 
         if ($withdrawal_method->is_default == 1) {
             return response()->json([
@@ -105,7 +113,7 @@ class WalletMethodController extends Controller
 
         }
 
-        DisbursementWithdrawalMethod::where('id', '!=', $request->id)->update(['is_default' => 0]);
+        DisbursementWithdrawalMethod::where('id', '!=', $request->id)->where('restaurant_id', Helpers::get_restaurant_id())->update(['is_default' => 0]); // 哪吒安全(2026-07-11 N-06): 加 restaurant_id——防一次调用清空全平台所有餐厅默认收款标记(原无过滤=跨租户数据破坏)
         $withdrawal_method->is_default = 1;
         $withdrawal_method->is_active = 1;
         $withdrawal_method->save();
@@ -117,8 +125,9 @@ class WalletMethodController extends Controller
 
        public function edit($id)
     {
-        $withdrawal_method = DisbursementWithdrawalMethod::with('withdrawMethod')->where('id', $id)->first();
-        if (!$withdrawal_method->withdrawMethod) {
+        // 哪吒安全(2026-07-11 N-06): IDOR——只看本店收款方式(restaurant_id 作用域)。
+        $withdrawal_method = DisbursementWithdrawalMethod::with('withdrawMethod')->where('id', $id)->where('restaurant_id', Helpers::get_restaurant_id())->first();
+        if (!$withdrawal_method || !$withdrawal_method->withdrawMethod) {
         return response()->json([
                     'error' => 1,'message' => translate('messages.Withdrawal_method_not_found')
                 ]);
@@ -134,7 +143,8 @@ class WalletMethodController extends Controller
     public function update(Request $request)
     {
 
-        $withdrawal_method = DisbursementWithdrawalMethod::with('withdrawMethod')->find($request['id']);
+        // 哪吒安全(2026-07-11 N-06): IDOR——只改本店收款方式(防跨店篡改打款账户字段·restaurant_id 作用域)。
+        $withdrawal_method = DisbursementWithdrawalMethod::with('withdrawMethod')->where('id', $request['id'])->where('restaurant_id', Helpers::get_restaurant_id())->first();
 
         if(!isset($withdrawal_method)) {
             Toastr::error('Withdrawal method not found!');

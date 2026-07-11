@@ -115,7 +115,11 @@ class WithdrawMethodController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
-        $method = DisbursementWithdrawalMethod::find($request->id);
+        // 哪吒安全(2026-07-11 N-06): IDOR——只允许操作本店收款方式(按 session 商家 restaurant_id 作用域·防跨店改他人打款账户默认标记)。
+        $method = DisbursementWithdrawalMethod::where('id', $request->id)->where('restaurant_id', $restaurant['id'])->first();
+        if (!$method) {
+            return response()->json(['errors' => [['code' => 'id', 'message' => translate('messages.not_found')]]], 404);
+        }
         $method->is_default = $request->is_default;
         $method->save();
         DisbursementWithdrawalMethod::whereNot('id', $request->id)->where('restaurant_id',$restaurant['id'])->update(['is_default' => 0]);
@@ -132,7 +136,12 @@ class WithdrawMethodController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        $method = DisbursementWithdrawalMethod::find($request->id);
+        // 哪吒安全(2026-07-11 N-06): IDOR——只允许删本店收款方式(按 session 商家 restaurant_id 作用域·防跨店删他人打款账户)。
+        $restaurant = $request['vendor']?->restaurants[0];
+        $method = DisbursementWithdrawalMethod::where('id', $request->id)->where('restaurant_id', $restaurant?->id)->first();
+        if (!$method) {
+            return response()->json(['errors' => [['code' => 'id', 'message' => translate('messages.not_found')]]], 404);
+        }
         $method->delete();
         return response()->json(['message'=>translate('messages.method_deleted_successfully')], 200);
     }
