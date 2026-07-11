@@ -1095,7 +1095,20 @@ class OrderController extends Controller
             $order->cancellation_reason = $request->reason;
             $order->cancellation_note = $request->note;
             $order->canceled_by = 'customer';
-            $order->save();
+            // 哪吒 M3 边界①: 加订单行锁 + 锁内复核状态再 save, 防与商家 status() 并发 last-write-wins(照 OrderTimeoutSweep:203 范式,
+            // 保留 save/observer 语义)。输了竞态(状态已被商家改走, 如刚被 confirm)→ 返回冲突, 不做任何副作用/退款留痕。业主 2026-07-11 已批。
+            $nz_cancel_ok = true;
+            DB::transaction(function () use ($order, &$nz_cancel_ok) {
+                $nz_fresh = Order::where('id', $order->id)->lockForUpdate()->first();
+                if (!$nz_fresh || !in_array($nz_fresh->order_status, ['pending', 'failed'], true)) {
+                    $nz_cancel_ok = false;
+                    return;
+                }
+                $order->save();
+            });
+            if (!$nz_cancel_ok) {
+                return response()->json(['errors' => [['code' => 'order', 'message' => translate('messages.you_can_not_cancel_a_order')]]], 409);
+            }
 
             Helpers::decreaseSellCount(order_details:$order->details);
             // 哪吒 D1: 已付直付单下方会发专用"联系商家原路退款"通知, 先登记以跳过通用 canceled 站内信(防双通知)。

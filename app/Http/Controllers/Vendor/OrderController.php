@@ -821,7 +821,22 @@ class OrderController extends Controller
             $order->processing_time = $request->processing_time;
         }
         $order[$request['order_status']] = now();
-        $order->save();
+        // 哪吒 M3 边界①: 加订单行锁 + 锁内复核状态(仍是加载时的值)再 save, 防与顾客 cancel_order 并发 last-write-wins(照 OrderTimeoutSweep:203
+        // 范式, 保留 save/observer)。输了竞态(状态已被改走, 如顾客刚取消)→ Toastr 提示刷新, 不覆盖对方的写入。业主 2026-07-11 已批。
+        $nz_status_ok = true;
+        $nz_prev_status = $order->getOriginal('order_status');
+        DB::transaction(function () use ($order, $nz_prev_status, &$nz_status_ok) {
+            $nz_fresh = Order::where('id', $order->id)->lockForUpdate()->first();
+            if (!$nz_fresh || $nz_fresh->order_status !== $nz_prev_status) {
+                $nz_status_ok = false;
+                return;
+            }
+            $order->save();
+        });
+        if (!$nz_status_ok) {
+            Toastr::warning('订单状态已被更新（可能已被顾客取消），请刷新后重试');
+            return back();
+        }
 
         // 哪吒 F-4 补缺(2026-06-21): 商家经 status 通道取消已付直付单时, 补「待退款」留痕。
         // 旧版只写 canceled_by/reason 而漏调 record_direct_pay_refund_pending → 资金留痕缺口。
