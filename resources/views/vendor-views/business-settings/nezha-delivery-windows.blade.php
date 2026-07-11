@@ -54,6 +54,27 @@
 .nzdw-fhelp{font-size:11px;color:#9AA0A8;margin-top:6px;line-height:1.55}
 .nzdw-sbtn{margin-top:16px;width:100%;height:48px;border-radius:12px;background:#1F2329;color:#fff;font-size:15px;font-weight:600;border:none;cursor:pointer}
 .nzdw-sbtn:disabled{background:#C9CDD2;cursor:not-allowed}
+.nzdw-modecard{cursor:pointer}
+.nzdw-modehead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.nzdw-modelabel{font-size:12px;color:#9AA0A8}
+.nzdw-modeval{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px;margin-top:2px}
+.nzdw-modechev{font-size:13px;font-weight:600;color:#1F2329;white-space:nowrap}
+.nzdw-modehint{font-size:12px;color:#5A6069;line-height:1.55;margin-top:8px}
+.nzdw-b{background:#ECEAF7;color:#5B54A8}
+.nzdw-opts{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.nzdw-opt{display:flex;gap:12px;align-items:flex-start;border:1.5px solid #E7EAEF;border-radius:14px;background:#fff;padding:13px 14px;cursor:pointer}
+.nzdw-opt.nzdw-optsel{border-color:#1F2329}
+.nzdw-oicon{width:38px;height:38px;border-radius:12px;background:#F0F2F4;color:#5A6069;display:flex;align-items:center;justify-content:center;flex:none;font-size:18px}
+.nzdw-opt.nzdw-optsel .nzdw-oicon{background:#1F2329;color:#fff}
+.nzdw-obody{flex:1;min-width:0}
+.nzdw-ot{font-size:15px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.nzdw-ochip{font-size:11px;font-weight:600;color:#5B54A8;background:#ECEAF7;border-radius:999px;padding:3px 8px}
+.nzdw-od{font-size:13px;color:#5A6069;line-height:1.55;margin-top:3px}
+.nzdw-radio{width:20px;height:20px;border-radius:50%;border:1.7px solid #C9CDD2;flex:none;margin-top:2px;background:#fff}
+.nzdw-opt.nzdw-optsel .nzdw-radio{border:6px solid #1F2329}
+.nzdw-alert{margin-top:10px;background:#fff;border:1px solid #E7EAEF;border-left:3px solid #D9A521;border-radius:10px;padding:11px 13px}
+.nzdw-alt{font-size:13px;font-weight:600;color:#1F2329}
+.nzdw-ald{font-size:12px;color:#5A6069;line-height:1.55;margin-top:4px}
 </style>
 @endpush
 
@@ -68,6 +89,19 @@
 @endphp
 <div class="content container-fluid">
   <div class="nzdw-wrap">
+    @php $modeNames = ['instant'=>'即时接单','instant_preorder'=>'即时 + 预约','preorder_only'=>'只接预约']; @endphp
+    <div class="nzdw-card nzdw-modecard" id="nzdwModeOpen" role="button" tabindex="0">
+      <div class="nzdw-modehead">
+        <div>
+          <div class="nzdw-modelabel">接单模式</div>
+          <div class="nzdw-modeval"><span>{{ $modeNames[$currentMode] ?? '即时接单' }}</span>
+            @if($currentMode==='preorder_only')<span class="nzdw-chip nzdw-b">只接预约</span>@elseif($currentMode==='instant_preorder')<span class="nzdw-chip nzdw-b">开放预约</span>@endif
+          </div>
+        </div>
+        <span class="nzdw-modechev">切换 ›</span>
+      </div>
+      <div class="nzdw-modehint">决定顾客能怎么向您下单 · 与「忙碌 / 暂停接单」互不影响</div>
+    </div>
     <div class="nzdw-card">
       <div class="nzdw-ct">预约配送时段
         @if($preorderOn)
@@ -113,6 +147,40 @@
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>添加时段
     </button>
     <div class="nzdw-note">「单时段接单上限」用于防爆单,Phase 2 开放;当前不限量,请按备货能力设置时段数量。</div>
+  </div>
+</div>
+
+<div class="nzdw-mask" id="nzdwModeMask" hidden>
+  <div class="nzdw-sheet">
+    <div class="nzdw-grab"></div>
+    <div class="nzdw-sh"><span class="nzdw-sht">接单模式</span><span class="nzdw-shx" id="nzdwModeClose">✕</span></div>
+    <div class="nzdw-modehint" style="margin:3px 0 12px">决定顾客能怎么向您下单 · 随时可改</div>
+    <form method="post" action="{{ route('vendor.business-settings.nezha-accept-mode') }}" id="nzdwModeForm">
+      @csrf
+      <input type="hidden" name="mode" id="nzdwModeInput" value="{{ $currentMode }}">
+      <div class="nzdw-opts">
+        <div class="nzdw-opt @if($currentMode==='instant') nzdw-optsel @endif" data-mode="instant">
+          <span class="nzdw-oicon">⚡</span>
+          <div class="nzdw-obody"><div class="nzdw-ot">即时接单</div><div class="nzdw-od">只接「现在送」的即时单,需要实时接单、实时备餐(平台默认)。</div></div>
+          <span class="nzdw-radio"></span>
+        </div>
+        <div class="nzdw-opt @if($currentMode==='instant_preorder') nzdw-optsel @endif" data-mode="instant_preorder">
+          <span class="nzdw-oicon">🗓</span>
+          <div class="nzdw-obody"><div class="nzdw-ot">即时 + 预约</div><div class="nzdw-od">即时单照常接,同时开放预约时段,顾客可任选「现在送」或「预约送」。</div></div>
+          <span class="nzdw-radio"></span>
+        </div>
+        <div class="nzdw-opt @if($currentMode==='preorder_only') nzdw-optsel @endif" data-mode="preorder_only">
+          <span class="nzdw-oicon">📦</span>
+          <div class="nzdw-obody"><div class="nzdw-ot">只接预约 <span class="nzdw-ochip">适合超市 / 百货</span></div><div class="nzdw-od">顾客必须选择配送时段下单;您可按时段集中备货、集中叫车,<b style="color:#1F2329">不用守店</b>。</div></div>
+          <span class="nzdw-radio"></span>
+        </div>
+      </div>
+      <div class="nzdw-alert" id="nzdwModeAlert" hidden>
+        <div class="nzdw-alt">⚠ 还没有配送时段</div>
+        <div class="nzdw-ald">「即时+预约」或「只接预约」需要至少 1 个配送时段才能生效,顾客才有时段可选。请先在下方添加配送时段。</div>
+      </div>
+      <button type="submit" class="nzdw-sbtn" id="nzdwModeSave">保存接单模式</button>
+    </form>
   </div>
 </div>
 
@@ -255,6 +323,37 @@
   // 初始选中日:URL hash > 首个有时段的日 > 今天
   var m = (location.hash || '').match(/day-(\d)/);
   selectDay(m ? parseInt(m[1], 10) : firstDayWithWindows());
+})();
+
+// screen 01 接单模式抽屉(三态·form POST 走 M4 nezha_accept_mode·server 端二次校验 0/0 与「≥1时段」守卫)
+(function () {
+  var HASWIN = @json($hasActiveWindow);
+  var mask = document.getElementById('nzdwModeMask');
+  if (!mask) return;
+  var opts = document.querySelectorAll('#nzdwModeForm .nzdw-opt');
+  var input = document.getElementById('nzdwModeInput');
+  var alertEl = document.getElementById('nzdwModeAlert');
+  var saveBtn = document.getElementById('nzdwModeSave');
+
+  function refresh() {
+    var mode = input.value;
+    var block = (mode === 'instant_preorder' || mode === 'preorder_only') && !HASWIN; // 预约模式须 ≥1 时段(mockup01 状态B)
+    alertEl.hidden = !block;
+    saveBtn.disabled = block;
+    saveBtn.textContent = block ? '添加配送时段后即可保存' : '保存接单模式';
+  }
+  document.getElementById('nzdwModeOpen').addEventListener('click', function () { mask.hidden = false; });
+  document.getElementById('nzdwModeClose').addEventListener('click', function () { mask.hidden = true; });
+  mask.addEventListener('click', function (e) { if (e.target === mask) mask.hidden = true; });
+  opts.forEach(function (o) {
+    o.addEventListener('click', function () {
+      opts.forEach(function (x) { x.classList.remove('nzdw-optsel'); });
+      o.classList.add('nzdw-optsel');
+      input.value = o.getAttribute('data-mode');
+      refresh();
+    });
+  });
+  refresh();
 })();
 </script>
 @endsection

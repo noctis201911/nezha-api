@@ -42,7 +42,14 @@ class NezhaDeliveryWindowController extends Controller
         $hoursByDay = RestaurantSchedule::where('restaurant_id', $rid)
             ->orderBy('opening_time')->get()->groupBy('day');
         $preorderOn = NezhaPreorder::enabled();
-        return view('vendor-views.business-settings.nezha-delivery-windows', compact('windowsByDay', 'hoursByDay', 'preorderOn'));
+        // screen 01 接单模式抽屉: 当前三态(反推自底座两 flag) + 有无启用中窗口(预约模式「≥1时段」守卫的 UI 态)。
+        $restaurant = Helpers::get_restaurant_data();
+        $currentMode = NezhaPreorder::flagsToMode(
+            $restaurant->restaurant_config?->instant_order ?? 1,
+            $restaurant->schedule_order ?? 0
+        );
+        $hasActiveWindow = NezhaPreorder::hasActiveWindow($rid);
+        return view('vendor-views.business-settings.nezha-delivery-windows', compact('windowsByDay', 'hoursByDay', 'preorderOn', 'currentMode', 'hasActiveWindow'));
     }
 
     /** 加窗口。 */
