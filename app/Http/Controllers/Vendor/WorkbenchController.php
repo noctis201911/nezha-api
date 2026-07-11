@@ -8,7 +8,9 @@ use App\CentralLogics\NezhaCustomerNudge;
 use App\CentralLogics\NezhaOrderCounts;
 use App\CentralLogics\NezhaOrderNextAction;
 use App\CentralLogics\NezhaOrderTimeout;
+use App\CentralLogics\NezhaPreorder;
 use App\Http\Controllers\Controller;
+use App\Models\NezhaDeliveryWindow;
 use App\Models\NezhaRefundRecord;
 use App\Models\Order;
 use Illuminate\Http\Request;
@@ -90,6 +92,11 @@ class WorkbenchController extends Controller
             array_column($wb['queues']['cooking']['rows'] ?? [], 'id'),
             array_column(array_filter($wb['queues']['delivery']['rows'] ?? [], fn ($r) => ($r['stage'] ?? '') === 'handover'), 'id')
         );
+        // screen05: 预约分组内 handover(已出餐)单也要能「逐单叫车」→ 并入叫车抽屉源(复用同一 partial·不造第二套写路径)。
+        foreach (($wb['preorder']['groups'] ?? []) as $g) {
+            $dispatchIds = array_merge($dispatchIds, $g['dispatch_ids'] ?? []);
+        }
+        $dispatchIds = self::uniqInts($dispatchIds);
 
         return $dispatchIds
             ? Order::with(['restaurant', 'details'])->whereIn('id', $dispatchIds)->get()
@@ -159,9 +166,13 @@ class WorkbenchController extends Controller
             'mode_enabled' => (int) \App\CentralLogics\Helpers::get_business_settings('nezha_busy_mode_status') === 1,
         ];
 
+        // screen05: 预约分区。总闸 nezha_preorder_status 关(dormant 常态)→ enabled() 短路→ 只 ['enabled'=>false], 零额外查询、整区块不渲染。
+        $preorder = NezhaPreorder::enabled() ? self::queuePreorder($rid, $rateCny, $rateUsd) : ['enabled' => false];
+
         return [
             'action'       => $action,
             'queues'       => $queues,
+            'preorder'     => $preorder,
             'rail'         => $rail,
             'store'        => $store,
             'rates'        => ['cny' => $rateCny, 'usd' => $rateUsd],
@@ -176,6 +187,135 @@ class WorkbenchController extends Controller
     {
         return Order::with(['customer', 'offline_payments', 'details', 'restaurant.restaurant_sub'])
             ->where('restaurant_id', $rid)->Notpos()->HasSubscriptionToday();
+    }
+
+    /**
+     * screen05 · 集中配送作业台「预约」分区(mockup05)。总闸 nezha_preorder_status 开时才构造(buildSummary 已 gate·关时整区块不出)。
+     * 只读: 把「今日起 + 可约上限内」的预约单按 schedule_at(=配送窗口起始)分组, 供商家按时段集中备货/叫车。绝不写任何订单状态。
+     *   - 与现有 5 队列有意「同单并存」(那 5 队列按阶段·本区块按窗口): 不改现有队列口径(守 NezhaOrderCounts 计数 parity·DoD#1)。
+     *   - 分组卡「全部标出餐」= confirmed→handover 走 M7 batch-ready 端点; 「转入配送」= 展开该窗口 handover 单逐单叫 Yandex(不批量翻 picked_up·业主 0711 定)。
+     */
+    protected static function queuePreorder(int $rid, float $rateCny, float $rateUsd): array
+    {
+        $now  = now();
+        $from = $now->copy()->startOfDay();
+        $to   = $now->copy()->addDays(NezhaPreorder::maxDaysAhead() + 1)->endOfDay();   // 今日起 + 可约上限, 防拉超远脏单
+
+        $orders = self::base($rid)
+            ->where('scheduled', 1)->whereNotNull('schedule_at')
+            ->whereBetween('schedule_at', [$from, $to])
+            ->whereIn('order_status', ['confirmed', 'accepted', 'processing', 'handover', 'picked_up', 'delivered'])
+            ->orderBy('schedule_at', 'asc')->orderBy('created_at', 'asc')
+            ->get();
+
+        $winById      = NezhaDeliveryWindow::where('restaurant_id', $rid)->get()->keyBy('id');
+        $remindMin    = NezhaPreorder::windowRemindMin();
+        $dispatchLead = NezhaPreorder::dispatchLeadMin();
+
+        $groups = [];
+        $todayWindows = 0; $todayOrders = 0; $todayDelivered = 0; $todayAmd = 0.0;
+
+        foreach ($orders->groupBy(fn ($o) => Carbon::parse($o->schedule_at)->format('Y-m-d H:i')) as $groupOrders) {
+            $first = $groupOrders->first();
+            $start = Carbon::parse($first->schedule_at);
+            $win   = $first->nezha_delivery_window_id ? $winById->get($first->nezha_delivery_window_id) : null;
+            $endHm = $win ? substr((string) $win->end_time, 0, 5) : $start->copy()->addHours(2)->format('H:i');   // 窗口删了则回退推导(仅显示)
+
+            $rows = []; $confirmedIds = []; $handoverIds = []; $dispatched = 0;
+            foreach ($groupOrders as $o) {
+                $st = (string) $o->order_status;
+                if (in_array($st, ['picked_up', 'delivered'], true)) { $dispatched++; }
+                if ($st === 'confirmed') { $confirmedIds[] = (int) $o->id; }   // 只 confirmed 可批量标出餐(与 canBatchReady 口径一致)
+                if ($st === 'handover')  { $handoverIds[]  = (int) $o->id; }
+                $rows[] = [
+                    'id'         => (int) $o->id,
+                    'customer'   => self::maskedCustomer($o)['name'],
+                    'items_qty'  => (int) ($o->details?->sum('quantity') ?? 0),
+                    'amount_amd' => Helpers::format_currency($o->order_amount),
+                    'stage'      => self::preorderStage($st),
+                    'stage_text' => self::preorderStageText($st),
+                ];
+            }
+            $count        = $groupOrders->count();
+            $minutesUntil = (int) round($now->diffInMinutes($start, false));   // 未来正、已过负
+            $state        = NezhaPreorder::workbenchGroupState($minutesUntil, $dispatched === $count, $remindMin);
+            $isToday      = $start->isSameDay($now);
+
+            if ($isToday) {
+                $todayWindows++; $todayOrders += $count; $todayDelivered += $dispatched; $todayAmd += (float) $groupOrders->sum('order_amount');
+            }
+
+            $groups[] = [
+                'label'           => $start->format('H:i') . '–' . $endHm,
+                'day_label'       => self::dayLabel($start, $now),
+                'is_today'        => $isToday,
+                'state'           => $state,                              // done / hot / upcoming
+                'count'           => $count,
+                'confirmed_count' => count($confirmedIds),               // 待出餐(可批量标出餐)
+                'ready_count'     => count($handoverIds) + $dispatched,  // 已出餐及以后
+                'rows'            => $rows,
+                'batch_ready_ids' => $confirmedIds,                      // 全部标出餐 → M7 batch-ready
+                'dispatch_ids'    => $handoverIds,                       // 转入配送 → 逐单叫车(展开·复用叫车抽屉)
+                'minutes_until'   => $minutesUntil,
+                'suggest_time'    => $start->copy()->subMinutes($dispatchLead)->format('H:i'),
+            ];
+        }
+
+        // 到窗口提醒: 最近一个「临近(hot) 且有待出餐」的窗口(groups 已按 schedule_at 升序)。
+        $reminder = null;
+        foreach ($groups as $g) {
+            if ($g['state'] === 'hot' && $g['confirmed_count'] > 0) {
+                $reminder = [
+                    'label'         => $g['is_today'] ? $g['label'] : ($g['day_label'] . ' ' . $g['label']),
+                    'minutes_until' => $g['minutes_until'],
+                    'pending'       => $g['confirmed_count'],
+                    'suggest_time'  => $g['suggest_time'],
+                    'dispatch_lead' => $dispatchLead,
+                ];
+                break;
+            }
+        }
+
+        return [
+            'enabled'  => true,
+            'groups'   => $groups,
+            'summary'  => [
+                'windows'   => $todayWindows,
+                'orders'    => $todayOrders,
+                'delivered' => $todayDelivered,
+                'total_amd' => Helpers::format_currency($todayAmd),
+                'total_cny' => $rateCny > 0 ? round($todayAmd / $rateCny) : null,
+                'total_usd' => $rateUsd > 0 ? round($todayAmd / $rateUsd) : null,
+            ],
+            'reminder'      => $reminder,
+            'remind_min'    => $remindMin,
+            'dispatch_lead' => $dispatchLead,
+            'empty_text'    => '还没有预约单',
+        ];
+    }
+
+    /** 预约行阶段机读键(呈现层用)。 */
+    protected static function preorderStage(string $st): string
+    {
+        return ['confirmed' => 'waiting', 'accepted' => 'waiting', 'processing' => 'cooking',
+                'handover' => 'handover', 'picked_up' => 'delivering', 'delivered' => 'done'][$st] ?? 'waiting';
+    }
+
+    /** 预约行阶段中文(M7 映射: 待出餐=confirmed / 已出餐=handover / 配送中=picked_up / 已送达=delivered)。 */
+    protected static function preorderStageText(string $st): string
+    {
+        return ['confirmed' => '待出餐', 'accepted' => '待出餐', 'processing' => '备餐中',
+                'handover' => '已出餐', 'picked_up' => '配送中', 'delivered' => '已送达'][$st] ?? '待出餐';
+    }
+
+    /** 日期标签(今天/明天/后天/n月j日)。$d 与 $now 同 tz。 */
+    protected static function dayLabel(Carbon $d, Carbon $now): string
+    {
+        $days = (int) $now->copy()->startOfDay()->diffInDays($d->copy()->startOfDay(), false);
+        if ($days <= 0) { return '今天'; }
+        if ($days === 1) { return '明天'; }
+        if ($days === 2) { return '后天'; }
+        return $d->format('n月j日');
     }
 
     /**

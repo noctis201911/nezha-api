@@ -185,6 +185,18 @@ return [
             'settings_route' => null, 'ops_note' => "无专用后台 UI(DB 数值)。改后须 {$OPS_FORGET}。见 NezhaOrderTimeout preorder_lead",
         ],
         [
+            'key' => 'nezha_preorder_dispatch_lead_min', 'label' => '预约建议提前叫车(分钟)', 'section' => 'D', 'level' => 'L2',
+            'expected' => null, 'value_type' => 'param', 'default' => 30,
+            'prereq' => '参数非布尔·后台可调(默认 30·业主 2026-07-11 定「固定提前量」·非实时 ETA)。screen05 作业台到窗口提醒「建议 X 开始叫车」= 窗口起始 − 本值分钟。空/0=回落默认 30',
+            'settings_route' => null, 'ops_note' => "无专用后台 UI(DB 数值)。改后须 {$OPS_FORGET}。见 NezhaPreorder::dispatchLeadMin",
+        ],
+        [
+            'key' => 'nezha_preorder_window_remind_min', 'label' => '预约到窗口提醒阈值(分钟)', 'section' => 'D', 'level' => 'L2',
+            'expected' => null, 'value_type' => 'param', 'default' => 45,
+            'prereq' => '参数非布尔·后台可调(默认 45)。screen05 作业台:下一个配送窗口起始 ≤ 本值分钟内即在顶部提醒(并把该窗口分组标「临近」)。空/0=回落默认 45',
+            'settings_route' => null, 'ops_note' => "无专用后台 UI(DB 数值)。改后须 {$OPS_FORGET}。见 NezhaPreorder::windowRemindMin",
+        ],
+        [
             'key' => 'nezha_refund_dispute_status', 'label' => '退款争议流(denied 凭证)', 'section' => 'D', 'level' => 'L1-2',
             'l1_clause' => $L1['L1-2'], 'expected' => 0, 'value_type' => 'bool',
             'prereq' => 'R1-R4 全实装 dormant·🔴真开须业主批准+亲测整条争议链(商家发起→超管裁决→逾期恢复)',

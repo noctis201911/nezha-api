@@ -46,6 +46,88 @@
         <span class="nzwb-today">今日 <b class="num">{{ (int)($today['orders'] ?? 0) }}</b> 单 · 自收款 <b class="num">֏{{ number_format((float)($today['collected'] ?? 0)) }}</b></span>
     </div>
 
+    {{-- ══ screen05 · 集中配送作业台「预约」分区(mockup05·浅白专业 DS§19·nzpo- scoped)。总闸 nezha_preorder_status 关 → enabled=false → 整区块不渲染(dormant)。 ══ --}}
+    @php $po = $wb['preorder'] ?? ['enabled' => false]; $poHasGroups = !empty($po['enabled']) && !empty($po['groups']); @endphp
+    @if(!empty($po['enabled']))
+        @php
+            $poGroups = $po['groups'] ?? []; $poSum = $po['summary'] ?? []; $poRem = $po['reminder'] ?? null;
+            $poChip = ['waiting' => 'a', 'handover' => 'g', 'delivering' => 'g', 'done' => 'x'];
+        @endphp
+        <section class="nzpo">
+            <div class="nzpo-head">
+                <span class="nzpo-h1">预约 · 集中配送</span>
+                <a class="nzpo-manage" href="{{ route('vendor.business-settings.nezha-window.index') }}">配送时段设置 ›</a>
+            </div>
+
+            @if(empty($poGroups))
+                <div class="nzpo-empty">
+                    <div class="nzpo-eic">📅</div>
+                    <div class="nzpo-e1">还没有预约单</div>
+                    <div class="nzpo-e2">开启「即时 + 预约」或「只接预约」模式后，顾客即可选时段下单；<br>订单会按配送时段在这里自动分组。</div>
+                    <a class="nzpo-ebtn" href="{{ route('vendor.business-settings.nezha-window.index') }}">去设置接单模式</a>
+                </div>
+            @else
+                <div class="nzpo-sum">今天 <b>{{ (int) ($poSum['windows'] ?? 0) }}</b> 个时段 · <b>{{ (int) ($poSum['orders'] ?? 0) }}</b> 单（已送出 <b>{{ (int) ($poSum['delivered'] ?? 0) }}</b>）<span class="nzpo-sumr">合计 <b>{{ $poSum['total_amd'] ?? '' }}</b>@if(($poSum['total_cny'] ?? null) !== null)<i>≈¥{{ number_format((float) $poSum['total_cny']) }} ≈${{ number_format((float) $poSum['total_usd']) }}</i>@endif</span></div>
+
+                @if($poRem)
+                    <div class="nzpo-rem">
+                        <span class="nzpo-rem-i">⏰</span>
+                        <div>
+                            <div class="nzpo-rt"><b>{{ $poRem['label'] }}</b> 窗口{{ ($poRem['minutes_until'] ?? 0) > 0 ? '将于 ' . $dur($poRem['minutes_until']) . ' 后开始' : '正在进行中' }}</div>
+                            <div class="nzpo-rs">{{ (int) $poRem['pending'] }} 单待处理 · 建议 <b>{{ $poRem['suggest_time'] }}</b> 开始叫车（固定提前 {{ (int) $poRem['dispatch_lead'] }} 分钟，非实时路况，可在设置调整）</div>
+                        </div>
+                    </div>
+                @endif
+
+                @foreach($poGroups as $g)
+                    @php
+                        $gcls  = $g['state'] === 'hot' ? 'hot' : ($g['state'] === 'done' ? 'done' : 'up');
+                        $gchip = $g['state'] === 'hot' ? ['临近', 'a'] : ($g['state'] === 'done' ? ['已完成', 'g'] : ['未到时段', 'b']);
+                    @endphp
+                    <details class="nzpo-gc {{ $gcls }}" @if($g['state'] === 'hot') open @endif>
+                        <summary class="nzpo-gh">
+                            <span class="nzpo-gt">{{ $g['label'] }}</span>
+                            <span class="nzpo-gday">{{ $g['day_label'] }}</span>
+                            <span class="nzpo-chip c-{{ $gchip[1] }}">{{ $gchip[0] }}</span>
+                            <span class="nzpo-gchev">▾</span>
+                        </summary>
+                        <div class="nzpo-gbody">
+                            <div class="nzpo-gsub">
+                                <span><b>{{ (int) $g['count'] }}</b> 单@if(($g['ready_count'] ?? 0) > 0) · 已出餐 <b>{{ (int) $g['ready_count'] }}</b>/{{ (int) $g['count'] }}@endif</span>
+                                @if(($g['count'] ?? 0) > 0)<span class="nzpo-bar"><i style="width:{{ (int) round(($g['ready_count'] ?? 0) / max(1, (int) $g['count']) * 100) }}%"></i></span>@endif
+                            </div>
+                            @foreach($g['rows'] as $r)
+                                <div class="nzpo-ol">
+                                    <div class="nzpo-ob"><div class="nzpo-oid">#{{ $r['id'] }}</div><div class="nzpo-on">{{ $r['customer'] }} · {{ (int) $r['items_qty'] }} 件</div></div>
+                                    <span class="nzpo-ov">{{ $r['amount_amd'] }}</span>
+                                    <span class="nzpo-chip c-{{ $poChip[$r['stage']] ?? 'x' }}">{{ $r['stage_text'] }}</span>
+                                    @if($r['stage'] === 'handover')<button type="button" class="nzpo-call nz-dispatch-open" data-nz-dispatch="{{ $r['id'] }}" hidden>叫车</button>@endif
+                                </div>
+                            @endforeach
+                            @if(($g['confirmed_count'] ?? 0) > 0 || count($g['dispatch_ids'] ?? []) > 0)
+                                <div class="nzpo-acts">
+                                    @if(($g['confirmed_count'] ?? 0) > 0)
+                                        <form action="{{ route('vendor.business-settings.nezha-window.batch-ready') }}" method="post" class="nzpo-actf" data-nz-ajax data-nz-ok-toast="已标出餐 · 转入「出餐待叫车」" data-nz-confirm="把该时段 {{ (int) $g['confirmed_count'] }} 单一起标为「出餐待叫车」？标记后请逐单叫车配送。">
+                                            @csrf
+                                            @foreach($g['batch_ready_ids'] as $bid)<input type="hidden" name="order_ids[]" value="{{ $bid }}">@endforeach
+                                            <button type="submit" class="nzpo-btn-o">全部标出餐（{{ (int) $g['confirmed_count'] }}）</button>
+                                        </form>
+                                    @endif
+                                    @if(count($g['dispatch_ids'] ?? []) > 0)
+                                        <button type="button" class="nzpo-btn nzpo-reveal" data-nzpo-reveal>转入配送（{{ count($g['dispatch_ids']) }}）</button>
+                                    @endif
+                                </div>
+                                <div class="nzpo-acap">「转入配送」不批量派车：点开后请对每单叫 Yandex 并粘贴跟踪链接（平台不代派车、不会批量把顾客状态翻「配送中」）。</div>
+                            @endif
+                        </div>
+                    </details>
+                @endforeach
+
+                <div class="nzpo-tip">窗口开始前约 {{ (int) ($po['remind_min'] ?? 45) }} 分钟在此提醒 · 时段与接单模式在「配送时段设置」调整</div>
+            @endif
+        </section>
+    @endif
+
     {{-- 需动作总览条: 4 枚定稿=待确认收款/催促·超时/退款处理/退款申请中(不含待叫车·裁决 0703)。全 0 → 绿胶囊。 --}}
     @if($isEmpty)
         <div class="nzwb-alertbar"><span class="calm">今天没有需要立刻处理的事</span></div>
@@ -71,7 +153,7 @@
                 <button type="button" class="nzwb-seg{{ $segOn('refund') }}" data-nzwb-seg="refund" role="tab">退款@if($qCounts['refund'] > 0)<b>{{ $qCounts['refund'] }}</b>@endif</button>
             </div>
 
-            @if($isEmpty)
+            @if($isEmpty && !$poHasGroups)
                 <div class="nzwb-banner-empty"><span class="zzz">◔</span>今天还没有新订单。顾客下单后会第一时间出现在这里并响铃提醒。</div>
             @endif
 

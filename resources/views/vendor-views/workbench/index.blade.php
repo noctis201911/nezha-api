@@ -150,6 +150,65 @@ body.nz-dispatch-lock { overflow: hidden; }
     .nz-dispatch-sheet { left: auto; right: 0; top: 0; bottom: 0; transform: none; width: 440px; max-width: 92vw; height: 100vh; max-height: 100vh; border-radius: 0; box-shadow: -12px 0 40px rgba(10,25,47,.35); }
     .nz-dispatch-grip { display: none; }
 }
+
+/* ══ screen05 · 集中配送作业台「预约」分区(mockup05·浅白专业 DS§19)。全 nzpo- scoped·令牌走 CSS 变量便于日后与作业台统一迁墨/换色(藏青↔墨仅换 --po-ink)。 ══ */
+.nzpo{--po-ink:#1F2329;--po-body:#5A6069;--po-sec:#9AA0A8;--po-line:#E7EAEF;
+  --po-a-bg:#F7EFDC;--po-a-fg:#8A6210;--po-a-side:#D9A521;--po-g-bg:#E5F1EA;--po-g-fg:#2B7A57;--po-g-side:#57A984;
+  --po-b-bg:#ECEAF7;--po-b-fg:#5B54A8;--po-x-bg:#EFF1F3;--po-x-fg:#6B7280;
+  margin:0 0 16px;color:var(--po-ink);font-family:inherit}
+.nzpo *{box-sizing:border-box}
+.nzpo-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.nzpo-h1{font-size:15px;font-weight:700;color:var(--po-ink)}
+.nzpo-manage{margin-left:auto;font-size:13px;font-weight:600;color:var(--po-ink);text-decoration:none}
+.nzpo-manage:hover{opacity:.7}
+.nzpo-sum{font-size:13px;color:var(--po-body);line-height:1.6;padding:0 2px;margin-bottom:10px;font-variant-numeric:tabular-nums}
+.nzpo-sum b{font-weight:700;color:var(--po-ink)}
+.nzpo-sumr{margin-left:8px}
+.nzpo-sumr i{font-style:normal;font-size:12px;color:var(--po-sec);margin-left:6px}
+.nzpo-rem{background:#fff;border:1px solid var(--po-line);border-left:3px solid var(--po-a-side);border-radius:12px;padding:12px 14px;display:flex;gap:10px;margin-bottom:12px}
+.nzpo-rem-i{font-size:16px;line-height:1.3;flex:none}
+.nzpo-rt{font-size:14px;font-weight:600;line-height:1.45;color:var(--po-ink)}
+.nzpo-rt b{font-variant-numeric:tabular-nums}
+.nzpo-rs{font-size:12px;color:var(--po-body);line-height:1.6;margin-top:3px}
+.nzpo-rs b{font-weight:600;color:var(--po-ink);font-variant-numeric:tabular-nums}
+.nzpo-gc{background:#fff;border:1px solid var(--po-line);border-radius:14px;margin-bottom:10px;overflow:hidden}
+.nzpo-gc.hot{border-left:3px solid var(--po-a-side)}
+.nzpo-gc.done{border-left:3px solid var(--po-g-side)}
+.nzpo-gh{display:flex;align-items:center;gap:8px;padding:13px 15px;cursor:pointer;list-style:none;user-select:none}
+.nzpo-gh::-webkit-details-marker{display:none}
+.nzpo-gt{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--po-ink)}
+.nzpo-gday{font-size:12px;color:var(--po-sec)}
+.nzpo-gchev{margin-left:auto;color:var(--po-sec);transition:transform .2s;font-size:11px}
+details[open] .nzpo-gchev{transform:rotate(180deg)}
+.nzpo-chip{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;white-space:nowrap}
+.nzpo-chip.c-a{background:var(--po-a-bg);color:var(--po-a-fg)}
+.nzpo-chip.c-g{background:var(--po-g-bg);color:var(--po-g-fg)}
+.nzpo-chip.c-b{background:var(--po-b-bg);color:var(--po-b-fg)}
+.nzpo-chip.c-x{background:var(--po-x-bg);color:var(--po-x-fg)}
+.nzpo-gbody{padding:0 15px 14px}
+.nzpo-gsub{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--po-body);padding:2px 0 10px}
+.nzpo-gsub b{font-weight:700;color:var(--po-ink);font-variant-numeric:tabular-nums}
+.nzpo-bar{flex:1;height:4px;border-radius:2px;background:#EAEDF1;overflow:hidden;max-width:170px}
+.nzpo-bar i{display:block;height:100%;border-radius:2px;background:var(--po-ink)}
+.nzpo-ol{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid #F0F2F4}
+.nzpo-ob{flex:1;min-width:0}
+.nzpo-oid{font-size:11px;color:var(--po-sec);font-variant-numeric:tabular-nums}
+.nzpo-on{font-size:14px;font-weight:500;margin-top:1px;color:var(--po-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nzpo-ov{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--po-ink);white-space:nowrap}
+.nzpo-call{border:1.5px solid var(--po-ink);background:#fff;color:var(--po-ink);border-radius:9px;padding:6px 14px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap}
+.nzpo-call[hidden]{display:none}
+.nzpo-acts{display:flex;gap:10px;margin-top:12px}
+.nzpo-actf{flex:1;margin:0;display:flex}
+.nzpo-btn-o{flex:1;width:100%;height:42px;border-radius:11px;border:1.5px solid var(--po-ink);color:var(--po-ink);background:#fff;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.nzpo-btn{flex:1;height:42px;border-radius:11px;background:var(--po-ink);color:#fff;border:none;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.nzpo-btn.on{background:#fff;color:var(--po-ink);border:1.5px solid var(--po-ink)}
+.nzpo-acap{font-size:11.5px;color:var(--po-sec);line-height:1.55;margin-top:8px}
+.nzpo-tip{font-size:12px;color:var(--po-sec);text-align:center;line-height:1.6;padding:6px 10px 0}
+.nzpo-empty{background:#fff;border:1px solid var(--po-line);border-radius:14px;padding:34px 24px;text-align:center;display:flex;flex-direction:column;align-items:center}
+.nzpo-eic{font-size:32px;margin-bottom:10px}
+.nzpo-e1{font-size:15px;font-weight:600;color:var(--po-ink)}
+.nzpo-e2{font-size:13px;color:var(--po-sec);line-height:1.7;margin-top:6px}
+.nzpo-ebtn{margin-top:16px;height:40px;padding:0 20px;border-radius:11px;border:1.5px solid var(--po-ink);color:var(--po-ink);font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center}
 </style>
 @endpush
 
@@ -443,6 +502,20 @@ body.nz-dispatch-lock { overflow: hidden; }
             }
         }, { passive: true });
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply); else apply();
+    })();
+
+    (function () {
+        // screen05: 预约分组「转入配送（N）」= 展开该窗口 handover(已出餐)单的逐单「叫车」按钮(业主 0711 定·不批量翻 picked_up)。
+        // 事件委托挂 document(6s 心跳换入 #nzwbRefresh 后是新节点·刷新即回落收起态·符合"逐单叫完即刷新"预期)。叫车本身复用既有 nz-dispatch-open 抽屉。
+        document.addEventListener('click', function (e) {
+            var b = (e.target && e.target.closest) ? e.target.closest('[data-nzpo-reveal]') : null;
+            if (!b) return;
+            var gc = b.closest('.nzpo-gc'); if (!gc) return;
+            if (!b.getAttribute('data-nzpo-orig')) b.setAttribute('data-nzpo-orig', b.textContent);
+            var showing = b.classList.toggle('on');
+            gc.querySelectorAll('.nzpo-call').forEach(function (c) { c.hidden = !showing; });
+            b.textContent = showing ? '收起' : b.getAttribute('data-nzpo-orig');
+        });
     })();
 </script>
 @endpush

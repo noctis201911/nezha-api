@@ -196,4 +196,33 @@ class NezhaPreorder
     {
         return $scheduled === 1 && $orderStatus === 'confirmed';
     }
+
+    /** screen05/11-7:建议提前叫车分钟数(L2·后台可调·默认 30·业主 2026-07-11 定「固定提前量」·非实时 ETA)。 */
+    public static function dispatchLeadMin(): int
+    {
+        $v = (int) (BusinessSetting::where('key', 'nezha_preorder_dispatch_lead_min')->first()->value ?? 30);
+        return $v > 0 ? $v : 30;
+    }
+
+    /** screen05:到窗口提醒阈值分钟数(L2·后台可调·默认 45·下一个窗口起始 ≤ 本值分钟内即在作业台顶部提醒)。 */
+    public static function windowRemindMin(): int
+    {
+        $v = (int) (BusinessSetting::where('key', 'nezha_preorder_window_remind_min')->first()->value ?? 45);
+        return $v > 0 ? $v : 45;
+    }
+
+    /**
+     * screen05 作业台窗口分组的呈现态(纯函数·可单测)。
+     *   done     = 该窗口订单全部已派出(picked_up/delivered)→ 族②绿·已完成。
+     *   hot      = 窗口起始 ≤ remind 阈值(含已进行中/负值)且未全派出 → 族①琥珀·临近(该集中备货叫车)。
+     *   upcoming = 窗口起始还早(> remind 阈值) → 族③紫·未到时段。
+     * $minutesUntilStart = 窗口起始 − now 的分钟数(未来为正、已过为负)。
+     */
+    public static function workbenchGroupState(int $minutesUntilStart, bool $allDispatched, int $windowRemindMin): string
+    {
+        if ($allDispatched) {
+            return 'done';
+        }
+        return $minutesUntilStart <= $windowRemindMin ? 'hot' : 'upcoming';
+    }
 }

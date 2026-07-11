@@ -78,6 +78,16 @@
                         </a>
                     </li>
 
+                    {{-- 哪吒预约下单 screen05/入口链: 「预约设置」(配送时段 + 接单模式 = nezha-windows 页)。按总闸 nezha_preorder_status 显隐——关(dormant 常态)则整入口不出。 --}}
+                    @if(\App\CentralLogics\NezhaPreorder::enabled())
+                    <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/business-settings/nezha-windows*')?'active':''}}">
+                        <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{route('vendor.business-settings.nezha-window.index')}}" title="预约设置">
+                            <i class="tio-calendar nav-icon"></i>
+                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">预约设置</span>
+                        </a>
+                    </li>
+                    @endif
+
                     <!-- Dashboards -->
 
                     <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel')?'active':''}}">
