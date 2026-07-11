@@ -81,4 +81,46 @@ class NezhaPreorder
             ->where('active', 1)
             ->exists();
     }
+
+    /**
+     * 'H:i' 或 'H:i:s' → 当天分钟数(0-1439);格式非法返回 null。纯函数。
+     * 营业时段列存 'H:i:s'(如 22:00:00),窗口输入是 'H:i'——统一归一为分钟再比,免字符串比较踩坑。秒粒度忽略(时段到分钟)。
+     */
+    public static function hmToMinutes(?string $t): ?int
+    {
+        if (!is_string($t) || !preg_match('/^(\d{1,2}):(\d{2})(?::\d{2})?$/', $t, $m)) {
+            return null;
+        }
+        $h = (int) $m[1];
+        $min = (int) $m[2];
+        if ($h > 23 || $min > 59) {
+            return null;
+        }
+        return $h * 60 + $min;
+    }
+
+    /**
+     * 配送窗口 [start,end] 是否**整段**落在某一个营业块 [opening,closing] 内(且 start<end)。纯函数·可单测。
+     * 债辩 §4.2:配窗口时即校验窗口 ⊆ 营业时段(否则下单校验 order_validation_check 会直接拒单)。
+     * $blocks:可迭代,每项数组或模型可 [] 取 opening_time/closing_time(一天可有多营业块,窗口不得跨闭店缝)。
+     */
+    public static function rangeWithinAnyBlock(string $start, string $end, iterable $blocks): bool
+    {
+        $ws = self::hmToMinutes($start);
+        $we = self::hmToMinutes($end);
+        if ($ws === null || $we === null || $ws >= $we) {
+            return false;
+        }
+        foreach ($blocks as $block) {
+            $os = self::hmToMinutes($block['opening_time'] ?? null);
+            $ce = self::hmToMinutes($block['closing_time'] ?? null);
+            if ($os === null || $ce === null) {
+                continue;
+            }
+            if ($os <= $ws && $ce >= $we) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Vendor\AddOnController;
 use App\Http\Controllers\Vendor\AdvertisementController;
 use App\Http\Controllers\Vendor\NezhaTieredDiscountController;
+use App\Http\Controllers\Vendor\NezhaDeliveryWindowController;
 use App\Http\Controllers\Vendor\BusinessSettingsController;
 use App\Http\Controllers\Vendor\CampaignController;
 use App\Http\Controllers\Vendor\CategoryController;
@@ -378,6 +379,10 @@ Route::group(['prefix' => 'withdraw-method', 'as' => 'wallet-method.', 'middlewa
             Route::post('update-setup/{restaurant}', [BusinessSettingsController::class, 'restaurant_setup'])->name('update-setup');
             Route::get('toggle-settings-status/{restaurant}/{status}/{menu}', [BusinessSettingsController::class, 'restaurant_status'])->name('toggle-settings');
             Route::post('nezha-accept-mode', [BusinessSettingsController::class, 'nezha_accept_mode'])->name('nezha-accept-mode'); // 哪吒预约下单 M4 三态接单模式
+            // 哪吒预约下单 M5 配送时段窗口 CRUD(全收总闸 nezha_preorder_status·IDOR 按 session 商家作用域)
+            Route::post('nezha-window', [NezhaDeliveryWindowController::class, 'store'])->name('nezha-window.store');
+            Route::post('nezha-window/{id}/toggle', [NezhaDeliveryWindowController::class, 'toggle'])->name('nezha-window.toggle');
+            Route::post('nezha-window/{id}/delete', [NezhaDeliveryWindowController::class, 'destroy'])->name('nezha-window.destroy');
             Route::get('site_direction_vendor', [BusinessSettingsController::class, 'site_direction_vendor'])->name('site_direction_vendor');
             Route::post('update-meta-data/{restaurant}', [BusinessSettingsController::class, 'updateStoreMetaData'])->name('update-meta-data');
             Route::post('update-opening-closing-status/{restaurant}', [BusinessSettingsController::class, 'updateOpeningClosingStatus'])->name('update-opening-closing-status');
