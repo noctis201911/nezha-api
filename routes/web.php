@@ -89,7 +89,8 @@ Route::get('cancellation-policy', [HomeController::class, 'cancellation_policy']
 
 
 
-Route::get('subscription-invoice/{id}', [HomeController::class, 'subscription_invoice'])->name('subscription_invoice');
+// 哪吒安全(2026-07-11 N-03): 免登录发票下载改签名URL——防匿名枚举 id 下载他人订阅发票(链接由 Helpers signedRoute 生成后邮件发送·合法链带签名)。
+Route::get('subscription-invoice/{id}', [HomeController::class, 'subscription_invoice'])->name('subscription_invoice')->middleware('signed');
 
 
 

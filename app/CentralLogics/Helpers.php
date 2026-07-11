@@ -3772,7 +3772,7 @@ class Helpers
                 } elseif (Helpers::get_mail_status('subscription_shift_mail_status_restaurant') == '1' && $type != 'renew' && $subscription_transaction->plan_type != 'first_purchased') {
                     Mail::to($restaurant?->getRawOriginal('email'))->send(new SubscriptionRenewOrShift($type, $restaurant->name));
                 } elseif (Helpers::get_mail_status('subscription_successful_mail_status_restaurant') == '1' && $subscription_transaction->plan_type == 'first_purchased') {
-                    $url = route('subscription_invoice', ['id' => base64_encode($subscription_transaction->id)]);
+                    $url = \Illuminate\Support\Facades\URL::signedRoute('subscription_invoice', ['id' => base64_encode($subscription_transaction->id)]); // 哪吒安全(2026-07-11 N-03): 签名URL, 邮件里发给商家的合法链带签名, 防匿名枚举 id 下载他人发票
                     Mail::to($restaurant?->getRawOriginal('email'))->send(new SubscriptionSuccessful($restaurant->name, $url));
                 }
             }
