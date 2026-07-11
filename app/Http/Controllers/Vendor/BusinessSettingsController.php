@@ -386,6 +386,62 @@ class BusinessSettingsController extends Controller
         return back();
     }
 
+    /**
+     * 哪吒 预约下单 M4 —— 商家「接单模式」三态统一写入端点(即时 / 即时+预约 / 只接预约)。
+     * 三态 → 底座两 flag(restaurants.schedule_order + restaurant_config.instant_order)权威映射走
+     * NezhaPreorder::modeToFlags;0/0(停业态)由三态构造天然不可能。全程收在总闸 nezha_preorder_status(默认关)下。
+     * 与现有逐 flag toggle-settings 并存、不替换;仅切「怎么接单」,不碰钱/退款/L1(L2/L3·PLAN §9)。
+     * 守卫:(a) 平台级 instant/schedule 被 admin 关时不许启用对应 flag(与 restaurant_status 一致);
+     *       (b) 净新增——预约模式(schedule_order=1)须先配 ≥1 个启用中的配送时段(mockup 01 状态B)。
+     */
+    public function nezha_accept_mode(Request $request)
+    {
+        // 总闸门(默认关)——功能未开放时端点不生效(防御纵深,UI 关时也不该到这)。
+        if (!\App\CentralLogics\NezhaPreorder::enabled()) {
+            Toastr::warning('预约下单功能尚未开放');
+            return back();
+        }
+
+        $flags = \App\CentralLogics\NezhaPreorder::modeToFlags((string) $request->mode);
+        if ($flags === null) {
+            Toastr::warning('无效的接单模式');
+            return back();
+        }
+
+        $restaurant = Helpers::get_restaurant_data();
+
+        // 平台级门(与 restaurant_status 逐 toggle 一致):admin 全局关掉 instant/schedule 时不许商家启用对应 flag。
+        if ($flags['instant_order'] == 1) {
+            $admin_instant = BusinessSetting::where('key', 'instant_order')->first()?->value ?? null;
+            if (!$admin_instant) {
+                Toastr::warning(translate('messages.instant_order_is_disabled_by_admin'));
+                return back();
+            }
+        }
+        if ($flags['schedule_order'] == 1 && !Helpers::schedule_order()) {
+            Toastr::warning(translate('messages.schedule_order_disabled_warning'));
+            return back();
+        }
+
+        // 净新增守卫:预约模式须先有 ≥1 个启用中的配送时段,否则顾客无时段可选(mockup 01 状态B:保存置灰 + 去配置引导)。
+        if ($flags['schedule_order'] == 1 && !\App\CentralLogics\NezhaPreorder::hasActiveWindow($restaurant->id)) {
+            Toastr::warning('请先配置至少 1 个配送时段，再开启预约接单');
+            return back();
+        }
+
+        // 原子写两 flag(与现网列/语义一致,不新增真相源;避免中途出现 0/0 或半态)。
+        \Illuminate\Support\Facades\DB::transaction(function () use ($restaurant, $flags) {
+            $restaurant->schedule_order = $flags['schedule_order'];
+            $restaurant->save();
+            $conf = RestaurantConfig::firstOrNew(['restaurant_id' => $restaurant->id]);
+            $conf->instant_order = $flags['instant_order'];
+            $conf->save();
+        });
+
+        Toastr::success('接单模式已更新');
+        return back();
+    }
+
     public function active_status(Request $request)
     {
         $restaurant = Helpers::get_restaurant_data();

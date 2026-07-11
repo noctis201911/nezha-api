@@ -155,6 +155,12 @@ return [
 
         /* ═══ D. 未就绪/有前置——【暂不开】(expected=0, ≠0 即红) ═══ */
         [
+            'key' => 'nezha_preorder_status', 'label' => '预约下单/集中配送(总闸)', 'section' => 'D', 'level' => 'L2',
+            'expected' => 0, 'value_type' => 'bool',
+            'prereq' => 'Phase1 分阶段 dormant(M1地基/M2窗口锚定时钟/M3取消并发锁/M4三态接单模式 已上线未部署)。真开=①全链 staging QA(含 M3 真并发下单 harness)②业主批准③前端预约 UI 6屏截图点头。开=商家可选三态接单模式(即时/即时+预约/只接预约)+顾客选配送时段+作业台分组;关=三态抽屉不显·下单选窗口不透出·作业台分组隐·端点 nezha_accept_mode 直接拒。见 fable-brief/PLAN_preorder_scheduled_delivery.md §16',
+            'settings_route' => null, 'ops_note' => "无专用后台开关 UI(DB flag,flip 走 tinker/DB)。翻开须 {$OPS_ACTIVATE}(忙碌模式同经验:reload 不够·进程内 static 读旧值)",
+        ],
+        [
             'key' => 'nezha_refund_dispute_status', 'label' => '退款争议流(denied 凭证)', 'section' => 'D', 'level' => 'L1-2',
             'l1_clause' => $L1['L1-2'], 'expected' => 0, 'value_type' => 'bool',
             'prereq' => 'R1-R4 全实装 dormant·🔴真开须业主批准+亲测整条争议链(商家发起→超管裁决→逾期恢复)',

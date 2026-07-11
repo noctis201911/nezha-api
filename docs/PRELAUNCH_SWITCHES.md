@@ -50,6 +50,7 @@
 
 | 开关 key | 现值 | 卡在哪 / 何时才能开 | 等级 |
 |---|---|---|---|
+| `nezha_preorder_status` | 0 | 预约下单/集中配送**总闸**(Phase1 分阶段 dormant:M1 地基 / M2 窗口锚定时钟 / M3 取消并发锁 / M4 三态接单模式 均已上线未部署)。开=商家可选三态接单模式(即时/即时+预约/只接预约)+ 顾客选配送时段 + 作业台分组;关=三态抽屉不显、下单选窗口不透出、作业台分组隐、`nezha_accept_mode` 端点直接拒。🔴 真开前须①全链 staging QA(含 M3 真并发下单 harness)②业主批准③前端预约 UI 6 屏截图点头④翻闸后 `php artisan cache:clear` + php-fpm **restart**(非 reload·进程内 static)。见 `fable-brief/PLAN_preorder_scheduled_delivery.md §16`。 | L2 |
 | `nezha_refund_dispute_status` | 0 | denied 凭证争议流(R1-R4 全实装·dormant)。开=商家可对「待退款(段B·凭证在案先核后退)」发起争议→运营在「退款留痕 → 退款争议裁决」裁决(维持退款义务 / 核实未收款);逾期计时锚点 R4 已接(维持后从裁决时刻重算 + 催办重周期)。关=入口/弹层/裁决动作全不触发。🔴 技术就绪, 真开前须业主批准 + 亲测整条争议链(商家发起→超管裁决→逾期恢复)。 | 🔴L1-2 |
 | `nezha_ad_auction_status` | 0 | 广告竞价 CPC。🔴 INVARIANTS 钉死：C1 后端加固(throttle+按日上限+自点击剔除)+C2 前端触发正确性+首页推广条去 merit 标签，**三者齐前不得真开**。见 `docs/PLAN_ad_auction.md §11`。 | L2 |
 | `nezha_ad_billing_status` | 0 | 广告 CPT 按天计费。广告变现未启动，现广告免费。想收费再开（确认单价/商家知情/有充值通道）。 | L2 |

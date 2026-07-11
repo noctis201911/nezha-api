@@ -377,6 +377,7 @@ Route::group(['prefix' => 'withdraw-method', 'as' => 'wallet-method.', 'middlewa
             Route::get('nezha-store-mode', [BusinessSettingsController::class, 'nezha_store_mode'])->name('nezha-store-mode');
             Route::post('update-setup/{restaurant}', [BusinessSettingsController::class, 'restaurant_setup'])->name('update-setup');
             Route::get('toggle-settings-status/{restaurant}/{status}/{menu}', [BusinessSettingsController::class, 'restaurant_status'])->name('toggle-settings');
+            Route::post('nezha-accept-mode', [BusinessSettingsController::class, 'nezha_accept_mode'])->name('nezha-accept-mode'); // 哪吒预约下单 M4 三态接单模式
             Route::get('site_direction_vendor', [BusinessSettingsController::class, 'site_direction_vendor'])->name('site_direction_vendor');
             Route::post('update-meta-data/{restaurant}', [BusinessSettingsController::class, 'updateStoreMetaData'])->name('update-meta-data');
             Route::post('update-opening-closing-status/{restaurant}', [BusinessSettingsController::class, 'updateOpeningClosingStatus'])->name('update-opening-closing-status');
