@@ -166,7 +166,10 @@ class DeliveryManController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)],403);
         }
 
-        $delivery_man = DeliveryMan::find($request->delivery_man_id);
+        // 哪吒安全(2026-07-11 N-05): IDOR——按 session 商家 restaurant_id 作用域, 防跨店操作他人骑手。
+        $delivery_man = DeliveryMan::where('id', $request->delivery_man_id)
+            ->where('restaurant_id', $request->vendor?->restaurants[0]?->id)
+            ->first();
         if(!$delivery_man)
         {
             return response()->json([
@@ -230,7 +233,10 @@ class DeliveryManController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)],403);
         }
 
-        $delivery_man = DeliveryMan::find($id);
+        // 哪吒安全(2026-07-11 N-05): IDOR——按 session 商家 restaurant_id 作用域。
+        $delivery_man = DeliveryMan::where('id', $id)
+            ->where('restaurant_id', $request->vendor?->restaurants[0]?->id)
+            ->first();
         if(!$delivery_man)
         {
             return response()->json([
@@ -284,7 +290,10 @@ class DeliveryManController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)],403);
         }
 
-        $delivery_man = DeliveryMan::find($request->delivery_man_id);
+        // 哪吒安全(2026-07-11 N-05): IDOR——按 session 商家 restaurant_id 作用域。
+        $delivery_man = DeliveryMan::where('id', $request->delivery_man_id)
+            ->where('restaurant_id', $request->vendor?->restaurants[0]?->id)
+            ->first();
         if(!$delivery_man)
         {
             return response()->json([
