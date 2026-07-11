@@ -93,9 +93,36 @@ trait  Processor
     {
         $payment_info = PaymentRequest::find($payment_info->id);
         $token_string = 'payment_method=' . $payment_info->payment_method . '&&attribute_id=' . $payment_info->attribute_id . '&&transaction_reference=' . $payment_info->transaction_id;
-        if (in_array($payment_info->payment_platform, ['web', 'app']) && $payment_info['external_redirect_link'] != null) {
+        // 哪吒安全(2026-07-11 N-11): 跳转 sink 补白名单二次校验——external_redirect_link 源头有未过滤路径(Wallet/DM callback·NZ-SEC-004 只修了 PaymentController), 挡开放跳转 + base64 token 外泄; 不安全则回退站内 payment-* 命名路由。
+        if (in_array($payment_info->payment_platform, ['web', 'app']) && $payment_info['external_redirect_link'] != null && $this->nezhaIsSafeRedirect($payment_info['external_redirect_link'])) {
             return redirect($payment_info['external_redirect_link'] . '?flag=' . $payment_flag . '&&token=' . base64_encode($token_string));
         }
         return redirect()->route('payment-' . $payment_flag, ['token' => base64_encode($token_string)]);
+    }
+
+    // 哪吒安全(2026-07-11 N-11): 支付回调跳转白名单(同 PaymentController::isSafeCallback 口径)——站内相对路径或本平台 host 的 http(s); 拒外部 host/协议相对//、js:data:vbscript:、CR-LF/控制字符、超长。
+    private function nezhaIsSafeRedirect($url): bool
+    {
+        if (!is_string($url) || $url === '' || strlen($url) > 512) {
+            return false;
+        }
+        if (preg_match('/[\x00-\x1f\x7f]|\s/', $url)) {
+            return false;
+        }
+        $lower = strtolower($url);
+        if (str_starts_with($lower, 'javascript:') || str_starts_with($lower, 'data:') || str_starts_with($lower, 'vbscript:')) {
+            return false;
+        }
+        if (str_starts_with($url, '/') && !str_starts_with($url, '//')) {
+            return true;
+        }
+        $parts = parse_url($url);
+        if ($parts === false || empty($parts['scheme']) || empty($parts['host'])) {
+            return false;
+        }
+        if (!in_array(strtolower($parts['scheme']), ['http', 'https'], true)) {
+            return false;
+        }
+        return in_array(strtolower($parts['host']), ['nezha.am', 'www.nezha.am', 'api.nezha.am'], true);
     }
 }
