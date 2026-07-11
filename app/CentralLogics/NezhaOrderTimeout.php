@@ -46,6 +46,7 @@ class NezhaOrderTimeout
             'nezha_timeout_prep_red_min',
             'nezha_timeout_handover_min',
             'nezha_timeout_picked_min',
+            'nezha_preorder_timeout_lead_min',
         ])->pluck('value', 'key');
 
         self::$settingsCache = [
@@ -58,6 +59,8 @@ class NezhaOrderTimeout
             'prep_red'       => (int) ($rows['nezha_timeout_prep_red_min'] ?? 15),
             'handover'       => (int) ($rows['nezha_timeout_handover_min'] ?? 45),
             'picked'         => (int) ($rows['nezha_timeout_picked_min'] ?? 90),
+            // 预约单窗口锚定时钟提前量(分钟): 计时起点=schedule_at−该值; 默认0=窗口起始才启超时钟。仅 scheduled=1 单生效。
+            'preorder_lead'  => (int) ($rows['nezha_preorder_timeout_lead_min'] ?? 0),
         ];
 
         return self::$settingsCache;
@@ -67,13 +70,18 @@ class NezhaOrderTimeout
     public static function phase(Order $order): ?string
     {
         $s = $order->order_status;
+        // 预约单(scheduled=1)P0 窗口锚定: A/B/C 计时阶段在窗口临近前(now < schedule_at−lead)一律归 null——
+        // 展示层不显"将自动取消"假警、动作层(sweep 经 clockStart)天然跳过, 杜绝预约单承诺窗口前被误杀。D/E 不受影响。
         if ($s === 'pending' && $order->payment_method === 'offline_payment') {
+            if (self::isScheduled($order) && self::beforePreorderClock($order)) { return null; }
             return self::PHASE_PROOF;
         }
         if ($s === 'confirmed') {
+            if (self::isScheduled($order) && self::beforePreorderClock($order)) { return null; }
             return self::PHASE_ACCEPT;
         }
         if ($s === 'processing') {
+            if (self::isScheduled($order) && self::beforePreorderClock($order)) { return null; }
             return self::PHASE_PREP;
         }
         // D/E 仅 delivery 单计配送超时；take_away 的 handover=可取餐、非配送延迟，不计超时。
@@ -97,7 +105,40 @@ class NezhaOrderTimeout
             self::PHASE_PICKED   => $order->picked_up,  // 仅真实配送时间，无则 null
             default              => null,
         };
-        return $raw ? Carbon::parse($raw) : null;
+        $normal = $raw ? Carbon::parse($raw) : null;
+
+        // 预约单(scheduled=1)P0 窗口锚定时钟(仅 A/B/C 计时阶段; D/E 配送阶段不改): 计时起点 = max(常规锚点, schedule_at−lead)。
+        // 窗口临近前(now < schedule_at−lead)返回 null → sweep 的 !$start continue 天然跳过、describe 归 null(与 phase() 一致),
+        // 杜绝预约单在承诺窗口前几天被当"商家超时未接单"自动取消(P0 地雷)。窗口临近后以窗口点起表(防用几天前的
+        // created_at/confirmed 造成一进阶段就秒超时)。改动触 L1-1/L1-2(类注释), 业主 2026-07-11 已批准。
+        if (self::isScheduled($order)
+            && in_array($phase, [self::PHASE_PROOF, self::PHASE_ACCEPT, self::PHASE_PREP], true)) {
+            $windowStart = self::preorderClockAnchor($order);
+            if (Carbon::now()->lt($windowStart)) {
+                return null; // 窗口未临近: 超时计时未启动
+            }
+            return ($normal && $normal->gt($windowStart)) ? $normal : $windowStart;
+        }
+
+        return $normal;
+    }
+
+    /** 是否为真实预约单(scheduled=1 且有 schedule_at)。即时单(scheduled=0, schedule_at=now)恒 false → 窗口锚定逻辑一律不触发、零回归。 */
+    public static function isScheduled(Order $order): bool
+    {
+        return (int) ($order->scheduled ?? 0) === 1 && !empty($order->schedule_at);
+    }
+
+    /** 预约单窗口锚定点 = schedule_at − preorder_lead(分钟)。 */
+    public static function preorderClockAnchor(Order $order): Carbon
+    {
+        return Carbon::parse($order->schedule_at)->subMinutes(self::settings()['preorder_lead']);
+    }
+
+    /** 预约单当前是否"窗口尚未临近"(now < 窗口锚定点)——此期间不计任何超时。 */
+    public static function beforePreorderClock(Order $order): bool
+    {
+        return Carbon::now()->lt(self::preorderClockAnchor($order));
     }
 
     /**

@@ -82,6 +82,9 @@ class OrderTimeoutSweep extends Command
             }
 
             // 有凭证图：可能已付待商家核对
+            // 预约单(scheduled=1)P0: 已付款预约单绝不自动取消(与 D/E「钱已付不自动取消」一致)——不 email/不升级/不取消, 直接跳。
+            // 未付款预约单(上面 !$hasProof 分支)窗口临近仍会被清扫(clockStart 窗口锚定, 承诺窗口前不启表)。业主 2026-07-11 已批。
+            if (NezhaOrderTimeout::isScheduled($order)) { continue; }
             $this->escalateOwnerUnbound($order, $age); // 哪吒 P2-9: 商家未绑 TG(收不到催单)→ 不等阈值, 首次 sweep 即升级业主(dormant·共享幂等)
             if ($age >= $cfg['email_merchant']) {
                 $acted += $this->fireOnce($order->id, 'email_merchant', function () use ($order, $age) {
@@ -107,6 +110,8 @@ class OrderTimeoutSweep extends Command
             if (!$start) { continue; }
             $age = (int) floor($start->diffInSeconds($now) / 60);
 
+            // 预约单(scheduled=1)P0: 已付款/已确认预约单绝不自动取消——窗口临近后由到窗口提醒机制(非本超时钟)驱动商家履约。业主 2026-07-11 已批。
+            if (NezhaOrderTimeout::isScheduled($order)) { continue; }
             $this->escalateOwnerUnbound($order, $age); // 哪吒 P2-9: 商家未绑 TG → 不等阈值, 首次 sweep 即升级业主(dormant·共享幂等)
             if ($age >= $cfg['email_merchant']) {
                 $acted += $this->fireOnce($order->id, 'email_merchant', function () use ($order, $age) {
@@ -131,6 +136,8 @@ class OrderTimeoutSweep extends Command
             $start = NezhaOrderTimeout::clockStart($order, NezhaOrderTimeout::PHASE_PREP);
             if (!$start) { continue; }
             $age = (int) floor($start->diffInSeconds($now) / 60);
+            // 预约单(scheduled=1)P0: 备餐中的预约单不计「备餐超时」升级(其时限由配送窗口而非即时钟界定)。业主 2026-07-11 已批。
+            if (NezhaOrderTimeout::isScheduled($order)) { continue; }
             $etaMin = is_numeric($order->processing_time) && (int) $order->processing_time > 0
                 ? (int) $order->processing_time : null;
             // 关键修复(2026-06-21): 无 ETA 不再在第 0 分钟立刻升级客服(避免每张未填出餐时间的单都骚扰客服,
