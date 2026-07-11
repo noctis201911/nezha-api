@@ -92,6 +92,22 @@ case "$SANC" in
   STALE:*) add "制裁名单已 ${SANC#STALE:}h 未成功同步(>30h) — OFAC SDN 更新停滞, 筛查在用陈旧名单" "sanction" ;;
 esac
 
+# 9. 前端 build 运行期漂移哨兵 (0711 退版事故: pm2 从旧 dump/resurrect 顶回旧 build, 部署时健康门管不到; 只告警不自愈)
+exec 8>>/tmp/nezha_webdeploy.lock
+if flock -n 8; then                     # 抢到锁=当前无部署进行(部署会持锁), 躲开 restart 窗口误报
+  EXP=$(cat "$(readlink /www/wwwroot/web-deploy/current 2>/dev/null)/.next/BUILD_ID" 2>/dev/null)
+  wbid(){ curl -s -m8 http://127.0.0.1:3000/home | grep -aoE '"buildId":"[^"]*"' | head -1 | sed -E 's/.*:"([^"]*)"/\1/'; }
+  SRV=$(wbid)
+  if [ -z "$EXP" ]; then
+    add "web-deploy/current 或其 .next/BUILD_ID 读不到 — 前端 release 结构异常" "webdrift"
+  elif [ -n "$SRV" ] && [ "$SRV" != "$EXP" ]; then
+    sleep 3; SRV=$(wbid)                 # 3秒复查, 滤掉部署重启瞬时窗口
+    [ -n "$SRV" ] && [ "$SRV" != "$EXP" ] && add "前端实际 build=$SRV != current release=$EXP — 疑 pm2 顶回旧 build(运行期漂移). 修: node nz.js run bash /www/wwwroot/nezha.am/nzbuild.sh (内含 pm2 save)" "webdrift"
+  fi
+  flock -u 8
+fi
+exec 8>&-
+
 [ -z "$ALERTS" ] && exit 0
 
 # 冷却: 按"告警类别集合"做指纹, 同一组问题1小时内只发一封; 出现新类别立即另发
