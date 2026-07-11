@@ -225,3 +225,10 @@
 - ⚠️ 业主本机 Test-NetConnection 29928=True: 因业主挂着服务器自建 VPN(出口=服务器本机), 流量经 loopback 回到 29928 绕过外网接口 block = 业主私有路径, 非公网可达(公网仍 DROP; 业主手机蜂窝关VPN 自验超时)。
 - 访问: ①桌面 `打开aaPanel面板(安全隧道).bat`(ssh -L 29928:127.0.0.1:29928, 任何网络) ②挂VPN时也可直开原URL。更严(仅隧道)可把 aaPanel listen 改 127.0.0.1(未做, 更侵入+aaPanel可能重置)。
 - 回滚: `ufw allow 29928/tcp` 恢复。ufw 备份 /root/nezha-s2-ufw-backup-0710.txt。
+### 2026-07-10 安全路线图 S4(Part A) — SSH 登录密钥轮换(活跃键)
+- 等级 🟡 主机层加固。批准人: 业主 2026-07-10(在场 + Hetzner 云控制台逃生舱已确认)。
+- 背景: root SSH 登录密钥开发期视为已泄露(QA_MASTER §三欠账)。authorized_keys 原 4 把 root 键: #1 claude-deploy-key(别窗指定备用·git/AGENTS/memory查无记录·业主确认保留) #2 claude-code-nezha(本机id_ed25519·8次) #3 root@stackfood-prod-eu(服务器自用·2次) #4 Administrator@PC(RSA·id_rsa·nz.js活跃键·auth.log 60498次)。
+- 动作(overlap-swap 全程不断线): 服务器 ssh-keygen 生成新 ed25519(nezha-nzjs-2026-07-rotated)→加入 authorized_keys→nz.js get 下载私钥到业主本机(私钥仅本机·服务器 temp 即删)→plain ssh 验新键登录 exit0→本机 id_rsa 换新键(旧RSA备份 id_rsa.old-rotated-0710)→nz.js 验走新键 OK→authorized_keys 删旧 RSA(grep -v Administrator@PC)→验: nz.js 新键 POST_REMOVAL_OK + 旧RSA键 Permission denied exit255(正确拒绝)。
+- 保留: #1/#2/#3 未动。GitHub 出站部署键 /root/.ssh/github_nezha 独立未轮换(另议)。
+- 备份: authorized_keys.bak.s4.0710 + .pre-rsaremove.0710(服务器); id_rsa.old-rotated-0710(本机)。
+- ⬜ Part B 密码轮换(root/aaPanel/超管admin)业主自设(不经AI): 超管走后台设置改密·root走 passwd·aaPanel走面板/bt。
