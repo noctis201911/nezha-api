@@ -30,6 +30,21 @@ class NezhaDeliveryWindowController extends Controller
         return null;
     }
 
+    /**
+     * 配送时段配置页(mockup 02·浅白专业 DS §19)。渲染本店各 day 的窗口 + 营业时段(供「时段须在营业时间内」提示与校验)。
+     * 页面本身渲染不 gate(便于隔离预览截图·纯读无副作用), mutations 端点各自 gated 403;真实入口链另按总闸 nezha_preorder_status 显隐。
+     */
+    public function index(Request $request)
+    {
+        $rid = Helpers::get_restaurant_id();
+        $windowsByDay = NezhaDeliveryWindow::where('restaurant_id', $rid)
+            ->orderBy('start_time')->get()->groupBy('day');
+        $hoursByDay = RestaurantSchedule::where('restaurant_id', $rid)
+            ->orderBy('opening_time')->get()->groupBy('day');
+        $preorderOn = NezhaPreorder::enabled();
+        return view('vendor-views.business-settings.nezha-delivery-windows', compact('windowsByDay', 'hoursByDay', 'preorderOn'));
+    }
+
     /** 加窗口。 */
     public function store(Request $request)
     {

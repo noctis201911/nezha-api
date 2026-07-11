@@ -380,6 +380,7 @@ Route::group(['prefix' => 'withdraw-method', 'as' => 'wallet-method.', 'middlewa
             Route::get('toggle-settings-status/{restaurant}/{status}/{menu}', [BusinessSettingsController::class, 'restaurant_status'])->name('toggle-settings');
             Route::post('nezha-accept-mode', [BusinessSettingsController::class, 'nezha_accept_mode'])->name('nezha-accept-mode'); // 哪吒预约下单 M4 三态接单模式
             // 哪吒预约下单 M5 配送时段窗口 CRUD(全收总闸 nezha_preorder_status·IDOR 按 session 商家作用域)
+            Route::get('nezha-windows', [NezhaDeliveryWindowController::class, 'index'])->name('nezha-window.index'); // M5前端·配送时段配置页(mockup02)
             Route::post('nezha-window', [NezhaDeliveryWindowController::class, 'store'])->name('nezha-window.store');
             Route::post('nezha-window/{id}/toggle', [NezhaDeliveryWindowController::class, 'toggle'])->name('nezha-window.toggle');
             Route::post('nezha-window/{id}/delete', [NezhaDeliveryWindowController::class, 'destroy'])->name('nezha-window.destroy');
