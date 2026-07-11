@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\CentralLogics\Helpers;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * 本地生活商家（后台录入）。前端商家列表/商家店铺页以本表为准。
@@ -16,7 +18,7 @@ class LocalLifeMerchant extends Model
         'rating', 'google_rating', 'google_rating_url',
         'area', 'address', 'latitude', 'longitude',
         'open_days', 'open_time', 'close_time', 'hours_note',
-        'intro', 'services', 'has_offer', 'offer_text',
+        'intro', 'services', 'video_links', 'has_offer', 'offer_text',
         'is_sensitive', 'sort_order', 'status',
     ];
 
@@ -25,6 +27,7 @@ class LocalLifeMerchant extends Model
         'contacts'      => 'array',
         'open_days'     => 'array',
         'services'      => 'array',
+        'video_links'   => 'array',
         'rating'        => 'float',
         'google_rating' => 'float',
         'latitude'      => 'float',
@@ -123,5 +126,94 @@ class LocalLifeMerchant extends Model
             ];
         }
         return $out;
+    }
+
+    /* ───────────── 店内视频外链卡（档1·L1-1 纯信息墙·外跳不嵌入） ───────────── */
+
+    /** 视频封面存储目录（与相册 / Helpers::upload 一致） */
+    private const VIDEO_IMG_DIR = 'local-life-merchant';
+    private const VIDEO_MAX = 6;
+
+    /**
+     * 平台 → 允许的 host 后缀（子域一律允许：host === 域名 或 以「.域名」结尾）。
+     * v.douyin.com / iesdouyin.com 均为抖音；vm./vt.tiktok.com 均为 tiktok.com 子域。
+     */
+    private const VIDEO_DOMAINS = [
+        'douyin'      => ['douyin.com', 'iesdouyin.com'],
+        'xiaohongshu' => ['xiaohongshu.com', 'xhslink.com'],
+        'tiktok'      => ['tiktok.com'],
+        'instagram'   => ['instagram.com', 'instagr.am'],
+    ];
+
+    private const VIDEO_LABELS = [
+        'douyin'      => '抖音',
+        'xiaohongshu' => '小红书',
+        'tiktok'      => 'TikTok',
+        'instagram'   => 'Instagram',
+    ];
+
+    /**
+     * 规范化店内视频外链（详情页视频卡用）。逐条过滤：
+     *   ① platform ∈ 四平台白名单
+     *   ② url = https + host 后缀过白名单（防 evil.com/douyin.com 路径伪装）
+     *   ③ cover 非空且文件真实存在（悬空文件名守卫，同 merchantHeroPath 思路）
+     * 产出 [{platform, platform_label(中文名), url, cover_url(全量URL), title?}]，上限截前 6。
+     * 仅 merchantDetail API 在总闸开时调用；闸关/空 → 前端整卡不显。
+     * L1-1：纯展示 + 外跳，无下单/预订/团购。
+     */
+    public function normalizedVideoLinks(): array
+    {
+        $raw = is_array($this->video_links) ? $this->video_links : [];
+        $out = [];
+        foreach ($raw as $v) {
+            if (count($out) >= self::VIDEO_MAX) {
+                break;
+            }
+            if (!is_array($v)) {
+                continue;
+            }
+            $platform = strtolower(trim((string) ($v['platform'] ?? '')));
+            $url      = trim((string) ($v['url'] ?? ''));
+            $cover    = basename(trim((string) ($v['cover'] ?? '')));
+            $title    = trim((string) ($v['title'] ?? ''));
+            if (!isset(self::VIDEO_DOMAINS[$platform]) || $url === '' || $cover === '') {
+                continue;
+            }
+            if (!$this->videoUrlAllowed($url, self::VIDEO_DOMAINS[$platform])) {
+                continue;
+            }
+            // 封面文件存在守卫：悬空文件名 → 丢弃该条（禁「无封面显图标卡」回落）
+            if (!Storage::disk('public')->exists(self::VIDEO_IMG_DIR . '/' . $cover)) {
+                continue;
+            }
+            $coverUrl = Helpers::get_full_url(self::VIDEO_IMG_DIR, $cover, 'public');
+            if (!$coverUrl) {
+                continue;
+            }
+            $out[] = [
+                'platform'       => $platform,
+                'platform_label' => self::VIDEO_LABELS[$platform],
+                'url'            => $url,
+                'cover_url'      => $coverUrl,
+                'title'          => $title !== '' ? $title : null,
+            ];
+        }
+        return $out;
+    }
+
+    /** url 只认 https + host 后缀命中白名单（子域允许）。防路径/查询串伪装。 */
+    private function videoUrlAllowed(string $url, array $allowed): bool
+    {
+        $p = parse_url($url);
+        if (($p['scheme'] ?? '') !== 'https' || empty($p['host'])) {
+            return false;
+        }
+        $host = strtolower($p['host']);
+        foreach ($allowed as $d) {
+            if ($host === $d || str_ends_with($host, '.' . $d)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

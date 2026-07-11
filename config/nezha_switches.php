@@ -207,6 +207,12 @@ return [
             'prereq' => 'step4-4/step5 实装 dormant·资金流出路径·灰度存量 7 店 KYC 未录→保持关·真开前 staging 单店试跑',
             'settings_route' => 'admin.nezha-offboard.index', 'ops_note' => "{$OPS_FORGET}。超管审批队列 admin/nezha-offboard 不受本闸限、始终可见",
         ],
+        [
+            'key' => 'nezha_merchant_video_status', 'label' => '本地生活商家店内视频卡', 'section' => 'D', 'level' => 'L1-1',
+            'l1_clause' => $L1['L1-1'] . '(纯信息墙·外链外跳不嵌入 iframe)', 'expected' => 0, 'value_type' => 'bool',
+            'prereq' => '档1 外链视频卡全栈上线 dormant·真开=业主看隔离预览截图点头后手动翻(翻后 cache:clear)。=0 时 merchantDetail 不透出 video_links·前端整卡不显。见 fable-brief/HANDOFF_locallife_merchant_video.md',
+            'settings_route' => null, 'ops_note' => "无专用后台开关 UI(DB flag)。{$OPS_FORGET}。与商家页笔记同套(内容层总闸·flip 走 tinker/DB)",
+        ],
         // 〔selfserve / merchant_notes 原在 D·2026-07-10 业主拍板 reclassify 至 F 已开(已放量)——见文件末 F 区〕
         [
             'key' => 'nezha_topup_status', 'label' => '自助充值申请总闸', 'section' => 'D', 'level' => 'L2',

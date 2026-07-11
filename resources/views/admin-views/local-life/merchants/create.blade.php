@@ -15,6 +15,9 @@
     $svcRows = count($existingServices) ? $existingServices : [[]];
     $svcLayouts = ['studio'=>'开间','1b1l'=>'一室一厅','2b1l'=>'两室一厅','3b1l'=>'三室一厅','4plus'=>'四室及以上'];
     $svcAmenities = ['furniture'=>'家具','washer'=>'洗衣机','fridge'=>'冰箱','ac'=>'空调','heating'=>'暖气','elevator'=>'电梯','parking'=>'停车位','balcony'=>'阳台','private_bath'=>'独立卫浴','kitchen'=>'可做饭'];
+    // 店内视频外链卡（档1）：video_links[{platform,url,cover,title?}]，四平台白名单 + 封面强制。
+    $videoRows = old('video_links', $isEdit && is_array($merchant->video_links) ? $merchant->video_links : []);
+    $videoPlatforms = ['douyin'=>'抖音','xiaohongshu'=>'小红书','tiktok'=>'TikTok','instagram'=>'Instagram'];
 @endphp
 
 <div class="content container-fluid">
@@ -266,6 +269,43 @@
                         <small class="text-muted d-block mt-1">电话=可拨号 / WhatsApp=填带国码号(如 +374 43 329475) / Telegram=填用户名(如 @name) / 微信=填微信号(二维码另在右侧「微信二维码」上传)。平台只展示，不代收款。</small>
                     </div>
                 </div>
+
+                <div class="card mb-3">
+                    <div class="card-header"><h5 class="mb-0">店内视频（外链 · 点击外跳观看）</h5></div>
+                    <div class="card-body">
+                        <div id="nz-videos-rows">
+                            @foreach($videoRows as $vi => $v)
+                                @php $vCover = basename(trim((string)($v['cover'] ?? ''))); @endphp
+                                <div class="nz-video-row border rounded p-2 mb-2">
+                                    <div class="row g-2 align-items-center">
+                                        <div class="col-md-2">
+                                            <select name="video_links[{{ $vi }}][platform]" class="form-control form-control-sm">
+                                                @foreach($videoPlatforms as $pk => $pl)
+                                                    <option value="{{ $pk }}" {{ ($v['platform'] ?? '') === $pk ? 'selected' : '' }}>{{ $pl }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div class="col-md-5"><input type="text" name="video_links[{{ $vi }}][url]" class="form-control form-control-sm" placeholder="视频链接(如 https://v.douyin.com/xxx)" value="{{ $v['url'] ?? '' }}"></div>
+                                        <div class="col-md-3"><input type="text" name="video_links[{{ $vi }}][title]" class="form-control form-control-sm" placeholder="标题(可空·≤30·不显示在卡上)" value="{{ $v['title'] ?? '' }}"></div>
+                                        <div class="col-md-2 text-center"><button type="button" class="btn btn-sm btn-outline-danger nz-del-row" title="删除">&times;</button></div>
+                                    </div>
+                                    <div class="row g-2 mt-1 align-items-center">
+                                        <div class="col-12">
+                                            <label class="text-muted" style="font-size:11px">封面图（必传 · 建议竖图 3:4，横图自动居中裁切）</label>
+                                            @if($vCover !== '')
+                                                <div class="mb-1"><img src="{{ \App\CentralLogics\Helpers::get_full_url('local-life-merchant', $vCover, 'public') }}" style="height:56px;border-radius:8px"></div>
+                                                <input type="hidden" name="video_links[{{ $vi }}][existing_cover]" value="{{ $vCover }}">
+                                            @endif
+                                            <input type="file" name="video_links[{{ $vi }}][cover]" accept="image/*" class="form-control form-control-sm">
+                                        </div>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                        <button type="button" class="btn btn-sm btn--primary mt-1" id="nz-add-video">+ 添加视频</button>
+                        <small class="text-muted d-block mt-1">仅接受 抖音 / 小红书 / TikTok / Instagram 的 https 视频或分享短链（不接受主页链接、其它平台、非视频链接）。每条必须上传封面（平台抓不到官方缩略图）。每店最多 6 条。视频点击后外跳对应平台观看，站内不嵌入播放。审核请打开落地页确认是本店视频、非引流私域或无关内容。总闸 <code>nezha_merchant_video_status</code> 关闭时顾客端不显示。</small>
+                    </div>
+                </div>
             </div>
 
             <div class="col-12 col-lg-4 mb-3">
@@ -383,7 +423,7 @@
     document.addEventListener('click', function (e) {
         var btn = e.target.closest ? e.target.closest('.nz-del-row') : null;
         if (!btn) return;
-        var row = btn.closest('.nz-service-row') || btn.closest('.nz-contact-row');
+        var row = btn.closest('.nz-service-row') || btn.closest('.nz-contact-row') || btn.closest('.nz-video-row');
         if (row) row.parentNode.removeChild(row);
     });
 
@@ -437,6 +477,28 @@
                 '<div class="col-md-3"><input type="text" name="contacts[' + i + '][label]" class="form-control form-control-sm" placeholder="备注(可空)"></div>' +
                 '<div class="col-md-1 text-center"><button type="button" class="btn btn-sm btn-outline-danger nz-del-row" title="删除">&times;</button></div>';
             ctRows.appendChild(div);
+        });
+    }
+
+    // ---- 店内视频：添加 ----
+    var vidIdx = 1000;
+    var addVid = document.getElementById('nz-add-video');
+    var vidRows = document.getElementById('nz-videos-rows');
+    var vidPlatformOptions = '<option value="douyin">抖音</option><option value="xiaohongshu">小红书</option><option value="tiktok">TikTok</option><option value="instagram">Instagram</option>';
+    if (addVid && vidRows) {
+        addVid.addEventListener('click', function () {
+            var i = vidIdx++;
+            var div = document.createElement('div');
+            div.className = 'nz-video-row border rounded p-2 mb-2';
+            div.innerHTML =
+                '<div class="row g-2 align-items-center">' +
+                '<div class="col-md-2"><select name="video_links[' + i + '][platform]" class="form-control form-control-sm">' + vidPlatformOptions + '</select></div>' +
+                '<div class="col-md-5"><input type="text" name="video_links[' + i + '][url]" class="form-control form-control-sm" placeholder="视频链接(如 https://v.douyin.com/xxx)"></div>' +
+                '<div class="col-md-3"><input type="text" name="video_links[' + i + '][title]" class="form-control form-control-sm" placeholder="标题(可空·≤30·不显示在卡上)"></div>' +
+                '<div class="col-md-2 text-center"><button type="button" class="btn btn-sm btn-outline-danger nz-del-row" title="删除">&times;</button></div>' +
+                '</div>' +
+                '<div class="row g-2 mt-1 align-items-center"><div class="col-12"><label class="text-muted" style="font-size:11px">封面图（必传 · 建议竖图 3:4，横图自动居中裁切）</label><input type="file" name="video_links[' + i + '][cover]" accept="image/*" class="form-control form-control-sm"></div></div>';
+            vidRows.appendChild(div);
         });
     }
 })();

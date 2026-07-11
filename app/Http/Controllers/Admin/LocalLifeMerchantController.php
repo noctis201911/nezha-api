@@ -239,6 +239,13 @@ class LocalLifeMerchantController extends Controller
             'contacts.*.method' => 'nullable|string|in:wechat,phone,whatsapp,telegram',
             'contacts.*.value'  => 'nullable|string|max:120',
             'contacts.*.label'  => 'nullable|string|max:40',
+            // 店内视频外链卡（档1）：四平台白名单 + 封面必传（buildVideoLinks 二次严校 + 422）
+            'video_links'                  => 'nullable|array',
+            'video_links.*.platform'       => 'nullable|string|in:douyin,xiaohongshu,tiktok,instagram',
+            'video_links.*.url'            => 'nullable|string|max:500',
+            'video_links.*.title'          => 'nullable|string|max:30',
+            'video_links.*.cover'          => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
+            'video_links.*.existing_cover' => 'nullable|string|max:191',
         ], [
             'name.required'     => '商家名必填',
             'category.required' => '请选择类目',
@@ -247,6 +254,7 @@ class LocalLifeMerchantController extends Controller
 
         $services = $this->buildServicesWithMedia($request);
         $contacts = $this->parseContacts($request);
+        $videoLinks = $this->buildVideoLinks($request); // 违规（非白名单/无封面/超6条）→ 422
 
         // 硬禁业务词筛查：命中即拒（换汇/加密买卖/医美注射/性服务/赌博/制裁规避等）
         $servicesFlat = '';
@@ -282,6 +290,7 @@ class LocalLifeMerchantController extends Controller
             'hours_note'        => $request->hours_note ?: null,
             'intro'             => $request->intro ?: null,
             'services'          => $services,
+            'video_links'       => $videoLinks,
             'contacts'          => $contacts,
             'has_offer'         => $request->boolean('has_offer'),
             'offer_text'        => $request->offer_text ?: null,
@@ -439,6 +448,95 @@ class LocalLifeMerchantController extends Controller
             $out[] = $item;
         }
         return $out ?: null;
+    }
+
+    /**
+     * 店内视频外链（档1）→ [{platform,url,cover(文件名),title?}]。
+     * 动态行 video_links[i][platform|url|cover(文件)|existing_cover|title]。
+     * 严校（业主锁定·违规 422 中文报错）：平台四选、url 过 https+host 后缀白名单（防 evil.com/douyin.com）、
+     *   封面必传（新传或编辑保留）、≤6 条。空行（平台/链接/封面全空）跳过。
+     * L1-1：外链外跳，前端不嵌 iframe，不碰钱。
+     */
+    private function buildVideoLinks(Request $request): ?array
+    {
+        $rows = $request->input('video_links');
+        if (!is_array($rows)) {
+            return null;
+        }
+        $domains = [
+            'douyin'      => ['douyin.com', 'iesdouyin.com'],
+            'xiaohongshu' => ['xiaohongshu.com', 'xhslink.com'],
+            'tiktok'      => ['tiktok.com'],
+            'instagram'   => ['instagram.com', 'instagr.am'],
+        ];
+        $out = [];
+        foreach ($rows as $i => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $platform = strtolower(trim((string) ($row['platform'] ?? '')));
+            $url      = trim((string) ($row['url'] ?? ''));
+            $title    = trim((string) ($row['title'] ?? ''));
+            $file     = $request->file("video_links.$i.cover");
+            $existing = basename(trim((string) ($row['existing_cover'] ?? '')));
+            // 空行（未填任何内容）跳过，不报错
+            if ($platform === '' && $url === '' && !$file && $existing === '') {
+                continue;
+            }
+            if (!isset($domains[$platform])) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'video_links' => '店内视频：每条都需选择平台（抖音 / 小红书 / TikTok / Instagram）。',
+                ]);
+            }
+            if (!$this->videoUrlAllowed($url, $domains[$platform])) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'video_links' => "店内视频：链接「{$url}」不是有效的" . $this->videoLabel($platform)
+                        . '视频/分享链接（只接受该平台 https 视频或分享短链，不接受主页链接或其它站点）。',
+                ]);
+            }
+            // 封面：新上传优先，否则保留隐藏域回填的原文件名；两者皆无 → 422（业主锁定封面强制）
+            $cover = $file ? Helpers::upload(self::IMG_DIR, 'jpg', $file) : $existing;
+            if ($cover === '') {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'video_links' => '店内视频：每条都必须上传封面图（平台抓不到官方缩略图）。',
+                ]);
+            }
+            $item = ['platform' => $platform, 'url' => $url, 'cover' => basename($cover)];
+            if ($title !== '') {
+                $item['title'] = mb_substr($title, 0, 30);
+            }
+            $out[] = $item;
+            if (count($out) > 6) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'video_links' => '店内视频最多 6 条，请删除多余的条目。',
+                ]);
+            }
+        }
+        return $out ?: null;
+    }
+
+    /** url 只认 https + host 后缀命中白名单（子域允许）。防路径/查询串伪装。 */
+    private function videoUrlAllowed(string $url, array $allowed): bool
+    {
+        if ($url === '') {
+            return false;
+        }
+        $p = parse_url($url);
+        if (($p['scheme'] ?? '') !== 'https' || empty($p['host'])) {
+            return false;
+        }
+        $host = strtolower($p['host']);
+        foreach ($allowed as $d) {
+            if ($host === $d || str_ends_with($host, '.' . $d)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function videoLabel(string $platform): string
+    {
+        return ['douyin' => '抖音', 'xiaohongshu' => '小红书', 'tiktok' => 'TikTok', 'instagram' => 'Instagram'][$platform] ?? $platform;
     }
 
     /* ---------------- 商户轻管理面账号（C·邮箱+密码·邮箱自助设密/找回） ---------------- */

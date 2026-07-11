@@ -282,6 +282,8 @@ class LocalLifeController extends Controller
         $data['views']             = (int) $m->views;
         // 笔记预览(批N §④-8)：最新 4 条过审笔记 + 总数。总闸关 / 无过审 → 空(前端整卡不渲染)。
         $data['notes_preview']     = $this->notesPreviewFor($m);
+        // 店内视频外链卡(档1 §④-1)：总闸开时透出规范化外链；闸关/空 → [](前端整卡不渲染)。
+        $data['video_links']       = $this->videoEnabled() ? $m->normalizedVideoLinks() : [];
         return response()->json($data, 200);
     }
 
@@ -1027,6 +1029,12 @@ class LocalLifeController extends Controller
     private function notesEnabled(): bool
     {
         return (string) $this->setting('nezha_merchant_notes_status', '0') === '1';
+    }
+
+    /** 店内视频卡总闸（档1）：business_settings.nezha_merchant_video_status=1 才透出。默认关。 */
+    private function videoEnabled(): bool
+    {
+        return (string) $this->setting('nezha_merchant_video_status', '0') === '1';
     }
 
     /**
