@@ -219,7 +219,7 @@ details[open] .nzpo-gchev{transform:rotate(180deg)}
 
     {{-- 哪吒 P3 常开设备接单: 指引入口(小字·常显·可选·把闲置设备设成常开接单更省心) --}}
     <div style="text-align:right;margin:-2px 0 8px">
-        <a href="{{ route('vendor.workbench.guide') }}" style="font-size:12.5px;color:#9AA0A8;text-decoration:none;font-family:inherit">📟 常开设备接单 · 怎么设 ›</a>
+        <a href="{{ route('vendor.workbench.guide') }}" style="font-size:12.5px;color:#9AA0A8;text-decoration:none;font-family:inherit">新订单提醒设置 ›</a>
     </div>
 
     {{-- W4: 新出现的队列行高亮(6s 心跳换入 _body 后 JS 给新行加 .nzwb-new) --}}
