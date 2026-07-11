@@ -186,4 +186,14 @@ class NezhaPreorder
         $sat = $scheduleAt instanceof Carbon ? $scheduleAt : Carbon::parse($scheduleAt);
         return $now->copy()->addHours($freeCancelLeadHours)->lte($sat);
     }
+
+    /**
+     * M7:预约单是否可被商家「批量标出餐」(纯谓词·可单测)。业主 2026-07-11 定映射:待出餐=confirmed → 标出餐 → handover(出餐待叫车)。
+     * 条件:scheduled=1 且 order_status==confirmed(跳过 processing 备餐中·集中备货一次性出餐)。
+     * 🔴 调用方须另用 enabled() 门控 + IDOR(restaurant_id) + 锁内以 fresh 状态复核。「转入配送」不批量翻 picked_up(不告诉顾客批量配送), 走逐单 Yandex。
+     */
+    public static function canBatchReady(int $scheduled, string $orderStatus): bool
+    {
+        return $scheduled === 1 && $orderStatus === 'confirmed';
+    }
 }

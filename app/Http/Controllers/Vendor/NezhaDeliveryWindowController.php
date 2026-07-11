@@ -135,4 +135,46 @@ class NezhaDeliveryWindowController extends Controller
         $window->delete();
         return response()->json(['message' => '配送时段已删除']);
     }
+
+    /**
+     * M7 批量「标出餐」: 把 order_ids 中属本店 + scheduled + confirmed 的单批量 confirmed→handover(出餐待叫车·跳过备餐中)。
+     * 业主 2026-07-11 定映射(见 memory)。逐单包 DB::transaction + lockForUpdate + 锁内 canBatchReady(fresh) 复核(照 M3 范式), 输竞态/不合格→跳过不覆盖。
+     * 🔴「转入配送」不批量翻 picked_up(不告诉顾客批量配送), 走逐单 Yandex——故本端点只到 handover。通知在锁外发(不在事务内外呼)。上限 100 防滥用。
+     */
+    public function batchMarkReady(Request $request)
+    {
+        if ($resp = $this->gateClosed()) {
+            return $resp;
+        }
+        $ids = $request->input('order_ids', []);
+        if (!is_array($ids) || !count($ids)) {
+            return response()->json(['errors' => [['code' => 'order', 'message' => '未选择订单']]], 422);
+        }
+        $rid = Helpers::get_restaurant_id();
+        $readied = [];
+        foreach (array_slice($ids, 0, 100) as $oid) {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($oid, $rid, &$readied) {
+                $o = Order::where('id', $oid)->where('restaurant_id', $rid)->lockForUpdate()->first();  // 🔴 IDOR + 行锁
+                if (!$o || !NezhaPreorder::canBatchReady((int) $o->scheduled, (string) $o->order_status)) {
+                    return; // 非本店/非预约/非 confirmed(已被改走)→跳过, 不覆盖
+                }
+                $o->order_status = 'handover';
+                $o->handover = now();
+                $o->save();
+                $readied[] = $o->id;
+            });
+        }
+        // 通知锁外发(避免事务内外呼): 逐单知会顾客"出餐待叫车"。send 失败不阻断批量结果。
+        foreach ($readied as $oid) {
+            try {
+                $o = Order::find($oid);
+                if ($o) {
+                    Helpers::send_order_notification($o);
+                }
+            } catch (\Throwable $e) {
+                info('nezha batch-ready notify failed #' . $oid . ': ' . $e->getMessage());
+            }
+        }
+        return response()->json(['message' => '已标出餐 ' . count($readied) . ' 单', 'done' => count($readied)]);
+    }
 }
