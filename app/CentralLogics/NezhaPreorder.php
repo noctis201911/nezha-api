@@ -4,6 +4,7 @@ namespace App\CentralLogics;
 
 use App\Models\BusinessSetting;
 use App\Models\NezhaDeliveryWindow;
+use Carbon\Carbon;
 
 /**
  * 哪吒 预约下单 / 集中配送 — 接单模式逻辑中枢(M4)。
@@ -122,5 +123,46 @@ class NezhaPreorder
             }
         }
         return false;
+    }
+
+    /** 最少提前下单小时数(L2·后台可调·默认 2)。窗口起始 ≥ now + 本值 才可约。 */
+    public static function minLeadHours(): int
+    {
+        $v = (int) (BusinessSetting::where('key', 'nezha_preorder_min_lead_hours')->first()->value ?? 2);
+        return $v > 0 ? $v : 2;
+    }
+
+    /** 最远可约天数(L2·后台可调·默认 3)。窗口起始 ≤ now + 本值天 才可约。 */
+    public static function maxDaysAhead(): int
+    {
+        $v = (int) (BusinessSetting::where('key', 'nezha_preorder_max_days_ahead')->first()->value ?? 3);
+        return $v > 0 ? $v : 3;
+    }
+
+    /**
+     * 校验一张预约单的 schedule_at 是否与所选窗口自洽 + 落在可约区间(纯函数·可单测)。返回中文错误串或 null(通过)。
+     * 债辩纠正①:delivery 预约现只拦「不能约过去」, min_lead/max_days 是**净新增服务端硬校验**, 别当已复用。
+     * 校验:不约过去 → 星期匹配窗口 day → 时刻等于窗口起始 → ≥ now+minLead → ≤ now+maxDays。
+     */
+    public static function validateWindowTiming(Carbon $scheduleAt, int $windowDay, string $windowStart, Carbon $now, int $minLeadHours, int $maxDays): ?string
+    {
+        if ($scheduleAt->lt($now)) {
+            return '不能预约过去的时段';
+        }
+        if ((int) $scheduleAt->dayOfWeek !== $windowDay) {
+            return '所选日期与配送时段不匹配';
+        }
+        $ws = self::hmToMinutes($windowStart);
+        $sat = (int) $scheduleAt->format('H') * 60 + (int) $scheduleAt->format('i');
+        if ($ws === null || $sat !== $ws) {
+            return '所选时间与配送时段不匹配';
+        }
+        if ($scheduleAt->lt($now->copy()->addHours($minLeadHours))) {
+            return '需至少提前 ' . $minLeadHours . ' 小时预约';
+        }
+        if ($scheduleAt->gt($now->copy()->addDays($maxDays))) {
+            return '最多提前 ' . $maxDays . ' 天预约';
+        }
+        return null;
     }
 }

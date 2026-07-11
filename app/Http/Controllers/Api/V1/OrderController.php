@@ -146,6 +146,7 @@ class OrderController extends Controller
             'guest_id' => $request->user ? 'nullable' : 'required',
             'contact_person_name' => $request->user ? 'nullable' : 'required',
             'contact_person_number' => $request->user ? 'nullable' : 'required',
+            'nezha_delivery_window_id' => 'nullable|integer', // 哪吒预约下单 M6: 顾客所选配送时段窗口(可选)
         ]);
 
         if ($validator->fails()) {
@@ -184,6 +185,28 @@ class OrderController extends Controller
         $free_delivery_min_purchase = 0;
 
         $schedule_at = $request->schedule_at?Carbon::parse($request->schedule_at):now();
+
+        // 哪吒 预约下单 M6: 走新预约窗口流程(传了 window_id 且总闸开)时, 校验窗口有效(属本店·启用中) + schedule_at 与窗口自洽
+        //   + 提前量/最远期(净新增服务端硬校验·债辩纠正①)。🔴 不传 window_id → 短路跳过(即时单/旧预约逐字零回归·连 enabled() 都不查)。
+        //   置于 beginTransaction 之前, 早退不留未闭事务。
+        $nz_window_id = null;
+        if ($request->filled('nezha_delivery_window_id') && \App\CentralLogics\NezhaPreorder::enabled()) {
+            $nz_win = \App\Models\NezhaDeliveryWindow::where('id', $request->nezha_delivery_window_id)
+                ->where('restaurant_id', $restaurant->id)   // 🔴 IDOR: 窗口须属本店
+                ->where('active', 1)
+                ->first();
+            if (!$nz_win) {
+                return response()->json(['errors' => [['code' => 'schedule_at', 'message' => '所选配送时段不可用']]], 403);
+            }
+            $nz_err = \App\CentralLogics\NezhaPreorder::validateWindowTiming(
+                $schedule_at, (int) $nz_win->day, (string) $nz_win->start_time, now(),
+                \App\CentralLogics\NezhaPreorder::minLeadHours(), \App\CentralLogics\NezhaPreorder::maxDaysAhead()
+            );
+            if ($nz_err) {
+                return response()->json(['errors' => [['code' => 'schedule_at', 'message' => $nz_err]]], 403);
+            }
+            $nz_window_id = $nz_win->id;
+        }
 
         DB::beginTransaction();
 
@@ -272,6 +295,7 @@ class OrderController extends Controller
         $order->delivery_address = json_encode($address);
         $order->schedule_at = $schedule_at;
         $order->scheduled = $request->schedule_at && $request->order_type != 'dine_in' ?1:0;
+        $order->nezha_delivery_window_id = $nz_window_id; // 哪吒预约下单 M6: 已校验窗口(否则 null·即时/旧预约不受影响)
         $order->is_guest = $request->user ? 0 : 1;
         $order->otp = rand(1000, 9999);
         $order->zone_id = $restaurant->zone_id;

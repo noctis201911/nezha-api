@@ -161,6 +161,24 @@ return [
             'settings_route' => null, 'ops_note' => "无专用后台开关 UI(DB flag,flip 走 tinker/DB)。翻开须 {$OPS_ACTIVATE}(忙碌模式同经验:reload 不够·进程内 static 读旧值)",
         ],
         [
+            'key' => 'nezha_preorder_min_lead_hours', 'label' => '预约最少提前(小时)', 'section' => 'D', 'level' => 'L2',
+            'expected' => null, 'value_type' => 'param', 'default' => 2,
+            'prereq' => '参数非布尔·后台可调(默认 2)。顾客下预约单时窗口起始须 ≥ now + 本值小时(M6 净新增服务端硬校验·债辩纠正①)。空/0=回落默认 2',
+            'settings_route' => null, 'ops_note' => "无专用后台 UI(DB 数值)。改后须 {$OPS_FORGET}",
+        ],
+        [
+            'key' => 'nezha_preorder_max_days_ahead', 'label' => '预约最远可约(天)', 'section' => 'D', 'level' => 'L2',
+            'expected' => null, 'value_type' => 'param', 'default' => 3,
+            'prereq' => '参数非布尔·后台可调(默认 3)。顾客最远能约 now + 本值天内的窗口(M6 净新增)。空/0=回落默认 3',
+            'settings_route' => null, 'ops_note' => "无专用后台 UI(DB 数值)。改后须 {$OPS_FORGET}",
+        ],
+        [
+            'key' => 'nezha_preorder_timeout_lead_min', 'label' => '预约超时时钟提前量(分钟)', 'section' => 'D', 'level' => 'L2',
+            'expected' => null, 'value_type' => 'param', 'default' => 0,
+            'prereq' => '参数非布尔·后台可调(默认 0)。M2 窗口锚定时钟:预约单在 now < schedule_at − 本值分钟 时对超时清扫 dormant(补登记·此前 M2 未入表)。空=回落默认 0',
+            'settings_route' => null, 'ops_note' => "无专用后台 UI(DB 数值)。改后须 {$OPS_FORGET}。见 NezhaOrderTimeout preorder_lead",
+        ],
+        [
             'key' => 'nezha_refund_dispute_status', 'label' => '退款争议流(denied 凭证)', 'section' => 'D', 'level' => 'L1-2',
             'l1_clause' => $L1['L1-2'], 'expected' => 0, 'value_type' => 'bool',
             'prereq' => 'R1-R4 全实装 dormant·🔴真开须业主批准+亲测整条争议链(商家发起→超管裁决→逾期恢复)',
