@@ -1431,7 +1431,7 @@
 
     {{-- 哪吒 P3 接单机模式: 断连横幅(轮询≥60s 无成功) + 屏幕常亮状态胶囊(仅作业台显·JS 控制) --}}
     <div id="nzDisconnectBar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:13000;background:#F9EAE8;color:#AE4840;font-size:13.5px;font-weight:600;text-align:center;padding:9px 14px;border-bottom:2px solid #AE4840;font-family:'Noto Sans Armenian','Segoe UI','Microsoft YaHei','PingFang SC',sans-serif;">
-        ⚠️ 接单机已断连，可能收不到新单——请检查网络 / WiFi
+        ⚠️ 后台已断开连接，可能收不到新单——请检查网络 / WiFi
     </div>
     <div id="nzWlChip" style="display:none;position:fixed;right:12px;bottom:12px;z-index:12500;align-items:center;gap:5px;background:#E5F1EA;color:#2B7A57;font-size:12px;font-weight:600;border-radius:999px;padding:6px 12px;border:1px solid #CFE6DA;box-shadow:0 2px 8px rgba(23,28,38,.10);font-family:'Noto Sans Armenian','Segoe UI','Microsoft YaHei','PingFang SC',sans-serif;">
         📱 屏幕常亮

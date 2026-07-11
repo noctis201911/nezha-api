@@ -1,10 +1,10 @@
 @extends('layouts.vendor.app')
 
-@section('title', '接单机模式 · 设置指引')
+@section('title', '常开设备接单 · 设置指引')
 
 @push('css_or_js')
 <style>
-/* 哪吒 P3 接单机模式指引页 —— nzgm- 前缀命名空间。商家后台配色 = DS §19 方向A「浅白专业」:
+/* 哪吒 P3 常开设备接单指引页 —— nzgm- 前缀命名空间。商家后台配色 = DS §19 方向A「浅白专业」:
    骨架零彩色(白灰), accent=墨#1F2329 只做交互(主键实心/功能链带›), 状态循五族制(绿②/琥珀①/红⑤ muted tint), 强调=粗墨非彩色。 */
 .nzgm{
   --ink:#1F2329; --ink2:#5A6069; --ink3:#9AA0A8; --line:#E7EAEF; --line2:#F0F2F4; --bg:#F5F6F8;
@@ -46,20 +46,20 @@
   <div class="nzgm">
 
     <div class="nzgm-card nzgm-head">
-      <h1>📟 接单机模式 · 让旧手机稳稳接住每一单</h1>
-      <p>找一台闲置的手机或平板，插上充电常开，放在看得见听得见的地方——新单一到就响铃提醒，不怕漏单。跟着下面几步设好即可。</p>
+      <h1>📟 别漏单 · 用一台常开设备接单更省心</h1>
+      <p><b style="color:#1F2329">接单不用额外开什么"模式"</b>——只要作业台开着，新单就会自动进来 + 响铃提醒；人在外面时，靠 Telegram 也能收单（见「通知设置」）。这页是给<b style="color:#1F2329">想更省心</b>的店：拿一台闲置手机 / 平板插电常开、专门摆着接单，屏幕不灭、掉线有提示，就更不容易漏单。可选，不设也照常接单。</p>
     </div>
 
     <div class="nzgm-steps">
       <div class="nzgm-card nzgm-step">
         <div class="nzgm-badge">1</div>
         <div><h3><span class="nzgm-ic">📱</span>准备一台闲置手机/平板</h3>
-        <p>旧手机也行。<span class="hl">插上充电器保持通电</span>，让它一直开着当专用接单机。</p></div>
+        <p>旧手机也行。<span class="hl">插上充电器保持通电</span>，让它一直开着专门接单。</p></div>
       </div>
       <div class="nzgm-card nzgm-step">
         <div class="nzgm-badge">2</div>
         <div><h3><span class="nzgm-ic">🌐</span>连一个稳定的 WiFi</h3>
-        <p>网络断了就收不到新单。真断连时，页面顶部会出现红条 <span class="nzgm-redbar">⚠️ 接单机已断连</span> 提醒你去检查网络。</p></div>
+        <p>网络断了就收不到新单。真断连时，页面顶部会出现红条 <span class="nzgm-redbar">⚠️ 后台已断连</span> 提醒你去检查网络。</p></div>
       </div>
       <div class="nzgm-card nzgm-step">
         <div class="nzgm-badge">3</div>
@@ -85,7 +85,7 @@
 
     <div class="nzgm-card nzgm-tsc">
       <h2><span class="i">🛟</span>遇到问题？</h2>
-      <div class="nzgm-tr"><b>顶部出现红条「接单机已断连」</b><span>说明网络断了或很慢，检查 WiFi / 路由器；恢复后红条会自动消失。</span></div>
+      <div class="nzgm-tr"><b>顶部出现红条「后台已断连」</b><span>说明网络断了或很慢，检查 WiFi / 路由器；恢复后红条会自动消失。</span></div>
       <div class="nzgm-tr"><b>没听到响铃</b><span>确认手机没静音、系统音量够大；并在后台把提示音开关打开、音量调大。</span></div>
       <div class="nzgm-tr"><b>屏幕还是会熄灭</b><span>个别旧机型不支持网页自动常亮。请在手机「系统设置 → 显示 → 自动锁屏/息屏」里改成「永不」。</span></div>
       <div class="nzgm-tr"><b>右下角没出现「屏幕常亮」标记</b><span>请把浏览器升级到较新版本；不影响接单，只是需要手动把息屏时间调长。</span></div>
