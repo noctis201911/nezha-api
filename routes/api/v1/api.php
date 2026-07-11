@@ -486,6 +486,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
             Route::get('order-subscription-list', [OrderController::class, 'get_order_subscription_list']);
             Route::get('running-orders', [OrderController::class, 'get_running_orders']);
             Route::get('details', [OrderController::class, 'get_order_details']);
+            Route::get('nezha-delivery-windows', [OrderController::class, 'nezha_delivery_windows']); // 哪吒预约下单 M6(READ): 顾客选配送时段·总闸关→preorder_enabled:false·纯只读
             Route::post('place', [OrderController::class, 'place_order'])->name('order.place')->middleware('rateLimiter');
             Route::post('nezha-quote', [\App\Http\Controllers\Api\V1\NezhaOrderQuoteController::class, 'quote']); // 哪吒[多级满减·Phase4] 结算满减/券取优只读预览
             Route::post('risk-check', [\App\Http\Controllers\Api\V1\NezhaRiskController::class, 'risk_check']); // 哪吒风控① 下单前预检

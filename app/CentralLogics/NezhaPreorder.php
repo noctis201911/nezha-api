@@ -225,4 +225,119 @@ class NezhaPreorder
         }
         return $minutesUntilStart <= $windowRemindMin ? 'hot' : 'upcoming';
     }
+
+    /* ───────────────────────── M6 顾客选配送时段(READ·screen03/04) ───────────────────────── */
+
+    /** 时段起始时刻 → 上午/下午/晚上('HH:MM' 或 'HH:MM:SS')。纯函数。 */
+    public static function periodLabel(string $startHm): string
+    {
+        $h = (int) substr($startHm, 0, 2);
+        if ($h < 12) { return '上午'; }
+        if ($h < 18) { return '下午'; }
+        return '晚上';
+    }
+
+    /** 星期几(0=周日..6=周六·Carbon dayOfWeek 口径)→ 中文。纯函数。 */
+    public static function weekdayLabel(int $wd): string
+    {
+        return ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][(($wd % 7) + 7) % 7] ?? '';
+    }
+
+    /** 日期标签(今天/明天/后天/n月j日)。screen05 作业台 + 顾客选窗口单一真相源。纯函数。 */
+    public static function dayLabel(Carbon $d, Carbon $now): string
+    {
+        $days = (int) $now->copy()->startOfDay()->diffInDays($d->copy()->startOfDay(), false);
+        if ($days <= 0) { return '今天'; }
+        if ($days === 1) { return '明天'; }
+        if ($days === 2) { return '后天'; }
+        return $d->format('n月j日');
+    }
+
+    /**
+     * 顾客选配送时段:把 active 窗口按「今日起 max_days 天」铺成 {days, earliest}(纯函数·可单测·$now 注入)。
+     * 每 slot 带 schedule_at('Y-m-d H:i:s' = 该日期 + 窗口起始, 与 place_order/validateWindowTiming 自洽)+ selectable(受 min_lead/max_days/不约过去过滤)。
+     * $windows: 可迭代, 每项数组可 [] 取 id/day/start_time/end_time(day=0-6 周日..周六)。有窗口的 weekday 才出该天(空天不出 tab)。
+     */
+    public static function buildSlotDays(iterable $windows, Carbon $now, int $minLeadHours, int $maxDays): array
+    {
+        $earliestSel = $now->copy()->addHours($minLeadHours);
+        $latestSel   = $now->copy()->addDays($maxDays);
+
+        $byDay = [];
+        foreach ($windows as $w) {
+            $byDay[(int) ($w['day'] ?? -1)][] = $w;
+        }
+
+        $days = [];
+        $earliest = null;
+        for ($d = 0; $d <= $maxDays; $d++) {
+            $date = $now->copy()->addDays($d)->startOfDay();
+            $wd = (int) $date->dayOfWeek;
+            if (empty($byDay[$wd])) {
+                continue;
+            }
+            $dayWins = $byDay[$wd];
+            usort($dayWins, fn($a, $b) => strcmp((string) ($a['start_time'] ?? ''), (string) ($b['start_time'] ?? '')));
+
+            $slots = [];
+            $hasSel = false;
+            foreach ($dayWins as $w) {
+                $startHm = substr((string) ($w['start_time'] ?? ''), 0, 5);
+                $endHm   = substr((string) ($w['end_time'] ?? ''), 0, 5);
+                if (!preg_match('/^\d{2}:\d{2}$/', $startHm) || !preg_match('/^\d{2}:\d{2}$/', $endHm)) {
+                    continue;
+                }
+                $sat = Carbon::parse($date->format('Y-m-d') . ' ' . $startHm . ':00');
+                $selectable = $sat->gte($earliestSel) && $sat->lte($latestSel) && $sat->gt($now);
+                if ($selectable) { $hasSel = true; }
+                $slots[] = [
+                    'window_id'   => (int) ($w['id'] ?? 0),
+                    'start'       => $startHm,
+                    'end'         => $endHm,
+                    'period'      => self::periodLabel($startHm),
+                    'schedule_at' => $sat->format('Y-m-d H:i:s'),
+                    'selectable'  => $selectable,
+                ];
+                if ($selectable && ($earliest === null || $sat->lt(Carbon::parse($earliest['schedule_at'])))) {
+                    $earliest = [
+                        'window_id'   => (int) ($w['id'] ?? 0),
+                        'schedule_at' => $sat->format('Y-m-d H:i:s'),
+                        'date'        => $date->format('Y-m-d'),
+                        'day_label'   => self::dayLabel($date, $now),
+                        'start'       => $startHm,
+                        'end'         => $endHm,
+                    ];
+                }
+            }
+            if (!$slots) {
+                continue;
+            }
+            $days[] = [
+                'date'           => $date->format('Y-m-d'),
+                'day_label'      => self::dayLabel($date, $now),
+                'weekday'        => $wd,
+                'weekday_label'  => self::weekdayLabel($wd),
+                'has_selectable' => $hasSel,
+                'slots'          => $slots,
+            ];
+        }
+
+        return ['days' => $days, 'earliest' => $earliest];
+    }
+
+    /**
+     * 顾客选配送时段完整数据(查本店 active 窗口 → buildSlotDays)。$now 缺省 now()。
+     * 🔴 调用方(端点)须先 enabled() 门控 + 店存在/active 校验。返回 {days, earliest}。
+     */
+    public static function computeSelectableSlots(int $restaurantId, ?Carbon $now = null): array
+    {
+        $now = $now ?: now();
+        $windows = NezhaDeliveryWindow::where('restaurant_id', $restaurantId)
+            ->where('active', 1)
+            ->get(['id', 'day', 'start_time', 'end_time'])
+            ->map(fn($w) => ['id' => (int) $w->id, 'day' => (int) $w->day, 'start_time' => (string) $w->start_time, 'end_time' => (string) $w->end_time])
+            ->all();
+
+        return self::buildSlotDays($windows, $now, self::minLeadHours(), self::maxDaysAhead());
+    }
 }

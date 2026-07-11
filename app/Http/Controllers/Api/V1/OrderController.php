@@ -1962,6 +1962,43 @@ class OrderController extends Controller
         return response()->json($data, 200);
     }
 
+    /**
+     * 哪吒预约下单 M6(READ · screen03 结算选窗口 / screen04 门店「最快X送达」)。
+     * GET customer/order/nezha-delivery-windows?restaurant_id=X。纯只读·不碰钱/L1。
+     *   - 总闸关 → {preorder_enabled:false}(前端据此不显选择器·不报错·dormant 零透出)。
+     *   - 开 → accept_mode(instant/instant_preorder/preorder_only)+ 按日铺开的可选时段(每 slot 带 schedule_at 与 place_order 自洽 + selectable)
+     *          + earliest(最快可约·screen04)+ min_lead/max_days/free_cancel 参数(供文案)。
+     */
+    public function nezha_delivery_windows(Request $request)
+    {
+        $rid = (int) $request->input('restaurant_id');
+        if ($rid <= 0) {
+            return response()->json(['errors' => [['code' => 'restaurant_id', 'message' => 'restaurant_id is required']]], 403);
+        }
+        if (!\App\CentralLogics\NezhaPreorder::enabled()) {
+            return response()->json(['preorder_enabled' => false, 'accept_mode' => 'instant', 'days' => [], 'earliest' => null]);
+        }
+        $restaurant = Restaurant::with('restaurant_config')->find($rid);
+        if (!$restaurant) {
+            return response()->json(['errors' => [['code' => 'restaurant', 'message' => '餐厅不存在']]], 404);
+        }
+        $acceptMode = \App\CentralLogics\NezhaPreorder::flagsToMode(
+            $restaurant->restaurant_config->instant_order ?? 1,
+            $restaurant->schedule_order ?? 0
+        );
+        $slots = \App\CentralLogics\NezhaPreorder::computeSelectableSlots($rid);
+
+        return response()->json([
+            'preorder_enabled'       => true,
+            'accept_mode'            => $acceptMode,   // instant / instant_preorder / preorder_only
+            'min_lead_hours'         => \App\CentralLogics\NezhaPreorder::minLeadHours(),
+            'max_days_ahead'         => \App\CentralLogics\NezhaPreorder::maxDaysAhead(),
+            'free_cancel_lead_hours' => \App\CentralLogics\NezhaPreorder::freeCancelLeadHours(),
+            'earliest'               => $slots['earliest'],
+            'days'                   => $slots['days'],
+        ]);
+    }
+
 
     public function food_list(Request $request){
 
