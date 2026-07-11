@@ -351,10 +351,11 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     Route::group(['prefix' => 'config'], function () {
         Route::get('/', [ConfigController::class, 'configuration']);
         Route::get('/get-zone-id', [ConfigController::class, 'get_zone']);
-        Route::get('place-api-autocomplete', [ConfigController::class, 'place_api_autocomplete']);
-        Route::get('distance-api', [ConfigController::class, 'distance_api']);
-        Route::get('place-api-details', [ConfigController::class, 'place_api_details']);
-        Route::get('geocode-api', [ConfigController::class, 'geocode_api']);
+        // 哪吒安全(2026-07-11 N-02): 免登录 Google Maps 代理加 per-IP 限速, 防脚本刷爆 Maps 配额/账单($50/月预算)。前端地址录入(debounce)远低于 120/分。
+        Route::get('place-api-autocomplete', [ConfigController::class, 'place_api_autocomplete'])->middleware('throttle:120,1');
+        Route::get('distance-api', [ConfigController::class, 'distance_api'])->middleware('throttle:120,1');
+        Route::get('place-api-details', [ConfigController::class, 'place_api_details'])->middleware('throttle:120,1');
+        Route::get('geocode-api', [ConfigController::class, 'geocode_api'])->middleware('throttle:120,1');
         Route::get('get-analytic-scripts', [ConfigController::class, 'analyticScripts']);
     });
 
