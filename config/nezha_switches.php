@@ -190,6 +190,12 @@ return [
             'settings_route' => null, 'ops_note' => "无专用后台 UI(DB flag)。{$OPS_FORGET}。=0 业主升级跳静默(既有商家 TG 催单/邮件不受影响)",
         ],
         [
+            'key' => 'nezha_owner_shadow_status', 'label' => '上线校准·业主影子接收', 'section' => 'D', 'level' => 'L1-1邻',
+            'l1_clause' => $L1['L1-1'] . '(邻区·仅 T+0 抄送业主本人·无顾客 PII·纯通知不碰钱/动作)', 'expected' => 0, 'value_type' => 'bool',
+            'prereq' => 'P0 发送真值已上线(d62c895)。真开=业主批准接受消息量(PLAN §9-3)·上线校准期每笔新单 T+0 抄送业主 TG(nezha_risk_admin_chat_id)店名/单号/类型/合计/时间(禁顾客 PII)·供校准 P2 的 T+5 升级阈值·前~30 笔后业主手动翻回 0(不做自动计数降级)。见 fable-brief/PLAN_merchant_order_alert_reliability.md §5-6/§9-3',
+            'settings_route' => null, 'ops_note' => "无专用后台 UI(DB flag)。{$OPS_FORGET}。=0 影子抄送跳静默(不影响商家 TG/邮件/风控告警)",
+        ],
+        [
             'key' => 'nezha_offboard_status', 'label' => '商家退出结算', 'section' => 'D', 'level' => 'L1-8',
             'l1_clause' => $L1['L1-8'], 'expected' => 0, 'value_type' => 'bool',
             'prereq' => 'step4-4/step5 实装 dormant·资金流出路径·灰度存量 7 店 KYC 未录→保持关·真开前 staging 单店试跑',

@@ -2399,9 +2399,53 @@ class Helpers
         }
     }
 
+    /**
+     * 哪吒 P1 影子接收(nezha_owner_shadow_status 默认 0 dormant): 上线校准期把每笔真实新单 T+0 抄送业主 TG
+     * (nezha_risk_admin_chat_id), 供业主观察每店接单时效、为 P2 的 T+5 升级阈值提供数据。前 ~30 笔后业主手动翻回 0
+     * (不做自动计数降级, 避免过度工程)。走 P0 已加固的 sendTelegramToAdmin(真值+重试), 每单一次幂等, 失败清标记待重试。
+     * 🔴 禁顾客任何 PII(仅店名/单号/类型/合计/时间); 与既有商家 TG/邮件/风控告警互不影响。
+     */
+    public static function sendOwnerShadowAlert($order)
+    {
+        try {
+            if ((int) self::get_business_settings('nezha_owner_shadow_status') !== 1) {
+                return; // dormant: 影子抄送跳静默
+            }
+            if (!$order || !in_array($order->order_status, ['pending', 'confirmed'])) {
+                return;
+            }
+            $chatId = self::get_business_settings('nezha_risk_admin_chat_id', false);
+            if (!$chatId) {
+                return; // 业主未绑, 无处抄送
+            }
+            $shadowKey = 'nezha_owner_shadow_' . $order->id;
+            if (!\Illuminate\Support\Facades\Cache::add($shadowKey, 1, now()->addDay())) {
+                return;
+            }
+            $shop = $order?->restaurant?->name ?: ('餐厅 #' . ($order->restaurant_id ?? '?'));
+            $typeMap = ['delivery' => '配送', 'take_away' => '自取', 'dine_in' => '堂食'];
+            $otype = $typeMap[$order->order_type] ?? $order->order_type;
+            $total = number_format((float) $order->order_amount, 0);
+            // 🔴 用 date(strtotime) 非 ->format(): Order::getCreatedAtAttribute 全局返字符串(见 P0 真值修)。
+            $time = $order->created_at ? date('H:i', strtotime((string) $order->created_at)) : '';
+            $text = "👁 哪吒影子｜「{$shop}」新单 #{$order->id}\n类型：{$otype}｜合计：{$total}֏"
+                . ($time ? "｜{$time}" : '')
+                . "\n（上线校准期抄送·满约 30 笔后可在后台关闭）";
+            if (!self::sendTelegramToAdmin($text)) {
+                \Illuminate\Support\Facades\Cache::forget($shadowKey);
+            }
+        } catch (\Throwable $e) {
+            if (isset($shadowKey)) {
+                \Illuminate\Support\Facades\Cache::forget($shadowKey);
+            }
+            \Illuminate\Support\Facades\Log::warning('owner shadow alert failed: ' . $e->getMessage());
+        }
+    }
+
     public static function sentRestaurantNotification($order)
     {
         try { self::sendTelegramOrderAlert($order); } catch (\Throwable $e) {}
+        try { self::sendOwnerShadowAlert($order); } catch (\Throwable $e) {} // 哪吒 P1 影子接收(dormant·默认0)
         $message = self::getOrderPushNotificationMessage($order, 'restaurant_order_notification', 'restaurant', lang: $order?->restaurant?->vendor?->current_language_key);
         $restaurant_push_notification_status = self::getRestaurantNotificationStatusData($order?->restaurant?->id, 'restaurant_order_notification');
         if ($message == null || $restaurant_push_notification_status?->push_notification_status != 'active') {
