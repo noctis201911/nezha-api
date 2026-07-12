@@ -222,10 +222,10 @@ return [
             'settings_route' => null, 'ops_note' => "无专用后台 UI(DB 数值)。改后须 {$OPS_FORGET}。见 NezhaPreorder::windowRemindMin",
         ],
         [
-            'key' => 'nezha_preorder_dispatch_remind_push', 'label' => '预约单叫车提醒推送(平台级)', 'section' => 'D', 'level' => 'L2',
+            'key' => 'nezha_preorder_dispatch_remind_push', 'label' => '预约叫车提醒·平台总闸(killswitch)', 'section' => 'D', 'level' => 'L2',
             'expected' => null, 'value_type' => 'param', 'default' => 1,
-            'prereq' => '布尔开关(1/0·默认 1 开)。到每单「建议叫车时间」给商家推「该叫车了：N 单待发」摘要一条(防轰炸: 摘要合并 + 在场抑制作业台开着不推 + 一个叫车周期最多一条)。关=只停推送、作业台在场横幅照亮。须总闸 nezha_preorder_status 同开才发。空/缺=回落默认 1。⚠️MVP 平台级(商家「通知设置」页可调)·每商家粒度为后续',
-            'settings_route' => null, 'ops_note' => "商家「通知设置」页开关(总闸开才显)。改后须 {$OPS_FORGET}。见 NezhaPreorder::dispatchRemindPush / 07 稿",
+            'prereq' => '布尔(1/0·默认 1 开)·平台级 killswitch。关=平台一刀切停掉全部商家的预约叫车推送(不动预约功能本身)。**每商家自选**在 restaurants.nezha_preorder_dispatch_remind(默认开·商家「通知设置」页各管各·业主 0712)。叫车推送三门: 总闸 nezha_preorder_status + 本 killswitch + 本店列。到每单「建议叫车时间」推「该叫车了：N 单待发」摘要一条(防轰炸: 摘要合并 + 在场抑制 + 一周期一条)。空/缺=回落默认 1',
+            'settings_route' => null, 'ops_note' => "平台级 DB 开关(无商家 UI·每商家开关在通知设置页写 restaurants 列)。改后须 {$OPS_FORGET}。见 NezhaPreorder::dispatchRemindPush / 07 稿",
         ],
         [
             'key' => 'nezha_refund_dispute_status', 'label' => '退款争议流(denied 凭证)', 'section' => 'D', 'level' => 'L1-2',

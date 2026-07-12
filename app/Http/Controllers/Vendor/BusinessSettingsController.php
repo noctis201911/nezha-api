@@ -71,9 +71,9 @@ class BusinessSettingsController extends Controller
             \App\CentralLogics\NezhaCsAssistant::rememberBindCode($tgCode, 'restaurant', $restaurant->id);
         }
 
-        // 预约单叫车提醒开关(平台级·07 稿)。总闸 nezha_preorder_status 关时页不显此项(dormant)。
+        // 预约单叫车提醒开关(每商家自选·07 稿·业主 0712)。总闸 nezha_preorder_status 关时页不显此项(dormant)。缺列(未 migrate)→ ?? 1 回落开。
         $preorderOn = \App\CentralLogics\NezhaPreorder::enabled();
-        $poRemindOn = (bool) (BusinessSetting::where('key', 'nezha_preorder_dispatch_remind_push')->first()->value ?? 1);
+        $poRemindOn = (bool) ($restaurant->nezha_preorder_dispatch_remind ?? 1);
 
         return view('vendor-views.business-settings.notification-index', compact('business_name', 'data', 'restaurant', 'botUser', 'tgCode', 'preorderOn', 'poRemindOn'));
     }
@@ -108,15 +108,11 @@ class BusinessSettingsController extends Controller
         }
         // 全关=常开设备, 置豁免(满足上线硬闸); 任一通道开则回到非豁免由通道兜底
         $restaurant->nezha_alert_exempt = ($tg === 0 && $mail === 0) ? 1 : 0;
-        $restaurant->save();
-
-        // 预约单叫车提醒(平台级开关·07 稿·关=只停推送、作业台横幅照亮)。总闸关时页不显此项→不提交→不写(dormant)。MVP 平台级, 每商家粒度为后续。
-        if (\App\CentralLogics\NezhaPreorder::enabled()) {
-            BusinessSetting::updateOrCreate(
-                ['key' => 'nezha_preorder_dispatch_remind_push'],
-                ['value' => $request->boolean('nezha_preorder_dispatch_remind') ? 1 : 0]
-            );
+        // 预约单叫车提醒(每商家自选·07 稿·业主 0712·关=只停本店推送、作业台横幅照亮)。总闸关→页不显→不提交→保持原值(dormant)。Schema 守卫防列未 migrate 时报错。
+        if (\App\CentralLogics\NezhaPreorder::enabled() && \Illuminate\Support\Facades\Schema::hasColumn('restaurants', 'nezha_preorder_dispatch_remind')) {
+            $restaurant->nezha_preorder_dispatch_remind = $request->boolean('nezha_preorder_dispatch_remind') ? 1 : 0;
         }
+        $restaurant->save();
 
         Toastr::success('提醒通道设置已更新');
         return back();

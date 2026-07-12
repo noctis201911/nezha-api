@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Log;
  *   冷却     = 一个叫车周期最多一条, 不随单量涨; 只有出现「新的到点单」(due 集合有新 id)才可能再推。
  *
  * 🔴 L2/L3 展示层: 只读订单 + 发 TG, 绝不写订单状态 / 不碰钱 / 不碰 L1。
- * 双闸: 总闸 nezha_preorder_status + 平台级 nezha_preorder_dispatch_remind_push, 任一关 → 整命令 no-op(dormant 零查询零发送)。
+ * 三门(业主 0712): ①命令级双闸 总闸 nezha_preorder_status + 平台 killswitch nezha_preorder_dispatch_remind_push(任一关 → 整命令 no-op·dormant 零查询零发送) ②店级 restaurants.nezha_preorder_dispatch_remind(每商家自选·关则本店跳过)。
  * 通道: 复用商家 TG(Helpers::sendTelegramToRestaurant·绑定 telegram_chat_id 才有·尊重每店 timeout_notify_telegram)。
  */
 class NezhaPreorderDispatchReminder extends Command
@@ -34,7 +34,7 @@ class NezhaPreorderDispatchReminder extends Command
     {
         $dry = (bool) $this->option('dry-run');
 
-        // 双闸: 总闸 + 平台级叫车提醒开关。任一关 → no-op(dormant)。
+        // 命令级双闸: 总闸 + 平台 killswitch。任一关 → no-op(dormant)。店级每商家开关在下面循环内逐店过滤。
         if (!NezhaPreorder::enabled() || !NezhaPreorder::dispatchRemindPush()) {
             $this->info('预约总闸或叫车提醒开关关闭, 跳过。');
             return self::SUCCESS;
@@ -66,6 +66,10 @@ class NezhaPreorderDispatchReminder extends Command
 
             $restaurant = Restaurant::find($rid);
             if (!$restaurant) {
+                continue;
+            }
+            // 本店叫车提醒开关(每商家自选·业主 0712)。关 = 本店不推(作业台在场横幅仍覆盖)。缺列→ ?? 1 回落开。
+            if (!(int) ($restaurant->nezha_preorder_dispatch_remind ?? 1)) {
                 continue;
             }
             // 尊重每店 TG 通道开关(商家把 TG 关了就别推)+ 须已绑 chat(未绑 = 无投递地址)。
