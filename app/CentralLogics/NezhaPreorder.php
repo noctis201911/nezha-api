@@ -178,11 +178,11 @@ class NezhaPreorder
         return null;
     }
 
-    /** 预约单窗口前"免费自助取消"的提前量小时数(L2·后台可调·默认 2·业主 2026-07-11 定)。 */
+    /** 预约单送达点前"免费自助取消"的提前量小时数(L2·后台可调·默认 1·业主 2026-07-12 调,原 2)。 */
     public static function freeCancelLeadHours(): int
     {
-        $v = (int) (BusinessSetting::where('key', 'nezha_preorder_free_cancel_lead_hours')->first()->value ?? 2);
-        return $v > 0 ? $v : 2;
+        $v = (int) (BusinessSetting::where('key', 'nezha_preorder_free_cancel_lead_hours')->first()->value ?? 1);
+        return $v > 0 ? $v : 1;
     }
 
     /**

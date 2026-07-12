@@ -126,6 +126,27 @@ class OrderController extends Controller
             'requested_at'  => $order->nezha_cancel_requested_at,
             'responded_at'  => $order->nezha_cancel_responded_at,
         ];
+        // 哪吒 预约配送(单点·11-6·业主 0712): 顾客端订单页「预计送达」单点 label + 中性取消路由资格。
+        //   is_preorder = 本单确为 nezha 预约单(scheduled=1 且挂配送窗口·纯数据判定·不受总闸影响→dormant 期无此类单=零透出)。
+        //   schedule_label = 送达点「明天(周日) 14:20」(复用 dayLabel/weekdayLabel·与选点器同源)。
+        //   can_self_cancel_free = 免费自助取消资格(gated enabled() + 时间敏感 confirmedSelfCancelAllowed·前端照它定弹层文案/走哪个端点·避免时钟偏差)。过点/备餐中「申请取消」资格复用上方 nezha_cancel.can_request。
+        if ((int) $order->scheduled === 1 && $order->nezha_delivery_window_id !== null && $order->schedule_at) {
+            $nz_sat = Carbon::parse($order->schedule_at);
+            $order['nezha_preorder'] = [
+                'is_preorder'          => true,
+                'schedule_at'          => (string) $order->schedule_at,
+                'schedule_label'       => \App\CentralLogics\NezhaPreorder::dayLabel($nz_sat, now())
+                    . '（' . \App\CentralLogics\NezhaPreorder::weekdayLabel((int) $nz_sat->dayOfWeek) . '）'
+                    . $nz_sat->format('H:i'),
+                'can_self_cancel_free' => \App\CentralLogics\NezhaPreorder::enabled()
+                    && \App\CentralLogics\NezhaPreorder::confirmedSelfCancelAllowed(
+                        (int) $order->scheduled, (string) $order->order_status, $order->schedule_at, now(),
+                        \App\CentralLogics\NezhaPreorder::freeCancelLeadHours()
+                    ),
+            ];
+        } else {
+            $order['nezha_preorder'] = null;
+        }
         // 哪吒: 订单超时状态(集中规则, 见 docs/ORDER_TIMEOUT_RULES.md)。前端只渲染, 不写散落计时器。
         $order['nezha_timeout'] = \App\CentralLogics\NezhaOrderTimeout::describe($order);
         return response()->json($order, 200);

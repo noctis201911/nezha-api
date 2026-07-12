@@ -199,8 +199,8 @@ return [
         ],
         [
             'key' => 'nezha_preorder_free_cancel_lead_hours', 'label' => '预约免费取消提前量(小时)', 'section' => 'D', 'level' => 'L2',
-            'expected' => null, 'value_type' => 'param', 'default' => 2,
-            'prereq' => '参数非布尔·后台可调(默认 2·业主 2026-07-11 定)。11-6:已确认预约单在窗口起始前 ≥ 本值小时且未备货时, 顾客可自助免费取消(走既有原路退款)。空/0=回落默认 2',
+            'expected' => null, 'value_type' => 'param', 'default' => 1,
+            'prereq' => '参数非布尔·后台可调(默认 1·业主 2026-07-12 调,原 2)。11-6:已确认预约单在送达点前 ≥ 本值小时且未备货时, 顾客可自助免费取消(走既有原路退款)。空/0=回落默认 1',
             'settings_route' => null, 'ops_note' => "无专用后台 UI(DB 数值)。改后须 {$OPS_FORGET}。总闸关时 11-6 整条不生效",
         ],
         [
