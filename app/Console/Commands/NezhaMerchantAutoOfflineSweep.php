@@ -112,7 +112,7 @@ class NezhaMerchantAutoOfflineSweep extends Command
     private function notifyMerchant(Restaurant $restaurant, int $strikes, int $hours): void
     {
         $name = $restaurant->name ?? '商家';
-        $text = "⛔ 哪吒通知｜你的店「{$name}」近{$hours}小时有{$strikes}单因超时未处理被系统取消, 且期间没有成功接单, 已【暂停接单】以免继续影响顾客。\n"
+        $text = "哪吒通知｜你的店「{$name}」近{$hours}小时有{$strikes}单因超时未处理被系统取消, 且期间没有成功接单, 已【暂停接单】以免继续影响顾客。\n"
               . "你在岗后, 请登录作业台点「恢复接单」即可继续营业。";
         try {
             $email = $restaurant->nezha_notify_email ?: ($restaurant->email ?? $restaurant->vendor?->email);
@@ -138,7 +138,7 @@ class NezhaMerchantAutoOfflineSweep extends Command
     {
         $name  = $restaurant->name ?? ('餐厅#' . $restaurant->id);
         $phone = $restaurant->phone ?: ($restaurant->vendor?->phone ?: '未登记');
-        $text  = "🚨 哪吒升级｜商家「{$name}」(#{$restaurant->id}) 近{$hours}小时{$strikes}单超时未处理且无成功接单, 已【自动停接单】。\n"
+        $text  = "哪吒升级｜商家「{$name}」(#{$restaurant->id}) 近{$hours}小时{$strikes}单超时未处理且无成功接单, 已【自动停接单】。\n"
                . "商家电话: {$phone}。商家可自助恢复, 运营也可在「风控中心 → 自动下线商家」恢复。";
         try {
             Helpers::sendTelegramToAdmin($text);
@@ -166,7 +166,7 @@ class NezhaMerchantAutoOfflineSweep extends Command
             return;
         }
         $name = $restaurant->name ?? ('餐厅#' . $restaurant->id);
-        $text = "⚠️ 哪吒预警｜商家「{$name}」(#{$restaurant->id}) 近{$hours}小时已有{$strikes}单超时被取消(但仍在处理其它单, 暂不自动下线)。建议关注是否人手不足。";
+        $text = "哪吒预警｜商家「{$name}」(#{$restaurant->id}) 近{$hours}小时已有{$strikes}单超时被取消(但仍在处理其它单, 暂不自动下线)。建议关注是否人手不足。";
         try {
             Helpers::sendTelegramToAdmin($text);
         } catch (\Throwable $e) {
