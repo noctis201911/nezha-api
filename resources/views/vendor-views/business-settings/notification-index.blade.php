@@ -64,6 +64,21 @@
                             <input type="email" name="nezha_notify_email" class="form-control" placeholder="例如 you@example.com" value="{{ $restaurant->nezha_notify_email ?: ($restaurant->email ?? '') }}">
                         </div>
                     </div>
+                    @if(!empty($preorderOn))
+                    {{-- 预约单叫车提醒(07 稿·到建议叫车时间推送摘要一条·防轰炸三件套)。总闸 nezha_preorder_status 关时整块不出(dormant)。 --}}
+                    <div class="border rounded p-3 mb-3">
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" role="switch" name="nezha_preorder_dispatch_remind" id="nz_po_remind" value="1" {{ !empty($poRemindOn) ? 'checked' : '' }}>
+                                <label class="form-check-label fw-medium" for="nz_po_remind">预约单叫车提醒</label>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="nzToggleHelp('nz_po_help')">？怎么用</button>
+                        </div>
+                        <div id="nz_po_help" class="alert alert-soft-info fs-12 mt-2" style="display:none">
+                            到每单的「建议叫车时间」（送达点前固定提前量）推送提醒：多单合并成一条摘要，同一批最多提醒一次；你正开着作业台时不推送、只在作业台里亮提醒。关闭后不再推送，作业台内的提醒横幅照常显示。
+                        </div>
+                    </div>
+                    @endif
                     <div class="alert alert-soft-warning fs-12">⚠️ 为保障顾客权益，「订单超时被自动取消、需你原路退款」这条通知<strong>始终会发送</strong>，不受上面开关影响；它同时也会出现在后台「订单 → 待退款」里。</div>
                     <button type="submit" class="btn btn--primary">保存设置</button>
                 </form>

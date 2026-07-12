@@ -222,6 +222,12 @@ return [
             'settings_route' => null, 'ops_note' => "无专用后台 UI(DB 数值)。改后须 {$OPS_FORGET}。见 NezhaPreorder::windowRemindMin",
         ],
         [
+            'key' => 'nezha_preorder_dispatch_remind_push', 'label' => '预约单叫车提醒推送(平台级)', 'section' => 'D', 'level' => 'L2',
+            'expected' => null, 'value_type' => 'param', 'default' => 1,
+            'prereq' => '布尔开关(1/0·默认 1 开)。到每单「建议叫车时间」给商家推「该叫车了：N 单待发」摘要一条(防轰炸: 摘要合并 + 在场抑制作业台开着不推 + 一个叫车周期最多一条)。关=只停推送、作业台在场横幅照亮。须总闸 nezha_preorder_status 同开才发。空/缺=回落默认 1。⚠️MVP 平台级(商家「通知设置」页可调)·每商家粒度为后续',
+            'settings_route' => null, 'ops_note' => "商家「通知设置」页开关(总闸开才显)。改后须 {$OPS_FORGET}。见 NezhaPreorder::dispatchRemindPush / 07 稿",
+        ],
+        [
             'key' => 'nezha_refund_dispute_status', 'label' => '退款争议流(denied 凭证)', 'section' => 'D', 'level' => 'L1-2',
             'l1_clause' => $L1['L1-2'], 'expected' => 0, 'value_type' => 'bool',
             'prereq' => 'R1-R4 全实装 dormant·🔴真开须业主批准+亲测整条争议链(商家发起→超管裁决→逾期恢复)',
