@@ -2388,7 +2388,9 @@ class Helpers
                 . "—— 详情请登录商家后台查看";
             // P0-3: 走统一入队出口(异步模式甩 worker, 消除下单请求路径内 ~7s 同步外呼); 送达真值+重试由 Job 负责。
             // P0-2: 硬失败(同步模式送达失败 / 异步入队且回落同步也失败) 清幂等标记, 让后续触发重试。
-            if (!self::enqueueTelegram($chatId, $text)) {
+            $nzSent = self::enqueueTelegram($chatId, $text);
+            NezhaNotifyLog::record('telegram', 'merchant', 'new_order', $nzSent ? 'ok' : 'failed', $order->id, $order->restaurant_id);
+            if (!$nzSent) {
                 \Illuminate\Support\Facades\Cache::forget($alertKey);
             }
         } catch (\Throwable $e) {

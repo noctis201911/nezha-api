@@ -302,10 +302,12 @@ class OrderTimeoutSweep extends Command
         try {
             $restaurant = $order->restaurant;
             if (!$restaurant || !($restaurant->telegram_chat_id ?? null)) {
+                \App\CentralLogics\NezhaNotifyLog::record('telegram', 'merchant', $type, 'no_recipient', $order->id, $order->restaurant_id, 'no telegram_chat_id');
                 return;
             }
             $sensitive = $type === 'cancel_refund';
             if (!$sensitive && (int) ($restaurant->timeout_notify_telegram ?? 1) === 0) {
+                \App\CentralLogics\NezhaNotifyLog::record('telegram', 'merchant', $type, 'skipped', $order->id, $order->restaurant_id, 'timeout_notify_telegram=0');
                 return;
             }
             $id = $order->id;
@@ -319,8 +321,10 @@ class OrderTimeoutSweep extends Command
                 default: // remind
                     $text = "🔔 哪吒提醒｜订单 #{$id} 已等待约 {$minutes} 分钟仍未处理，请尽快登录商家后台接单/核对。";
             }
-            Helpers::sendTelegramToRestaurant($restaurant, $text);
+            $nzSent = Helpers::sendTelegramToRestaurant($restaurant, $text);
+            \App\CentralLogics\NezhaNotifyLog::record('telegram', 'merchant', $type, $nzSent ? 'ok' : 'failed', $order->id, $order->restaurant_id);
         } catch (\Throwable $e) {
+            \App\CentralLogics\NezhaNotifyLog::record('telegram', 'merchant', $type, 'failed', $order->id, $order->restaurant_id, 'exception');
             Log::info('NEZHA_TIMEOUT telegramMerchant order#' . $order->id . ': ' . $e->getMessage());
         }
     }
@@ -392,14 +396,17 @@ class OrderTimeoutSweep extends Command
         try {
             $chatId = Helpers::get_business_settings('nezha_risk_admin_chat_id', false);
             if (!$chatId) {
+                \App\CentralLogics\NezhaNotifyLog::record('telegram', 'owner', 'owner_escalate', 'no_recipient', $order->id, $order->restaurant_id, 'admin chat unset · ' . $tag);
                 // 🔴 升级路径不许静默(§5-№4): 业主 chat 未绑时明确记一行
                 Log::warning('NEZHA_TIMEOUT_OWNER_ESCALATE[' . $tag . '] 业主 TG 未绑(nezha_risk_admin_chat_id 空), 订单 #' . $order->id . ' 升级未送达, 请补配业主 chat_id');
                 return;
             }
             // P0-2 幂等后置(§0.5③): sendTelegramToAdmin 返送达真值(异步=入队成功 true·送达+重试归 Job tries=3; 同步=真实真值)。
             if (Helpers::sendTelegramToAdmin($text)) {
+                \App\CentralLogics\NezhaNotifyLog::record('telegram', 'owner', 'owner_escalate', 'ok', $order->id, $order->restaurant_id, $tag);
                 Log::info('NEZHA_TIMEOUT_OWNER_ESCALATE[' . $tag . '] 已升级业主 TG · order#' . $order->id);
             } else {
+                \App\CentralLogics\NezhaNotifyLog::record('telegram', 'owner', 'owner_escalate', 'failed', $order->id, $order->restaurant_id, $tag);
                 Cache::forget('nezha_owner_escalate_' . $order->id);
                 Log::warning('NEZHA_TIMEOUT_OWNER_ESCALATE[' . $tag . '] 发送失败, 已清幂等标记待下轮 sweep 重试 · order#' . $order->id);
             }
@@ -413,6 +420,7 @@ class OrderTimeoutSweep extends Command
         $email = $order->restaurant?->nezha_notify_email ?: ($order->restaurant?->email ?? $order->restaurant?->vendor?->email);
         $name  = $order->restaurant?->name ?? '商家';
         if (!$email) {
+            \App\CentralLogics\NezhaNotifyLog::record('email', 'merchant', $type, 'no_recipient', $order->id, $order->restaurant_id, 'no email');
             Log::warning('NEZHA_TIMEOUT 商家无邮箱, 跳过邮件 order#' . $order->id);
             return;
         }
@@ -420,10 +428,12 @@ class OrderTimeoutSweep extends Command
         // 但敏感邮件(自动取消+需原路退款 cancel_refund)恒发, 无视开关(L1 退款义务必须落到商家)。
         $sensitive = in_array($type, ['cancel_refund'], true);
         if (! $sensitive && (int) ($order->restaurant?->timeout_notify_email ?? 1) === 0) {
+            \App\CentralLogics\NezhaNotifyLog::record('email', 'merchant', $type, 'skipped', $order->id, $order->restaurant_id, 'timeout_notify_email=0');
             Log::info('NEZHA_TIMEOUT 商家选「仅系统」, 跳过软提醒邮件 type=' . $type . ' order#' . $order->id);
             return;
         }
         Mail::to($email)->send(new NezhaOrderTimeoutMail($type, (int) $order->id, $name, $minutes, $paid));
+        \App\CentralLogics\NezhaNotifyLog::record('email', 'merchant', $type, 'ok', $order->id, $order->restaurant_id);
     }
 
     private function escalateToSupport(Order $order, string $body): void
