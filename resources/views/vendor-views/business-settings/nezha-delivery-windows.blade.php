@@ -1,8 +1,8 @@
 @extends('layouts.vendor.app')
 
-@section('title', '配送时段')
+@section('title', '可约时间段')
 
-{{-- 哪吒 预约下单 M5 前端 · 配送时段配置页(mockup 02)·商家端方向A「浅白专业」DS §19(墨 #1F2329 accent·状态五族)。
+{{-- 哪吒 预约下单 M5 前端 · 可约时间段配置页(mockup 02)·商家端方向A「浅白专业」DS §19(墨 #1F2329 accent·状态五族)。
      后端 CRUD = NezhaDeliveryWindowController(store/toggle/destroy·全总闸门·IDOR)。页面渲染不 gate·mutations 端点 gated。 --}}
 
 @push('css_or_js')
@@ -103,14 +103,14 @@
       <div class="nzdw-modehint">决定顾客能怎么向您下单 · 与「忙碌 / 暂停接单」互不影响</div>
     </div>
     <div class="nzdw-card">
-      <div class="nzdw-ct">预约配送时段
+      <div class="nzdw-ct">开放预约的时间段
         @if($preorderOn)
           <span class="nzdw-chip nzdw-g">预约模式生效中</span>
         @else
           <span class="nzdw-chip nzdw-gray">预约功能未开放</span>
         @endif
       </div>
-      <div class="nzdw-cd">顾客结算时只能从这里的时段中选择;时段仅影响预约单,即时单不受影响。</div>
+      <div class="nzdw-cd">顾客会在这些时间段内选一个具体送达时间(每 20 分钟一档)下单;您会看到每单的精确送达时间。仅影响预约单,即时单不受影响。</div>
     </div>
 
     <div class="nzdw-days" id="nzdwDays">
@@ -138,13 +138,13 @@
             </button>
           </div>
         @empty
-          <div class="nzdw-empty">该日暂无配送时段,点下方「添加时段」新增。</div>
+          <div class="nzdw-empty">该日暂无可约时间段,点下方「添加可约时间段」新增。</div>
         @endforelse
       </div>
     @endforeach
 
     <button type="button" class="nzdw-add" id="nzdwAdd">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>添加时段
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>添加可约时间段
     </button>
     <div class="nzdw-note">「单时段接单上限」用于防爆单,Phase 2 开放;当前不限量,请按备货能力设置时段数量。</div>
   </div>
@@ -166,18 +166,18 @@
         </div>
         <div class="nzdw-opt @if($currentMode==='instant_preorder') nzdw-optsel @endif" data-mode="instant_preorder">
           <span class="nzdw-oicon">🗓</span>
-          <div class="nzdw-obody"><div class="nzdw-ot">即时 + 预约</div><div class="nzdw-od">即时单照常接,同时开放预约时段,顾客可任选「现在送」或「预约送」。</div></div>
+          <div class="nzdw-obody"><div class="nzdw-ot">即时 + 预约</div><div class="nzdw-od">即时单照常接,同时接受预约——顾客可选「现在送」,也可约一个具体送达时间。</div></div>
           <span class="nzdw-radio"></span>
         </div>
         <div class="nzdw-opt @if($currentMode==='preorder_only') nzdw-optsel @endif" data-mode="preorder_only">
           <span class="nzdw-oicon">📦</span>
-          <div class="nzdw-obody"><div class="nzdw-ot">只接预约 <span class="nzdw-ochip">适合超市 / 百货</span></div><div class="nzdw-od">顾客必须选择配送时段下单;您可按时段集中备货、集中叫车,<b style="color:#1F2329">不用守店</b>。</div></div>
+          <div class="nzdw-obody"><div class="nzdw-ot">只接预约 <span class="nzdw-ochip">适合超市 / 百货</span></div><div class="nzdw-od">顾客必须预约送达时间下单;每单的送达时间提前可见,照建议时间备货、叫车即可。</div></div>
           <span class="nzdw-radio"></span>
         </div>
       </div>
       <div class="nzdw-alert" id="nzdwModeAlert" hidden>
-        <div class="nzdw-alt">⚠ 还没有配送时段</div>
-        <div class="nzdw-ald">「即时+预约」或「只接预约」需要至少 1 个配送时段才能生效,顾客才有时段可选。请先在下方添加配送时段。</div>
+        <div class="nzdw-alt">⚠ 还没有可约时间段</div>
+        <div class="nzdw-ald">「即时+预约」或「只接预约」需要至少 1 个可约时间段才能生效,顾客才有时间可选。请先在下方添加可约时间段。</div>
       </div>
       <button type="submit" class="nzdw-sbtn" id="nzdwModeSave">保存接单模式</button>
     </form>
@@ -187,7 +187,7 @@
 <div class="nzdw-mask" id="nzdwMask" hidden>
   <div class="nzdw-sheet">
     <div class="nzdw-grab"></div>
-    <div class="nzdw-sh"><span class="nzdw-sht">添加时段 · <span id="nzdwSheetDay"></span></span><span class="nzdw-shx" id="nzdwClose">✕</span></div>
+    <div class="nzdw-sh"><span class="nzdw-sht">添加可约时间段 · <span id="nzdwSheetDay"></span></span><span class="nzdw-shx" id="nzdwClose">✕</span></div>
     <div class="nzdw-grp">常用时段</div>
     <div class="nzdw-qs" id="nzdwQs">
       <span class="nzdw-q" data-s="10:00" data-e="12:00">10:00–12:00</span>
@@ -201,7 +201,7 @@
       <label class="nzdw-fld"><span class="nzdw-fl">结束</span><input type="time" id="nzdwEnd"></label>
     </div>
     <div class="nzdw-fhelp">时段须在当天营业时间内。上限用于防爆单,Phase 2 开放设置;当前默认不限量。</div>
-    <button type="button" class="nzdw-sbtn" id="nzdwSave">添加时段</button>
+    <button type="button" class="nzdw-sbtn" id="nzdwSave">添加可约时间段</button>
   </div>
 </div>
 
@@ -226,7 +226,7 @@
   function renderHours(day) {
     var el = document.getElementById('nzdwHours');
     var h = HOURS[day] || [];
-    if (!h.length) { el.textContent = NAMES[day] + '当天不营业 · 无法添加配送时段'; return; }
+    if (!h.length) { el.textContent = NAMES[day] + '当天不营业 · 无法添加可约时间段'; return; }
     var parts = h.map(function (b) { return b[0] + '–' + b[1]; }).join('、');
     el.textContent = NAMES[day] + '营业时间 ' + parts + ' · 时段须在营业时间内';
   }
@@ -278,7 +278,7 @@
     }
     var del = e.target.closest('.nzdw-tdel');
     if (del) {
-      if (!confirm('确定删除该配送时段?')) return;
+      if (!confirm('确定删除该可约时间段?')) return;
       var did = del.getAttribute('data-del-id');
       post(R_del.replace('__ID__', did)).then(function (res) {
         if (res.ok) { location.reload(); } else { nzToast('error', errMsg(res)); }
@@ -340,7 +340,7 @@
     var block = (mode === 'instant_preorder' || mode === 'preorder_only') && !HASWIN; // 预约模式须 ≥1 时段(mockup01 状态B)
     alertEl.hidden = !block;
     saveBtn.disabled = block;
-    saveBtn.textContent = block ? '添加配送时段后即可保存' : '保存接单模式';
+    saveBtn.textContent = block ? '添加可约时间段后即可保存' : '保存接单模式';
   }
   document.getElementById('nzdwModeOpen').addEventListener('click', function () { mask.hidden = false; });
   document.getElementById('nzdwModeClose').addEventListener('click', function () { mask.hidden = true; });
