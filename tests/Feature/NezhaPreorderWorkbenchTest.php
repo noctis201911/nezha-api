@@ -47,4 +47,15 @@ class NezhaPreorderWorkbenchTest extends TestCase
         $this->assertSame('called', NezhaPreorder::pointCardState('picked_up', false));
         $this->assertSame('delivered', NezhaPreorder::pointCardState('delivered', false));
     }
+
+    /** 在场感知(阶段③④叫车推送用): 打点后 20s 内判在看; 未打点/已清=不在看。叫车推送据此抑制。 */
+    public function test_workbench_presence_roundtrip(): void
+    {
+        \Illuminate\Support\Facades\Cache::forget('nezha_wb_seen_99999');
+        $this->assertFalse(NezhaPreorder::isViewingWorkbench(99999));
+        NezhaPreorder::markWorkbenchSeen(99999);
+        $this->assertTrue(NezhaPreorder::isViewingWorkbench(99999));
+        \Illuminate\Support\Facades\Cache::forget('nezha_wb_seen_99999');
+        $this->assertFalse(NezhaPreorder::isViewingWorkbench(99999));
+    }
 }

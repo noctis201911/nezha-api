@@ -216,11 +216,29 @@ class NezhaPreorder
         return $v > 0 ? $v : 30;
     }
 
-    /** screen05:到窗口提醒阈值分钟数(L2·后台可调·默认 45·下一个窗口起始 ≤ 本值分钟内即在作业台顶部提醒)。 */
+    /** screen05:到窗口提醒阈值分钟数(L2·后台可调·默认 45·窗口版遗留·单点版作业台已不用·参数保留可后台调)。 */
     public static function windowRemindMin(): int
     {
         $v = (int) (BusinessSetting::where('key', 'nezha_preorder_window_remind_min')->first()->value ?? 45);
         return $v > 0 ? $v : 45;
+    }
+
+    /** 阶段③:预约单叫车提醒推送(平台级)开关(L2·默认开·07 稿)。关=只停推送、作业台在场横幅照亮。 */
+    public static function dispatchRemindPush(): bool
+    {
+        return (bool) (BusinessSetting::where('key', 'nezha_preorder_dispatch_remind_push')->first()->value ?? 1);
+    }
+
+    /** 在场感知:商家开着作业台的心跳(6s 轮询刷新时打点·20s TTL·参考 vendor chat nzViewing)。叫车推送据此抑制(在看→不推·只亮横幅)。 */
+    public static function markWorkbenchSeen($restaurantId): void
+    {
+        \Illuminate\Support\Facades\Cache::put('nezha_wb_seen_' . (int) $restaurantId, 1, 20);
+    }
+
+    /** 在场感知:商家此刻是否正盯着作业台(20s 内有心跳=在看)。 */
+    public static function isViewingWorkbench($restaurantId): bool
+    {
+        return \Illuminate\Support\Facades\Cache::has('nezha_wb_seen_' . (int) $restaurantId);
     }
 
     /**

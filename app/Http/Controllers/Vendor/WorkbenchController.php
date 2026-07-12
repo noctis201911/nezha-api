@@ -52,6 +52,8 @@ class WorkbenchController extends Controller
     public function index(Request $request)
     {
         $rid = (int) Helpers::get_restaurant_id();
+        // 在场感知: 总闸开时给作业台打在场心跳(叫车推送据此抑制·参考 vendor chat nzViewing)。dormant 不打点。
+        if (NezhaPreorder::enabled()) { NezhaPreorder::markWorkbenchSeen($rid); }
         $wb = self::buildSummary($rid);
         $dispatchOrders = self::dispatchOrdersFor($wb);
 
@@ -87,6 +89,8 @@ class WorkbenchController extends Controller
     public function refresh(Request $request)
     {
         $rid = (int) Helpers::get_restaurant_id();
+        // 在场感知: 6s 轮询刷新即在场心跳(总闸开时·叫车推送据此抑制不推、只亮横幅)。dormant 不打点·纯只读。
+        if (NezhaPreorder::enabled()) { NezhaPreorder::markWorkbenchSeen($rid); }
         $wb = self::buildSummary($rid);
         $dispatchOrders = self::dispatchOrdersFor($wb);
 

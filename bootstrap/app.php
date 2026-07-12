@@ -137,6 +137,11 @@ return Application::configure(basePath: dirname(__DIR__))
         //   总开关 business_settings.nezha_autooffline_status(默认0关 dormant), 关时命令直接返回。每分钟扫。
         $schedule->command('nezha:merchant-autooffline-sweep')->everyMinute()->withoutOverlapping();
 
+        // 哪吒 预约配送 v2 单点 阶段③ ④叫车推送: 预约单到「建议叫车时间」给商家推「该叫车了：N 单待发」摘要一条。
+        //   防轰炸三件套: 摘要合并 + 在场抑制(作业台开着不推·只亮横幅) + 冷却(出现新到点单才再推)。
+        //   双闸 nezha_preorder_status(总) + nezha_preorder_dispatch_remind_push(默认1开), 任一关时命令直接返回(dormant)。每分钟扫。
+        $schedule->command('nezha:preorder-dispatch-remind')->everyMinute()->withoutOverlapping();
+
         // 哪吒广告计费 T3: 到投放起始日对「已通过+未扣费」广告从商家保证金扣全额(单价×天数)。
         //   L2 资金, 流水类型 advertisement_fee; 总开关 nezha_ad_billing_status(默认0关, 关时命令直接返回零扣费)。
         //   幂等(paid_at IS NULL 防重闸+事务内 lockForUpdate), 每小时跑一次, 起始日到达后尽快扣费; 余额不足跳过并提醒充值。
