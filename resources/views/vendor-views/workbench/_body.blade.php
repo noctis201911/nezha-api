@@ -39,13 +39,14 @@
     {{-- 哪吒 自动下线: 长期不确认订单被自动停接单 → 顶部红条 + 商家一键恢复(自助·点击即证明在场)。未下线/总闸关时整条不渲染。 --}}
     @php $nzAO = $wb['auto_offline'] ?? ['on' => false]; @endphp
     @if(!empty($nzAO['on']))
-    <div style="margin:0 0 12px;padding:13px 15px;border-radius:12px;background:#FDECEC;border:1px solid #F1B0AC;color:#B4231F;font-size:13.5px;line-height:1.6">
-        <div style="font-weight:700;font-size:14.5px;margin-bottom:3px">⛔ 你的店已被系统暂停接单</div>
-        <div style="color:#8A2E2A">近期有多单超时未处理、且期间没有成功接单，为免继续影响顾客，已暂时停止接新单。<b>你已回到岗位的话，点下方按钮即可立即恢复。</b></div>
+    {{-- DS§19 商家后台·危险族 tint #F9EAE8 / 字 #AE4840 / 次墨 #5A6069 / accent 墨钮 #1F2329(唯一交互色)。 --}}
+    <div style="margin:0 0 12px;padding:13px 15px;border-radius:12px;background:#F9EAE8;box-shadow:0 1px 3px rgba(23,28,38,.05);font-size:13px;line-height:1.6">
+        <div style="font-weight:600;font-size:14.5px;color:#AE4840;margin-bottom:3px">已暂停接单</div>
+        <div style="color:#5A6069">近期多单超时未处理、期间也没有成功接单，为免影响顾客，已暂停接新单。你回到岗位后点下方即可恢复。</div>
         <form action="{{ route('vendor.workbench.autooffline-recover') }}" method="post" style="margin:11px 0 0"
               onsubmit="var b=this.querySelector('button');b.disabled=true;b.textContent='恢复中…';">
             @csrf
-            <button type="submit" style="border:0;border-radius:9px;background:#0AA66E;color:#fff;font-weight:700;font-size:14px;padding:9px 22px;cursor:pointer">✅ 我已就位 · 恢复接单</button>
+            <button type="submit" style="border:0;border-radius:12px;background:#1F2329;color:#fff;font-weight:600;font-size:14px;padding:10px 22px;cursor:pointer">恢复接单</button>
         </form>
     </div>
     @endif
