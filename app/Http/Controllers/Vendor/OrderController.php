@@ -318,7 +318,8 @@ class OrderController extends Controller
             return back();
         }
         // 哪吒 H3(QA 2026-06-18): 已结束的单(顾客取消/拒收/退款)不可被"确认收款"复活。
-        if (in_array($order->order_status, ['canceled', 'failed', 'refunded', 'refund_requested', 'refund_request_canceled'], true)) {
+        // 哪吒 M3(2026-07-12): 终态集合收敛到 Order::isFinalized() 单一 owner。
+        if ($order->isFinalized()) {
             Toastr::warning(translate('messages.this_order_has_ended_cannot_confirm_payment'));
             return back();
         }
@@ -329,7 +330,12 @@ class OrderController extends Controller
         }
 
         try {
-            \App\CentralLogics\OrderLogic::confirm_offline_payment($order, 'vendor', auth('vendor')->id() ?? auth('vendor_employee')->id(), processing_time: $request->processing_time);
+            // 哪吒 M3(2026-07-12): OrderLogic 锁内复核发现订单已终态(并发取消)会返回 false → 不显"确认成功"。
+            $nz_confirm_result = \App\CentralLogics\OrderLogic::confirm_offline_payment($order, 'vendor', auth('vendor')->id() ?? auth('vendor_employee')->id(), processing_time: $request->processing_time);
+            if ($nz_confirm_result === false) {
+                Toastr::warning('该订单已被取消/结束，无法确认收款，请刷新后查看。');
+                return back();
+            }
         } catch (\App\Exceptions\SanctionScreenException $e) {
             // 哪吒 A1: reject(命中制裁) 与 hold(来源待核验) 都抛此异常, 按类型给固定脱敏文案。
             // 不裸透传 $e->getMessage(): reject 的 message 含 from/tx/sdn_uid 命中内幕, 会泄露给商家。
@@ -586,12 +592,22 @@ class OrderController extends Controller
         }
         // 哪吒 B方案: 商家叫车后一拍标记「配送中」(picked_up), 无需 Yandex 链接, 顾客立即看到配送中。
         // 配送单不单独显示"已出餐"拍, 但 handover 时间戳是超时+24h自动结算的承重墙, 这里照样补记。
-        if (empty($order->handover)) {
-            $order->handover = now();
+        // 哪吒 M3(2026-07-12): 行锁 + 锁内终态复核, 防与顾客并发取消 last-write-wins 把死单复活为"配送中"。
+        $nz_dispatch_ok = true;
+        DB::transaction(function () use ($order, &$nz_dispatch_ok) {
+            $nz_fresh = Order::where('id', $order->id)->lockForUpdate()->first();
+            if (!$nz_fresh || $nz_fresh->isFinalized()) { $nz_dispatch_ok = false; return; }
+            if (empty($order->handover)) {
+                $order->handover = now();
+            }
+            $order->order_status = 'picked_up';
+            $order->picked_up = now();
+            $order->save();
+        });
+        if (!$nz_dispatch_ok) {
+            Toastr::warning('订单状态已变更（可能已被顾客取消），请刷新后重试');
+            return back();
         }
-        $order->order_status = 'picked_up';
-        $order->picked_up = now();
-        $order->save();
 
         if (!Helpers::send_order_notification($order)) {
             Toastr::warning(translate('messages.push_notification_faild'));
@@ -637,20 +653,29 @@ class OrderController extends Controller
             return back();
         }
 
-        $order->yandex_tracking_url = $url;
-        $order->delivery_link_reminded_at = null;
-        // 哪吒 B方案: 商家填入配送链接 = 配送真实出发, 状态推进到「配送中」(picked_up)。
-        // processing/handover(+单点预约 confirmed)都推进到 picked_up(并补记 handover 承重墙时间戳); 已是 picked_up 只更新链接。
+        // 哪吒 M3(2026-07-12): 行锁 + 锁内终态复核, 防与顾客并发取消把死单复活为"配送中"。
+        $nz_yandex_ok = true;
         $nz_advanced_to_dispatch = false;
-        if (in_array($order->order_status, ['processing', 'handover'], true) || ((int) $order->scheduled === 1 && $order->order_status === 'confirmed')) {
-            if (empty($order->handover)) {
-                $order->handover = now();
+        DB::transaction(function () use ($order, $url, &$nz_yandex_ok, &$nz_advanced_to_dispatch) {
+            $nz_fresh = Order::where('id', $order->id)->lockForUpdate()->first();
+            if (!$nz_fresh || $nz_fresh->isFinalized()) { $nz_yandex_ok = false; return; }
+            $order->yandex_tracking_url = $url;
+            $order->delivery_link_reminded_at = null;
+            // 哪吒 B方案: 商家填入配送链接 = 配送真实出发, 状态推进到「配送中」(picked_up)。
+            if (in_array($order->order_status, ['processing', 'handover'], true) || ((int) $order->scheduled === 1 && $order->order_status === 'confirmed')) {
+                if (empty($order->handover)) {
+                    $order->handover = now();
+                }
+                $order->order_status = 'picked_up';
+                $order->picked_up = now();
+                $nz_advanced_to_dispatch = true;
             }
-            $order->order_status = 'picked_up';
-            $order->picked_up = now();
-            $nz_advanced_to_dispatch = true;
+            $order->save();
+        });
+        if (!$nz_yandex_ok) {
+            Toastr::warning('订单状态已变更（可能已被顾客取消），请刷新后重试');
+            return back();
         }
-        $order->save();
 
         // 哪吒 D2: 仅当本次真把状态推进到"配送中"才通知顾客; 已是 picked_up(仅更新/重贴链接)不再发, 防重复"配送中"。
         if ($nz_advanced_to_dispatch && !Helpers::send_order_notification($order)) {
@@ -708,6 +733,12 @@ class OrderController extends Controller
 
         if ($order->delivered != null) {
             Toastr::warning(translate('messages.cannot_change_status_after_delivered'));
+            return back();
+        }
+
+        // 哪吒 M3(2026-07-12): 终态早退守卫(层1)。已取消/退款/已送达等终态单不可再被推进, 防死单复活为送货态。
+        if ($order->isFinalized()) {
+            Toastr::warning('该订单已结束（已取消/已退款/已送达），无法再更新状态，请刷新订单列表后查看');
             return back();
         }
 
@@ -829,7 +860,7 @@ class OrderController extends Controller
         $nz_prev_status = $order->getOriginal('order_status');
         DB::transaction(function () use ($order, $nz_prev_status, &$nz_status_ok) {
             $nz_fresh = Order::where('id', $order->id)->lockForUpdate()->first();
-            if (!$nz_fresh || $nz_fresh->order_status !== $nz_prev_status) {
+            if (!$nz_fresh || $nz_fresh->order_status !== $nz_prev_status || $nz_fresh->isFinalized()) {
                 $nz_status_ok = false;
                 return;
             }

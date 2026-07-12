@@ -1070,27 +1070,34 @@ class OrderLogic
 
         $before_status = $order->order_status;
 
-        $order->payment_status = 'paid';
-        $order->confirmed = now();
-        $order->order_status = 'confirmed';
-        // 哪吒 B方案: 确认收款 = 接单; 即时单自动进入「备餐中」, 省去商家再点一下"开始备餐"(高峰减负)。
-        // 预约单(scheduled=1 且未来时段)不自动进备餐, 商家临近时段手动开始(预约单当前已平台级关闭, 此为防御性兜底)。
-        $nz_is_scheduled = $order->scheduled == 1 && $order->schedule_at && \Carbon\Carbon::parse($order->schedule_at)->gt(now());
-        if (!$nz_is_scheduled) {
-            $order->processing = now();
-            $order->order_status = 'processing';
-            // 哪吒 P4: 商家「确认收款」时可传本单预计出餐时间(1-1440); 未传则退回平台默认(仅当当前为空)。纯展示 ETA, 不碰资金/状态流转(L3)。
-            $nz_pt = (int) $processing_time;
-            if ($nz_pt >= 1) {
-                $order->processing_time = min($nz_pt, 1440);
-            } elseif (empty($order->processing_time)) {
-                $order->processing_time = (int) (\App\CentralLogics\Helpers::get_business_settings('nezha_default_prep_min') ?: 30);
+        // 哪吒 M3(2026-07-12): 行锁 + 锁内终态复核, 防"顾客已并发取消并生成待退款留痕"的死单被本"确认收款=接单"
+        //   主路径裸 save 复活成送货态(并把 offline 翻回 verified)。终态则中止本次确认(不改状态/不翻 offline), 返回 false。
+        $nz_confirm_ok = true;
+        \Illuminate\Support\Facades\DB::transaction(function () use ($order, $processing_time, &$nz_confirm_ok) {
+            $nz_fresh = \App\Models\Order::where('id', $order->id)->lockForUpdate()->first();
+            if (!$nz_fresh || $nz_fresh->isFinalized()) { $nz_confirm_ok = false; return; }
+            $order->payment_status = 'paid';
+            $order->confirmed = now();
+            $order->order_status = 'confirmed';
+            // 哪吒 B方案: 确认收款 = 接单; 即时单自动进入「备餐中」。预约单(未来时段)不自动进备餐。
+            $nz_is_scheduled = $order->scheduled == 1 && $order->schedule_at && \Carbon\Carbon::parse($order->schedule_at)->gt(now());
+            if (!$nz_is_scheduled) {
+                $order->processing = now();
+                $order->order_status = 'processing';
+                // 哪吒 P4: 可传本单预计出餐时间(1-1440); 未传退回平台默认(仅当当前为空)。
+                $nz_pt = (int) $processing_time;
+                if ($nz_pt >= 1) {
+                    $order->processing_time = min($nz_pt, 1440);
+                } elseif (empty($order->processing_time)) {
+                    $order->processing_time = (int) (\App\CentralLogics\Helpers::get_business_settings('nezha_default_prep_min') ?: 30);
+                }
             }
+            $order->save();
+            $order->offline_payments()->update(['status' => 'verified']);
+        });
+        if (!$nz_confirm_ok) {
+            return false;
         }
-        $order->save();
-        $order->offline_payments()->update([
-            'status' => 'verified',
-        ]);
 
         $payment_method_name = data_get(json_decode($order->offline_payments?->payment_info ?? '', true), 'method_name', $order->payment_method); // F-1 防无凭证行时 null->payment_info fatal
         if ($order->payment_method == 'partial_payment') {

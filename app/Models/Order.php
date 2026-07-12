@@ -15,6 +15,17 @@ class Order extends Model
 {
     use ReportFilter,HasFactory ,MasksSensitiveAttributes,\App\Traits\OwnedByCustomer;
     protected $guarded = ['id'];
+
+    // 哪吒 M3 修复(2026-07-12): 订单"终态"单一事实源(SSOT)。任何"推进订单状态"的写入方在推进前须复核
+    // 订单未处于终态, 防"顾客已并发取消并生成待退款留痕"的死单被复活成送货态(送货态与待退款留痕并存=L1 邻区不一致)。
+    // 集合复用 confirm_offline_payment 的 H3(自 2026-06-18 起 prod 在用)那一份, 收敛为唯一 owner。
+    public const NZ_TERMINAL_STATUSES = ['canceled', 'failed', 'refunded', 'refund_requested', 'refund_request_canceled', 'delivered'];
+
+    public function isFinalized(): bool
+    {
+        return in_array($this->order_status, self::NZ_TERMINAL_STATUSES, true) || $this->delivered != null;
+    }
+
     protected $casts = [
         'order_amount' => 'float',
         'coupon_discount_amount' => 'float',
