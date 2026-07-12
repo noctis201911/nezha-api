@@ -24,6 +24,11 @@ class WalletPaymentController extends Controller
             Toastr::error(translate('messages.insufficient_balance'));
             return back();
         }
+        // 哪吒 M3 Phase2(2026-07-12·dormant wallet_status=0): 终态单(如已取消)不可被钱包支付回调复活成 confirmed。
+        if ($order->isFinalized()) {
+            Toastr::warning(translate('messages.this_order_has_ended_cannot_confirm_payment'));
+            return back();
+        }
         $transaction = CustomerLogic::create_wallet_transaction(user_id:$order->user_id,amount: $order->order_amount, transaction_type:'order_place',referance: $order->id);
         if ($transaction != false) {
             try {

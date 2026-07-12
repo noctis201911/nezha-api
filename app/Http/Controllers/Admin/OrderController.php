@@ -652,6 +652,13 @@ class OrderController extends Controller
             return back();
         }
 
+        // 哪吒 M3 Phase2(2026-07-12·业主"一刀切"): 终态单不可再"推进配送状态"(防已取消/退款单被复活成送货态)。
+        // 刻意只拦推进目标, 放行退款裁决(终态→refunded/refund_request_canceled 是超管合法退款流·非推进)。
+        if ($order->isFinalized() && in_array($request->order_status, ['confirmed', 'processing', 'handover', 'picked_up', 'out_for_delivery', 'delivered'], true)) {
+            Toastr::warning('该订单已结束（已取消/已退款/已送达等），无法再推进配送状态，请刷新后查看');
+            return back();
+        }
+
 
         if (in_array($order->order_status, ['refund_requested']) && BusinessSetting::where(['key' => 'refund_active_status'])->first()?->value == false) {
             Toastr::warning(translate('Refund Option is not active. Please active it from Refund Settings'));
@@ -1545,13 +1552,19 @@ class OrderController extends Controller
         $order = Order::findOrFail($request->id);
         if ($request->verify == 'yes') {
             // 哪吒 H3(QA 2026-06-18): 已结束的单不可被"确认收款"复活。
-            if (in_array($order->order_status, ['canceled', 'failed', 'refunded', 'refund_requested', 'refund_request_canceled'], true)) {
+            // 哪吒 M3(2026-07-12): 终态集合收敛到 Order::isFinalized() 单一 owner。
+            if ($order->isFinalized()) {
                 Toastr::warning(translate('messages.this_order_has_ended_cannot_confirm_payment'));
                 return back();
             }
             // 哪吒: 确认收款动作统一走 OrderLogic, 与商家自营确认共用同一实现(避免逻辑漂移)。
             try {
-                \App\CentralLogics\OrderLogic::confirm_offline_payment($order, 'admin', auth('admin')->id());
+                // 哪吒 M3(2026-07-12): OrderLogic 锁内复核发现订单已终态(并发取消)会返回 false → 不显"确认成功"。
+                $nz_confirm_result = \App\CentralLogics\OrderLogic::confirm_offline_payment($order, 'admin', auth('admin')->id());
+                if ($nz_confirm_result === false) {
+                    Toastr::warning('该订单已被取消/结束，无法确认收款，请刷新后查看。');
+                    return back();
+                }
             } catch (\App\Exceptions\SanctionScreenException $e) {
                 // 哪吒 A1: reject(命中) 与 hold(来源待核验) 都抛此异常, 按类型给文案, 不裸透传(reject 含命中内幕)。
                 if (str_contains($e->getMessage(), '命中制裁名单')) {
