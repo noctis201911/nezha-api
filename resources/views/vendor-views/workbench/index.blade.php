@@ -171,38 +171,33 @@ body.nz-dispatch-lock { overflow: hidden; }
 .nzpo-rt b{font-variant-numeric:tabular-nums}
 .nzpo-rs{font-size:12px;color:var(--po-body);line-height:1.6;margin-top:3px}
 .nzpo-rs b{font-weight:600;color:var(--po-ink);font-variant-numeric:tabular-nums}
-.nzpo-gc{background:#fff;border:1px solid var(--po-line);border-radius:14px;margin-bottom:10px;overflow:hidden}
-.nzpo-gc.hot{border-left:3px solid var(--po-a-side)}
-.nzpo-gc.done{border-left:3px solid var(--po-g-side)}
-.nzpo-gh{display:flex;align-items:center;gap:8px;padding:13px 15px;cursor:pointer;list-style:none;user-select:none}
-.nzpo-gh::-webkit-details-marker{display:none}
-.nzpo-gt{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--po-ink)}
-.nzpo-gday{font-size:12px;color:var(--po-sec)}
-.nzpo-gchev{margin-left:auto;color:var(--po-sec);transition:transform .2s;font-size:11px}
-details[open] .nzpo-gchev{transform:rotate(180deg)}
+.nzpo-h1n{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--po-x-bg);color:var(--po-x-fg);font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
 .nzpo-chip{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;white-space:nowrap}
 .nzpo-chip.c-a{background:var(--po-a-bg);color:var(--po-a-fg)}
 .nzpo-chip.c-g{background:var(--po-g-bg);color:var(--po-g-fg)}
 .nzpo-chip.c-b{background:var(--po-b-bg);color:var(--po-b-fg)}
-.nzpo-chip.c-x{background:var(--po-x-bg);color:var(--po-x-fg)}
-.nzpo-gbody{padding:0 15px 14px}
-.nzpo-gsub{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--po-body);padding:2px 0 10px}
-.nzpo-gsub b{font-weight:700;color:var(--po-ink);font-variant-numeric:tabular-nums}
-.nzpo-bar{flex:1;height:4px;border-radius:2px;background:#EAEDF1;overflow:hidden;max-width:170px}
-.nzpo-bar i{display:block;height:100%;border-radius:2px;background:var(--po-ink)}
-.nzpo-ol{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid #F0F2F4}
-.nzpo-ob{flex:1;min-width:0}
+.nzpo-dh{display:flex;align-items:baseline;gap:6px;font-size:12px;font-weight:500;color:var(--po-sec);padding:8px 2px 4px}
+.nzpo-dh b{font-size:13px;font-weight:700;color:var(--po-ink)}
+.nzpo-dh i{font-style:normal;margin-left:auto;font-variant-numeric:tabular-nums}
+.nzpo-oc{background:#fff;border:1px solid var(--po-line);border-radius:14px;box-shadow:0 1px 3px rgba(23,28,38,.04);padding:12px 14px;margin-bottom:10px}
+.nzpo-oc.hot{border-left:3px solid var(--po-a-side)}
+.nzpo-oc.done{border-left:3px solid var(--po-g-side)}
+.nzpo-l1{display:flex;align-items:center;gap:7px}
+.nzpo-pt{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--po-ink)}
+.nzpo-plab{font-size:11px;color:var(--po-sec)}
+.nzpo-l1 .nzpo-chip{margin-left:auto}
+.nzpo-l2{display:flex;align-items:center;gap:6px;margin-top:6px}
 .nzpo-oid{font-size:11px;color:var(--po-sec);font-variant-numeric:tabular-nums}
-.nzpo-on{font-size:14px;font-weight:500;margin-top:1px;color:var(--po-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.nzpo-ov{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--po-ink);white-space:nowrap}
-.nzpo-call{border:1.5px solid var(--po-ink);background:#fff;color:var(--po-ink);border-radius:9px;padding:6px 14px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap}
-.nzpo-call[hidden]{display:none}
-.nzpo-acts{display:flex;gap:10px;margin-top:12px}
-.nzpo-actf{flex:1;margin:0;display:flex}
-.nzpo-btn-o{flex:1;width:100%;height:42px;border-radius:11px;border:1.5px solid var(--po-ink);color:var(--po-ink);background:#fff;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.nzpo-btn{flex:1;height:42px;border-radius:11px;background:var(--po-ink);color:#fff;border:none;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.nzpo-btn.on{background:#fff;color:var(--po-ink);border:1.5px solid var(--po-ink)}
-.nzpo-acap{font-size:11.5px;color:var(--po-sec);line-height:1.55;margin-top:8px}
+.nzpo-onm{font-size:13.5px;font-weight:500;color:var(--po-ink)}
+.nzpo-cnt{font-size:12px;color:var(--po-body)}
+.nzpo-amt{margin-left:auto;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--po-ink)}
+.nzpo-l3{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid #F0F2F4}
+.nzpo-sug{font-size:12px;color:var(--po-body);line-height:1.5}
+.nzpo-sug b{font-weight:700;color:var(--po-ink);font-variant-numeric:tabular-nums}
+.nzpo-due{font-weight:600;color:var(--po-a-fg)}
+.nzpo-dnote{font-size:12px;color:var(--po-sec);font-variant-numeric:tabular-nums}
+.nzpo-oc.done .nzpo-pt,.nzpo-oc.done .nzpo-onm,.nzpo-oc.done .nzpo-amt{color:var(--po-sec)}
+.nzpo-call{margin-left:auto;height:34px;border:1.5px solid var(--po-ink);background:#fff;color:var(--po-ink);border-radius:10px;padding:0 16px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center}
 .nzpo-tip{font-size:12px;color:var(--po-sec);text-align:center;line-height:1.6;padding:6px 10px 0}
 .nzpo-empty{background:#fff;border:1px solid var(--po-line);border-radius:14px;padding:34px 24px;text-align:center;display:flex;flex-direction:column;align-items:center}
 .nzpo-eic{font-size:32px;margin-bottom:10px}
@@ -502,20 +497,6 @@ details[open] .nzpo-gchev{transform:rotate(180deg)}
             }
         }, { passive: true });
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply); else apply();
-    })();
-
-    (function () {
-        // screen05: 预约分组「转入配送（N）」= 展开该窗口 handover(已出餐)单的逐单「叫车」按钮(业主 0711 定·不批量翻 picked_up)。
-        // 事件委托挂 document(6s 心跳换入 #nzwbRefresh 后是新节点·刷新即回落收起态·符合"逐单叫完即刷新"预期)。叫车本身复用既有 nz-dispatch-open 抽屉。
-        document.addEventListener('click', function (e) {
-            var b = (e.target && e.target.closest) ? e.target.closest('[data-nzpo-reveal]') : null;
-            if (!b) return;
-            var gc = b.closest('.nzpo-gc'); if (!gc) return;
-            if (!b.getAttribute('data-nzpo-orig')) b.setAttribute('data-nzpo-orig', b.textContent);
-            var showing = b.classList.toggle('on');
-            gc.querySelectorAll('.nzpo-call').forEach(function (c) { c.hidden = !showing; });
-            b.textContent = showing ? '收起' : b.getAttribute('data-nzpo-orig');
-        });
     })();
 </script>
 @endpush

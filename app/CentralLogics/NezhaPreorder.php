@@ -224,18 +224,22 @@ class NezhaPreorder
     }
 
     /**
-     * screen05 作业台窗口分组的呈现态(纯函数·可单测)。
-     *   done     = 该窗口订单全部已派出(picked_up/delivered)→ 族②绿·已完成。
-     *   hot      = 窗口起始 ≤ remind 阈值(含已进行中/负值)且未全派出 → 族①琥珀·临近(该集中备货叫车)。
-     *   upcoming = 窗口起始还早(> remind 阈值) → 族③紫·未到时段。
-     * $minutesUntilStart = 窗口起始 − now 的分钟数(未来为正、已过为负)。
+     * screen05 单点版 · 作业台每单卡态(纯函数·可单测·替代窗口版 workbenchGroupState·业主 2026-07-11 单点模型)。
+     *   delivered = 已送达(order_status=delivered)→ 族②绿·沉底。
+     *   called    = 已叫车(order_status=picked_up·商家已叫 Yandex)→ 族②绿·沉底。
+     *   due       = 该叫车(未派出 且 now ≥ 建议叫车时间=送达点 − dispatch_lead)→ 族①琥珀·置顶带[叫车]。
+     *   upcoming  = 未到时间(未派出 且 建议叫车时间未到)→ 族③紫·白卡无按钮。
+     * $callTimeReached = now 是否已达该单建议叫车时间(调用方按 schedule_at − dispatch_lead 算)。
      */
-    public static function workbenchGroupState(int $minutesUntilStart, bool $allDispatched, int $windowRemindMin): string
+    public static function pointCardState(string $orderStatus, bool $callTimeReached): string
     {
-        if ($allDispatched) {
-            return 'done';
+        if ($orderStatus === 'delivered') {
+            return 'delivered';
         }
-        return $minutesUntilStart <= $windowRemindMin ? 'hot' : 'upcoming';
+        if ($orderStatus === 'picked_up') {
+            return 'called';
+        }
+        return $callTimeReached ? 'due' : 'upcoming';
     }
 
     /* ───────────────────────── M6 顾客选配送时段(READ·screen03/04) ───────────────────────── */

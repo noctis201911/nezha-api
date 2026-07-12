@@ -6,45 +6,45 @@ use App\CentralLogics\NezhaPreorder;
 use Tests\TestCase;
 
 /**
- * screen05 集中配送作业台「预约」分区的纯逻辑单测(无 DB·安全对生产库·零写入)。
- * 覆盖 NezhaPreorder::workbenchGroupState —— 窗口分组呈现态(done/hot/upcoming)判定。
+ * screen05 单点版作业台「预约配送」每单卡态的纯逻辑单测(无 DB·安全对生产库·零写入)。
+ * 覆盖 NezhaPreorder::pointCardState —— 按 order_status + 是否到建议叫车时间判 due/upcoming/called/delivered。
  */
 class NezhaPreorderWorkbenchTest extends TestCase
 {
-    /** 全部派出(picked_up/delivered) → done(已完成), 不论剩余时间。 */
-    public function test_all_dispatched_is_done(): void
+    /** 已送达(delivered)→ delivered, 不论是否到建议叫车时间。 */
+    public function test_delivered_is_delivered(): void
     {
-        $this->assertSame('done', NezhaPreorder::workbenchGroupState(200, true, 45));
-        $this->assertSame('done', NezhaPreorder::workbenchGroupState(-30, true, 45));
-        $this->assertSame('done', NezhaPreorder::workbenchGroupState(0, true, 45));
+        $this->assertSame('delivered', NezhaPreorder::pointCardState('delivered', true));
+        $this->assertSame('delivered', NezhaPreorder::pointCardState('delivered', false));
     }
 
-    /** 未全派出 + 窗口起始 ≤ 阈值(含正好开始/已进行中的负值) → hot(临近·该集中备货叫车)。 */
-    public function test_within_threshold_is_hot(): void
+    /** 已叫车(picked_up)→ called, 不论是否到建议叫车时间。 */
+    public function test_picked_up_is_called(): void
     {
-        $this->assertSame('hot', NezhaPreorder::workbenchGroupState(45, false, 45));   // 边界 = 阈值
-        $this->assertSame('hot', NezhaPreorder::workbenchGroupState(42, false, 45));   // mockup05 示例(42 < 45)
-        $this->assertSame('hot', NezhaPreorder::workbenchGroupState(0, false, 45));    // 正好开始
-        $this->assertSame('hot', NezhaPreorder::workbenchGroupState(-15, false, 45));  // 窗口进行中(已过起始)
+        $this->assertSame('called', NezhaPreorder::pointCardState('picked_up', true));
+        $this->assertSame('called', NezhaPreorder::pointCardState('picked_up', false));
     }
 
-    /** 未全派出 + 窗口起始还早(> 阈值) → upcoming(未到时段)。 */
-    public function test_beyond_threshold_is_upcoming(): void
+    /** 未派出(confirmed/processing/handover) + 已到建议叫车时间 → due(该叫车·带[叫车])。 */
+    public function test_active_and_call_time_reached_is_due(): void
     {
-        $this->assertSame('upcoming', NezhaPreorder::workbenchGroupState(46, false, 45));   // 边界外一分钟
-        $this->assertSame('upcoming', NezhaPreorder::workbenchGroupState(300, false, 45));  // 5 小时后
+        foreach (['confirmed', 'processing', 'handover'] as $st) {
+            $this->assertSame('due', NezhaPreorder::pointCardState($st, true), $st);
+        }
     }
 
-    /** 阈值可调:同一剩余时间, 阈值变大即更早进入 hot。 */
-    public function test_threshold_is_configurable(): void
+    /** 未派出 + 建议叫车时间未到 → upcoming(未到时间·无按钮)。 */
+    public function test_active_and_call_time_not_reached_is_upcoming(): void
     {
-        $this->assertSame('upcoming', NezhaPreorder::workbenchGroupState(50, false, 45));
-        $this->assertSame('hot', NezhaPreorder::workbenchGroupState(50, false, 60));
+        foreach (['confirmed', 'processing', 'handover'] as $st) {
+            $this->assertSame('upcoming', NezhaPreorder::pointCardState($st, false), $st);
+        }
     }
 
-    /** done 优先于时间态:已全派出即便窗口未到(未来正值)也算 done, 不误标 upcoming。 */
-    public function test_done_takes_precedence_over_timing(): void
+    /** 派出态(picked_up/delivered)优先于时间: 即便未到建议叫车时间也不回落 due/upcoming(作业台待办优先·已完事沉底)。 */
+    public function test_dispatched_states_take_precedence_over_timing(): void
     {
-        $this->assertSame('done', NezhaPreorder::workbenchGroupState(500, true, 45));
+        $this->assertSame('called', NezhaPreorder::pointCardState('picked_up', false));
+        $this->assertSame('delivered', NezhaPreorder::pointCardState('delivered', false));
     }
 }

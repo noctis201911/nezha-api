@@ -4,15 +4,18 @@
      固定 ID 全部后缀连订单号 防列表多行同页 ID 碰撞。自带 delivery 门控, 非配送/非对应状态渲染为空。
      两步逻辑/端点/表单字段/JS 钩子沿用上一版零改动(0703 呈现壳改版: 居中弹层改右侧或底部抽屉, 杂绿改系统藏青)。
      实现约束: 全文只用一个 php 语句块, 不混用内联 php 指令, 防 Blade 原始块正则误配吞并整段。 --}}
-@if ($order->order_type == 'delivery' && in_array($order->order_status, ['processing', 'handover', 'picked_up']))
+@if ($order->order_type == 'delivery' && (in_array($order->order_status, ['processing', 'handover', 'picked_up']) || (($nzAllowConfirmed ?? false) && (int) $order->scheduled === 1 && $order->order_status === 'confirmed')))
     @php
         $nzDrawer = $nzDrawer ?? false;
+        // 单点预约折叠出餐(业主 2026-07-12): 作业台源传 nzAllowConfirmed 时, scheduled 的 confirmed(待出餐)单也走本抽屉——
+        //   [叫车]即开、"出餐·标记配送中"一步 confirmed→picked_up(mark_dispatched/set_yandex_delivery 端点同步放行·补记 handover 时间戳)。列表/详情页不传此旗=零影响。
+        $nzAllowConfirmed = $nzAllowConfirmed ?? false;
         $yAddr = $order->delivery_address ? json_decode($order->delivery_address, true) : [];
         $yAddr = is_array($yAddr) ? $yAddr : [];
         $yLat = $yAddr['latitude'] ?? null;
         $yLng = $yAddr['longitude'] ?? null;
         $yText = $yAddr['address'] ?? '';
-        $isCall = in_array($order->order_status, ['processing', 'handover']);
+        $isCall = in_array($order->order_status, ['processing', 'handover']) || ($nzAllowConfirmed && (int) $order->scheduled === 1 && $order->order_status === 'confirmed');
         $hasCoord = $yLat && $yLng;
         $hasRoute = $hasCoord && $order->restaurant && $order->restaurant->latitude && $order->restaurant->longitude;
         // 抽屉内独有: 订单上下文条 + 送达地址块所需数据(详情页 $nzDrawer=false 不算, 页面已有同信息)

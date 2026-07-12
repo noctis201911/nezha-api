@@ -579,7 +579,8 @@ class OrderController extends Controller
             Toastr::warning('仅配送订单需要标记配送中');
             return back();
         }
-        if (!in_array($order->order_status, ['processing', 'handover'], true)) {
+        // 单点预约折叠出餐(业主 2026-07-12): scheduled 的 confirmed(待出餐)单放行——作业台[叫车]一步 confirmed→picked_up(下方补记 handover 承重墙时间戳)。即时单不含 scheduled=1, 逐字不变。
+        if (!(in_array($order->order_status, ['processing', 'handover'], true) || ((int) $order->scheduled === 1 && $order->order_status === 'confirmed'))) {
             Toastr::warning('请在「备餐中 / 已出餐」状态、呼叫 Yandex 后再标记为配送中');
             return back();
         }
@@ -630,7 +631,8 @@ class OrderController extends Controller
             Toastr::warning('仅配送订单需要填写 Yandex 配送链接');
             return back();
         }
-        if (!in_array($order->order_status, ['processing', 'handover', 'picked_up'], true)) {
+        // 单点预约折叠出餐(业主 2026-07-12): scheduled 的 confirmed(待出餐)单放行, 与 mark_dispatched 同口径。即时单不含 scheduled=1, 逐字不变。
+        if (!(in_array($order->order_status, ['processing', 'handover', 'picked_up'], true) || ((int) $order->scheduled === 1 && $order->order_status === 'confirmed'))) {
             Toastr::warning('请在「备餐中 / 已出餐 / 配送中」状态下填写 Yandex 配送链接');
             return back();
         }
@@ -638,9 +640,9 @@ class OrderController extends Controller
         $order->yandex_tracking_url = $url;
         $order->delivery_link_reminded_at = null;
         // 哪吒 B方案: 商家填入配送链接 = 配送真实出发, 状态推进到「配送中」(picked_up)。
-        // processing/handover 都推进到 picked_up(并补记 handover 承重墙时间戳); 已是 picked_up 只更新链接。
+        // processing/handover(+单点预约 confirmed)都推进到 picked_up(并补记 handover 承重墙时间戳); 已是 picked_up 只更新链接。
         $nz_advanced_to_dispatch = false;
-        if (in_array($order->order_status, ['processing', 'handover'], true)) {
+        if (in_array($order->order_status, ['processing', 'handover'], true) || ((int) $order->scheduled === 1 && $order->order_status === 'confirmed')) {
             if (empty($order->handover)) {
                 $order->handover = now();
             }
