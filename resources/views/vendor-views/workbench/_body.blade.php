@@ -155,7 +155,7 @@
                 @forelse(($qc['rows'] ?? []) as $r)
                     <div class="nzwb-row">
                         <div class="grow"><span class="oid">#{{ $r['id'] }}</span> <span class="nzwb-chip">{{ $r['payment_label'] }}</span>
-                            <div class="meta">{{ $r['placed_at'] ? '下单 '.$r['placed_at'].' · ' : '' }}{{ $waitTxt($r['waited_min']) }} · 顾客 {{ $r['customer']['name'] }}{{ $r['customer']['phone'] ? '（'.$r['customer']['phone'].'）' : '' }}</div></div>
+                            <div class="meta">@if(!empty($r['schedule_label']))<strong style="color:#AE4840">预约送达 {{ $r['schedule_label'] }}</strong> · @endif{{ $r['placed_at'] ? '下单 '.$r['placed_at'].' · ' : '' }}{{ $waitTxt($r['waited_min']) }} · 顾客 {{ $r['customer']['name'] }}{{ $r['customer']['phone'] ? '（'.$r['customer']['phone'].'）' : '' }}</div></div>
                         @if(!empty($r['proof']['url']))
                             <a class="nzwb-proof" href="{{ $r['proof']['url'] }}" target="_blank" rel="noopener" title="点开大图快速预筛（正式核对在详情页收款）"><img src="{{ $r['proof']['url'] }}" alt="凭证" style="width:100%;height:100%;object-fit:cover;border-radius:6px;"></a>
                         @else

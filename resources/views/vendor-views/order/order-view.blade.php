@@ -46,6 +46,13 @@
 
         // 哪吒P1b-B: 主操作决策收口到共享 helper NezhaOrderNextAction::decide()(详情页/作业台同源·真值表回归锁定)。
         $nzPrimary = \App\CentralLogics\NezhaOrderNextAction::decide($order, $max_processing_time ?? null);
+        $nzScheduleLabel = null;
+        if ((int) $order->scheduled === 1 && !empty($order->schedule_at)) {
+            $nzScheduleAt = \Carbon\Carbon::parse($order->schedule_at);
+            $nzScheduleLabel = \App\CentralLogics\NezhaPreorder::dayLabel($nzScheduleAt, now())
+                .'（'.\App\CentralLogics\NezhaPreorder::weekdayLabel($nzScheduleAt->dayOfWeek).'） '
+                .$nzScheduleAt->format('H:i');
+        }
     @endphp
 
     <div class="content container-fluid item-box-page">
@@ -76,6 +83,14 @@
 
 
         {{-- 哪吒 M-04: 置顶状态条 + 唯一主操作(打样阶段: 仅 pending·离线待核验态渲染)。镜像现有 confirm-offline-payment 路由; 凭证/链上核验区与「未收到/打回」「拒单」原位保留, 此处只复读 CTA 不搬走原件。 --}}
+        @if ($nzScheduleLabel)
+            <div role="note" style="background:#F9EAE8;border-left:4px solid #AE4840;border-radius:8px;padding:11px 14px;margin-bottom:12px;color:#1F2329;display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;">
+                <strong style="font-size:15px;color:#AE4840;">预约送达</strong>
+                <strong style="font-size:16px;">{{ $nzScheduleLabel }}</strong>
+                <span style="font-size:13px;color:#5A6069;">请按预约时间安排备餐和叫车，不要按即时单立刻出餐。</span>
+            </div>
+        @endif
+
         @if ($nzPrimary['visible'] && $nzPrimary['kind'] == 'form')
             <div class="nz-order-statusbar" style="position:sticky;top:0;z-index:1020;background:#fff;border:1px solid #FFE2A8;border-radius:12px;box-shadow:0 2px 10px rgba(23,25,29,.06);padding:10px 14px;margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
                 <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 160px;">
@@ -91,7 +106,7 @@
                     <form action="{{ $nzPrimary['route'] }}" method="post" style="margin:0;flex:0 0 auto;"
                         data-nz-auto-print-invoice="{{ route('vendor.order.generate-invoice', [$order['id']]) }}?nz_auto_print=1"
                         data-nz-auto-print-action="{{ $nzOffPending ? '1' : '0' }}"
-                        @if ($nzPrimary['confirm']) data-nz-confirm-msg="{{ $nzPrimary['confirm'] }}" @endif>
+                        @if ($nzPrimary['confirm']) data-nz-confirm-msg="{{ $nzPrimary['confirm'] }}{{ $nzScheduleLabel ? ' 本单预约送达：'.$nzScheduleLabel.'；确认后请按预约时间安排备餐和叫车。' : '' }}" @endif>
                         @csrf
                         @method($nzPrimary['method'])
                         <button type="submit" class="btn btn-success btn-sm" style="border-radius:8px;font-weight:700;white-space:nowrap;">{{ $nzPrimary['label'] }}</button>

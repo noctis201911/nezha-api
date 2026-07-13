@@ -29,4 +29,18 @@ class NezhaVendorWorkbenchDashboardContractTest extends TestCase
         $this->assertStringNotContainsString('Create_ads_to_get_highlighted_on_the_app_and_web_browser', $blade);
         $this->assertStringNotContainsString("route('vendor.advertisement.create')", $blade);
     }
+
+    public function testPreorderTimeIsVisibleBeforeMerchantConfirmsPayment(): void
+    {
+        $controller = file_get_contents(app_path('Http/Controllers/Vendor/WorkbenchController.php'));
+        $workbench = file_get_contents(resource_path('views/vendor-views/workbench/_body.blade.php'));
+        $list = file_get_contents(resource_path('views/vendor-views/order/list.blade.php'));
+        $detail = file_get_contents(resource_path('views/vendor-views/order/order-view.blade.php'));
+
+        $this->assertStringContainsString("'schedule_label'", $controller);
+        $this->assertStringContainsString('$r[\'schedule_label\']', $workbench);
+        $this->assertStringContainsString('预约送达 · {{ $__scheduleLabel }}', $list);
+        $this->assertStringContainsString('不要按即时单立刻出餐', $detail);
+        $this->assertStringContainsString('本单预约送达：', $detail);
+    }
 }

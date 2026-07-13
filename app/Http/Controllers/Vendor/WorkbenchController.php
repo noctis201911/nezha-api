@@ -515,6 +515,14 @@ class WorkbenchController extends Controller
     /** 队列行公共字段 + decide() 主 CTA(与详情页同源)。$extra 为各队列专属字段。 */
     protected static function row($order, float $rateCny, float $rateUsd, array $extra = []): array
     {
+        $scheduleLabel = null;
+        if ((int) $order->scheduled === 1 && !empty($order->schedule_at)) {
+            $scheduleAt = Carbon::parse($order->schedule_at);
+            $scheduleLabel = NezhaPreorder::dayLabel($scheduleAt, now())
+                .'（'.NezhaPreorder::weekdayLabel($scheduleAt->dayOfWeek).'） '
+                .$scheduleAt->format('H:i');
+        }
+
         return array_merge([
             'id'            => (int) $order->id,
             'amount'        => (float) $order->order_amount,
@@ -525,6 +533,8 @@ class WorkbenchController extends Controller
             'customer'      => self::maskedCustomer($order),
             'items'         => self::itemsSummary($order),
             'cta'           => NezhaOrderNextAction::decide($order),
+            'is_preorder'   => $scheduleLabel !== null,
+            'schedule_label'=> $scheduleLabel,
         ], $extra);
     }
 

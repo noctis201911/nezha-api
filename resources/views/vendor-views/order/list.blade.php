@@ -642,6 +642,15 @@
                                 @if ($order->edited == 1)
                                 <span class="text-info fs-12 d-block font-500">({{ translate('Edited') }})</span>
                                 @endif
+                                @if ((int) $order->scheduled === 1 && !empty($order->schedule_at))
+                                    @php
+                                        $__scheduleAt = Carbon\Carbon::parse($order->schedule_at);
+                                        $__scheduleLabel = \App\CentralLogics\NezhaPreorder::dayLabel($__scheduleAt, now())
+                                            .'（'.\App\CentralLogics\NezhaPreorder::weekdayLabel($__scheduleAt->dayOfWeek).'） '
+                                            .$__scheduleAt->format('H:i');
+                                    @endphp
+                                    <div class="font-semibold" style="font-size:12px;color:#AE4840;margin-top:3px;">预约送达 · {{ $__scheduleLabel }}</div>
+                                @endif
                                 @if($order->details && $order->details->count() > 0)
                                     <div class="nz-order-foods">
                                         @foreach($order->details->take(3) as $__d)
