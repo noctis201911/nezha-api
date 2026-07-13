@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\CentralLogics\NezhaPreorder;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class NezhaPreorderCustomerAvailabilityTest extends TestCase
@@ -41,5 +42,17 @@ class NezhaPreorderCustomerAvailabilityTest extends TestCase
         $this->assertSame(NezhaPreorder::CUSTOMER_PREORDER, NezhaPreorder::customerAvailabilityFromRank(2));
         $this->assertSame(NezhaPreorder::CUSTOMER_CLOSED, NezhaPreorder::customerAvailabilityFromRank(1));
         $this->assertSame(NezhaPreorder::CUSTOMER_CLOSED, NezhaPreorder::customerAvailabilityFromRank(null));
+    }
+
+    public function test_delivery_windows_read_route_is_public_for_store_page(): void
+    {
+        $route = collect(Route::getRoutes()->getRoutes())->first(
+            fn ($route) => $route->uri() === 'api/v1/customer/order/nezha-delivery-windows'
+                && in_array('GET', $route->methods(), true)
+        );
+
+        $this->assertNotNull($route);
+        $this->assertNotContains('apiGuestCheck', $route->middleware());
+        $this->assertNotContains('auth:api', $route->middleware());
     }
 }

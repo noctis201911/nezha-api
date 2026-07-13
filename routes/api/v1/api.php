@@ -363,6 +363,8 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     Route::get('food/get-nutrition-name-list', [ProductController::class, 'getNutritionNameList']);
 
     Route::get('customer/order/cancellation-reasons', [OrderController::class, 'cancellation_reason']);
+    // 哪吒预约下单 M6(READ): 门店页游客也必须能读取真实可选配送点；端点自身只读且由总闸控制。
+    Route::get('customer/order/nezha-delivery-windows', [OrderController::class, 'nezha_delivery_windows']);
     Route::get('customer/order/send-notification/{order_id}', [OrderController::class, 'order_notification'])->middleware('apiGuestCheck');
     // 哪吒[举报商家 2026-06-28]: 顾客举报餐厅(游客可举报, 走 apiGuestCheck)。
     Route::post('customer/restaurant/{restaurant_id}/report', [\App\Http\Controllers\Api\V1\RestaurantReportController::class, 'store'])->middleware('auth:api');
@@ -486,7 +488,6 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
             Route::get('order-subscription-list', [OrderController::class, 'get_order_subscription_list']);
             Route::get('running-orders', [OrderController::class, 'get_running_orders']);
             Route::get('details', [OrderController::class, 'get_order_details']);
-            Route::get('nezha-delivery-windows', [OrderController::class, 'nezha_delivery_windows']); // 哪吒预约下单 M6(READ): 顾客选配送时段·总闸关→preorder_enabled:false·纯只读
             Route::post('place', [OrderController::class, 'place_order'])->name('order.place')->middleware('rateLimiter');
             Route::post('nezha-quote', [\App\Http\Controllers\Api\V1\NezhaOrderQuoteController::class, 'quote']); // 哪吒[多级满减·Phase4] 结算满减/券取优只读预览
             Route::post('risk-check', [\App\Http\Controllers\Api\V1\NezhaRiskController::class, 'risk_check']); // 哪吒风控① 下单前预检
@@ -596,4 +597,3 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     Route::get('offline_payment_method_list', [ConfigController::class, 'offline_payment_method_list']);
     Route::get('dm-shifts', [ConfigController::class, 'dm_shifts']);
 });
-
