@@ -33,10 +33,25 @@ trait ActivationClass
         return str_replace('-', '_', Str::slug($appName.'cache_system_addons_for_' . $app . '_' . $this->getDomain()));
     }
 
+    /**
+     * Release directories are intentionally read-only. Keep runtime activation
+     * state in shared storage so a cache refresh cannot make login requests fail.
+     */
+    protected function getAddonsConfigPath(): string
+    {
+        $sharedConfigPath = storage_path('app/system-addons.php');
+
+        return is_file($sharedConfigPath)
+            ? $sharedConfigPath
+            : base_path('config/system-addons.php');
+    }
+
     public function getAddonsConfig(): array
     {
-        if (file_exists(base_path('config/system-addons.php'))) {
-            return include(base_path('config/system-addons.php'));
+        $configPath = $this->getAddonsConfigPath();
+
+        if (is_file($configPath)) {
+            return include($configPath);
         }
 
         $apps = ['admin_panel', 'restaurant_app', 'deliveryman_app', 'react_web'];
@@ -114,7 +129,40 @@ trait ActivationClass
         $config = $this->getAddonsConfig();
         $config[$app] = $response;
         $configContents = "<?php return " . var_export($config, true) . ";";
-        file_put_contents(base_path('config/system-addons.php'), $configContents);
+        $configDirectory = storage_path('app');
+        $configPath = $configDirectory.'/system-addons.php';
+
+        if (!is_dir($configDirectory) && !@mkdir($configDirectory, 0770, true) && !is_dir($configDirectory)) {
+            logger()->warning('Unable to create shared activation-config directory.');
+            Cache::forget($this->getSystemAddonCacheKey(app: $app));
+            return;
+        }
+
+        $temporaryConfigPath = @tempnam($configDirectory, 'system-addons-');
+
+        if ($temporaryConfigPath === false) {
+            logger()->warning('Unable to prepare shared activation-config file.');
+            Cache::forget($this->getSystemAddonCacheKey(app: $app));
+            return;
+        }
+
+        try {
+            $wasWritten = @file_put_contents($temporaryConfigPath, $configContents, LOCK_EX) !== false;
+            $wasMoved = $wasWritten && @rename($temporaryConfigPath, $configPath);
+
+            if (!$wasMoved) {
+                logger()->warning('Unable to persist shared activation config.');
+                Cache::forget($this->getSystemAddonCacheKey(app: $app));
+                return;
+            }
+
+            @chmod($configPath, 0640);
+        } finally {
+            if (is_file($temporaryConfigPath)) {
+                @unlink($temporaryConfigPath);
+            }
+        }
+
         $cacheKey = $this->getSystemAddonCacheKey(app: $app);
         Cache::forget($cacheKey);
     }
