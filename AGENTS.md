@@ -1,3 +1,4 @@
+- [ ] Codex(付款事实修正·2026-07-13) 正在从 origin/main 新增独立付款意图/冻结快照，并让离线付款初交与重交核验只读冻结值；只在 codex/payment-flow-corrected-20260713 隔离分支，不部署生产。
 - [ ] Codex(形态C v2·2026-07-13) 接手顾客端商家卡三态：customer_availability/分页前排序 + 首页、餐厅/搜索/分类/菜系「仅预约/休息中」底部横条。仅 staging，不碰生产，不改 DESIGN_SYSTEM/产品文档。
 # AGENTS.md — 哪吒多窗口并发协调约定（所有 AI 窗口必读）
 
