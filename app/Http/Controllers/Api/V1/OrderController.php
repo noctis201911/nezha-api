@@ -2102,8 +2102,9 @@ class OrderController extends Controller
         $latitude= $request->header('latitude') ?? 0;
         $user_id = $request->user ? $request->user->id : $request['guest_id'];
         $zone_id= json_decode($request->header('zoneId'), true);
-        $data = Restaurant::withOpen($longitude,$latitude)->
-        wherehas('orders' ,function($q) use($user_id){
+        $data = Restaurant::withOpen($longitude,$latitude)
+        ->withCustomerAvailability()
+        ->wherehas('orders' ,function($q) use($user_id){
             $q->where('user_id', $user_id)->where('is_guest' , 0)->latest();
         })
 
@@ -2112,7 +2113,7 @@ class OrderController extends Controller
             ->Active()
             ->whereIn('zone_id', $zone_id)
             ->take(20)
-            ->orderBy('open', 'desc')
+            ->orderByCustomerAvailability()
             ->get()
             ->map(function ($data) {
                 $data->foods = $data->foods_for_reorder->take(5);

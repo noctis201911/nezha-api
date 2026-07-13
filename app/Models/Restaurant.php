@@ -430,6 +430,73 @@ class Restaurant extends Model
         $query->selectRaw('*, IF(((select count(*) from `restaurant_schedule` where `restaurants`.`id` = `restaurant_schedule`.`restaurant_id` and `restaurant_schedule`.`day` = '.now()->dayOfWeek.' and `restaurant_schedule`.`opening_time` < "'.now()->format('H:i:s').'" and `restaurant_schedule`.`closing_time` >"'.now()->format('H:i:s').'") > 0), true, false) as open,ST_Distance_Sphere(point(longitude, latitude),point('.$longitude.', '.$latitude.')) as distance');
     }
 
+    /**
+     * Add the customer-facing availability rank before pagination.
+     *
+     * 3 = instant, 2 = preorder with a real selectable point, 1 = closed.
+     * The projection is dormant while the preorder gate is off, preserving the
+     * legacy list contract and ordering outside the Shape C rollout.
+     */
+    public function scopeWithCustomerAvailability($query, $at = null)
+    {
+        if (!\App\CentralLogics\NezhaPreorder::enabled()) {
+            return $query;
+        }
+
+        $at = $at ? \Carbon\Carbon::parse($at) : now();
+        $selectableIds = \App\CentralLogics\NezhaPreorder::selectableRestaurantIds($at);
+        $bindings = [];
+
+        $blockedSql = implode(' OR ', [
+            'COALESCE(restaurants.status, 0) <> 1',
+            'COALESCE(restaurants.active, 0) <> 1',
+            "(COALESCE(restaurants.nezha_temp_closed, 0) = 1 AND (restaurants.nezha_pause_until IS NULL OR restaurants.nezha_pause_until > ?))",
+            'COALESCE(restaurants.nezha_order_suspended, 0) = 1',
+            'COALESCE(restaurants.nezha_auto_offline, 0) = 1',
+            "COALESCE(restaurants.offboard_status, 'active') = 'settling'",
+            "restaurants.restaurant_model IN ('unsubscribed', 'none')",
+        ]);
+        $bindings[] = $at->format('Y-m-d H:i:s');
+
+        $depositMode = (int) (Helpers::get_business_settings('nezha_deposit_mode_status') ?? 0);
+        if ($depositMode === 1) {
+            $blockedSql .= ' OR (COALESCE(restaurants.nezha_commission_enabled, 0) = 1 AND COALESCE((SELECT rw.deposit_balance FROM restaurant_wallets rw WHERE rw.vendor_id = restaurants.vendor_id LIMIT 1), 0) <= ?)';
+            $bindings[] = (float) (Helpers::get_business_settings('nezha_min_deposit_threshold') ?? 0);
+        }
+
+        $instantSql = '0 = 1';
+        if ((int) (Helpers::get_business_settings('instant_order') ?? 0) === 1) {
+            $instantSql = 'EXISTS (SELECT 1 FROM restaurant_schedule rs WHERE rs.restaurant_id = restaurants.id AND rs.day = ? AND rs.opening_time < ? AND rs.closing_time > ?)'
+                . ' AND EXISTS (SELECT 1 FROM restaurant_configs rc WHERE rc.restaurant_id = restaurants.id AND COALESCE(rc.instant_order, 0) = 1)';
+            array_push($bindings, $at->dayOfWeek, $at->format('H:i:s'), $at->format('H:i:s'));
+        }
+
+        $preorderSql = '0 = 1';
+        if ($selectableIds) {
+            $preorderSql = 'COALESCE(restaurants.schedule_order, 0) = 1 AND restaurants.id IN ('
+                . implode(',', array_fill(0, count($selectableIds), '?')) . ')';
+            array_push($bindings, ...$selectableIds);
+        }
+
+        $rankSql = "CASE WHEN ($blockedSql) THEN 1 WHEN ($instantSql) THEN 3 WHEN ($preorderSql) THEN 2 ELSE 1 END";
+        return $query->selectRaw("$rankSql AS customer_availability_rank", $bindings);
+    }
+
+    public function scopeOrderByCustomerAvailability($query)
+    {
+        return \App\CentralLogics\NezhaPreorder::enabled()
+            ? $query->orderByDesc('customer_availability_rank')
+            : $query->orderByDesc('open');
+    }
+
+    public function scopeReorderByCustomerAvailability($query)
+    {
+        $query->reorder();
+        return \App\CentralLogics\NezhaPreorder::enabled()
+            ? $query->orderByDesc('customer_availability_rank')
+            : $query;
+    }
+
     public function scopeWeekday($query)
     {
         return $query->where('off_day', 'not like', "%".now()->dayOfWeek."%");
@@ -781,11 +848,14 @@ class Restaurant extends Model
         return $query->when($sortBy && $sortBy !== 'default', function ($q) use ($sortBy) {
 
             if ($sortBy == 'fast_delivery') {
-                $q->reorder()->orderBy(function($query){
-                    $query->selectRaw('IF(((select count(*) from `restaurant_schedule` where `restaurants`.`id` = `restaurant_schedule`.`restaurant_id` and `restaurant_schedule`.`day` = '.now()->dayOfWeek.' and `restaurant_schedule`.`opening_time` < "'.now()->format('H:i:s').'" and `restaurant_schedule`.`closing_time` >"'.now()->format('H:i:s').'") > 0), true, false)')
-                    ->from('restaurants')->whereColumn('restaurants.id', 'restaurants.id')->limit(1);
-                }, 'desc')
-                ->orderByRaw("
+                $q->reorderByCustomerAvailability();
+                if (!\App\CentralLogics\NezhaPreorder::enabled()) {
+                    $q->orderBy(function($query){
+                        $query->selectRaw('IF(((select count(*) from `restaurant_schedule` where `restaurants`.`id` = `restaurant_schedule`.`restaurant_id` and `restaurant_schedule`.`day` = '.now()->dayOfWeek.' and `restaurant_schedule`.`opening_time` < "'.now()->format('H:i:s').'" and `restaurant_schedule`.`closing_time` >"'.now()->format('H:i:s').'") > 0), true, false)')
+                        ->from('restaurants')->whereColumn('restaurants.id', 'restaurants.id')->limit(1);
+                    }, 'desc');
+                }
+                $q->orderByRaw("
                     CASE
                         WHEN delivery_time LIKE '%hour%'
                             THEN CAST(SUBSTRING_INDEX(delivery_time,'-',1) AS UNSIGNED) * 60
@@ -796,10 +866,10 @@ class Restaurant extends Model
                 ");
 
             } elseif ($sortBy == 'a_to_z') {
-                $q->reorder()->orderBy('name', 'asc');
+                $q->reorderByCustomerAvailability()->orderBy('name', 'asc');
 
             } elseif ($sortBy == 'z_to_a') {
-                $q->reorder()->orderBy('name', 'desc');
+                $q->reorderByCustomerAvailability()->orderBy('name', 'desc');
             } elseif ($sortBy == 'distance') {
                 $longitude = request()?->header('longitude') ?? request('longitude');
                 $latitude = request()?->header('latitude') ?? request('latitude');
@@ -811,7 +881,7 @@ class Restaurant extends Model
                     $longitude = (float)$longitude;
                     $latitude  = (float)$latitude;
 
-                    $q->reorder()
+                    $q->reorderByCustomerAvailability()
                         ->addSelect(DB::raw("ST_Distance_Sphere(point(longitude, latitude), point($longitude, $latitude)) as distance"))
                         ->orderBy('distance', 'asc');
                 }
@@ -823,7 +893,7 @@ class Restaurant extends Model
                         ->join('food', 'food.id', '=', 'reviews.food_id')
                         ->whereColumn('food.restaurant_id', 'restaurants.id')
                         ->groupBy('food.restaurant_id');
-                }, 'avg_rating_all')->reorder()->orderBy('avg_rating_all', 'desc');
+                }, 'avg_rating_all')->reorderByCustomerAvailability()->orderBy('avg_rating_all', 'desc');
             }
         });
     }

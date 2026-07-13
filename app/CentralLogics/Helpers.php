@@ -845,6 +845,12 @@ class Helpers
                 $item['delivery_fee'] = self::getDeliveryFee($item);
 
                 $item['restaurant_status'] = (int) $item->status;
+                if ($item->getAttribute('customer_availability_rank') !== null) {
+                    $item['customer_availability'] = NezhaPreorder::customerAvailabilityFromRank(
+                        $item->getAttribute('customer_availability_rank')
+                    );
+                    unset($item['customer_availability_rank']);
+                }
                 // [哪吒 组4] 保证金≤0(开关开时)自动下线: 顾客端复用休息中展示, 不露内部术语; 关闭(switch=0)恒false零开销
                 $item['nezha_deposit_paused'] = (bool) \App\Http\Controllers\Api\V1\OrderController::nezha_store_paused($item);
                 // 哪吒 忙碌模式/定时挂起(灰度关时恒 false/null, 顾客端无变化)
@@ -910,6 +916,12 @@ class Helpers
                 $data['self_delivery_system'] = (int) $data->restaurant_sub->self_delivery;
             }
             $data['restaurant_status'] = (int) $data->status;
+            if ($data->getAttribute('customer_availability_rank') !== null) {
+                $data['customer_availability'] = NezhaPreorder::customerAvailabilityFromRank(
+                    $data->getAttribute('customer_availability_rank')
+                );
+                unset($data['customer_availability_rank']);
+            }
             // [哪吒 组4] 保证金≤0(开关开时)自动下线: 顾客端复用休息中展示
             $data['nezha_deposit_paused'] = (bool) \App\Http\Controllers\Api\V1\OrderController::nezha_store_paused($data);
             // 哪吒 忙碌模式/定时挂起(灰度关时恒 false/null, 顾客端无变化)

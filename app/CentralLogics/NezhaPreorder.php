@@ -30,6 +30,37 @@ class NezhaPreorder
     const MODE_INSTANT_PREORDER = 'instant_preorder';
     const MODE_PREORDER_ONLY    = 'preorder_only';
 
+    const CUSTOMER_INSTANT  = 'instant';
+    const CUSTOMER_PREORDER = 'preorder';
+    const CUSTOMER_CLOSED   = 'closed';
+
+    /**
+     * 顾客端商家卡可用态的单一判定顺序。
+     * 休息/风控等硬阻断优先；其次即时；再其次真实可预约；其余休息中。
+     */
+    public static function resolveCustomerAvailability(bool $blocked, bool $instantAvailable, bool $preorderAvailable): string
+    {
+        if ($blocked) {
+            return self::CUSTOMER_CLOSED;
+        }
+        if ($instantAvailable) {
+            return self::CUSTOMER_INSTANT;
+        }
+        if ($preorderAvailable) {
+            return self::CUSTOMER_PREORDER;
+        }
+        return self::CUSTOMER_CLOSED;
+    }
+
+    public static function customerAvailabilityFromRank($rank): string
+    {
+        return match ((int) $rank) {
+            3 => self::CUSTOMER_INSTANT,
+            2 => self::CUSTOMER_PREORDER,
+            default => self::CUSTOMER_CLOSED,
+        };
+    }
+
     /**
      * 三态 → 两 flag 的权威映射(纯函数·无 DB·可单测)。非法 mode 返回 null(端点据此拒绝,不误写)。
      */
@@ -384,5 +415,60 @@ class NezhaPreorder
             ->all();
 
         return self::buildSlotDays($windows, $now, self::minLeadHours(), self::maxDaysAhead(), self::pointStepMin());
+    }
+
+    /**
+     * 批量计算“此刻至少有一个真实可选配送点”的商家 id。
+     * 一次读取全部启用窗口，再复用 buildSlotDays 精确判定；列表页不会逐卡请求窗口。
+     */
+    public static function selectableRestaurantIds(?Carbon $now = null): array
+    {
+        if (!self::enabled() || !Helpers::schedule_order()) {
+            return [];
+        }
+
+        $now = $now ?: now();
+        $minLeadHours = self::minLeadHours();
+        $maxDaysAhead = self::maxDaysAhead();
+        $pointStepMin = self::pointStepMin();
+        $cacheKey = implode(':', [
+            'nz_preorder_selectable_restaurants',
+            $now->format('Y-m-d-H-i'),
+            $minLeadHours,
+            $maxDaysAhead,
+            $pointStepMin,
+        ]);
+        if (app()->bound($cacheKey)) {
+            return app($cacheKey);
+        }
+
+        $grouped = NezhaDeliveryWindow::where('active', 1)
+            ->orderBy('restaurant_id')
+            ->orderBy('day')
+            ->orderBy('start_time')
+            ->get(['id', 'restaurant_id', 'day', 'start_time', 'end_time'])
+            ->groupBy('restaurant_id');
+
+        $ids = [];
+        foreach ($grouped as $restaurantId => $windows) {
+            $slotData = self::buildSlotDays(
+                $windows->map(fn($w) => [
+                    'id' => (int) $w->id,
+                    'day' => (int) $w->day,
+                    'start_time' => (string) $w->start_time,
+                    'end_time' => (string) $w->end_time,
+                ])->all(),
+                $now,
+                $minLeadHours,
+                $maxDaysAhead,
+                $pointStepMin
+            );
+            if ($slotData['earliest'] !== null) {
+                $ids[] = (int) $restaurantId;
+            }
+        }
+
+        app()->instance($cacheKey, $ids);
+        return $ids;
     }
 }

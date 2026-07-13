@@ -26,7 +26,8 @@ class RestaurantLogic
 
         $query = Restaurant::
         withOpen($additional_data['longitude'],$additional_data['latitude'])
-            ->orderBy('open', 'desc') // 【物理劫持】：强制关店商户沉底
+            ->withCustomerAvailability()
+            ->orderByCustomerAvailability()
             ->with(['discount'=>function($q){
                 return $q->validate();
             }])
@@ -175,7 +176,9 @@ class RestaurantLogic
                 }
 
                 if($all_restaurant_sort_by_unavailable == 'remove'){
-                    $query = $query->having('open', '>', 0);
+                    $query = NezhaPreorder::enabled()
+                        ? $query->having('customer_availability_rank', '>', 1)
+                        : $query->having('open', '>', 0);
                 }
 
                 if($all_restaurant_sort_by_general == 'latest_created') {
@@ -231,7 +234,8 @@ class RestaurantLogic
         $new_restaurant_sort_by_temp_closed = $new_restaurant_sort_by_temp_closed ? $new_restaurant_sort_by_temp_closed->value : '';
 
         $query = Restaurant::withOpen($longitude,$latitude)
-        ->orderBy('open', 'desc') // 【物理劫持】
+        ->withCustomerAvailability()
+        ->orderByCustomerAvailability()
         ->with(['discount'=>function($q){
             return $q->validate();
         }])->whereIn('zone_id', $zone_id)
@@ -272,7 +276,9 @@ class RestaurantLogic
             }
 
             if($new_restaurant_sort_by_unavailable == 'remove'){
-                $query = $query->having('open', '>', 0);
+                $query = NezhaPreorder::enabled()
+                    ? $query->having('customer_availability_rank', '>', 1)
+                    : $query->having('open', '>', 0);
             }
 
             if($new_restaurant_sort_by_general == 'latest_created') {
@@ -316,7 +322,8 @@ class RestaurantLogic
         $popular_restaurant_sort_by_temp_closed = $popular_restaurant_sort_by_temp_closed ? $popular_restaurant_sort_by_temp_closed->value : '';
 
         $query = Restaurant::withOpen($longitude,$latitude)
-            ->orderBy('open', 'desc') // 【物理劫持】
+            ->withCustomerAvailability()
+            ->orderByCustomerAvailability()
             ->with(['reviews','discount'=>function($q){
                 return $q->validate();
             }])->whereIn('zone_id', $zone_id)
@@ -359,7 +366,9 @@ class RestaurantLogic
             }
 
             if($popular_restaurant_sort_by_unavailable == 'remove'){
-                $query = $query->having('open', '>', 0);
+                $query = NezhaPreorder::enabled()
+                    ? $query->having('customer_availability_rank', '>', 1)
+                    : $query->having('open', '>', 0);
             }
 
             if($popular_restaurant_sort_by_general == 'rating') {
@@ -394,7 +403,8 @@ class RestaurantLogic
     public static function get_dine_in_restaurants(array $additional_data)
     {
         $query = Restaurant::withOpen($additional_data['longitude']?? 0,$additional_data['latitude']?? 0)
-            ->orderBy('open', 'desc') // 【物理劫持】
+            ->withCustomerAvailability()
+            ->orderByCustomerAvailability()
             ->whereHas('restaurant_config', function ($query) {
                 $query->where('dine_in',1);
             })
@@ -484,7 +494,8 @@ class RestaurantLogic
         }
 
         $query = Restaurant::withOpen($longitude,$latitude)
-        ->orderBy('open', 'desc') // 【物理劫持】
+        ->withCustomerAvailability()
+        ->orderByCustomerAvailability()
         ->with(['discount'=>function($q){
             return $q->validate();
         }])->whereIn('zone_id', $zone_id)->weekday()
@@ -623,7 +634,9 @@ class RestaurantLogic
             }
 
             if($search_bar_sort_by_unavailable == 'remove'){
-                $query = $query->having('open', '>', 0);
+                $query = NezhaPreorder::enabled()
+                    ? $query->having('customer_availability_rank', '>', 1)
+                    : $query->having('open', '>', 0);
             }
         }
 
@@ -776,7 +789,8 @@ class RestaurantLogic
             $query->where('user_id',$user_id);
         })
         ->withOpen($longitude,$latitude)
-        ->orderBy('open', 'desc') // 【物理劫持】
+        ->withCustomerAvailability()
+        ->orderByCustomerAvailability()
         ->with(['discount'=>function($q){
             return $q->validate();
         }])->whereIn('zone_id', $zone_id)

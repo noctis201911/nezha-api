@@ -138,7 +138,10 @@ class CategoryLogic
         $category_id= Category::where(fn($q) =>$q->where('id', $additional_data['category_id'])->orWhere('slug', $additional_data['category_id']))->select(['id'])->first()?->id ;
 
 
-        $query = Restaurant::withOpen($additional_data['longitude'] , $additional_data['latitude'] )->with(['discount'=>function($q){
+        $query = Restaurant::withOpen($additional_data['longitude'] , $additional_data['latitude'] )
+        ->withCustomerAvailability()
+        ->orderByCustomerAvailability()
+        ->with(['discount'=>function($q){
             return $q->validate();
         }])->whereIn('zone_id', $additional_data['zone_id'] )
         ->whereHas('foods.category', function($query)use($category_id){
@@ -168,7 +171,9 @@ class CategoryLogic
             }
 
             if($all_restaurant_sort_by_unavailable == 'remove'){
-                $query = $query->having('open', '>', 0);
+                $query = NezhaPreorder::enabled()
+                    ? $query->having('customer_availability_rank', '>', 1)
+                    : $query->having('open', '>', 0);
             }elseif($all_restaurant_sort_by_unavailable == 'last'){
                 $query = $query->orderBy('open', 'desc');
             }

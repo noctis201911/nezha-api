@@ -323,12 +323,12 @@ class RestaurantController extends Controller
         // $user_id = $request->user ? $request->user->id : $request['guest_id'];
         $zone_id= json_decode($request->header('zoneId'), true);
         $data = Restaurant::withOpen($longitude,$latitude)
-
+        ->withCustomerAvailability()
         ->withcount('foods')
         ->with(['foods_for_reorder'])
         ->Active()
         ->whereIn('zone_id', $zone_id)
-        ->orderBy('open', 'desc')
+        ->orderByCustomerAvailability()
         ->orderBy('distance', 'asc')
         ->inRandomOrder()->limit(20)
         ->get()
@@ -351,6 +351,7 @@ class RestaurantController extends Controller
         // dd($user_id);
         $zone_id= json_decode($request->header('zoneId'), true);
         $data = Restaurant::withOpen($longitude,$latitude)
+        ->withCustomerAvailability()
         ->wherehas('users', function($q) use($user_id) {
             $q->where('user_id',$user_id);
         })
@@ -362,6 +363,7 @@ class RestaurantController extends Controller
 
         ->selectRaw('(SELECT `visit_count` FROM `visitor_logs` WHERE `restaurants`.`id` = `visitor_logs`.`visitor_log_id` AND `user_id` = ? ORDER BY `visit_count` DESC LIMIT 1) as visit_count', [$user_id])
 
+        ->orderByCustomerAvailability()
         ->orderBy('visit_count', 'desc')
 
         ->limit(20)
