@@ -36,11 +36,15 @@ class NezhaVendorWorkbenchDashboardContractTest extends TestCase
         $workbench = file_get_contents(resource_path('views/vendor-views/workbench/_body.blade.php'));
         $list = file_get_contents(resource_path('views/vendor-views/order/list.blade.php'));
         $detail = file_get_contents(resource_path('views/vendor-views/order/order-view.blade.php'));
+        $detailModes = file_get_contents(resource_path('views/vendor-views/order/partials/_detail_modes.blade.php'));
 
         $this->assertStringContainsString("'schedule_label'", $controller);
         $this->assertStringContainsString('$r[\'schedule_label\']', $workbench);
         $this->assertStringContainsString('预约送达 · {{ $__scheduleLabel }}', $list);
         $this->assertStringContainsString('不要按即时单立刻出餐', $detail);
         $this->assertStringContainsString('本单预约送达：', $detail);
+        $this->assertStringContainsString('data-nz-confirm-msg', $detailModes);
+        $this->assertStringContainsString('$nzScheduleLabel', $detailModes);
+        $this->assertStringNotContainsString("data-nz-auto-print-action=\"{{ \$nzOffPending ? '1' : '0' }}\" @if (\$nzPrimary['confirm']) onsubmit=", $detailModes);
     }
 }

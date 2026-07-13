@@ -184,7 +184,7 @@
             @elseif ($nzPrimary['visible'] && $nzPrimary['kind'] == 'form' && !empty($nzPrimary['combined_yandex']))
                 <a href="#nzYandexCard-{{ $order['id'] }}" onclick="var c=document.getElementById('nzYandexCard-{{ $order['id'] }}');if(c){c.scrollIntoView({behavior:'smooth',block:'center'});}return false;" class="nzo-btn nzo-btn-blue">↓ {{ $nzPrimary['label'] }}</a>
             @elseif ($nzPrimary['visible'] && $nzPrimary['kind'] == 'form')
-                <form action="{{ $nzPrimary['route'] }}" method="post" style="margin:0;" data-nz-auto-print-invoice="{{ route('vendor.order.generate-invoice', [$order['id']]) }}?nz_auto_print=1" data-nz-auto-print-action="{{ $nzOffPending ? '1' : '0' }}" @if ($nzPrimary['confirm']) onsubmit="return confirm('{{ $nzPrimary['confirm'] }}');" @endif>
+                <form action="{{ $nzPrimary['route'] }}" method="post" style="margin:0;" data-nz-auto-print-invoice="{{ route('vendor.order.generate-invoice', [$order['id']]) }}?nz_auto_print=1" data-nz-auto-print-action="{{ $nzOffPending ? '1' : '0' }}" @if ($nzPrimary['confirm']) data-nz-confirm-msg="{{ $nzPrimary['confirm'] }}{{ $nzScheduleLabel ? ' 本单预约送达：'.$nzScheduleLabel.'；确认后请按预约时间安排备餐和叫车。' : '' }}" @endif>
                     @csrf @method($nzPrimary['method'])
                     <button type="submit" class="nzo-btn nzo-btn-primary"><i class="tio-checkmark-circle"></i> {{ $nzPrimary['label'] }}</button>
                 </form>
