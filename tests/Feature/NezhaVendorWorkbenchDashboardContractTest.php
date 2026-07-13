@@ -47,4 +47,15 @@ class NezhaVendorWorkbenchDashboardContractTest extends TestCase
         $this->assertStringContainsString('$nzScheduleLabel', $detailModes);
         $this->assertStringNotContainsString("data-nz-auto-print-action=\"{{ \$nzOffPending ? '1' : '0' }}\" @if (\$nzPrimary['confirm']) onsubmit=", $detailModes);
     }
+
+    public function testCompletedMerchantRefundIsPresentedAsFinalAndCannotBeMarkedAgain(): void
+    {
+        $detailModes = file_get_contents(resource_path('views/vendor-views/order/partials/_detail_modes.blade.php'));
+
+        $this->assertStringContainsString("\$nzoRefundDone = \$nzoRR &&", $detailModes);
+        $this->assertStringContainsString("\$nzoRefundDone ? '已退款'", $detailModes);
+        $this->assertStringContainsString("@elseif (\$nzoRR && \$nzoRR->status === 'pending_merchant_refund')", $detailModes);
+        $this->assertStringContainsString("@if (\$nzoRR && \$nzoRR->status === 'pending_merchant_refund')", $detailModes);
+        $this->assertStringContainsString('已完成原路退款并留痕，无需再次操作。', $detailModes);
+    }
 }
