@@ -2214,73 +2214,14 @@ class OrderController extends Controller
             $OfflinePayments->customer_note = $request->customer_note;
             $OfflinePayments->method_fields = json_encode($method?->method_fields);
 
-            // 哪吒[自动核验]: 法币实付金额比对 + USDT 上链核验 + 图片软门标记。
-            // 仅辅助商家判断真到账, 不改资金机制(平台不碰钱), 不阻断下单 —— 任何异常都吞掉。
-            try {
-                $autoCheck = ['method_name' => $method->method_name, 'checked_at' => now()->toIso8601String()];
-                $expectedAmd = (float) ($order->order_amount ?? 0);
-                $rateCny = (float) (DB::table('business_settings')->where('key', 'nezha_rate_cny_to_amd')->value('value') ?: 55);
-                $rateUsd = (float) (DB::table('business_settings')->where('key', 'nezha_rate_usd_to_amd')->value('value') ?: 400);
-                $expectedUsdt = $rateUsd > 0 ? round($expectedAmd / $rateUsd, 2) : 0;
-                $expectedRmb  = $rateCny > 0 ? round($expectedAmd / $rateCny) : 0;
-                $isUsdtMethod = (bool) preg_match('/usdt/i', $method->method_name);
-                $autoCheck['expected_amd'] = $expectedAmd;
-                $autoCheck['expected_usdt'] = $expectedUsdt;
-                $autoCheck['expected_rmb'] = $expectedRmb;
-
-                // 顾客自报实付金额, 与应付比对(容差 3%)
-                $paid = $request->input('nezha_paid_amount');
-                if ($paid !== null && $paid !== '' && is_numeric($paid)) {
-                    $paid = (float) $paid;
-                    $autoCheck['paid_amount'] = $paid;
-                    $expect = $isUsdtMethod ? $expectedUsdt : $expectedRmb;
-                    $tol = max(1, $expect * 0.03);
-                    $autoCheck['amount_match'] = ($expect > 0) ? (abs($paid - $expect) <= $tol) : null;
-                }
-
-                // 图片软门标记(前端 canvas 体检: 过小/疑似模糊/接近空白) —— 仅提示不拦
-                $flags = json_decode((string) $request->input('nezha_image_flags'), true);
-                if (is_array($flags) && !empty($flags)) {
-                    $autoCheck['image_flags'] = $flags;
-                }
-
-                // USDT 上链核验
-                if ($isUsdtMethod) {
-                    $hash = null;
-                    foreach ($offline_payment_info as $k => $v) {
-                        if (in_array($k, ['method_id', 'method_name'], true)) continue;
-                        if (is_string($v) && \App\CentralLogics\NezhaChainVerifier::isValidHashFormat($v)) { $hash = $v; break; }
-                    }
-                    $autoCheck['tx_hash'] = $hash;
-                    if ($hash) {
-                        $reused = OfflinePayments::where('order_id', '!=', $order->id)
-                            ->where('payment_info', 'like', '%'.$hash.'%')->exists();
-                        $rest = DB::table('restaurants')->where('id', $order->restaurant_id)->first();
-                        // 按所选 USDT 方式确定链与应收地址: BEP20 方式→usdt_bep20_address; 否则波场TRC20→usdt_address。
-                        $isBep20 = (bool) preg_match('/bep ?20|bsc|bnb/i', $method->method_name);
-                        $expectNet = $isBep20 ? 'BEP20' : 'TRC20';
-                        $expectAddr = $isBep20 ? ($rest->usdt_bep20_address ?? '') : ($rest->usdt_address ?? '');
-                        $autoCheck['usdt_network'] = $expectNet;
-                        $verify = \App\CentralLogics\NezhaChainVerifier::verifyUsdt(
-                            $hash,
-                            $expectAddr,
-                            $expectedUsdt,
-                            $expectNet
-                        );
-                        if ($reused) {
-                            $verify['status'] = 'mismatch';
-                            $verify['reason'] = '这笔交易哈希此前已被其它订单使用过，疑似重复冒认，请核对';
-                            $verify['reused'] = true;
-                        }
-                        $autoCheck['chain'] = $verify;
-                    } else {
-                        $autoCheck['chain'] = ['status' => 'invalid_hash', 'reason' => '未填写有效交易哈希'];
-                    }
-                }
-                $OfflinePayments->nezha_auto_check = $autoCheck;
-            } catch (\Throwable $acEx) {
-                info('nezha auto_check failed: '.$acEx->getMessage());
-            }
+            // 哪吒[自动核验]: 初交与重交必须走同一真相源，避免重交后仍展示旧 TxID 的核验结果。
+            $this->refreshNezhaOfflinePaymentCheck(
+                $OfflinePayments,
+                $order,
+                $method,
+                $offline_payment_info,
+                $request
+            );
 
             DB::beginTransaction();
             $OfflinePayments->save();
@@ -2402,9 +2343,137 @@ class OrderController extends Controller
         $info->customer_note = $request->customer_note;
         $info->payment_info =json_encode($offline_payment_info);
         $info->status = 'pending';
+        // 重交 TxID / 法币凭证后必须覆盖旧核验快照；共享 helper 保持查重、链别、金额和图片软标记与初交一致。
+        $this->refreshNezhaOfflinePaymentCheck(
+            $info,
+            $order,
+            $method,
+            $offline_payment_info,
+            $request
+        );
         $info->save();
 
         return response()->json([ 'payment' => 'Payment_Info_Updated_successfully'], 200);
+    }
+
+    /**
+     * 初次提交与被打回后的重交共用同一只读核验逻辑。
+     * 失败时保持既有 fail-soft，同时显式清掉旧结果，避免把旧 TxID 的成功态误当成新凭证结果。
+     */
+    protected function refreshNezhaOfflinePaymentCheck(
+        OfflinePayments $payment,
+        Order $order,
+        OfflinePaymentMethod $method,
+        array $paymentInfo,
+        Request $request
+    ): void {
+        try {
+            $payment->nezha_auto_check = $this->buildNezhaOfflinePaymentCheck(
+                $order,
+                $method,
+                $paymentInfo,
+                $request
+            );
+        } catch (\Throwable $exception) {
+            $payment->nezha_auto_check = null;
+            info('nezha auto_check failed: '.$exception->getMessage());
+        }
+    }
+
+    protected function buildNezhaOfflinePaymentCheck(
+        Order $order,
+        OfflinePaymentMethod $method,
+        array $paymentInfo,
+        Request $request
+    ): array {
+        $autoCheck = [
+            'method_name' => $method->method_name,
+            'checked_at' => now()->toIso8601String(),
+        ];
+        $expectedAmd = (float) ($order->order_amount ?? 0);
+        $rateCny = (float) (DB::table('business_settings')->where('key', 'nezha_rate_cny_to_amd')->value('value') ?: 55);
+        $rateUsd = (float) (DB::table('business_settings')->where('key', 'nezha_rate_usd_to_amd')->value('value') ?: 400);
+        $expectedUsdt = $rateUsd > 0 ? round($expectedAmd / $rateUsd, 2) : 0;
+        $expectedRmb = $rateCny > 0 ? round($expectedAmd / $rateCny) : 0;
+        $isUsdtMethod = (bool) preg_match('/usdt/i', (string) $method->method_name);
+        $autoCheck['expected_amd'] = $expectedAmd;
+        $autoCheck['expected_usdt'] = $expectedUsdt;
+        $autoCheck['expected_rmb'] = $expectedRmb;
+
+        // 顾客自报实付金额，与应付比对（容差 3%）。
+        $paid = $request->input('nezha_paid_amount');
+        if ($paid !== null && $paid !== '' && is_numeric($paid)) {
+            $paid = (float) $paid;
+            $autoCheck['paid_amount'] = $paid;
+            $expected = $isUsdtMethod ? $expectedUsdt : $expectedRmb;
+            $tolerance = max(1, $expected * 0.03);
+            $autoCheck['amount_match'] = $expected > 0 ? abs($paid - $expected) <= $tolerance : null;
+        }
+
+        // 图片软门标记（过小/疑似模糊/接近空白）只提示商家，不阻断顾客提交。
+        $flags = json_decode((string) $request->input('nezha_image_flags'), true);
+        if (is_array($flags) && ! empty($flags)) {
+            $autoCheck['image_flags'] = $flags;
+        }
+
+        if (! $isUsdtMethod) {
+            return $autoCheck;
+        }
+
+        $hash = null;
+        foreach ($paymentInfo as $key => $value) {
+            if (in_array($key, ['method_id', 'method_name'], true)) {
+                continue;
+            }
+            if (is_string($value) && \App\CentralLogics\NezhaChainVerifier::isValidHashFormat($value)) {
+                $hash = $value;
+                break;
+            }
+        }
+
+        $autoCheck['tx_hash'] = $hash;
+        if (! $hash) {
+            $autoCheck['chain'] = ['status' => 'invalid_hash', 'reason' => '未填写有效交易哈希'];
+            return $autoCheck;
+        }
+
+        $reused = $this->nezhaOfflinePaymentHashWasReused($hash, $order->id);
+        $restaurant = DB::table('restaurants')->where('id', $order->restaurant_id)->first();
+        // 按所选 USDT 方式确定链与应收地址：BEP20→BSC 地址；否则 TRC20→Tron 地址。
+        $isBep20 = (bool) preg_match('/bep ?20|bsc|bnb/i', (string) $method->method_name);
+        $expectedNetwork = $isBep20 ? 'BEP20' : 'TRC20';
+        $expectedAddress = $isBep20
+            ? ($restaurant->usdt_bep20_address ?? '')
+            : ($restaurant->usdt_address ?? '');
+        $autoCheck['usdt_network'] = $expectedNetwork;
+        $verify = \App\CentralLogics\NezhaChainVerifier::verifyUsdt(
+            $hash,
+            $expectedAddress,
+            $expectedUsdt,
+            $expectedNetwork
+        );
+        if ($reused) {
+            $verify['status'] = 'mismatch';
+            $verify['reason'] = '这笔交易哈希此前已被其它订单使用过，疑似重复冒认，请核对';
+            $verify['reused'] = true;
+        }
+        $autoCheck['chain'] = $verify;
+
+        return $autoCheck;
+    }
+
+    /**
+     * 90 天后 payment_info 会按 L1-7 清除，但 nezha_auto_check 中的链上证据长期保留。
+     * 查重同时读取两处，避免凭证 PII 到期后同一 TxID 又被其它订单冒认。
+     */
+    protected function nezhaOfflinePaymentHashWasReused(string $hash, $currentOrderId): bool
+    {
+        return OfflinePayments::where('order_id', '!=', $currentOrderId)
+            ->where(function ($query) use ($hash) {
+                $query->where('payment_info', 'like', '%'.$hash.'%')
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(nezha_auto_check, '$.tx_hash')) = ?", [$hash]);
+            })
+            ->exists();
     }
 
     public function getPendingReviews(Request $request)
