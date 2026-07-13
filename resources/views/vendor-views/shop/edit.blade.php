@@ -43,13 +43,6 @@
                                         href="#"
                                         id="default-link">{{ translate('Default') }}</a>
                                     </li>
-                                    @foreach (json_decode($language) as $lang)
-                                        <li class="nav-item">
-                                            <a class="nav-link lang_link"
-                                                href="#"
-                                                id="{{ $lang }}-link">{{ \App\CentralLogics\Helpers::get_language_name($lang) . '(' . strtoupper($lang) . ')' }}</a>
-                                        </li>
-                                    @endforeach
                                 </ul>
                             </div>
                             @endif
@@ -147,31 +140,6 @@
                         </div>
                         <input type="hidden" name="latitude" id="nz-latitude" value="{{ $shop->latitude }}">
                         <input type="hidden" name="longitude" id="nz-longitude" value="{{ $shop->longitude }}">
-                    </div>
-                    <div class="card card-body mb-20">
-                        <div class="mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
-                            <div>
-                                <h4 class="mb-1">{{ translate('messages.Logo_&_Cover') }}</h4>
-                                <p class="fs-12 mb-0">{{ translate('店铺 Logo 和封面已统一在「门店形象」页管理，这里只看不改。') }}</p>
-                            </div>
-                            <a href="{{ route('vendor.shop.brand') }}" class="btn btn--primary" style="color:#fff;">
-                                <i class="tio-photo"></i> {{ translate('去门店形象页') }}
-                            </a>
-                        </div>
-                        <div class="row g-3">
-                            <div class="col-lg-6">
-                                <div class="p-12 global-bg-box rounded text-center h-100">
-                                    <p class="fs-12 gray-dark mb-2">{{ translate('店铺 Logo') }}</p>
-                                    <img src="{{ $shop?->logo_full_url ?? dynamicAsset('assets/admin/img/image-place-holder.png') }}" alt="logo" style="width:110px;height:110px;object-fit:cover;border-radius:10px;border:1px solid #e7eaf3;">
-                                </div>
-                            </div>
-                            <div class="col-lg-6">
-                                <div class="p-12 global-bg-box rounded text-center h-100">
-                                    <p class="fs-12 gray-dark mb-2">{{ translate('店铺封面') }}</p>
-                                    <img src="{{ $shop?->cover_photo_full_url ?? dynamicAsset('assets/admin/img/restaurant_cover.jpg') }}" alt="cover" style="width:100%;max-width:300px;height:88px;object-fit:cover;border-radius:10px;border:1px solid #e7eaf3;">
-                                </div>
-                            </div>
-                        </div>
                     </div>
                     <div class="btn--container justify-content-end">
                         <a class="btn btn--reset min-w-120" href="{{route('vendor.shop.view')}}">{{translate('messages.cancel')}}</a>

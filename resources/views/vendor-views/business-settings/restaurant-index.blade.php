@@ -114,6 +114,14 @@
                     </div>
                 </div>
             <div class="card card-body mb-20">
+                {{-- 商家端不展示订单类型，但保存其它设置时必须原样提交，避免控制器把缺失字段重置。 --}}
+                <input type="hidden" name="delivery" value="{{ $restaurant->delivery ? 1 : 0 }}">
+                <input type="hidden" name="take_away" value="{{ $restaurant->take_away ? 1 : 0 }}">
+                <input type="hidden" name="dine_in" value="{{ $restaurant->restaurant_config?->dine_in == 1 ? 1 : 0 }}">
+                <input type="hidden" name="minimum_order" value="{{ $restaurant->minimum_order ?? 0 }}">
+                <input type="hidden" name="schedule_advance_dine_in_booking_duration" value="{{ $restaurant->restaurant_config?->schedule_advance_dine_in_booking_duration ?? 0 }}">
+                <input type="hidden" name="schedule_advance_dine_in_booking_duration_time_format" value="{{ $restaurant->restaurant_config?->schedule_advance_dine_in_booking_duration_time_format ?? 'min' }}">
+                @if (false)
                 <div class="card card-body mb-20">
                     <div class="mb-20">
                         <h4 class="mb-1">{{ translate('messages.Order_Type') }}</h4>
@@ -250,6 +258,7 @@
                         </span>
                     </div>
                 </div>
+                @endif
                 <div class="card card-body mb-20">
                     <div class="mb-20">
                         <h4 class="mb-1">{{ translate('messages.Regular_Order') }}</h4>
@@ -639,6 +648,16 @@
                 @endif
 
 
+                {{-- 商家端不展示其他设置；以下隐藏字段仅保留数据库现值，不提供新的操作入口。 --}}
+                <input type="hidden" name="veg" value="{{ $restaurant->veg ? 1 : 0 }}">
+                <input type="hidden" name="non_veg" value="{{ $restaurant->non_veg ? 1 : 0 }}">
+                <input type="hidden" name="halal_tag_status" value="{{ $restaurant->restaurant_config?->halal_tag_status == 1 ? 1 : 0 }}">
+                <input type="hidden" name="cutlery" value="{{ $restaurant->cutlery ? 1 : 0 }}">
+                <input type="hidden" name="gst_status" value="{{ $restaurant->gst_status ? 1 : 0 }}">
+                <input type="hidden" name="gst" value="{{ $restaurant->gst_code }}">
+                <input type="hidden" name="customer_date_order_sratus" value="{{ $restaurant->restaurant_config?->customer_date_order_sratus == 1 ? 1 : 0 }}">
+                <input type="hidden" name="customer_order_date" value="{{ $restaurant->restaurant_config?->customer_order_date ?? 0 }}">
+                @if (false)
                 <div class="card card-body mb-20">
                     <div class="mb-20">
                         <h4 class="mb-1">{{ translate('messages.Other Setup') }}</h4>
@@ -807,6 +826,7 @@
 
                     </div>
                 </div>
+                @endif
                 <div class="btn--container justify-content-end">
                     <button type="reset" id="reset_btn"
                         class="btn btn--secondary min-w-120 location-reload">{{ translate('messages.Reset') }} </button>

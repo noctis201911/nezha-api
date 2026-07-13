@@ -73,36 +73,9 @@
                                                 <h2 class="h3 mb-1">{{$shop->name}}</h2>
                                                 {{-- <p class="fs-12 mb-0">{{translate('Created_at')}} {{ \App\CentralLogics\Helpers::time_date_format($shop->created_at) }}</p> --}}
                                             </div>
-                                            @if(!empty(\App\CentralLogics\Helpers::get_business_data('landing_page_links')['web_app_url']))
-                                            <a target="_blank"
-                                               href="{{ \App\CentralLogics\Helpers::get_business_data('landing_page_links')['web_app_url'] .'restaurant/' . $shop->slug . '?id=' . $shop->id . '&form_dine_in=false' }}"
-                                               class="btn btn-outline-primary d-flex gap-2 align-items-baseline">
-                                                {{translate('messages.Visit_Website')}} <i class="tio-open-in-new"></i>
-                                            </a>
-                                            @endif
                                         </div>
                                     </div>
                                     <div class="shop-details-model flex-xxl-nowrap">
-                                        <div class="shop-details-model-item align-items-start flex-grow-1 flex-shrink-0">
-                                            <img src="{{dynamicAsset('assets/admin/new-img/icon-1.png')}}" alt="">
-                                            <div class="shop-details-model-item-content fs-13">
-                                                <h5 class="mb-1 text-nowrap">  {{ translate('Business_Model') }} </h5>
-                                                @if($shop->restaurant_model == 'commission')
-                                                    <div>{{translate('Commission_Base')}}</div>
-                                                @elseif($shop->restaurant_model == 'none')
-                                                    <div>{{translate('Not_chosen')}}</div>
-                                                @else
-                                                    <div>{{translate('Subscription')}}</div>
-                                                @endif
-                                            </div>
-                                        </div>
-                                        <div class="shop-details-model-item align-items-start flex-grow-1 flex-shrink-0">
-                                            <img src="{{dynamicAsset('assets/admin/new-img/icon_6.png')}}" alt="">
-                                            <div class="shop-details-model-item-content fs-13">
-                                                <h5 class="mb-1 text-nowrap">  {{ translate('admin_Commission') }} </h5>
-                                                <div> {{(isset($shop->comission)?$shop->comission:\App\Models\BusinessSetting::where('key','admin_commission')->first()?->value)}} %</div>
-                                            </div>
-                                        </div>
                                         <div class="shop-details-model-item align-items-start flex-grow-1 flex-shrink-0">
                                             <img src="{{dynamicAsset('assets/admin/new-img/icon-3.png')}}" alt="">
                                             <div class="shop-details-model-item-content fs-13">
