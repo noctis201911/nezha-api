@@ -11,7 +11,7 @@
         $isVendor = in_array($role ?? '', ['vendor', 'vendor_employee']);
     @endphp
     <title>{{ translate('messages.login') }} | {{ $app_name ?? '哪吒外卖' }}</title>
-    <link rel="shortcut icon" href="{{ asset($icon ? 'storage/app/public/business/'.$icon : 'public/favicon.ico') }}">
+    <link rel="shortcut icon" href="{{ $icon ? dynamicStorage('storage/app/public/business/'.$icon) : dynamicAsset('favicon.ico') }}">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
