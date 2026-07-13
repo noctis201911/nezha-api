@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\V1\NewsletterController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\OrderSubscriptionController;
+use App\Http\Controllers\Api\V1\PaymentAddressCredentialController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\RestaurantController;
 use App\Http\Controllers\Api\V1\SupportMailTicketController;
@@ -418,6 +419,8 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     });
 
     Route::group(['prefix' => 'customer', 'middleware' => 'auth:api'], function () {
+        Route::post('payment/address-credential', [PaymentAddressCredentialController::class, 'store'])
+            ->middleware('rateLimiter');
         Route::get('notifications', [NotificationController::class, 'get_notifications']);
         Route::get('notifications/unread-count', [NotificationController::class, 'unread_count']);
         Route::post('notifications/mark-seen', [NotificationController::class, 'mark_seen']);

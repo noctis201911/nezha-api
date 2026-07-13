@@ -174,6 +174,12 @@ return [
 
         /* ═══ D. 未就绪/有前置——【暂不开】(expected=0, ≠0 即红) ═══ */
         [
+            'key' => 'nezha_payment_address_credential_status', 'label' => 'USDT 付款地址版本凭据', 'section' => 'D', 'level' => 'L1-1邻',
+            'expected' => 0, 'value_type' => 'bool',
+            'prereq' => '默认关闭。真开前须①生产存量 USDT 地址严格校验/修正②客户付款抽屉真实浏览器验收③前后端同批支持 address_credential_token④地址切换/旧凭据承认窗口获业主明确批准⑤迁移、影响和回滚方案获批。开=已登录客户取得持久化地址凭据，凭证提交按当时地址核验；不创建订单、不冻结金额',
+            'settings_route' => null, 'ops_note' => "无专用后台开关 UI(DB flag)。翻开须 {$OPS_ACTIVATE}；关闭即停止签发/强制校验，但既有凭据账本不删除",
+        ],
+        [
             'key' => 'nezha_preorder_status', 'label' => '预约下单/集中配送(总闸)', 'section' => 'D', 'level' => 'L2',
             'expected' => 0, 'value_type' => 'bool',
             'prereq' => 'Phase1 分阶段 dormant(M1地基/M2窗口锚定时钟/M3取消并发锁/M4三态接单模式 已上线未部署)。真开=①全链 staging QA(含 M3 真并发下单 harness)②业主批准③前端预约 UI 6屏截图点头。开=商家可选三态接单模式(即时/即时+预约/只接预约)+顾客选配送时段+作业台分组;关=三态抽屉不显·下单选窗口不透出·作业台分组隐·端点 nezha_accept_mode 直接拒。见 fable-brief/PLAN_preorder_scheduled_delivery.md §16',
