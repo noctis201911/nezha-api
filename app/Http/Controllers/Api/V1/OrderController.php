@@ -26,7 +26,9 @@ use App\Models\OrderReference;
 use App\Models\BusinessSetting;
 use App\Models\CashBackHistory;
 use App\Models\OfflinePayments;
+use App\Models\NezhaPaymentIntent;
 use App\CentralLogics\OrderLogic;
+use App\CentralLogics\NezhaPaymentSnapshot;
 use App\Models\OrderCancelReason;
 use App\CentralLogics\CouponLogic;
 use Illuminate\Support\Facades\DB;
@@ -63,7 +65,7 @@ class OrderController extends Controller
             $request['contact_number'] = $contact;
         }
 
-        $order = Order::with(['restaurant','restaurant.restaurant_sub', 'refund', 'delivery_man', 'delivery_man.rating','subscription','payments','OrderReference'])->withCount('details')->where(['id' => $request['order_id'], 'user_id' => $user_id])
+        $order = Order::with(['restaurant','restaurant.restaurant_sub', 'refund', 'delivery_man', 'delivery_man.rating','subscription','payments','offline_payments','nezha_payment_intent','OrderReference'])->withCount('details')->where(['id' => $request['order_id'], 'user_id' => $user_id])
             ->when(!$request->user, function ($query) use ($request) {
                 return $query->whereJsonContains('delivery_address->contact_person_number', $request['contact_number']);
             })
@@ -73,6 +75,7 @@ class OrderController extends Controller
             // 哪吒B方案: 完成/送达元数据 + 收据(必须在 restaurant 被格式化为数组、offline_payments 被 unset 之前, 关系仍为模型时计算)
             $order['nezha_completion'] = OrderLogic::completion_meta($order);
             $order['nezha_receipt'] = OrderLogic::receipt_meta($order);
+            $order['nezha_payment_snapshot'] = NezhaPaymentSnapshot::forCustomer($order->nezha_payment_intent);
             // 哪吒[追踪页展开商品]: 顾客自己订单的商品行(名称/数量/行价), 与订单详情页同源, L3只读不新增暴露
             $order['nezha_items'] = ($order->details ?? collect())->map(function ($it) {
                 $fd = json_decode($it->food_details, true);
@@ -712,7 +715,10 @@ class OrderController extends Controller
         $nezha_risk_ctx_authoritative = $nezha_risk_ctx;
         $nezha_risk_ctx_authoritative['order_amount'] = (float) $order->order_amount;
         // 哪吒[风控通道收口]: 不信任客户端 payment_channel(已在 ctx 内但此处忽略), 由服务端 order->payment_method 权威判定通道; 线下支付通道未定则对两套阈值取最严。
-        $nezha_risk_authoritative = \App\CentralLogics\NezhaRiskControl::evaluate_server_authoritative($nezha_risk_ctx_authoritative, (string) $order->payment_method);
+        $nezhaAuthoritativePaymentMethod = $request->partial_payment
+            ? (string) $request->payment_method
+            : (string) $order->payment_method;
+        $nezha_risk_authoritative = \App\CentralLogics\NezhaRiskControl::evaluate_server_authoritative($nezha_risk_ctx_authoritative, $nezhaAuthoritativePaymentMethod);
         if ($nezha_risk_authoritative['action'] !== 'pass') {
             DB::rollBack();
             \App\CentralLogics\NezhaRiskControl::record($nezha_risk_ctx_authoritative, $nezha_risk_authoritative);
@@ -722,6 +728,40 @@ class OrderController extends Controller
                 ]
             ], 403);
         }
+
+        // 顾客看到任何收款码/地址前，先用服务端权威订单金额冻结本单汇率与商家收款信息。
+        // 独立 payment_intent 只表示「付款信息已准备」，不表示顾客已经付款或提交付款信息。
+        $nezhaPaymentSnapshotData = null;
+        $nezhaPaymentIntent = null;
+        if ($request->payment_method === 'offline_payment') {
+            $nzTimeout = \App\CentralLogics\NezhaOrderTimeout::settings();
+            $nzExpiresAt = now()->copy()->addMinutes(max(1, (int) ($nzTimeout['unpaid_cancel'] ?? 10)));
+            $nzExpectedOfflineAmount = (float) $order->order_amount;
+            if ($request->partial_payment && $request->user) {
+                $nzExpectedOfflineAmount -= min(
+                    (float) $request->user->wallet_balance,
+                    (float) $order->order_amount
+                );
+            }
+            $nezhaPaymentSnapshotData = NezhaPaymentSnapshot::build(
+                $order,
+                $restaurant,
+                null,
+                null,
+                now(),
+                $nzExpiresAt,
+                max(0, $nzExpectedOfflineAmount)
+            );
+            if (empty($nezhaPaymentSnapshotData['methods'])) {
+                DB::rollBack();
+                return response()->json([
+                    'errors' => [
+                        ['code' => 'offline_payment_unavailable', 'message' => '该商家暂未配置可用的付款方式，请联系商家']
+                    ]
+                ], 403);
+            }
+        }
+
         if($request->payment_method == 'wallet' && $request->user->wallet_balance < $order_amount)
         {
             DB::rollBack();
@@ -780,6 +820,16 @@ class OrderController extends Controller
             }
 
             $order->save();
+
+            if ($nezhaPaymentSnapshotData) {
+                $nezhaPaymentIntent = NezhaPaymentIntent::create([
+                    'order_id' => $order->id,
+                    'restaurant_id' => $order->restaurant_id,
+                    'status' => 'prepared',
+                    'snapshot' => $nezhaPaymentSnapshotData,
+                    'expires_at' => data_get($nezhaPaymentSnapshotData, 'expires_at'),
+                ]);
+            }
 
             // 哪吒[券包 Slice3·任务④]: 下单成功用券 → firstOrCreate 领取记录 + 回填 used_at(纯信息字段, 不碰金额/状态机/退款)。
             //   覆盖"没领直接结算用券"路径, 使券进「我的券包」并标记已用; 在事务内随订单一致提交/回滚。失败仅记日志, 绝不阻断下单。
@@ -881,16 +931,23 @@ class OrderController extends Controller
             DB::commit();
             //PlaceOrderMail
 
-            // 哪吒商家版App: 新单落库后立即报警(独立于gated通知,覆盖顾客离线单H1漏单)。严格fire-and-forget: 自带try/catch绝不冒泡到外层catch(否则会把已成功订单误返403)。
-            try { \App\CentralLogics\Helpers::dispatchVendorOrderAlarm($order); } catch (\Throwable $nezhaAlarmE) { \Illuminate\Support\Facades\Log::info('nezha place_order alarm hook: ' . $nezhaAlarmE->getMessage()); }
+            // 离线直付单此时只是付款信息已冻结，顾客尚未提交付款信息；商家报警延后到 offline_payment 成功。
+            // 其它支付方式保持原有新单报警时机。
+            if ($request->payment_method !== 'offline_payment') {
+                try { \App\CentralLogics\Helpers::dispatchVendorOrderAlarm($order); } catch (\Throwable $nezhaAlarmE) { \Illuminate\Support\Facades\Log::info('nezha place_order alarm hook: ' . $nezhaAlarmE->getMessage()); }
+            }
 
             return response()->json([
                 'message' => translate('messages.order_placed_successfully'),
                 'order_id' => $order->id,
-                'total_ammount' => $total_price+$order->delivery_charge+$tax_amount
+                'total_ammount' => $total_price+$order->delivery_charge+$tax_amount,
+                'order_amount' => (float) $order->order_amount,
+                'payment_snapshot' => NezhaPaymentSnapshot::forCustomer($nezhaPaymentIntent),
             ], 200);
         } catch (\Exception $e) {
-            DB::rollBack();
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
             info($e->getMessage());
             return response()->json([translate('下单失败，请稍后重试')], 403); // 哪吒[N-I-01]: 不回吐原始异常(原泄露SQLSTATE/表名), 真因已 info() 记日志
         }
@@ -1053,7 +1110,7 @@ class OrderController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
         $user_id = $request->user ? $request->user->id : $request['guest_id'];
-        $order = Order::with('details','offline_payments','subscription.schedules', 'restaurant')->where('user_id', $user_id)
+        $order = Order::with('details','offline_payments','nezha_payment_intent','subscription.schedules', 'restaurant')->where('user_id', $user_id)
 
             ->when(!isset($request->user) , function($query){
                 $query->where('is_guest' , 1);
@@ -1078,7 +1135,7 @@ class OrderController extends Controller
             $subscription_schedules =  $order?->subscription?->schedules;
             $offline_payment = isset($order->offline_payments) ? Helpers::offline_payment_formater($order->offline_payments) : null;
 
-            return response()->json(['details'=>$data, 'subscription_schedules'=> $subscription_schedules, 'offline_payment' => $offline_payment, 'saver_delivery_time' => $this->get_saver_delivery_time($order)
+            return response()->json(['details'=>$data, 'subscription_schedules'=> $subscription_schedules, 'offline_payment' => $offline_payment, 'nezha_payment_snapshot' => NezhaPaymentSnapshot::forCustomer($order->nezha_payment_intent), 'saver_delivery_time' => $this->get_saver_delivery_time($order)
             ], 200);
         }
 
@@ -2134,24 +2191,33 @@ class OrderController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
+        $nezha_uid = $request->user ? $request->user->id : $request['guest_id'];
+        $order = Order::with('nezha_payment_intent')->where('id', $request->order_id)->where('user_id', $nezha_uid)
+            ->when(!isset($request->user), function($query){ $query->where('is_guest', 1); })
+            ->when(isset($request->user), function($query){ $query->where('is_guest', 0); })
+            ->first();
+
+        // 已冻结并展示给顾客的订单必须允许提交付款信息；全局开关只拦没有快照的旧路径。
         $config = Helpers::get_mail_status('offline_payment_status');
-        if ($config == 0) {
+        if ($config == 0 && ! $order?->nezha_payment_intent) {
             return response()->json([
                 'errors' => [
                     ['code' => 'offline_payment_status', 'message' => translate('messages.offline_payment_for_the_order_not_available_at_this_time')]
                 ]
             ], 403);
         }
-        $nezha_uid = $request->user ? $request->user->id : $request['guest_id'];
-        $order = Order::where('id', $request->order_id)->where('user_id', $nezha_uid)
-            ->when(!isset($request->user), function($query){ $query->where('is_guest', 1); })
-            ->when(isset($request->user), function($query){ $query->where('is_guest', 0); })
-            ->first();
 
         $offline_payment_info = [];
-        $method = OfflinePaymentMethod::where(['id'=>$request->method_id,'status'=>1])->first();
+        $frozenMethod = $order
+            ? NezhaPaymentSnapshot::methodFor($order->nezha_payment_intent, $request->method_id)
+            : null;
+        $method = OfflinePaymentMethod::where('id', $request->method_id)
+            ->when(! $frozenMethod, function ($query) {
+                $query->where('status', 1);
+            })
+            ->first();
 
-        if(!$method || !$order ) {
+        if(!$method || !$order || ($order->nezha_payment_intent && ! $frozenMethod)) {
             return response()->json([
                 'errors' => [
                     ['code' => 'offline_payment_order_or_method', 'message' => translate('messages.offline_payment_order_or_method_not_found')]
@@ -2159,11 +2225,25 @@ class OrderController extends Controller
             ], 403);
         }
 
+        // 首次提交接口幂等：网络超时后的重复请求不覆盖既有付款信息，也不重复通知商家。
+        if (OfflinePayments::where('order_id', $order->id)->exists()) {
+            return response()->json(['payment' => 'success'], 200);
+        }
+        if (in_array($order->order_status, ['canceled', 'failed', 'refunded'], true)) {
+            return response()->json([
+                'errors' => [[
+                    'code' => 'offline_payment_order_not_payable',
+                    'message' => '订单已取消或结束，请勿继续付款；如已转账请联系商家处理',
+                ]],
+            ], 403);
+        }
+
         try{
             // 哪吒: 顾客凭证字段名取自 method_fields 的 input_field_name。
             // 本站 method_informations 列被用作纯文字说明(cast→null),沿用原逻辑会丢弃顾客输入(如USDT交易哈希),
             // 导致退款无法按原始 tx 反查原路。优先 method_fields,空时回退 method_informations(兼容标准StackFood配置)。
-            $methodFields = $method->method_fields ?? [];
+            $methodFields = $frozenMethod['method_fields'] ?? $method->method_fields ?? [];
+            $methodName = $frozenMethod['method_name'] ?? $method->method_name;
             $fields = array_column($methodFields, 'input_field_name');
             if (empty($fields)) {
                 $fields = array_column($method->method_informations ?? [], 'customer_input');
@@ -2180,7 +2260,7 @@ class OrderController extends Controller
             $values = $request->all();
 
             $offline_payment_info['method_id'] = $request->method_id;
-            $offline_payment_info['method_name'] = $method->method_name;
+            $offline_payment_info['method_name'] = $methodName;
             foreach ($fields as $field) {
                 if (($fieldType[$field] ?? 'text') === 'file') {
                     // 哪吒: 付款截图属PII。存到 public 磁盘 offline_payment/ 下,
@@ -2213,82 +2293,28 @@ class OrderController extends Controller
             $OfflinePayments= OfflinePayments::firstOrNew(['order_id' => $order->id]);
             $OfflinePayments->payment_info =json_encode($offline_payment_info);
             $OfflinePayments->customer_note = $request->customer_note;
-            $OfflinePayments->method_fields = json_encode($method?->method_fields);
+            $OfflinePayments->method_fields = json_encode($methodFields);
 
-            // 哪吒[自动核验]: 法币实付金额比对 + USDT 上链核验 + 图片软门标记。
-            // 仅辅助商家判断真到账, 不改资金机制(平台不碰钱), 不阻断下单 —— 任何异常都吞掉。
-            try {
-                $autoCheck = ['method_name' => $method->method_name, 'checked_at' => now()->toIso8601String()];
-                $expectedAmd = (float) ($order->order_amount ?? 0);
-                $rateCny = (float) (DB::table('business_settings')->where('key', 'nezha_rate_cny_to_amd')->value('value') ?: 55);
-                $rateUsd = (float) (DB::table('business_settings')->where('key', 'nezha_rate_usd_to_amd')->value('value') ?: 400);
-                $expectedUsdt = $rateUsd > 0 ? round($expectedAmd / $rateUsd, 2) : 0;
-                $expectedRmb  = $rateCny > 0 ? round($expectedAmd / $rateCny) : 0;
-                $isUsdtMethod = (bool) preg_match('/usdt/i', $method->method_name);
-                $autoCheck['expected_amd'] = $expectedAmd;
-                $autoCheck['expected_usdt'] = $expectedUsdt;
-                $autoCheck['expected_rmb'] = $expectedRmb;
-
-                // 顾客自报实付金额, 与应付比对(容差 3%)
-                $paid = $request->input('nezha_paid_amount');
-                if ($paid !== null && $paid !== '' && is_numeric($paid)) {
-                    $paid = (float) $paid;
-                    $autoCheck['paid_amount'] = $paid;
-                    $expect = $isUsdtMethod ? $expectedUsdt : $expectedRmb;
-                    $tol = max(1, $expect * 0.03);
-                    $autoCheck['amount_match'] = ($expect > 0) ? (abs($paid - $expect) <= $tol) : null;
-                }
-
-                // 图片软门标记(前端 canvas 体检: 过小/疑似模糊/接近空白) —— 仅提示不拦
-                $flags = json_decode((string) $request->input('nezha_image_flags'), true);
-                if (is_array($flags) && !empty($flags)) {
-                    $autoCheck['image_flags'] = $flags;
-                }
-
-                // USDT 上链核验
-                if ($isUsdtMethod) {
-                    $hash = null;
-                    foreach ($offline_payment_info as $k => $v) {
-                        if (in_array($k, ['method_id', 'method_name'], true)) continue;
-                        if (is_string($v) && \App\CentralLogics\NezhaChainVerifier::isValidHashFormat($v)) { $hash = $v; break; }
-                    }
-                    $autoCheck['tx_hash'] = $hash;
-                    if ($hash) {
-                        $reused = OfflinePayments::where('order_id', '!=', $order->id)
-                            ->where('payment_info', 'like', '%'.$hash.'%')->exists();
-                        $rest = DB::table('restaurants')->where('id', $order->restaurant_id)->first();
-                        // 按所选 USDT 方式确定链与应收地址: BEP20 方式→usdt_bep20_address; 否则波场TRC20→usdt_address。
-                        $isBep20 = (bool) preg_match('/bep ?20|bsc|bnb/i', $method->method_name);
-                        $expectNet = $isBep20 ? 'BEP20' : 'TRC20';
-                        $expectAddr = $isBep20 ? ($rest->usdt_bep20_address ?? '') : ($rest->usdt_address ?? '');
-                        $autoCheck['usdt_network'] = $expectNet;
-                        $verify = \App\CentralLogics\NezhaChainVerifier::verifyUsdt(
-                            $hash,
-                            $expectAddr,
-                            $expectedUsdt,
-                            $expectNet
-                        );
-                        if ($reused) {
-                            $verify['status'] = 'mismatch';
-                            $verify['reason'] = '这笔交易哈希此前已被其它订单使用过，疑似重复冒认，请核对';
-                            $verify['reused'] = true;
-                        }
-                        $autoCheck['chain'] = $verify;
-                    } else {
-                        $autoCheck['chain'] = ['status' => 'invalid_hash', 'reason' => '未填写有效交易哈希'];
-                    }
-                }
-                $OfflinePayments->nezha_auto_check = $autoCheck;
-            } catch (\Throwable $acEx) {
-                info('nezha auto_check failed: '.$acEx->getMessage());
-            }
+            $this->refreshNezhaOfflinePaymentCheck(
+                $OfflinePayments,
+                $order,
+                $method,
+                $offline_payment_info,
+                $request,
+                $frozenMethod
+            );
 
             DB::beginTransaction();
             $OfflinePayments->save();
+            if ($order->nezha_payment_intent) {
+                $order->nezha_payment_intent->status = 'submitted';
+                $order->nezha_payment_intent->save();
+            }
             $order->save();
             DB::commit();
 
-            Helpers::sentAdminPanelNotification($order);
+            try { Helpers::sentAdminPanelNotification($order); } catch (\Throwable $nezhaNotifyE) { \Illuminate\Support\Facades\Log::info('nezha offline_payment admin notification: ' . $nezhaNotifyE->getMessage()); }
+            try { Helpers::dispatchVendorOrderAlarm($order); } catch (\Throwable $nezhaAlarmE) { \Illuminate\Support\Facades\Log::info('nezha offline_payment alarm hook: ' . $nezhaAlarmE->getMessage()); }
 
             return response()->json([
                 'payment' => 'success'
@@ -2296,7 +2322,9 @@ class OrderController extends Controller
 
 
         } catch (\Exception $e) {
-            DB::rollBack();
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
             // 哪吒(#3): 凭证上传/保存失败 → 后端兜底回滚刚建的订单(防 pending/unpaid 无凭证孤儿单)。
             // 比前端 onError 可靠: place 成功后前端已导航到订单详情、CheckoutPage 卸载致 react-query 的 onError 不触发(实测孤儿单残留)。
             try {
@@ -2307,10 +2335,19 @@ class OrderController extends Controller
                     $order->canceled_by = 'system';
                     $order->cancellation_reason = '付款凭证上传失败，订单已自动回滚';
                     $order->save();
+                    if ($order->nezha_payment_intent) {
+                        $order->nezha_payment_intent->status = 'canceled';
+                        $order->nezha_payment_intent->save();
+                    }
                     \App\CentralLogics\Helpers::decreaseSellCount(order_details: $order->details);
                 }
             } catch (\Throwable $ex) { info('offline_payment rollback-cancel failed: '.$ex->getMessage()); }
-            return response()->json([ 'payment' => $e->getMessage()], 403);
+            return response()->json([
+                'errors' => [[
+                    'code' => 'offline_payment_submit_failed_order_canceled',
+                    'message' => '付款信息提交失败，订单已自动取消，请重新下单',
+                ]],
+            ], 403);
         }
     }
 
@@ -2325,7 +2362,7 @@ class OrderController extends Controller
         }
         $info= OfflinePayments::where('order_id' , $request->order_id)->first();
         $nezha_uid = $request->user ? $request->user->id : $request['guest_id'];
-        $order= Order::where('id', $request->order_id)->where('user_id', $nezha_uid)
+        $order= Order::with('nezha_payment_intent')->where('id', $request->order_id)->where('user_id', $nezha_uid)
             ->when(!isset($request->user), function($query){ $query->where('is_guest', 1); })
             ->when(isset($request->user), function($query){ $query->where('is_guest', 0); })
             ->first();
@@ -2340,8 +2377,11 @@ class OrderController extends Controller
         $old_data =   json_decode($info->payment_info , true) ;
         $method_id= data_get($old_data,'method_id',null);
         $method = OfflinePaymentMethod::where('id', $method_id)->first();
+        $frozenMethod = $order
+            ? NezhaPaymentSnapshot::methodFor($order->nezha_payment_intent, $method_id)
+            : null;
 
-        if(!$method ) {
+        if(!$method || ($order->nezha_payment_intent && ! $frozenMethod)) {
             return response()->json([
                 'errors' => [
                     ['code' => 'offline_payment_order_or_method', 'message' => translate('messages.offline_payment_method_not_found')]
@@ -2350,7 +2390,8 @@ class OrderController extends Controller
         }
         $offline_payment_info = [];
         // 哪吒: 同 offline_payment(), 字段名优先取 method_fields.input_field_name(回退 method_informations.customer_input)
-        $methodFields = $method->method_fields ?? [];
+        $methodFields = $frozenMethod['method_fields'] ?? $method->method_fields ?? [];
+        $methodName = $frozenMethod['method_name'] ?? $method->method_name;
         $fields = array_column($methodFields, 'input_field_name');
         if (empty($fields)) {
             $fields = array_column($method->method_informations ?? [], 'customer_input');
@@ -2364,7 +2405,7 @@ class OrderController extends Controller
         }
         $values = $request->all();
         $offline_payment_info['method_id'] =$method->id;
-        $offline_payment_info['method_name'] = $method->method_name;
+        $offline_payment_info['method_name'] = $methodName;
         foreach ($fields as $field) {
             if (($fieldType[$field] ?? 'text') === 'file') {
                 // 哪吒: 截图字段。传了新文件→替换(并删旧文件防孤儿); 没传→保留原截图路径,避免编辑文本时丢截图。
@@ -2403,9 +2444,167 @@ class OrderController extends Controller
         $info->customer_note = $request->customer_note;
         $info->payment_info =json_encode($offline_payment_info);
         $info->status = 'pending';
+        $info->method_fields = json_encode($methodFields);
+        $this->refreshNezhaOfflinePaymentCheck(
+            $info,
+            $order,
+            $method,
+            $offline_payment_info,
+            $request,
+            $frozenMethod
+        );
         $info->save();
 
         return response()->json([ 'payment' => 'Payment_Info_Updated_successfully'], 200);
+    }
+
+    /**
+     * 初交与被打回后的重交共用同一核验逻辑。
+     * 有付款前快照时只读冻结值；老订单没有快照才回落当前配置。
+     */
+    protected function refreshNezhaOfflinePaymentCheck(
+        OfflinePayments $payment,
+        Order $order,
+        OfflinePaymentMethod $method,
+        array $paymentInfo,
+        Request $request,
+        ?array $frozenMethod = null
+    ): void {
+        try {
+            $payment->nezha_auto_check = $this->buildNezhaOfflinePaymentCheck(
+                $order,
+                $method,
+                $paymentInfo,
+                $request,
+                $frozenMethod
+            );
+        } catch (\Throwable $exception) {
+            // 新凭证核验失败时不可继续展示旧 TxID 的成功结果。
+            $payment->nezha_auto_check = null;
+            info('nezha auto_check failed: '.$exception->getMessage());
+        }
+    }
+
+    protected function buildNezhaOfflinePaymentCheck(
+        Order $order,
+        OfflinePaymentMethod $method,
+        array $paymentInfo,
+        Request $request,
+        ?array $frozenMethod = null
+    ): array {
+        $intent = $order->nezha_payment_intent;
+        $snapshot = $intent?->snapshot ?? [];
+        $methodName = (string) ($frozenMethod['method_name'] ?? $method->method_name);
+        $expectedAmd = (float) ($frozenMethod['expected_amd'] ?? data_get($snapshot, 'order_amount_amd', $order->order_amount ?? 0));
+        $rateCny = data_get($snapshot, 'rates.cny_to_amd');
+        $rateUsd = data_get($snapshot, 'rates.usd_to_amd');
+        if ($rateCny === null) {
+            $rateCny = DB::table('business_settings')->where('key', 'nezha_rate_cny_to_amd')->value('value') ?: 55;
+        }
+        if ($rateUsd === null) {
+            $rateUsd = DB::table('business_settings')->where('key', 'nezha_rate_usd_to_amd')->value('value') ?: 400;
+        }
+        $rateCny = (float) $rateCny;
+        $rateUsd = (float) $rateUsd;
+        $expectedUsdt = $rateUsd > 0 ? round($expectedAmd / $rateUsd, 2) : 0;
+        $expectedRmb = $rateCny > 0 ? round($expectedAmd / $rateCny) : 0;
+        $isUsdtMethod = (bool) preg_match('/usdt/i', $methodName);
+
+        if ($isUsdtMethod && isset($frozenMethod['expected_amount'])) {
+            $expectedUsdt = (float) $frozenMethod['expected_amount'];
+        } elseif (! $isUsdtMethod && isset($frozenMethod['expected_amount'])) {
+            $expectedRmb = (float) $frozenMethod['expected_amount'];
+        }
+
+        $autoCheck = [
+            'method_name' => $methodName,
+            'checked_at' => now()->toIso8601String(),
+            'expected_amd' => $expectedAmd,
+            'expected_usdt' => $expectedUsdt,
+            'expected_rmb' => $expectedRmb,
+            'rate_cny_to_amd' => $rateCny,
+            'rate_usd_to_amd' => $rateUsd,
+        ];
+        if ($intent) {
+            $autoCheck['payment_intent_id'] = (int) $intent->id;
+            $autoCheck['snapshot_frozen_at'] = data_get($snapshot, 'frozen_at');
+        }
+
+        $paid = $request->input('nezha_paid_amount');
+        if ($paid !== null && $paid !== '' && is_numeric($paid)) {
+            $paid = (float) $paid;
+            $autoCheck['paid_amount'] = $paid;
+            $expected = $isUsdtMethod ? $expectedUsdt : $expectedRmb;
+            $tolerance = max(1, $expected * 0.03);
+            $autoCheck['amount_match'] = $expected > 0 ? abs($paid - $expected) <= $tolerance : null;
+        }
+
+        $flags = json_decode((string) $request->input('nezha_image_flags'), true);
+        if (is_array($flags) && ! empty($flags)) {
+            $autoCheck['image_flags'] = $flags;
+        }
+
+        if (! $isUsdtMethod) {
+            return $autoCheck;
+        }
+
+        $hash = null;
+        foreach ($paymentInfo as $key => $value) {
+            if (in_array($key, ['method_id', 'method_name'], true)) {
+                continue;
+            }
+            if (is_string($value) && \App\CentralLogics\NezhaChainVerifier::isValidHashFormat($value)) {
+                $hash = $value;
+                break;
+            }
+        }
+
+        $autoCheck['tx_hash'] = $hash;
+        if (! $hash) {
+            $autoCheck['chain'] = ['status' => 'invalid_hash', 'reason' => '未填写有效交易哈希'];
+            return $autoCheck;
+        }
+
+        $reused = $this->nezhaOfflinePaymentHashWasReused($hash, $order->id);
+        $isBep20 = (bool) preg_match('/bep ?20|bsc|bnb/i', $methodName);
+        $expectedNetwork = (string) ($frozenMethod['network'] ?? ($isBep20 ? 'BEP20' : 'TRC20'));
+        if ($frozenMethod) {
+            $expectedAddress = (string) ($frozenMethod['address'] ?? '');
+        } else {
+            $restaurant = DB::table('restaurants')->where('id', $order->restaurant_id)->first();
+            $expectedAddress = $isBep20
+                ? ($restaurant->usdt_bep20_address ?? '')
+                : ($restaurant->usdt_address ?? '');
+        }
+        $autoCheck['usdt_network'] = $expectedNetwork;
+        $autoCheck['expected_address'] = $expectedAddress;
+        $verify = \App\CentralLogics\NezhaChainVerifier::verifyUsdt(
+            $hash,
+            $expectedAddress,
+            $expectedUsdt,
+            $expectedNetwork
+        );
+        if ($reused) {
+            $verify['status'] = 'mismatch';
+            $verify['reason'] = '这笔交易哈希此前已被其它订单使用过，疑似重复冒认，请核对';
+            $verify['reused'] = true;
+        }
+        $autoCheck['chain'] = $verify;
+
+        return $autoCheck;
+    }
+
+    /**
+     * payment_info 的 PII 90 天后会清除；nezha_auto_check 的链上证据长期保留。
+     */
+    protected function nezhaOfflinePaymentHashWasReused(string $hash, $currentOrderId): bool
+    {
+        return OfflinePayments::where('order_id', '!=', $currentOrderId)
+            ->where(function ($query) use ($hash) {
+                $query->where('payment_info', 'like', '%'.$hash.'%')
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(nezha_auto_check, '$.tx_hash')) = ?", [$hash]);
+            })
+            ->exists();
     }
 
     public function getPendingReviews(Request $request)

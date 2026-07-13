@@ -381,12 +381,25 @@
 
                                 @if ($order?->offline_payments)
                                     @php($nzAc = $order->offline_payments->nezha_auto_check ?? null)
+                                    @php($nzIntent = $order->nezha_payment_intent)
+                                    @php($nzSnapshot = $nzIntent?->snapshot ?? null)
+                                    @php($nzExpectedAmd = data_get($nzSnapshot, 'order_amount_amd', $order->order_amount))
+                                    @php($nzPaymentInfo = json_decode($order->offline_payments->payment_info ?? '{}', true) ?: [])
+                                    @php($nzFrozenMethod = $nzSnapshot ? collect($nzSnapshot['methods'] ?? [])->first(fn($m) => (string)($m['method_id'] ?? '') === (string)($nzPaymentInfo['method_id'] ?? '')) : null)
                                     <div style="background:#FFF7E6;border:1px solid #FFE2A8;border-radius:10px;padding:10px 12px;margin-bottom:12px;">
-                                        <div style="font-size:12px;color:#8a6d3b;">本单应收</div>
-                                        <div style="font-size:22px;font-weight:800;color:#17191D;line-height:1.2;">{{ Helpers::format_currency($order->order_amount) }}</div>
+                                        <div style="font-size:12px;color:#8a6d3b;">本单直付商家金额</div>
+                                        <div style="font-size:22px;font-weight:800;color:#17191D;line-height:1.2;">{{ Helpers::format_currency($nzExpectedAmd) }}</div>
                                         @if($nzAc && (!empty($nzAc['expected_usdt']) || !empty($nzAc['expected_rmb'])))
                                             @php($nzApprox = collect([!empty($nzAc['expected_usdt']) ? ('≈ '.$nzAc['expected_usdt'].' USDT') : null, !empty($nzAc['expected_rmb']) ? ('≈ ¥'.$nzAc['expected_rmb']) : null])->filter()->implode(' · '))
                                             <div style="font-size:12px;color:#8a6d3b;margin-top:2px;">{{ $nzApprox }}</div>
+                                        @endif
+                                        @if($nzIntent && $nzFrozenMethod)
+                                            <div style="margin-top:8px;padding-top:8px;border-top:1px solid #F0D49B;font-size:11.5px;color:#6f5b35;line-height:1.55;">
+                                                <div><strong>付款前已锁定</strong> · {{ data_get($nzSnapshot, 'frozen_at') ? \Carbon\Carbon::parse(data_get($nzSnapshot, 'frozen_at'))->timezone(config('app.timezone'))->format('Y-m-d H:i') : '—' }}</div>
+                                                <div>{{ $nzFrozenMethod['method_name'] ?? '' }}@if(!empty($nzFrozenMethod['network'])) · {{ $nzFrozenMethod['network'] }}@endif · 应付 {{ $nzFrozenMethod['expected_amount'] ?? '' }} {{ $nzFrozenMethod['currency'] ?? '' }}</div>
+                                                @if(!empty($nzFrozenMethod['address']))<div style="word-break:break-all;">冻结收款地址：{{ $nzFrozenMethod['address'] }}</div>@endif
+                                                @if(!empty($nzFrozenMethod['payee_name']))<div>冻结收款人：{{ $nzFrozenMethod['payee_name'] }}</div>@endif
+                                            </div>
                                         @endif
                                         <div style="font-size:11px;color:#a98b54;margin-top:6px;">请先在自己账户核对到账金额与上方一致，再点「确认收款」。</div>
                                     </div>

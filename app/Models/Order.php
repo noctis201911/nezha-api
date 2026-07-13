@@ -150,6 +150,11 @@ class Order extends Model
         return $this->belongsTo(OfflinePayments::class,'id','order_id' );
     }
 
+    public function nezha_payment_intent()
+    {
+        return $this->hasOne(NezhaPaymentIntent::class, 'order_id');
+    }
+
     public function logs()
     {
         return $this->hasMany(Log::class,'model_id')->where('model','Order');

@@ -1,4 +1,4 @@
-- [ ] Codex(付款事实修正·2026-07-13) 正在从 origin/main 新增独立付款意图/冻结快照，并让离线付款初交与重交核验只读冻结值；只在 codex/payment-flow-corrected-20260713 隔离分支，不部署生产。
+- [x] Codex(付款事实修正·2026-07-13) ✅隔离分支完成：独立 nezha_payment_intents 冻结服务端订单金额/汇率/商家收款信息，初交与重提核验只读冻结值；商家既有订单详情显示冻结时间/方式/应付信息。PHP lint 全绿，NezhaPaymentSnapshotTest 4测16断言通过。仅推送 codex/payment-flow-corrected-20260713，未迁移、未部署生产。
 - [ ] Codex(形态C v2·2026-07-13) 接手顾客端商家卡三态：customer_availability/分页前排序 + 首页、餐厅/搜索/分类/菜系「仅预约/休息中」底部横条。仅 staging，不碰生产，不改 DESIGN_SYSTEM/产品文档。
 # AGENTS.md — 哪吒多窗口并发协调约定（所有 AI 窗口必读）
 
