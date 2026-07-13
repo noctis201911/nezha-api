@@ -96,7 +96,6 @@ class NezhaPreorderDispatchReminder extends Command
 
             if ($dry) {
                 $this->line("  [DRY] restaurant#{$rid} :: 该叫车了 {$count} 单 · 最早 {$earliestPoint}(建议 {$earliestSuggest}) new=" . implode(',', $newIds));
-                Cache::put($prevKey, $dueIds, $now->copy()->addHours(12));
                 $pushed++;
                 continue;
             }

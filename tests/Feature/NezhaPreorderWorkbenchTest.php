@@ -58,4 +58,16 @@ class NezhaPreorderWorkbenchTest extends TestCase
         \Illuminate\Support\Facades\Cache::forget('nezha_wb_seen_99999');
         $this->assertFalse(NezhaPreorder::isViewingWorkbench(99999));
     }
+
+    public function test_dispatch_reminder_dry_run_does_not_write_cooldown(): void
+    {
+        $source = file_get_contents(app_path('Console/Commands/NezhaPreorderDispatchReminder.php'));
+        $start = strpos($source, 'if ($dry) {');
+        $end = strpos($source, 'continue;', $start);
+
+        $this->assertNotFalse($start);
+        $this->assertNotFalse($end);
+        $dryRunBlock = substr($source, $start, $end - $start);
+        $this->assertStringNotContainsString('Cache::put', $dryRunBlock);
+    }
 }
