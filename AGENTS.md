@@ -1,4 +1,4 @@
-- [ ] Codex(Google address staging fix, 2026-07-13): ConfigController + BusinessSettingsController + focused tests; staging only; no production deploy; no public storage.
+- [x] Codex(Google address staging fix, 2026-07-13): complete in cacddaa; staging API + 390x844 browser QA passed; temporary address/user/token cleaned; no production deploy; no public storage.
 - [ ] Codex(形态C v2·2026-07-13) 接手顾客端商家卡三态：customer_availability/分页前排序 + 首页、餐厅/搜索/分类/菜系「仅预约/休息中」底部横条。仅 staging，不碰生产，不改 DESIGN_SYSTEM/产品文档。
 # AGENTS.md — 哪吒多窗口并发协调约定（所有 AI 窗口必读）
 
