@@ -23,6 +23,9 @@ use App\Models\Cuisine;
 use App\Models\FAQ;
 use App\Models\OfflinePaymentMethod;
 use App\Models\PageSeoData;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Response as ClientResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cache;
 use App\Models\ReactPromotionalBanner;
@@ -35,18 +38,36 @@ use MatanYadaev\EloquentSpatial\Objects\Point;
 class ConfigController extends Controller
 {
     private $map_api_key;
+
     private $places_key;
+
     use AddonHelper;
 
-    function __construct()
+    public function __construct()
     {
-        $map_api_key_server = BusinessSetting::where(['key' => 'map_api_key_server'])->first()?->value ?? null;
-        $this->map_api_key = $map_api_key_server;
+        $this->map_api_key = $this->firstNonBlankBusinessSetting('map_api_key_server');
         // 哪吒[Places key 2026-06-28]: server key(map_api_key_server)的「API 限制」没放 Places,
         // 但浏览器 key(map_api_key, 域名限 nezha.am)放了。后端调 Places(autocomplete/details)
-        // 改用浏览器 key + 带 Referer: https://nezha.am/ 满足其域名限制 → 搜索可用,无需改 Console。
+        // 改用浏览器 key + 受信任前端 Origin 对应的 Referer 满足域名限制。
         // geocode/distance 仍用 server key(它们没被拦)。
-        $this->places_key = BusinessSetting::where(['key' => 'map_api_key'])->first()?->value ?? $map_api_key_server;
+        $this->places_key = $this->firstNonBlankBusinessSetting('map_api_key') ?? $this->map_api_key;
+    }
+
+    private function firstNonBlankBusinessSetting(string $key): ?string
+    {
+        $values = DB::table('business_settings')
+            ->where('key', $key)
+            ->orderBy('id')
+            ->pluck('value');
+
+        foreach ($values as $value) {
+            $normalized = trim((string) $value);
+            if ($normalized !== '') {
+                return $normalized;
+            }
+        }
+
+        return null;
     }
 
     public function configuration()
@@ -533,36 +554,29 @@ class ConfigController extends Controller
         if ($validator->errors()->count() > 0) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
-
-
         $apiKey = $this->places_key;
-        $url = "https://places.googleapis.com/v1/places:autocomplete";
+        if ($apiKey === null || trim((string) $apiKey) === '') {
+            return $this->googleMapsNotConfiguredResponse();
+        }
 
         $data = [
             "input" => $request['search_text'],
             "languageCode" => app()->getLocale(),
         ];
 
-        $headers = [
-            "Content-Type: application/json",
-            "X-Goog-Api-Key: $apiKey",
-            "Referer: https://nezha.am/",
-        ];
+        try {
+            $response = Http::timeout(10)
+                ->acceptJson()
+                ->withHeaders([
+                    'X-Goog-Api-Key' => $apiKey,
+                    'Referer' => $this->googleMapsReferer($request),
+                ])
+                ->post('https://places.googleapis.com/v1/places:autocomplete', $data);
+        } catch (ConnectionException) {
+            return $this->googleMapsUpstreamErrorResponse();
+        }
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-        $response = curl_exec($ch);
-        curl_close($ch);
-
-        return json_decode($response, true);
-
-        // old
-        // $response = Http::get('https://maps.googleapis.com/maps/api/place/autocomplete/json?input=' . $request['search_text'] . '&key=' . $this->map_api_key);
-        // return $response->json();
+        return $this->placesResponse($response);
     }
 
 
@@ -580,6 +594,9 @@ class ConfigController extends Controller
         }
 
         $apiKey = $this->map_api_key;
+        if ($apiKey === null || trim((string) $apiKey) === '') {
+            return $this->googleMapsNotConfiguredResponse();
+        }
         $url = "https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix";
 
         $data = [
@@ -625,33 +642,25 @@ class ConfigController extends Controller
         if ($validator->errors()->count() > 0) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
-
-
         $apiKey = $this->places_key;
-        $url = 'https://places.googleapis.com/v1/places/' . $request['placeid'];
+        if ($apiKey === null || trim((string) $apiKey) === '') {
+            return $this->googleMapsNotConfiguredResponse();
+        }
 
-        // Initialize cURL session
-        $ch = curl_init();
+        try {
+            $response = Http::timeout(10)
+                ->acceptJson()
+                ->withHeaders([
+                    'X-Goog-Api-Key' => $apiKey,
+                    'X-Goog-FieldMask' => 'id,displayName,formattedAddress,location',
+                    'Referer' => $this->googleMapsReferer($request),
+                ])
+                ->get('https://places.googleapis.com/v1/places/'.rawurlencode((string) $request['placeid']));
+        } catch (ConnectionException) {
+            return $this->googleMapsUpstreamErrorResponse();
+        }
 
-        // Set cURL options
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'X-Goog-Api-Key: ' . $apiKey,
-            'X-Goog-FieldMask: id,displayName,formattedAddress,location',
-            'Referer: https://nezha.am/',
-        ]);
-
-        // Execute the request and get the response
-        $response = curl_exec($ch);
-        curl_close($ch);
-
-        return json_decode($response, true);
-
-        // old
-        // $response = Http::get('https://maps.googleapis.com/maps/api/place/details/json?placeid=' . $request['placeid'] . '&key=' . $this->map_api_key);
-        // return $response->json();
+        return $this->placesResponse($response);
     }
 
     public function geocode_api(Request $request)
@@ -664,8 +673,78 @@ class ConfigController extends Controller
         if ($validator->errors()->count() > 0) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
-        $response = Http::get('https://maps.googleapis.com/maps/api/geocode/json?latlng=' . $request->lat . ',' . $request->lng . '&key=' . $this->map_api_key);
-        return $response->json();
+
+        $apiKey = $this->map_api_key;
+        if ($apiKey === null || trim((string) $apiKey) === '') {
+            return $this->googleMapsNotConfiguredResponse();
+        }
+
+        try {
+            $response = Http::timeout(10)->get('https://maps.googleapis.com/maps/api/geocode/json', [
+                'latlng' => $request->lat.','.$request->lng,
+                'key' => $apiKey,
+            ]);
+        } catch (ConnectionException) {
+            return $this->googleMapsUpstreamErrorResponse();
+        }
+
+        $payload = $response->json();
+        if (!$response->successful()
+            || !is_array($payload)
+            || !in_array($payload['status'] ?? null, ['OK', 'ZERO_RESULTS'], true)) {
+            return $this->googleMapsUpstreamErrorResponse();
+        }
+
+        return response()->json($payload);
+    }
+
+    private function placesResponse(ClientResponse $response): JsonResponse
+    {
+        $payload = $response->json();
+        if (!$response->successful() || !is_array($payload) || isset($payload['error'])) {
+            return $this->googleMapsUpstreamErrorResponse();
+        }
+
+        return response()->json($payload);
+    }
+
+    private function googleMapsReferer(Request $request): string
+    {
+        foreach ([$request->headers->get('origin'), $request->headers->get('referer')] as $candidate) {
+            if (!is_string($candidate) || $candidate === '') {
+                continue;
+            }
+
+            $scheme = strtolower((string) parse_url($candidate, PHP_URL_SCHEME));
+            $host = strtolower((string) parse_url($candidate, PHP_URL_HOST));
+            if ($scheme === 'https' && in_array($host, ['staging.nezha.am', 'nezha.am'], true)) {
+                return 'https://'.$host.'/';
+            }
+        }
+
+        return app()->environment('staging')
+            ? 'https://staging.nezha.am/'
+            : 'https://nezha.am/';
+    }
+
+    private function googleMapsNotConfiguredResponse(): JsonResponse
+    {
+        return response()->json([
+            'errors' => [[
+                'code' => 'google_maps_not_configured',
+                'message' => 'Address service is not configured.',
+            ]],
+        ], 503);
+    }
+
+    private function googleMapsUpstreamErrorResponse(): JsonResponse
+    {
+        return response()->json([
+            'errors' => [[
+                'code' => 'google_maps_upstream_error',
+                'message' => 'Address service is temporarily unavailable.',
+            ]],
+        ], 502);
     }
 
 

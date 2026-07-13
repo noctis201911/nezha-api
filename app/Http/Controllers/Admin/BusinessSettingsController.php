@@ -19,7 +19,9 @@ use App\Models\Translation;
 use App\Traits\Processor;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Validator;
@@ -1690,17 +1692,37 @@ class BusinessSettingsController extends Controller
 
     public function config_update(Request $request)
     {
-        Helpers::businessUpdateOrInsert(['key' => 'map_api_key'], [
-            'value' => $request['map_api_key'],
-        ]);
+        DB::transaction(function () use ($request): void {
+            $this->syncMapApiKeyRows('map_api_key', $request->input('map_api_key'));
+            $this->syncMapApiKeyRows('map_api_key_server', $request->input('map_api_key_server'));
+        });
 
-        Helpers::businessUpdateOrInsert(['key' => 'map_api_key_server'], [
-            'value' => $request['map_api_key_server'],
-        ]);
+        Cache::forget('business_settings_all_data');
+        Cache::forget('business_settings_keys');
 
         Toastr::success(translate('messages.config_data_updated'));
 
         return back();
+    }
+
+    private function syncMapApiKeyRows(string $key, mixed $value): void
+    {
+        $value = $value === null ? null : trim((string) $value);
+        $query = DB::table('business_settings')->where('key', $key);
+        $timestamp = now();
+
+        if ($query->exists()) {
+            $query->update(['value' => $value, 'updated_at' => $timestamp]);
+
+            return;
+        }
+
+        DB::table('business_settings')->insert([
+            'key' => $key,
+            'value' => $value,
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
+        ]);
     }
 
     public function toggle_settings($key, $value)
