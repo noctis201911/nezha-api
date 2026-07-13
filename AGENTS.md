@@ -37,6 +37,7 @@
 ---
 ## 认领区（动手前登记，干完划掉）
 <!-- 格式： - [ ] 窗口X 正在改 <文件/页面>（YYYY-MM-DD HH:MM） -->
+- [x] Codex(商家 USDT 双二维码·2026-07-14) 已完成隔离分支：vendor-views/wallet-method/index.blade.php 按真实配置只读展示 TRC20/BEP20 各自地址与二维码；新增 NezhaVendorWalletMethodTwoQrContractTest。永久测试 2 tests/11 assertions、源码契约 11/11、Laravel 双/单/空四态渲染 11/11、git diff --check 通过；未改地址生效、客户付款、状态机、配置或迁移，未部署。
 - [x] Codex(商家面板精简·2026-07-13) ✅已上线(62c8e30·release 20260713-222703-62c8e30)：shopInfo 删除商业模式/平台佣金/访问网站；shop/edit 隐藏英文/中文页签但保留翻译提交值、删除图标与封面；restaurant-index 隐藏订单类型/其他设置并以无 id 隐藏字段保留原值。pre-push 20 tests/100 assertions、Blade 编译 3/3、结构与保值断言 30/30、健康门 config/zone/login=200、三页登录浏览器验收通过；无表单提交、无迁移/配置改动。
 - [x] Claude(P1b-C订单页4+1组tab窗口) ✅已上线(19c61f8·release 20260703-033156·健康门config/zone/login=200) list.blade+Vendor/OrderController(list)+CentralLogics/NezhaOrderCounts —— 14平铺tab→「需动作/进行中/售后/已完结/全部」5组+组内二级chip; 组过滤/计数走 NezhaOrderCounts 单一真相源(applyGroupFilter+grp_* rollup+actionOrderIds按单去重·refund_requested并入告警); 补 timeout/done_canceled 计数修chip误显; 需动作告警红V2 #E5484D。LIVE复验: 5组+6chip list_total==provider·分区22=all不相交·D两段无回归·MERCHANT_GUIDE同步(793d173)。纯L3不碰confirm/payment/L1。未碰他窗WIP。（2026-07-03）
 - [x] Claude(P1b-E侧栏收敛窗口) ✅已上线(703c302·release 20260703-041800·健康门200×3·[force-revert]净删237行) _sidebar.blade.php —— 「普通订单」17状态子项折叠菜单→单条「订单」+需动作徽标(读NezhaOrderCounts::grp_action·消除侧栏内联count分叉); 徽标稳态V2红#E5484D·需动作=0隐藏(@if>0·rid7实测无假告警红0)·落点=grp_action需动作组。DoD达成: 侧栏徽标==订单组tab==provider 严格相等 LIVE 12==12==12; 待办条个体桶同源。🎉P1b全清(A/B/C/D/E)。纯L3不碰count机制/L1。订阅菜单@if(false)停用未碰·未碰他窗WIP。（2026-07-03）

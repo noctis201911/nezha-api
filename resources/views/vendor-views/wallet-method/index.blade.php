@@ -21,6 +21,10 @@
             word-break: break-all; background: #f7f8fa; border: 1px solid #eef0f3;
             border-radius: 8px; padding: 8px 12px; font-size: 14px; color: #1f2937;
         }
+        .nz-usdt-network-card {
+            height: 100%; border: 1px solid #e7eaf3; border-radius: 10px;
+            background: #fff; padding: 16px;
+        }
     </style>
 @endpush
 
@@ -30,7 +34,14 @@
 
         @php
             $hasAlipay = !empty($restaurant?->rmb_qr_image);
-            $hasUsdt   = !empty($restaurant?->usdt_address);
+            $hasTrc20 = !empty($restaurant?->usdt_address);
+            $hasBep20 = !empty($restaurant?->usdt_bep20_address);
+            $hasUsdt = $hasTrc20 || $hasBep20;
+            $configuredUsdtNetworks = ($hasTrc20 ? 1 : 0) + ($hasBep20 ? 1 : 0);
+            $usdtNetworkSummary = implode(' / ', array_filter([
+                $hasTrc20 ? 'TRC20' : null,
+                $hasBep20 ? 'BEP20' : null,
+            ]));
             $configuredCount = ($hasAlipay ? 1 : 0) + ($hasUsdt ? 1 : 0);
         @endphp
 
@@ -61,7 +72,7 @@
                     <span class="badge badge-soft-success fs-13 py-2 px-3">
                         <i class="tio-checkmark-circle"></i>
                         {{ translate('顾客可用') }}:
-                        {{ trim(($hasAlipay ? translate('支付宝') . ' ' : '') . ($hasUsdt ? 'USDT' : '')) }}
+                        {{ trim(($hasAlipay ? translate('支付宝') . ' ' : '') . ($hasUsdt ? 'USDT (' . $usdtNetworkSummary . ')' : '')) }}
                     </span>
                 @endif
             </div>
@@ -114,35 +125,58 @@
                     <span>{{ translate('USDT 收款') }}</span>
                 </h5>
                 @if ($hasUsdt)
-                    <span class="badge badge-soft-success badge-pill">{{ translate('已配置') }}</span>
+                    <span class="badge badge-soft-success badge-pill">
+                        {{ translate('已配置') }} {{ $configuredUsdtNetworks }} {{ translate('个网络') }}
+                    </span>
                 @else
                     <span class="badge badge-soft-secondary badge-pill">{{ translate('未配置') }}</span>
                 @endif
             </div>
             <div class="card-body">
-                <div class="row g-3 align-items-start">
-                    <div class="col-md-7">
-                        <label class="input-label">{{ translate('USDT 网络') }}</label>
-                        <div class="nz-addr-box mb-3">
-                            {{ $restaurant?->usdt_network ?: translate('— 平台尚未登记 —') }}
-                        </div>
-                        <label class="input-label">{{ translate('USDT 收款地址') }}</label>
-                        <div class="nz-addr-box mb-2">
-                            {{ $restaurant?->usdt_address ?: translate('— 平台尚未登记 —') }}
-                        </div>
-                        <small class="text-muted">{{ translate('顾客在结算页选「USDT」时，会扫描右侧二维码（或复制此地址）转账。请务必核对网络与地址一致，地址错误将无法收到款且无法追回。') }}</small>
-                    </div>
-                    <div class="col-md-5">
-                        <label class="input-label d-block mb-1">{{ translate('USDT 收款二维码 (顾客扫此码转账)') }}</label>
-                        @if ($hasUsdt)
-                            <span class="nz-qr-box">
-                                {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(150)->margin(1)->generate($restaurant->usdt_address) !!}
-                            </span>
-                        @else
-                            <div class="nz-pay-empty">{{ translate('平台尚未登记 USDT 收款地址') }}</div>
+                @if ($hasUsdt)
+                    <div class="row g-3 align-items-stretch">
+                        @if ($hasTrc20)
+                            <div class="col-lg-6">
+                                <section class="nz-usdt-network-card" data-usdt-network="TRC20">
+                                    <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+                                        <h6 class="mb-0">{{ translate('USDT · TRC20') }}</h6>
+                                        <span class="badge badge-soft-success badge-pill">{{ translate('已配置') }}</span>
+                                    </div>
+                                    <label class="input-label">{{ translate('USDT · TRC20 收款地址') }}</label>
+                                    <div class="nz-addr-box mb-2">{{ $restaurant?->usdt_address }}</div>
+                                    <small class="text-muted d-block mb-3">
+                                        {{ translate('仅限 TRON (TRC20) 网络。请核对网络与地址一致，跨网络转账可能无法到账且无法追回。') }}
+                                    </small>
+                                    <label class="input-label d-block mb-1">{{ translate('USDT · TRC20 收款二维码') }}</label>
+                                    <span class="nz-qr-box">
+                                        {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(150)->margin(1)->generate($restaurant->usdt_address) !!}
+                                    </span>
+                                </section>
+                            </div>
+                        @endif
+                        @if ($hasBep20)
+                            <div class="col-lg-6">
+                                <section class="nz-usdt-network-card" data-usdt-network="BEP20">
+                                    <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+                                        <h6 class="mb-0">{{ translate('USDT · BEP20') }}</h6>
+                                        <span class="badge badge-soft-success badge-pill">{{ translate('已配置') }}</span>
+                                    </div>
+                                    <label class="input-label">{{ translate('USDT · BEP20 收款地址') }}</label>
+                                    <div class="nz-addr-box mb-2">{{ $restaurant?->usdt_bep20_address }}</div>
+                                    <small class="text-muted d-block mb-3">
+                                        {{ translate('仅限 BNB Smart Chain (BEP20) 网络。请核对网络与地址一致，跨网络转账可能无法到账且无法追回。') }}
+                                    </small>
+                                    <label class="input-label d-block mb-1">{{ translate('USDT · BEP20 收款二维码') }}</label>
+                                    <span class="nz-qr-box">
+                                        {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(150)->margin(1)->generate($restaurant->usdt_bep20_address) !!}
+                                    </span>
+                                </section>
+                            </div>
                         @endif
                     </div>
-                </div>
+                @else
+                    <div class="nz-pay-empty">{{ translate('平台尚未登记 USDT 收款地址') }}</div>
+                @endif
             </div>
         </div>
 
