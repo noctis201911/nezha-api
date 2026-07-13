@@ -43,6 +43,14 @@
                                         href="#"
                                         id="default-link">{{ translate('Default') }}</a>
                                     </li>
+                                    @foreach (json_decode($language) as $lang)
+                                        @continue(in_array($lang, ['en', 'zh'], true))
+                                        <li class="nav-item">
+                                            <a class="nav-link lang_link"
+                                                href="#"
+                                                id="{{ $lang }}-link">{{ \App\CentralLogics\Helpers::get_language_name($lang) . '(' . strtoupper($lang) . ')' }}</a>
+                                        </li>
+                                    @endforeach
                                 </ul>
                             </div>
                             @endif
