@@ -66,6 +66,10 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
+Route::post('security/csp-report', [\App\Http\Controllers\Api\V1\Security\CspReportController::class, 'store'])
+    ->name('security.csp-report')
+    ->middleware('throttle:csp-report');
+
 Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['localization', 'react']], function () {
 
     Route::get('zone/list', [ZoneController::class, 'get_zones']);
