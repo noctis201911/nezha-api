@@ -3,6 +3,7 @@
 > 用户喊「应用层安全 QA / 像黑客一样查漏洞 / 越权排查」时走本文件。
 > 与 `QA_PLAYBOOK.md`(产品体验 14 轴)、`OPS_QA_PLAYBOOK.md`(运维 10 轴)、`QA_FUNDLOOP_PLAYBOOK.md`(资金闭环)互补——本文件只查**代码层安全漏洞**(越权/注入/赋值/上传/鉴权/PII)。
 > 运维层(限速/key/fail2ban/安全头/MySQL 加密)见 [[nezha-risk-control]]③,不在本文件范围。
+> USDT 收款地址变更、地址凭据、付款路由 CSP、DMARC/DNSSEC 与仿冒举报的当前治理方案、授权停点和回滚见 `USDT_PAYMENT_SECURITY_GOVERNANCE.md`；它是待裁决方案，不代表已部署或已翻闸。
 
 起因:2026-06-16 首次应用层安全 QA 发现一整簇 IDOR(对象级鉴权缺口),既有的产品/运维/资金 QA 全都没覆盖——因为它们问的是"功能通不通 / 性能稳不稳 / 钱对不对",**没人问"这东西归不归请求者"**。本 playbook 就是补这块。
 
