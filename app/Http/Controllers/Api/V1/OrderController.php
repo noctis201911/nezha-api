@@ -2464,29 +2464,35 @@ class OrderController extends Controller
      * = 抽佣总开关 nezha_deposit_mode_status=1 且 该店 nezha_commission_enabled=1。
      * 任一为关 → 不扣佣、不受保证金阈值下线约束(留在线上), 防"免佣却被下线"死结。
      */
-    public static function nezha_commission_active($restaurant){
+    public static function nezha_commission_active($restaurant, ?array $depositContext = null){
         if (!$restaurant) {
             return false;
         }
-        $mode = BusinessSetting::where('key','nezha_deposit_mode_status')->first()?->value;
+        $mode = $depositContext !== null && array_key_exists('mode', $depositContext)
+            ? $depositContext['mode']
+            : BusinessSetting::where('key','nezha_deposit_mode_status')->first()?->value;
         if ($mode != 1) {
             return false;
         }
         $enabled = is_array($restaurant) ? ($restaurant['nezha_commission_enabled'] ?? 0) : ($restaurant->nezha_commission_enabled ?? 0);
         return (bool) ((int) $enabled);
     }
-    public static function nezha_deposit_below_threshold($restaurant){
-        if (!self::nezha_commission_active($restaurant)) {
+    public static function nezha_deposit_below_threshold($restaurant, ?array $depositContext = null){
+        if (!self::nezha_commission_active($restaurant, $depositContext)) {
             return false;
         }
-        $threshold = (float) (BusinessSetting::where('key','nezha_min_deposit_threshold')->first()?->value ?? 0);
-        $balance = (float) (\App\Models\RestaurantWallet::where('vendor_id', $restaurant->vendor_id)->value('deposit_balance') ?? 0);
+        $threshold = (float) ($depositContext !== null && array_key_exists('threshold', $depositContext)
+            ? $depositContext['threshold']
+            : (BusinessSetting::where('key','nezha_min_deposit_threshold')->first()?->value ?? 0));
+        $balance = (float) ($depositContext !== null && array_key_exists('balance', $depositContext)
+            ? $depositContext['balance']
+            : (\App\Models\RestaurantWallet::where('vendor_id', $restaurant->vendor_id)->value('deposit_balance') ?? 0));
         return $balance <= $threshold;
     }
 
     // 哪吒: 店铺当前是否"休息中"(顾客端显休息中 + 后端拦下单 的统一判断)。
     // = 商家手动打烊(nezha_temp_closed, 独立于保证金模式开关, 任何时候生效) 或 保证金低于阈值(仅 deposit 模式开时)。
-    public static function nezha_store_paused($restaurant){
+    public static function nezha_store_paused($restaurant, ?array $depositContext = null){
         if (!$restaurant) {
             return false;
         }
@@ -2504,7 +2510,7 @@ class OrderController extends Controller
             }
             // 到期 → 视为已恢复, 继续往下判保证金
         }
-        return self::nezha_deposit_below_threshold($restaurant);
+        return self::nezha_deposit_below_threshold($restaurant, $depositContext);
     }
 
     public static function order_validation_check($request){

@@ -812,6 +812,166 @@ class Helpers
         return $data;
     }
 
+    private static function decodeRestaurantListJson($value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        $decoded = json_decode((string) $value, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    private static function prepareRestaurantListCoupons(array $restaurantIds): array
+    {
+        $restaurantIds = array_values(array_unique(array_map('intval', $restaurantIds)));
+        $restaurantIdStrings = array_map('strval', $restaurantIds);
+        $buckets = array_fill_keys($restaurantIds, []);
+
+        if ($restaurantIds === []) {
+            return $buckets;
+        }
+
+        $coupons = Coupon::query()
+            ->where(function ($query) use ($restaurantIds, $restaurantIdStrings) {
+                $query->whereIn('restaurant_id', $restaurantIds)
+                    ->orWhere(function ($restaurantWise) use ($restaurantIdStrings) {
+                        $restaurantWise->where('coupon_type', 'restaurant_wise')
+                            ->whereJsonContains('customer_id', ['all'])
+                            ->where(function ($dataQuery) use ($restaurantIdStrings) {
+                                foreach ($restaurantIdStrings as $index => $restaurantId) {
+                                    $method = $index === 0 ? 'whereJsonContains' : 'orWhereJsonContains';
+                                    $dataQuery->{$method}('data', [$restaurantId]);
+                                }
+                            });
+                    });
+            })
+            ->active()
+            ->valid()
+            ->get();
+
+        $restaurantLookup = array_fill_keys($restaurantIds, true);
+        foreach ($coupons as $coupon) {
+            $targets = [];
+            $directRestaurantId = (int) $coupon->restaurant_id;
+            if (isset($restaurantLookup[$directRestaurantId])) {
+                $targets[$directRestaurantId] = true;
+            }
+
+            if ($coupon->coupon_type === 'restaurant_wise') {
+                $customerIds = array_map('strval', self::decodeRestaurantListJson($coupon->customer_id));
+                if (in_array('all', $customerIds, true)) {
+                    foreach (self::decodeRestaurantListJson($coupon->data) as $restaurantId) {
+                        $restaurantId = (int) $restaurantId;
+                        if (isset($restaurantLookup[$restaurantId])) {
+                            $targets[$restaurantId] = true;
+                        }
+                    }
+                }
+            }
+
+            foreach (array_keys($targets) as $restaurantId) {
+                if (count($buckets[$restaurantId]) < 10) {
+                    $buckets[$restaurantId][] = $coupon;
+                }
+            }
+        }
+
+        foreach ($buckets as $restaurantId => $bucket) {
+            $buckets[$restaurantId] = new \Illuminate\Database\Eloquent\Collection($bucket);
+        }
+
+        return $buckets;
+    }
+
+    private static function prepareRestaurantListFormattingData($data): array
+    {
+        $restaurants = $data instanceof \Illuminate\Database\Eloquent\Collection
+            ? $data
+            : new \Illuminate\Database\Eloquent\Collection(is_array($data) ? $data : collect($data)->all());
+        $restaurantIds = $restaurants->pluck('id')->filter()->map(fn ($id) => (int) $id)->values()->all();
+
+        if ($restaurantIds === []) {
+            return [
+                'restaurants' => $restaurants,
+                'food_prices' => collect(),
+                'review_stats' => collect(),
+                'coupons' => [],
+                'deposit_mode' => null,
+                'deposit_threshold' => 0,
+                'wallet_balances' => collect(),
+            ];
+        }
+
+        $restaurants->load([
+            'foods' => function ($query) {
+                $query->active()
+                    ->with(['newVariations', 'newVariationOptions'])
+                    ->take(50)
+                    ->select(['id', 'image', 'name', 'price', 'variations', 'add_ons', 'category_id', 'restaurant_id', 'veg', 'status']);
+            },
+            'cuisine',
+            'schedules' => function ($query) {
+                $query->orderBy('restaurant_schedule.id');
+            },
+            'characteristics',
+        ]);
+        $subscriptionRestaurants = $restaurants->filter(
+            fn ($restaurant) => $restaurant->restaurant_model === 'subscription'
+        );
+        if ($subscriptionRestaurants->isNotEmpty()) {
+            $subscriptionRestaurants->load('restaurant_sub');
+        }
+
+        $foodPrices = Food::active()
+            ->whereIn('restaurant_id', $restaurantIds)
+            ->selectRaw('restaurant_id, MIN(price) as min_price')
+            ->groupBy('restaurant_id')
+            ->pluck('min_price', 'restaurant_id');
+
+        $reviewStats = DB::table('reviews')
+            ->join('food', 'food.id', '=', 'reviews.food_id')
+            ->whereIn('food.restaurant_id', $restaurantIds)
+            ->where('reviews.status', 1)
+            ->selectRaw('food.restaurant_id, AVG(reviews.rating) as average_rating, COUNT(reviews.id) as total_reviews')
+            ->groupBy('food.restaurant_id')
+            ->get()
+            ->keyBy('restaurant_id');
+
+        $depositMode = BusinessSetting::where('key', 'nezha_deposit_mode_status')->first()?->value;
+        $depositThreshold = 0;
+        $walletBalances = collect();
+
+        if ($depositMode == 1) {
+            $vendorIds = $restaurants
+                ->filter(fn ($restaurant) => (int) ($restaurant->nezha_commission_enabled ?? 0) === 1)
+                ->pluck('vendor_id')
+                ->filter()
+                ->unique()
+                ->values();
+            if ($vendorIds->isNotEmpty()) {
+                $depositThreshold = (float) (BusinessSetting::where('key', 'nezha_min_deposit_threshold')->first()?->value ?? 0);
+                $walletBalances = RestaurantWallet::query()
+                    ->whereIn('vendor_id', $vendorIds)
+                    ->orderBy('id')
+                    ->get(['vendor_id', 'deposit_balance'])
+                    ->groupBy('vendor_id')
+                    ->map(fn ($wallets) => $wallets->first()->deposit_balance);
+            }
+        }
+
+        return [
+            'restaurants' => $restaurants,
+            'food_prices' => $foodPrices,
+            'review_stats' => $reviewStats,
+            'coupons' => self::prepareRestaurantListCoupons($restaurantIds),
+            'deposit_mode' => $depositMode,
+            'deposit_threshold' => $depositThreshold,
+            'wallet_balances' => $walletBalances,
+        ];
+    }
+
     public static function restaurant_data_formatting($data, $multi_data = false)
     {
         $storage = [];
@@ -820,23 +980,12 @@ class Helpers
         $can_restaurant_edit_order = self::get_business_settings('can_restaurant_edit_order') ?? 0;
 
         if ($multi_data == true) {
-            foreach ($data as $item) {
-                $item['foods'] = $item->foods()->active()->with(['newVariations', 'newVariationOptions'])->take(50)->get(["id", "image", "name", "price", "variations", "add_ons", "category_id", "restaurant_id", "veg", "status"]);
-                $item['price_starts_from'] = (float) $item->foods()->active()->min('price');
-                $item->load('cuisine');
-                // $item['coupons'] = $item->coupon_valid;
+            $prepared = self::prepareRestaurantListFormattingData($data);
+            foreach ($prepared['restaurants'] as $item) {
+                $item['foods'] = $item->getRelation('foods');
+                $item['price_starts_from'] = (float) ($prepared['food_prices']->get($item->id) ?? 0);
                 $restaurant_id = (string) $item->id;
-
-                $item['coupons'] = Coupon::Where(function ($q) use ($restaurant_id) {
-                    $q->Where('coupon_type', 'restaurant_wise')->whereJsonContains('data', [$restaurant_id])
-                        ->where(function ($q1) {
-                            $q1->WhereJsonContains('customer_id', ['all']);
-                        });
-                })->orwhere('restaurant_id', $restaurant_id)
-                    ->active()
-                    ->valid()
-                    ->take(10)
-                    ->get();
+                $item['coupons'] = $prepared['coupons'][(int) $restaurant_id] ?? new \Illuminate\Database\Eloquent\Collection();
 
                 if ($item->restaurant_model == 'subscription' && isset($item->restaurant_sub)) {
                     $item['self_delivery_system'] = (int) $item->restaurant_sub->self_delivery;
@@ -852,14 +1001,19 @@ class Helpers
                     unset($item['customer_availability_rank']);
                 }
                 // [哪吒 组4] 保证金≤0(开关开时)自动下线: 顾客端复用休息中展示, 不露内部术语; 关闭(switch=0)恒false零开销
-                $item['nezha_deposit_paused'] = (bool) \App\Http\Controllers\Api\V1\OrderController::nezha_store_paused($item);
+                $depositContext = [
+                    'mode' => $prepared['deposit_mode'],
+                    'threshold' => $prepared['deposit_threshold'],
+                    'balance' => (float) ($prepared['wallet_balances']->get($item->vendor_id) ?? 0),
+                ];
+                $item['nezha_deposit_paused'] = (bool) \App\Http\Controllers\Api\V1\OrderController::nezha_store_paused($item, $depositContext);
                 // 哪吒 忙碌模式/定时挂起(灰度关时恒 false/null, 顾客端无变化)
                 $nezhaExtra = self::nezha_store_extra($item);
                 $item['nezha_busy'] = $nezhaExtra['busy'];
                 $item['nezha_busy_min'] = $nezhaExtra['busy_min'];
                 $item['nezha_busy_reason'] = $nezhaExtra['busy_reason'];
                 $item['nezha_pause_resume_at'] = $nezhaExtra['pause_resume_at'];
-                $item['cuisine'] = $item->cuisine;
+                $item['cuisine'] = $item->getRelation('cuisine');
 
                 if ($item->opening_time) {
                     $item['available_time_starts'] = $item->opening_time->format('H:i');
@@ -870,10 +1024,7 @@ class Helpers
                     unset($item['closeing_time']);
                 }
 
-                $reviewsInfo = $item->reviews()->where('reviews.status', 1)
-                    ->selectRaw('avg(reviews.rating) as average_rating, count(reviews.id) as total_reviews, food.restaurant_id')
-                    ->groupBy('food.restaurant_id')
-                    ->first();
+                $reviewsInfo = $prepared['review_stats']->get($item->id);
 
                 $item['ratings'] = $item?->ratings ?? [];
                 $item['avg_rating'] = (float) $reviewsInfo?->average_rating ?? 0;
@@ -900,7 +1051,9 @@ class Helpers
                 $item['schedule_advance_dine_in_booking_duration'] = (int) $item?->restaurant_config?->schedule_advance_dine_in_booking_duration;
                 $item['schedule_advance_dine_in_booking_duration_time_format'] = $item?->restaurant_config?->schedule_advance_dine_in_booking_duration_time_format ?? 'min';
 
-                $item['characteristics'] = $item->characteristics()->pluck('characteristic')->toArray();
+                $characteristics = $item->getRelation('characteristics')->pluck('characteristic')->toArray();
+                $item->unsetRelation('characteristics');
+                $item['characteristics'] = $characteristics;
                 // $item['tags'] = $item->tags()->pluck('tag')->toArray();
 
                 // unset($item['coupon_valid']);
@@ -4291,15 +4444,20 @@ class Helpers
     public static function vehicle_extra_charge(float $distance_data)
     {
         $data = [];
-        $vehicle = Vehicle::active()
-            ->where(function ($query) use ($distance_data) {
-                $query->where('starting_coverage_area', '<=', $distance_data)->where('maximum_coverage_area', '>=', $distance_data)
-                    ->orWhere(function ($query) use ($distance_data) {
-                        $query->where('starting_coverage_area', '>=', $distance_data);
-                    });
-            })->orderBy('starting_coverage_area')->first();
+        $cacheKey = 'nz_active_vehicles_' . app()->getLocale();
+        if (app()->bound($cacheKey)) {
+            $vehicles = app($cacheKey)[0];
+        } else {
+            $vehicles = Vehicle::active()->orderBy('starting_coverage_area')->get();
+            app()->instance($cacheKey, [$vehicles]);
+        }
+
+        $vehicle = $vehicles->first(function ($vehicle) use ($distance_data) {
+            return ($vehicle->starting_coverage_area <= $distance_data && $vehicle->maximum_coverage_area >= $distance_data)
+                || $vehicle->starting_coverage_area >= $distance_data;
+        });
         if (empty($vehicle)) {
-            $vehicle = Vehicle::active()->orderBy('maximum_coverage_area', 'desc')->first();
+            $vehicle = $vehicles->sortByDesc('maximum_coverage_area')->first();
         }
         $data['extra_charge'] = $vehicle->extra_charges ?? 0;
         $data['vehicle_id'] = $vehicle->id ?? null;
@@ -4686,7 +4844,13 @@ class Helpers
 
         } else {
 
-            $businessSettings = BusinessSetting::whereIn('key', ['free_delivery_over', 'free_delivery_distance', 'admin_free_delivery_status', 'admin_free_delivery_option'])->pluck('value', 'key');
+            $businessSettingsKey = 'nz_delivery_fee_business_settings_' . app()->getLocale();
+            if (app()->bound($businessSettingsKey)) {
+                $businessSettings = app($businessSettingsKey)[0];
+            } else {
+                $businessSettings = BusinessSetting::whereIn('key', ['free_delivery_over', 'free_delivery_distance', 'admin_free_delivery_status', 'admin_free_delivery_option'])->pluck('value', 'key');
+                app()->instance($businessSettingsKey, [$businessSettings]);
+            }
 
             $free_delivery_over = (float) ($businessSettings['free_delivery_over'] ?? 0);
             $free_delivery_distance = (float) ($businessSettings['free_delivery_distance'] ?? 0);
