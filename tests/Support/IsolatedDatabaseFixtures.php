@@ -49,6 +49,8 @@ final class IsolatedDatabaseFixtures
                 $table->id();
                 $table->string('f_name')->nullable();
                 $table->string('l_name')->nullable();
+                $table->string('phone')->nullable();
+                $table->string('ref_code')->nullable();
                 $table->string('image')->nullable();
                 $table->timestamps();
             });
@@ -214,8 +216,23 @@ final class IsolatedDatabaseFixtures
                 $table->boolean('nezha_auto_offline')->default(false);
                 $table->string('nezha_auto_offline_reason')->nullable();
                 $table->timestamp('nezha_auto_offline_at')->nullable();
+                $table->boolean('nezha_commission_enabled')->default(false);
                 $table->string('nezha_notify_email')->nullable();
                 $table->string('telegram_chat_id')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('restaurant_wallets')) {
+            $schema->create('restaurant_wallets', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('vendor_id')->unique();
+                $table->decimal('total_earning', 24, 2)->default(0);
+                $table->decimal('total_withdrawn', 24, 2)->default(0);
+                $table->decimal('pending_withdraw', 24, 2)->default(0);
+                $table->decimal('collected_cash', 24, 2)->default(0);
+                $table->decimal('deposit_balance', 24, 2)->default(0);
+                $table->decimal('ad_balance', 24, 2)->default(0);
                 $table->timestamps();
             });
         }
@@ -224,9 +241,11 @@ final class IsolatedDatabaseFixtures
             $schema->create('orders', function (Blueprint $table): void {
                 $table->id();
                 $table->unsignedBigInteger('restaurant_id')->index();
+                $table->unsignedBigInteger('user_id')->nullable()->index();
                 $table->decimal('restaurant_discount_amount', 24, 2)->default(0);
                 $table->string('order_status')->default('pending');
                 $table->boolean('scheduled')->default(false);
+                $table->timestamp('confirmed')->nullable();
                 $table->timestamp('accepted')->nullable();
                 $table->timestamp('processing')->nullable();
                 $table->timestamp('handover')->nullable();
@@ -234,6 +253,71 @@ final class IsolatedDatabaseFixtures
                 $table->timestamp('delivered')->nullable();
                 $table->timestamp('canceled')->nullable();
                 $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('advertisements')) {
+            $schema->create('advertisements', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('restaurant_id')->index();
+                $table->string('add_type')->default('restaurant_promotion');
+                $table->string('title')->nullable();
+                $table->text('description')->nullable();
+                $table->date('start_date');
+                $table->date('end_date');
+                $table->unsignedBigInteger('created_by_id');
+                $table->string('created_by_type');
+                $table->string('status')->default('pending');
+                $table->boolean('is_paid')->default(false);
+                $table->decimal('price', 24, 2)->nullable();
+                $table->timestamp('paid_at')->nullable();
+                $table->unsignedBigInteger('deposit_transaction_id')->nullable();
+                $table->decimal('bid_amount', 10, 2)->nullable();
+                $table->string('pricing_model', 8)->default('cpt');
+                $table->decimal('daily_budget', 10, 2)->nullable();
+                $table->decimal('spent_today', 10, 2)->default(0);
+                $table->date('budget_reset_date')->nullable();
+                $table->string('slot', 16)->nullable();
+                $table->decimal('quality_score', 4, 3)->default(1);
+                $table->decimal('mat_boost', 5, 3)->default(0);
+                $table->smallInteger('mat_rank')->nullable();
+                $table->timestamp('mat_at')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('restaurant_deposit_transactions')) {
+            $schema->create('restaurant_deposit_transactions', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('vendor_id')->index();
+                $table->unsignedBigInteger('restaurant_id')->nullable()->index();
+                $table->unsignedBigInteger('order_id')->nullable()->index();
+                $table->string('type', 30);
+                $table->decimal('amount', 24, 2)->default(0);
+                $table->decimal('commission', 24, 2)->default(0);
+                $table->decimal('balance_after', 24, 2)->default(0);
+                $table->string('note')->nullable();
+                $table->unsignedBigInteger('created_by')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('ad_events')) {
+            $schema->create('ad_events', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('advertisement_id')->index();
+                $table->unsignedBigInteger('restaurant_id')->index();
+                $table->unsignedBigInteger('vendor_id')->index();
+                $table->unsignedBigInteger('user_id')->nullable()->index();
+                $table->string('event_type', 16);
+                $table->string('slot', 16)->nullable();
+                $table->decimal('charged_amount', 10, 2)->default(0);
+                $table->string('charge_reason', 32)->nullable();
+                $table->unsignedBigInteger('deposit_transaction_id')->nullable();
+                $table->string('dedup_key', 64)->unique();
+                $table->string('ip_hash', 16)->nullable();
+                $table->string('ua_hash', 16)->nullable();
+                $table->timestamp('created_at')->nullable();
             });
         }
 
@@ -424,6 +508,7 @@ final class IsolatedDatabaseFixtures
             $schema->create('reviews', function (Blueprint $table): void {
                 $table->id();
                 $table->unsignedBigInteger('food_id')->index();
+                $table->unsignedBigInteger('restaurant_id')->nullable()->index();
                 $table->unsignedTinyInteger('rating')->default(0);
                 $table->text('comment')->nullable();
                 $table->boolean('status')->default(true);
