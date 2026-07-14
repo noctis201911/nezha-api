@@ -209,6 +209,48 @@
         <div class="nzo-kpi"><span>{{ $nzoAmtLbl }}</span><strong>{{ \App\CentralLogics\Helpers::format_currency($nzoRefundFlow ? $nzoRefundAmt : $nzoAmt) }}</strong></div>
     </div>
 
+    {{-- 顾客取消申请必须出现在当前可见的新详情区；旧右栏已被新版布局隐藏。 --}}
+    @if ($order->nezha_cancel_request === 'requested' && in_array($order->order_status, ['confirmed', 'processing'], true))
+        <div class="nzo-card">
+            <div class="nzo-cb">
+                <div class="nzo-warn" style="background:var(--red-b);color:var(--red-t);border-color:var(--red-l);">
+                    <i class="tio-warning"></i>
+                    <div>
+                        <strong>顾客申请取消本单</strong><br>
+                        顾客理由：{{ $order->nezha_cancel_request_reason ?: '（未填写）' }}
+                        @if ($order->payment_method == 'offline_payment')
+                            <br>若顾客已付款，同意取消后请按原路退款并在本单确认完成。
+                        @endif
+                    </div>
+                </div>
+                <div class="nzo-hact">
+                    <form action="{{ route('vendor.order.cancel-request-decision', ['id' => $order['id']]) }}" method="post" data-nz-confirm="确认同意取消本单？若顾客已付款，需你按原路退还。" data-nz-confirm-danger>
+                        @csrf @method('put')
+                        <input type="hidden" name="action" value="approve">
+                        <button type="submit" class="nzo-btn nzo-btn-primary">同意取消</button>
+                    </form>
+                    <button type="button" class="nzo-btn nzo-btn-ghost" style="color:var(--red-t);" data-toggle="modal" data-target="#nzRejectCancelReq-{{ $order['id'] }}">拒绝（继续履约）</button>
+                </div>
+            </div>
+        </div>
+        <div class="modal fade" id="nzRejectCancelReq-{{ $order['id'] }}" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document"><div class="modal-content">
+                <form action="{{ route('vendor.order.cancel-request-decision', ['id' => $order['id']]) }}" method="post">
+                    @csrf @method('put')
+                    <input type="hidden" name="action" value="reject">
+                    <div class="modal-header"><h5 class="modal-title">拒绝取消申请</h5><button type="button" class="close" data-dismiss="modal">&times;</button></div>
+                    <div class="modal-body">
+                        <label style="font-size:13px;color:#555;">请填写拒绝原因（会通知顾客）</label>
+                        <textarea name="reason" required maxlength="500" rows="3" class="form-control" placeholder="例：已开始备餐，无法取消；如有问题请电话联系。"></textarea>
+                    </div>
+                    <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">关闭</button><button type="submit" class="btn btn--danger btn-sm">确认拒绝</button></div>
+                </form>
+            </div></div>
+        </div>
+    @elseif ($order->nezha_cancel_request === 'rejected')
+        <div class="nzo-warn" style="background:var(--gray-b);color:var(--gray-t);border-color:var(--gray-l);">本单曾有顾客取消申请，你已拒绝（{{ $order->nezha_cancel_response_note }}），订单继续履约。</div>
+    @endif
+
     {{-- ===== 视图切换（工作台=全部·默认；收款/配送=聚焦子集，商家手动切） ===== --}}
     <div class="nzo-tabs" data-nzo-tabs>
         <button type="button" data-tab="wb" class="on">工作台</button>

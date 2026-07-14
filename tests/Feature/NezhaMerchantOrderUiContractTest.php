@@ -224,6 +224,16 @@ class NezhaMerchantOrderUiContractTest extends TestCase
         );
     }
 
+    public function testMerchantCancelRequestActionsLiveInTheVisibleDetailMode(): void
+    {
+        $blade = file_get_contents(resource_path('views/vendor-views/order/order-view.blade.php'));
+        $detailMode = file_get_contents(resource_path('views/vendor-views/order/partials/_detail_modes.blade.php'));
+
+        $this->assertStringContainsString('顾客申请取消本单', $detailMode);
+        $this->assertStringContainsString("route('vendor.order.cancel-request-decision'", $detailMode);
+        $this->assertStringNotContainsString('顾客申请取消本单', $blade);
+    }
+
     public function testStandardReceiptTemplateProtectsPrivacyAndPrintsAutomaticallyWhenRequested(): void
     {
         $blade = file_get_contents(resource_path('views/new_invoice.blade.php'));
