@@ -9,11 +9,13 @@ class NezhaMerchantOrderUiContractTest extends TestCase
     public function testMerchantOrderListKeepsSimpleDesignAndFastActions(): void
     {
         $blade = file_get_contents(resource_path('views/vendor-views/order/list.blade.php'));
+        $contactVisibility = file_get_contents(app_path('CentralLogics/NezhaContactVisibility.php'));
 
         $this->assertStringContainsString('下一步操作', $blade);
         $this->assertStringContainsString('打印小票', $blade);
         $this->assertStringContainsString('订单详情', $blade);
-        $this->assertStringContainsString('Helpers::mask_phone', $blade);
+        $this->assertStringContainsString('NezhaContactVisibility::phone', $blade);
+        $this->assertStringContainsString('Helpers::mask_phone', $contactVisibility);
         $this->assertStringContainsString('nz-order-step-form', $blade);
         $this->assertStringContainsString('nzAutoPrintReady', $blade);
         $this->assertStringNotContainsString("translate('messages.delivery_type')</th>", $blade);
@@ -62,23 +64,25 @@ class NezhaMerchantOrderUiContractTest extends TestCase
         $this->assertStringContainsString('nz-order-primary-line', $blade);
         $this->assertStringContainsString('nz-mobile-status-strip', $blade);
         $this->assertStringContainsString('nz-mobile-action-label', $blade);
+        $this->assertStringContainsString('td[data-label="订单"] { display: block; width: 100% !important;', $blade);
     }
 
-    public function testMerchantOrderTablePutsDetailsBeforePrintAction(): void
+    public function testMerchantOrderTableKeepsDetailsBeforePrintInTheMoreMenu(): void
     {
         $blade = file_get_contents(resource_path('views/vendor-views/order/list.blade.php'));
 
-        $detailHeader = strpos($blade, '>订单详情</th>');
-        $printHeader = strpos($blade, '>打印小票</th>');
-        $detailCell = strpos($blade, '<td class="text-center nz-detail-action-cell"');
-        $printCell = strpos($blade, '<td class="text-center nz-print-action-cell"');
+        $moreHeader = strpos($blade, '>更多</th>');
+        $moreCell = strpos($blade, '<td class="text-center nz-row-more-cell"');
+        $detailAction = strpos($blade, 'id="nzMenuDetail"');
+        $printAction = strpos($blade, 'id="nzMenuInvoice"');
 
-        $this->assertNotFalse($detailHeader);
-        $this->assertNotFalse($printHeader);
-        $this->assertNotFalse($detailCell);
-        $this->assertNotFalse($printCell);
-        $this->assertLessThan($printHeader, $detailHeader);
-        $this->assertLessThan($printCell, $detailCell);
+        $this->assertNotFalse($moreHeader);
+        $this->assertNotFalse($moreCell);
+        $this->assertNotFalse($detailAction);
+        $this->assertNotFalse($printAction);
+        $this->assertLessThan($printAction, $detailAction);
+        $this->assertStringContainsString("route('vendor.order.details'", $blade);
+        $this->assertStringContainsString("route('vendor.order.generate-invoice'", $blade);
     }
 
     public function testMerchantOrderTableSupportsOperatorTableControls(): void
@@ -140,12 +144,14 @@ class NezhaMerchantOrderUiContractTest extends TestCase
         $this->assertStringContainsString("'customer_nudged'", $controller);
     }
 
-    public function testMerchantOrderSidebarShowsAllStatusesWithoutMoreFold(): void
+    public function testMerchantOrderSidebarUsesOneActionCountedOrderEntry(): void
     {
         $blade = file_get_contents(resource_path('views/layouts/vendor/partials/_sidebar.blade.php'));
 
         $this->assertStringNotContainsString('nzSidebarMore', $blade);
-        $this->assertStringNotContainsString('更多', $blade);
+        $this->assertStringContainsString('NezhaOrderCounts::forRestaurant', $blade);
+        $this->assertStringContainsString("route('vendor.order.list', ['grp_action'])", $blade);
+        $this->assertStringContainsString('nz-order-action-badge', $blade);
 
         foreach ([
             'refunded',
@@ -154,26 +160,21 @@ class NezhaMerchantOrderUiContractTest extends TestCase
             'payment_failed',
             'canceled',
         ] as $status) {
-            $this->assertStringContainsString("restaurant-panel/order/list/{$status}", $blade);
-            $this->assertStringContainsString("route('vendor.order.list',['{$status}'])", $blade);
+            $this->assertStringNotContainsString("restaurant-panel/order/list/{$status}", $blade);
+            $this->assertStringNotContainsString("route('vendor.order.list',['{$status}'])", $blade);
         }
     }
 
-    public function testMerchantOrderSidebarKeepsCustomerNudgeAboveOfflinePendingWithAlarmBadge(): void
+    public function testMerchantOrderPageKeepsCustomerNudgeInTheActionGroup(): void
     {
-        $blade = file_get_contents(resource_path('views/layouts/vendor/partials/_sidebar.blade.php'));
+        $list = file_get_contents(resource_path('views/vendor-views/order/list.blade.php'));
+        $sidebar = file_get_contents(resource_path('views/layouts/vendor/partials/_sidebar.blade.php'));
 
-        $customerNudge = strpos($blade, "restaurant-panel/order/list/customer_nudged");
-        $offlinePending = strpos($blade, "restaurant-panel/order/list/offline_pending");
-
-        $this->assertNotFalse($customerNudge);
-        $this->assertNotFalse($offlinePending);
-        $this->assertLessThan($offlinePending, $customerNudge);
-        $this->assertStringContainsString('客户催促', $blade);
-        $this->assertStringContainsString('nz-customer-nudge-alert', $blade);
-        $this->assertStringContainsString('nz-customer-nudge-badge', $blade);
-        $this->assertStringContainsString('@keyframes nzNudgeBadgePulse', $blade);
-        $this->assertStringContainsString('NezhaCustomerNudge::count', $blade);
+        $this->assertStringContainsString("'chips' => ['offline_pending', 'customer_nudged', 'timeout'", $list);
+        $this->assertStringContainsString("'customer_nudged' => 'grp_action'", $list);
+        $this->assertStringContainsString('客户催促', $list);
+        $this->assertStringContainsString('NezhaOrderCounts::forRestaurant', $sidebar);
+        $this->assertStringNotContainsString('restaurant-panel/order/list/customer_nudged', $sidebar);
     }
 
     public function testRestaurantLoginReturnsToVendorDashboardByDefault(): void
@@ -197,9 +198,11 @@ class NezhaMerchantOrderUiContractTest extends TestCase
     public function testStandardReceiptTemplateProtectsPrivacyAndPrintsAutomaticallyWhenRequested(): void
     {
         $blade = file_get_contents(resource_path('views/new_invoice.blade.php'));
+        $receiptBody = file_get_contents(resource_path('views/nz_receipt_body.blade.php'));
 
         $this->assertStringContainsString('哪吒标准小票模板', $blade);
-        $this->assertStringContainsString('Helpers::mask_phone', $blade);
+        $this->assertStringContainsString("@include('nz_receipt_body'", $blade);
+        $this->assertStringContainsString('Helpers::mask_phone', $receiptBody);
         $this->assertStringContainsString('nz_auto_print=1', $blade);
         $this->assertStringContainsString('window.print()', $blade);
     }

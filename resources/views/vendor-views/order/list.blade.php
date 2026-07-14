@@ -257,7 +257,7 @@
             #datatable tr.class-all td:first-child { display: none; }      /* 序号在卡片里无意义, 隐藏 */
             #datatable tr.class-all td:last-child { border-bottom: 0; }
             #datatable tr.class-all td > * { text-align: right; }
-            #datatable tr.class-all td[data-label="订单"] { display: block; padding: 12px 0 10px; }
+            #datatable tr.class-all td[data-label="订单"] { display: block; width: 100% !important; padding: 12px 0 10px; }
             #datatable tr.class-all td[data-label="订单"]::before { display: none; }
             .nz-order-primary-line { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
             .nz-order-id { font-size: 18px; line-height: 1.15; }
