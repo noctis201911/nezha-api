@@ -18,6 +18,11 @@ class NezhaPaymentAddressChangeController extends Controller
             abort(404);
         }
 
+        // The formal reviewer page is intentionally held until the Fable redesign
+        // is approved. Keep the least-privilege JSON contract available for the
+        // future UI without exposing the withdrawn V2 screen.
+        abort_unless($request->expectsJson(), 404);
+
         $changes = NezhaPaymentAddressChange::query()
             ->with(['restaurant:id,name', 'requestedByAdmin:id,f_name,l_name,email'])
             ->where('state', 'pending_distinct_admin')
@@ -25,12 +30,6 @@ class NezhaPaymentAddressChangeController extends Controller
             ->orderBy('id')
             ->limit(100)
             ->get();
-
-        if (! $request->expectsJson()) {
-            return view('admin-views.payment-address-review.index', [
-                'changes' => $changes,
-            ]);
-        }
 
         $resources = $changes
             ->map(fn (NezhaPaymentAddressChange $change): array => $this->resource($change))
@@ -265,7 +264,7 @@ class NezhaPaymentAddressChangeController extends Controller
     {
         Toastr::success($message);
 
-        return redirect()->route('admin.payment-address-review.pending');
+        return back();
     }
 
     private function domainError(Request $request, \DomainException $e)

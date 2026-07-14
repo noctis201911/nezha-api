@@ -158,22 +158,18 @@ class NezhaPaymentAddressRbacRouteTest extends TestCase
         $create = file_get_contents(resource_path('views/admin-views/custom-role/create.blade.php'));
         $edit = file_get_contents(resource_path('views/admin-views/custom-role/edit.blade.php'));
         $bootstrap = file_get_contents(base_path('bootstrap/app.php'));
-        $reviewPage = file_get_contents(resource_path(
-            'views/admin-views/payment-address-review/index.blade.php'
-        ));
-
         $this->assertStringContainsString("where('state', 'pending_distinct_admin')", $controller);
         $this->assertStringContainsString("abort_unless(\$change->state === 'pending_distinct_admin', 404)", $controller);
+        $this->assertStringContainsString('abort_unless($request->expectsJson(), 404)', $controller);
         $this->assertStringContainsString('payment_address_review must be an exclusive role module', $roleController);
         $this->assertStringContainsString('value="payment_address_review"', $create);
         $this->assertStringContainsString('value="payment_address_manage"', $create);
         $this->assertStringContainsString('value="payment_address_review"', $edit);
         $this->assertStringContainsString('value="payment_address_manage"', $edit);
         $this->assertStringContainsString("'reviewer.scope' => PaymentAddressReviewerScopeMiddleware::class", $bootstrap);
-        $this->assertStringContainsString('data-payment-address-review="reviewer-v2"', $reviewPage);
-        $this->assertStringContainsString('驳回原因 <span class="text-muted font-weight-normal">（选填）</span>', $reviewPage);
-        $this->assertStringContainsString('data-review-reject-form', $reviewPage);
-        $this->assertStringNotContainsString('required name="reason"', $reviewPage);
+        $this->assertFileDoesNotExist(resource_path(
+            'views/admin-views/payment-address-review/index.blade.php'
+        ));
     }
 
     private function routeMiddleware(string $name): array
