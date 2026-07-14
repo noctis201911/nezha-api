@@ -42,16 +42,20 @@ class DeliveryManController extends Controller
 
 
     public function reviews_list(){
-        $reviews=DMReview::with(['delivery_man','customer'])->latest()->paginate(config('default_pagination'));
+        $reviews = DMReview::with(['delivery_man','customer'])
+            ->whereHas('delivery_man', function ($query) {
+                $query->where('restaurant_id', Helpers::get_restaurant_id());
+            })
+            ->latest()->paginate(config('default_pagination'));
         return view('vendor-views.delivery-man.reviews-list',compact('reviews'));
     }
 
     public function preview($id, $tab='info')
     {
-        $dm = DeliveryMan::with(['reviews'])->where('restaurant_id', Helpers::get_restaurant_id())->where(['id' => $id])->first();
+        $dm = DeliveryMan::with(['reviews'])->where('restaurant_id', Helpers::get_restaurant_id())->where(['id' => $id])->firstOrFail();
         if($tab == 'info')
         {
-            $reviews=DMReview::where(['delivery_man_id'=>$id])->latest()->paginate(config('default_pagination'));
+            $reviews = DMReview::where('delivery_man_id', $dm->id)->latest()->paginate(config('default_pagination'));
             return view('vendor-views.delivery-man.view.info', compact('dm', 'reviews'));
         }
         else if($tab == 'transaction')
@@ -126,13 +130,13 @@ class DeliveryManController extends Controller
 
     public function edit($id)
     {
-        $delivery_man = DeliveryMan::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->find($id);
+        $delivery_man = DeliveryMan::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->findOrFail($id);
         return view('vendor-views.delivery-man.edit', compact('delivery_man'));
     }
 
     public function status(Request $request)
     {
-        $delivery_man = DeliveryMan::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->find($request->id);
+        $delivery_man = DeliveryMan::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->findOrFail($request->id);
         $delivery_man->status = $request->status;
 
         try
@@ -170,7 +174,7 @@ class DeliveryManController extends Controller
 
     public function earning(Request $request)
     {
-        $delivery_man = DeliveryMan::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->find($request->id);
+        $delivery_man = DeliveryMan::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->findOrFail($request->id);
         $delivery_man->earning = $request->status;
 
         $delivery_man->save();
@@ -205,7 +209,7 @@ class DeliveryManController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)]);
         }
 
-        $delivery_man = DeliveryMan::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->find($id);
+        $delivery_man = DeliveryMan::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->findOrFail($id);
 
         if ($request->has('image')) {
             $image_name = Helpers::update(dir:'delivery-man/',old_image: $delivery_man->image, format:'png',image: $request->file('image'));
@@ -246,7 +250,7 @@ class DeliveryManController extends Controller
 
     public function delete(Request $request)
     {
-        $delivery_man = DeliveryMan::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->find($request->id);
+        $delivery_man = DeliveryMan::where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())->findOrFail($request->id);
 
         Helpers::check_and_delete('delivery-man/' , $delivery_man['image']);
 
@@ -287,6 +291,7 @@ class DeliveryManController extends Controller
 
     public function get_account_data(DeliveryMan $deliveryman)
     {
+        abort_unless((int) $deliveryman->restaurant_id === (int) Helpers::get_restaurant_id(), 404);
         $wallet = $deliveryman?->wallet;
         $cash_in_hand = 0;
         $balance = 0;

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Vendor;
 
+use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Banner;
@@ -20,18 +21,18 @@ class BannerController extends Controller
     public function status(Request $request)
     {
         $banner = Banner::findOrFail($request->id);
-        $restaurant_id = $request->status;
-        $restaurant_ids = json_decode($banner->restaurant_ids);
-        if(in_array($restaurant_id, $restaurant_ids))
+        $restaurantId = Helpers::get_restaurant_id();
+        $restaurantIds = array_map('intval', json_decode($banner->restaurant_ids, true) ?: []);
+        if(in_array($restaurantId, $restaurantIds, true))
         {
-            unset($restaurant_ids[array_search($restaurant_id, $restaurant_ids)]);
+            unset($restaurantIds[array_search($restaurantId, $restaurantIds, true)]);
         }
         else
         {
-            array_push($restaurant_ids, $restaurant_id);
+            $restaurantIds[] = $restaurantId;
         }
 
-        $banner->restaurant_ids = json_encode($restaurant_ids);
+        $banner->restaurant_ids = json_encode(array_values($restaurantIds));
         $banner->save();
         Toastr::success(translate('messages.capmaign_participation_updated'));
         return back();

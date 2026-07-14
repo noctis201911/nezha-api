@@ -31,6 +31,19 @@ use App\Exports\VendorTransactionReportExport;
 
 class ReportController extends Controller
 {
+    private function customerForCurrentRestaurant($customerId): ?User
+    {
+        if (! is_numeric($customerId)) {
+            return null;
+        }
+
+        return User::where('id', $customerId)
+            ->whereHas('orders', function ($query) {
+                $query->where('restaurant_id', Helpers::get_restaurant_id());
+            })
+            ->firstOrFail();
+    }
+
 
     public function set_date(Request $request)
     {
@@ -283,7 +296,11 @@ class ReportController extends Controller
         $company_web_logo =$settings['logo'] ?? null;
         $footer_text = $settings['footer_text'] ?? null;
 
-        $order_transaction = OrderTransaction::with('order','order.details','order.customer','order.restaurant')->where('id', $id)->first();
+        $order_transaction = OrderTransaction::with('order','order.details','order.customer','order.restaurant')
+            ->whereHas('order', function ($query) {
+                $query->where('restaurant_id', Helpers::get_restaurant_id());
+            })
+            ->findOrFail($id);
         $data["email"] = $order_transaction->order->customer !=null?$order_transaction->order->customer["email"]: translate('email_not_found');
         $data["client_name"] = $order_transaction->order->customer !=null? $order_transaction->order->customer["f_name"] . ' ' . $order_transaction->order->customer["l_name"]: translate('customer_not_found');
         $data["order_transaction"] = $order_transaction;
@@ -308,7 +325,7 @@ class ReportController extends Controller
 
         $restaurant_id = Helpers::get_restaurant_id();
         $customer_id = $request->query('customer_id', 'all');
-        $customer = is_numeric($customer_id) ? User::findOrFail($customer_id) : null;
+        $customer = $this->customerForCurrentRestaurant($customer_id);
         $restaurant= Helpers::get_restaurant_data();
         $data =0;
         if (($restaurant->restaurant_model == 'subscription' && isset($restaurant->restaurant_sub) && $restaurant->restaurant_sub->self_delivery == 1)  || ($restaurant->restaurant_model == 'commission' && $restaurant->self_delivery_system == 1) ){
@@ -384,7 +401,7 @@ class ReportController extends Controller
             }
 
             $customer_id = $request->query('customer_id', 'all');
-            $customer = is_numeric($customer_id) ? User::findOrFail($customer_id) : null;
+            $customer = $this->customerForCurrentRestaurant($customer_id);
             $filter = $request->query('filter', 'all_time');
 
             $orders = Order::with(['customer', 'restaurant'])->where('restaurant_id',$restaurant_id)
@@ -414,7 +431,7 @@ class ReportController extends Controller
                 'from'=>(($filter == 'custom') && $from)?$from:null,
                 'to'=>(($filter == 'custom') && $to)?$to:null,
                 'restaurant'=>Helpers::get_restaurant_name($restaurant_id),
-                'customer'=>is_numeric($customer_id)?Helpers::get_customer_name($customer_id):null,
+                'customer'=>$customer ? trim($customer->f_name.' '.$customer->l_name) : null,
                 'filter'=>$filter,
             ];
 
@@ -443,7 +460,7 @@ class ReportController extends Controller
         $restaurant_id = Helpers::get_restaurant_id();
 
         $customer_id = $request->query('customer_id', 'all');
-        $customer = is_numeric($customer_id) ? User::findOrFail($customer_id) : null;
+        $customer = $this->customerForCurrentRestaurant($customer_id);
         $campaign_id = $request->query('campaign_id', 'all');
         $key = explode(' ', $request['search']);
 
@@ -519,7 +536,7 @@ class ReportController extends Controller
             $restaurant_id = Helpers::get_restaurant_id();
 
             $customer_id = $request->query('customer_id', 'all');
-            $customer = is_numeric($customer_id) ? User::findOrFail($customer_id) : null;
+            $customer = $this->customerForCurrentRestaurant($customer_id);
             $campaign_id = $request->query('campaign_id', 'all');
 
             $orders = Order::with(['customer', 'restaurant','details'])->where('restaurant_id',$restaurant_id)
@@ -550,9 +567,9 @@ class ReportController extends Controller
                 'search'=>$request->search??null,
                 'from'=>(($filter == 'custom') && $from)?$from:null,
                 'to'=>(($filter == 'custom') && $to)?$to:null,
-                'campaign' => is_numeric($campaign_id)?ItemCampaign::where('id' ,$campaign_id)->first()?->title:null,
+                'campaign' => is_numeric($campaign_id) ? ItemCampaign::where('restaurant_id', $restaurant_id)->where('id', $campaign_id)->first()?->title : null,
                 'restaurant'=>Helpers::get_restaurant_name($restaurant_id),
-                'customer'=>is_numeric($customer_id)?Helpers::get_customer_name($customer_id):null,
+                'customer'=>$customer ? trim($customer->f_name.' '.$customer->l_name) : null,
                 'filter'=>$filter,
             ];
 

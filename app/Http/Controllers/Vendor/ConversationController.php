@@ -187,6 +187,8 @@ class ConversationController extends Controller
 
     public function store(Request $request, $user_id, $user_type)
     {
+        abort_unless(in_array($user_type, ['admin', 'user', 'delivery_man'], true), 404);
+
         if ($request->has('images')) {
 
             $validator = Validator::make($request->all(), [
@@ -260,7 +262,8 @@ class ConversationController extends Controller
             $receiver_id = $receiver->id;
 
         }elseif($user_type == 'delivery_man'){
-            $user = DeliveryMan::find($user_id);
+            $user = DeliveryMan::where('restaurant_id', Helpers::get_restaurant_id())
+                ->findOrFail($user_id);
             $fcm_token=$user->fcm_token;
             $receiver = UserInfo::where('deliveryman_id', $user->id)->first();
             if(!$receiver){

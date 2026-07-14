@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Mail;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Library\Payment as PaymentInfo;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use App\Exports\DisbursementHistoryExport;
 
 class WalletController extends Controller
@@ -58,7 +59,8 @@ class WalletController extends Controller
         if ($method) {
             $fields = array_column($method->method_fields, 'input_name');
         } else {
-            $method = DisbursementWithdrawalMethod::find($request['withdraw_method']);
+            $method = DisbursementWithdrawalMethod::where('restaurant_id', Helpers::get_restaurant_id())
+                ->find($request['withdraw_method']);
 
             if (!$method) {
                 Toastr::error(translate('Invalid withdrawal method.'));
@@ -116,7 +118,7 @@ class WalletController extends Controller
 
     public function close_request($id)
     {
-        $wr = WithdrawRequest::find($id);
+        $wr = WithdrawRequest::where('vendor_id', Helpers::get_vendor_id())->findOrFail($id);
         if ($wr->approved == 0) {
             RestaurantWallet::where('vendor_id', Helpers::get_vendor_id())->decrement('pending_withdraw', $wr['amount']);
         }
@@ -188,8 +190,9 @@ class WalletController extends Controller
 
 
     Public function make_payment(Request $request){
+        $restaurantId = Helpers::get_restaurant_id();
         $validator = Validator::make($request->all(), [
-            'restaurant_id' => 'required',
+            'restaurant_id' => ['required', Rule::in([$restaurantId])],
             'payment_gateway' => 'required',
             'amount' => 'required|min:0.001',
         ]);
@@ -198,7 +201,7 @@ class WalletController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        $restaurant =Restaurant::findOrfail($request->restaurant_id);
+        $restaurant = Restaurant::where('id', $restaurantId)->firstOrFail();
 
         $payer = new Payer(
             $restaurant->name ,

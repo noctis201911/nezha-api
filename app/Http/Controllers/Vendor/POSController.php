@@ -334,7 +334,11 @@ class POSController extends Controller
     public function get_customers(Request $request)
     {
         $key = explode(' ', $request['q']);
-        $data = User::where(function ($q) use ($key) {
+        $restaurantId = Helpers::get_restaurant_id();
+        $data = User::whereHas('orders', function ($query) use ($restaurantId) {
+                $query->where('restaurant_id', $restaurantId);
+            })
+            ->where(function ($q) use ($key) {
                 foreach ($key as $value) {
                     $q->orWhere('f_name', 'like', "%{$value}%")
                         ->orWhere('l_name', 'like', "%{$value}%")
@@ -445,6 +449,7 @@ class POSController extends Controller
         $customer->phone = $request['phone'];
         $customer->password = bcrypt('password');
         $customer->save();
+        Session::put('customer_id', $customer->id);
         try {
             $notification_status = Helpers::getNotificationStatusData('customer', 'customer_pos_registration');
 
@@ -588,6 +593,15 @@ class POSController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)]);
         }
 
+        $customerId = (int) $request->customer_id;
+        abort_unless($customerId > 0 && (int) Session::get('customer_id') === $customerId, 404);
+
+        if ($request->filled('address_id')) {
+            CustomerAddress::where('id', $request->address_id)
+                ->where('user_id', $customerId)
+                ->firstOrFail();
+        }
+
         $data = [
             'contact_person_name' => $request->contact_person_name,
             'contact_person_number' => $request->contact_person_number,
@@ -603,12 +617,12 @@ class POSController extends Controller
         $selectedAddress = CustomerAddress::updateOrCreate(
             [
                 'id' => $request->address_id,
-                'user_id' => $request->customer_id
+                'user_id' => $customerId
             ],
             $data
         );
 
-        $address = CustomerAddress::where('user_id', $request->customer_id)->get();
+        $address = CustomerAddress::where('user_id', $customerId)->get();
         Session::put('address_id', $selectedAddress->id);
         $deliveryChargeData = $this->calculateDeliveryCharge($this->getDistance(Helpers::get_restaurant_data()), Helpers::get_restaurant_data(),Session::get('cart_total_price')??0);
         Session::put('delivery_charge', $deliveryChargeData['delivery_charge']);

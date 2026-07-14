@@ -12,6 +12,7 @@ use Brian2694\Toastr\Facades\Toastr;
 use Maatwebsite\Excel\Facades\Excel;
 use Rap2hpoutre\FastExcel\FastExcel;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\Rule;
 use App\Exports\RestaurantEmployeeListExport;
 
 class EmployeeController extends Controller
@@ -27,7 +28,12 @@ class EmployeeController extends Controller
         $request->validate([
             'f_name' => 'required',
             'l_name' => 'nullable|max:100',
-            'role_id' => 'required',
+            'role_id' => [
+                'required',
+                Rule::exists('employee_roles', 'id')->where(function ($query) {
+                    $query->where('restaurant_id', Helpers::get_restaurant_id());
+                }),
+            ],
             'image' => 'required|max:2048',
             'email' => 'required|unique:vendor_employees',
             'phone' => 'required|regex:/^([0-9\s\-\+\(\)]*)$/|max:20|unique:vendor_employees',
@@ -79,7 +85,7 @@ class EmployeeController extends Controller
 
     public function edit($id)
     {
-        $e = VendorEmployee::where('restaurant_id', Helpers::get_restaurant_id())->where(['id' => $id])->first();
+        $e = VendorEmployee::where('restaurant_id', Helpers::get_restaurant_id())->where(['id' => $id])->firstOrFail();
 
         if (auth('vendor_employee')->id()  == $e['id']){
             Toastr::error(translate('messages.You_can_not_edit_your_own_info'));
@@ -98,7 +104,12 @@ class EmployeeController extends Controller
         $request->validate([
             'f_name' => 'required',
             'l_name' => 'nullable|max:100',
-            'role_id' => 'required',
+            'role_id' => [
+                'required',
+                Rule::exists('employee_roles', 'id')->where(function ($query) {
+                    $query->where('restaurant_id', Helpers::get_restaurant_id());
+                }),
+            ],
             'email' => 'required|unique:vendor_employees,email,'.$id,
             'phone' => 'required|regex:/^([0-9\s\-\+\(\)]*)$/|max:20|unique:vendor_employees,phone,'.$id,
             'image' => 'nullable|max:2048',
@@ -114,7 +125,7 @@ class EmployeeController extends Controller
             'password.custom' => translate('The password cannot contain white spaces.'),
         ]);
 
-        $e = VendorEmployee::where('restaurant_id', Helpers::get_restaurant_id())->find($id);
+        $e = VendorEmployee::where('restaurant_id', Helpers::get_restaurant_id())->findOrFail($id);
 
         if (auth('vendor_employee')->id()  == $e['id']){
             Toastr::error(translate('messages.You_can_not_edit_your_own_info'));
