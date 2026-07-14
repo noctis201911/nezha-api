@@ -87,6 +87,13 @@ class RouteServiceProvider extends ServiceProvider
             return Limit::perMinute(240)->by(optional($request->user())->id ?: $request->ip());
         });
 
+        RateLimiter::for('csp-report', function (Request $request) {
+            return [
+                Limit::perMinute(60)->by('csp-report:minute:'.$request->ip()),
+                Limit::perHour(600)->by('csp-report:hour:'.$request->ip()),
+            ];
+        });
+
         // 哪吒[防脚本注册 2026-07-01]: 注册双层限流(5/分钟突发+30/小时持续), 命名限流器两层key自动区分, 避免叠加未命名throttle互撞计数; reCAPTCHA落地前interim, CGNAT共享IP需复评
         RateLimiter::for('signup', function (Request $request) {
             return [

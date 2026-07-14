@@ -81,6 +81,7 @@
 - 位置/证据：生产 `Content-Security-Policy`；nginx 的 `extension/nezha.am/security_headers.conf` 与宝塔 proxy 生成配置。
 - 影响：若页面另有注入点，`unsafe-inline`、`unsafe-eval` 和过宽第三方来源会扩大脚本执行与数据外传空间；付款地址属于高价值 DOM 内容。
 - 修复：先 Report-Only，再按付款路由移除未使用第三方、消除 `unsafe-eval`、以 nonce/hash 替代内联放行、加入 `frame-ancestors 'none'`，最终强制执行。
+- 隔离候选（2026-07-14，未部署）：Web 独立分支已为 `/checkout`、`/info`、`/tracking` 构造 `Content-Security-Policy-Report-Only`；初始策略保留现行 host 与 `'unsafe-inline'`，移除 `'unsafe-eval'`，补 `frame-ancestors 'none'`、`worker-src 'self'`、`manifest-src 'self'`。API 独立分支新增仅 POST 的报告端，限制 16 KiB、60/分钟与 600/小时、10 分钟去重，只记录脱敏后的路由/来源 origin/指令/行列/状态；不记录 query、fragment、cookie、referrer、script sample、订单号或完整地址。现行 enforce、nginx、Cloudflare 与生产响应均未改变。
 - 暂时缓解：保留 `object-src 'none'`、`base-uri 'self'`、`form-action 'self'`，监控前端依赖和第三方配置变化。
 - 误报边界：宽 CSP 不是“已经发生 XSS”的证据；它是关键页面防御纵深不足。
 
@@ -90,6 +91,7 @@
 - 位置/证据：前端 `pages/_document.js` 中 Google GSI、Apple 登录及多家分析脚本分支。
 - 影响：付款页面承担不必要的第三方供应链、隐私和 CSP 放行成本；未来启用分析配置时，付款路由会随之扩权。
 - 修复：社交登录脚本只在实际登录动作或登录页懒加载；分析脚本明确排除结算、付款、订单凭据展示路由。
+- 隔离候选（2026-07-14，未部署）：Google GSI 与 Apple ID SDK 已从全站 `_document` 移到登录组件按需单次加载；即使 analytics API 返回非空配置，付款路由也不请求或渲染广告/分析脚本。是否在真实登录动作、地图、Firebase/PWA 与 Cloudflare JS Detection 下兼容，仍须部署前后按 Playbook 分阶段验证。
 - 暂时缓解：当前分析配置为空时维持关闭，并增加配置变更验收。
 - 误报边界：已列出的脚本是官方来源，不等同于恶意脚本；风险来自不必要的高权限加载范围。
 
