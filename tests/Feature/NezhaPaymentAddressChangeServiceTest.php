@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\CentralLogics\NezhaPaymentAddressChangeService;
+use App\CentralLogics\NezhaPaymentAddressChangeView;
 use App\CentralLogics\NezhaPaymentAddressCredentialService;
 use App\CentralLogics\NezhaTotp;
 use App\Models\Admin;
@@ -200,14 +201,36 @@ class NezhaPaymentAddressChangeServiceTest extends TestCase
         $this->assertSame('admin', $event->actor_type);
         $this->assertNotNull($event->totp_counter);
         $this->assertFalse(property_exists($event, 'totp_code'));
+        $this->assertSame(1, DB::table('user_notifications')->count());
+        $notification = json_decode((string) DB::table('user_notifications')->value('data'), true);
+        $this->assertSame('nezha_payment_address_security', $notification['type']);
+        $this->assertStringNotContainsString(self::TRON_A, $notification['description']);
+        $this->assertStringNotContainsString(self::TRON_B, $notification['description']);
 
         // A retry after a lost response returns the same request and does not consume
-        // the same TOTP step twice or append a duplicate event.
+        // the same TOTP step twice or append duplicate state/notification events.
         $retried = NezhaPaymentAddressChangeService::requestChange(
             $this->admin(1), 20, 'TRC20', self::TRON_B, 'scheduled rotation', $code, 'idem-request-0001'
         );
         $this->assertSame($change->id, $retried->id);
-        $this->assertSame(1, DB::table('nezha_payment_address_change_events')->count());
+        $this->assertSame(2, DB::table('nezha_payment_address_change_events')->count());
+        $this->assertSame(1, DB::table('user_notifications')->count());
+    }
+
+    public function test_opening_merchant_payment_page_marks_only_security_notifications_viewed(): void
+    {
+        $this->requestedChange('notification-viewed-0001');
+        DB::table('user_notifications')->insert([
+            'data' => json_encode(['type' => 'new_order'], JSON_UNESCAPED_UNICODE),
+            'status' => 1,
+            'vendor_id' => 100,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->assertSame(1, NezhaPaymentAddressChangeView::markMerchantSecurityNotificationsViewed(100));
+        $this->assertSame(0, (int) DB::table('user_notifications')->where('id', 1)->value('status'));
+        $this->assertSame(1, (int) DB::table('user_notifications')->where('id', 2)->value('status'));
     }
 
     public function test_same_totp_step_cannot_authorize_a_second_sensitive_action(): void
@@ -588,6 +611,8 @@ class NezhaPaymentAddressChangeServiceTest extends TestCase
             'nezha_payment_address_changes',
             'nezha_payment_network_states',
             'nezha_payment_address_credentials',
+            'nezha_notification_log',
+            'user_notifications',
             'offline_payment_methods',
             'business_settings',
             'restaurants',
@@ -616,6 +641,8 @@ class NezhaPaymentAddressChangeServiceTest extends TestCase
         Schema::create('vendors', function (Blueprint $table): void {
             $table->id();
             $table->boolean('status')->default(true);
+            $table->string('email')->nullable();
+            $table->string('firebase_token')->nullable();
             $table->timestamps();
         });
         Schema::create('restaurants', function (Blueprint $table): void {
@@ -624,6 +651,30 @@ class NezhaPaymentAddressChangeServiceTest extends TestCase
             $table->string('usdt_address')->nullable();
             $table->string('usdt_bep20_address')->nullable();
             $table->string('usdt_network')->nullable();
+            $table->string('name')->nullable();
+            $table->string('email')->nullable();
+            $table->string('nezha_notify_email')->nullable();
+            $table->string('telegram_chat_id')->nullable();
+            $table->timestamps();
+        });
+        Schema::create('user_notifications', function (Blueprint $table): void {
+            $table->id();
+            $table->text('data')->nullable();
+            $table->boolean('status')->default(true);
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('vendor_id')->nullable();
+            $table->unsignedBigInteger('delivery_man_id')->nullable();
+            $table->timestamps();
+        });
+        Schema::create('nezha_notification_log', function (Blueprint $table): void {
+            $table->id();
+            $table->string('channel', 16);
+            $table->string('target', 16);
+            $table->string('event_type', 40);
+            $table->string('outcome', 16);
+            $table->unsignedBigInteger('order_id')->nullable();
+            $table->unsignedBigInteger('restaurant_id')->nullable();
+            $table->string('detail')->nullable();
             $table->timestamps();
         });
         Schema::create('offline_payment_methods', function (Blueprint $table): void {
