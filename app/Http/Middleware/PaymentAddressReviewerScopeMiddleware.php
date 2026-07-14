@@ -20,6 +20,7 @@ class PaymentAddressReviewerScopeMiddleware
         'admin.payment-address-review.pending',
         'admin.restaurant.payment-address-change.show',
         'admin.restaurant.payment-address-change.approve',
+        'admin.restaurant.payment-address-change.reject',
         'admin.settings-password',
     ];
 

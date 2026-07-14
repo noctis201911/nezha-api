@@ -8,6 +8,7 @@ use App\CentralLogics\NezhaPaymentAddressCredentialService;
 use App\CentralLogics\NezhaTotp;
 use App\Models\Admin;
 use App\Models\NezhaPaymentAddressChange;
+use App\Models\NezhaPaymentAddressChangeEvent;
 use App\Models\NezhaPaymentAddressCredential;
 use App\Models\NezhaPaymentNetworkState;
 use App\Models\Restaurant;
@@ -440,6 +441,66 @@ class NezhaPaymentAddressChangeServiceTest extends TestCase
         $this->assertSame(self::TRON_A, DB::table('restaurants')->where('id', 20)->value('usdt_address'));
     }
 
+    public function test_distinct_admin_can_reject_without_a_reason_and_address_does_not_change(): void
+    {
+        $change = $this->confirmedChange('reviewer-reject-0001');
+        $rejected = NezhaPaymentAddressChangeService::rejectChange(
+            $this->admin(2),
+            $change->public_id,
+            $change->new_fingerprint,
+            $this->totp(self::SECRET_B),
+            null
+        );
+
+        $this->assertSame('rejected', $rejected->state);
+        $this->assertNotNull($rejected->rejected_at);
+        $state = NezhaPaymentNetworkState::firstOrFail();
+        $this->assertSame('active', $state->state);
+        $this->assertNull($state->pending_change_id);
+        $this->assertSame(self::TRON_A, DB::table('restaurants')->where('id', 20)->value('usdt_address'));
+
+        $event = NezhaPaymentAddressChangeEvent::where('change_id', $change->id)
+            ->where('event_type', 'distinct_admin_rejected')
+            ->firstOrFail();
+        $this->assertSame('admin', $event->actor_type);
+        $this->assertSame(2, $event->actor_id);
+        $this->assertNull($event->context);
+    }
+
+    public function test_reviewer_rejection_reason_is_optional_but_recorded_when_supplied(): void
+    {
+        $change = $this->confirmedChange('reviewer-reject-0002');
+        NezhaPaymentAddressChangeService::rejectChange(
+            $this->admin(2),
+            $change->public_id,
+            $change->new_fingerprint,
+            $this->totp(self::SECRET_B),
+            '候选地址与工单截图不一致'
+        );
+
+        $event = NezhaPaymentAddressChangeEvent::where('change_id', $change->id)
+            ->where('event_type', 'distinct_admin_rejected')
+            ->firstOrFail();
+        $this->assertSame('候选地址与工单截图不一致', $event->context['review_reason']);
+    }
+
+    public function test_requester_cannot_reject_their_own_change(): void
+    {
+        $change = $this->confirmedChange('reviewer-reject-0003');
+
+        $this->expectDomainCode('address_change_distinct_admin_required', function () use ($change): void {
+            NezhaPaymentAddressChangeService::rejectChange(
+                $this->admin(1),
+                $change->public_id,
+                $change->new_fingerprint,
+                $this->totp(self::SECRET_A, 1)
+            );
+        });
+
+        $this->assertSame('pending_distinct_admin', $change->fresh()->state);
+        $this->assertSame(self::TRON_A, DB::table('restaurants')->where('id', 20)->value('usdt_address'));
+    }
+
     public function test_admin_can_cancel_a_draining_change_but_cannot_write_an_address(): void
     {
         $change = $this->confirmedChange('admin-cancel-0001');
@@ -465,6 +526,12 @@ class NezhaPaymentAddressChangeServiceTest extends TestCase
 
         $this->assertSame(1, NezhaPaymentAddressChangeService::expireStaleChanges());
         $this->assertSame('expired', $change->fresh()->state);
+        $event = NezhaPaymentAddressChangeEvent::where('change_id', $change->id)
+            ->where('event_type', 'expired')
+            ->firstOrFail();
+        $this->assertSame('system', $event->actor_type);
+        $this->assertNull($event->actor_id);
+        $this->assertSame('approval_timeout', $event->context['rejection_code']);
         $state = NezhaPaymentNetworkState::firstOrFail();
         $this->assertSame('active', $state->state);
         $this->assertNull($state->pending_change_id);

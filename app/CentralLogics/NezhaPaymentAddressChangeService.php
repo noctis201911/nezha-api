@@ -341,6 +341,66 @@ class NezhaPaymentAddressChangeService
         return $change;
     }
 
+    public static function rejectChange(
+        Admin $admin,
+        string $publicId,
+        string $newFingerprint,
+        string $totpCode,
+        ?string $reason = null
+    ): NezhaPaymentAddressChange {
+        self::assertEnabled();
+        $preview = NezhaPaymentAddressChange::where('public_id', $publicId)->first();
+        if (! $preview) {
+            throw new \DomainException('address_change_not_found');
+        }
+        if ((int) $preview->requested_by_admin_id === (int) $admin->id) {
+            throw new \DomainException('address_change_distinct_admin_required');
+        }
+        $counter = self::stepUpCounter($admin, $totpCode);
+        $reviewReason = trim((string) $reason);
+
+        $change = self::runStepUpTransaction($admin, $counter, function () use (
+            $admin,
+            $publicId,
+            $newFingerprint,
+            $counter,
+            $reviewReason
+        ): NezhaPaymentAddressChange {
+            $change = self::changeForUpdate($publicId);
+            self::assertChangeState($change, 'pending_distinct_admin');
+            self::assertNotExpired($change);
+            self::assertFingerprint($change, $newFingerprint);
+            if ((int) $change->requested_by_admin_id === (int) $admin->id) {
+                throw new \DomainException('address_change_distinct_admin_required');
+            }
+            if (! $change->merchant_confirmed_at || ! $change->merchant_confirmed_by_vendor_id) {
+                throw new \DomainException('address_change_merchant_confirmation_required');
+            }
+
+            $state = self::lockedStateForChange($change);
+            $change->state = 'rejected';
+            $change->rejected_at = now();
+            $change->save();
+            self::releasePendingState($state, $change);
+            self::appendEvent(
+                $state,
+                $change,
+                'distinct_admin_rejected',
+                'pending_distinct_admin',
+                'rejected',
+                'admin',
+                (int) $admin->id,
+                $counter,
+                $reviewReason === '' ? null : ['review_reason' => $reviewReason]
+            );
+
+            return $change->fresh();
+        });
+        NezhaPaymentAddressChangeNotifier::change($change, 'distinct_admin_rejected');
+
+        return $change;
+    }
+
     public static function cancelChange(
         Admin $admin,
         string $publicId,
@@ -605,7 +665,17 @@ class NezhaPaymentAddressChangeService
                 $change->expired_at = now();
                 $change->save();
                 self::releasePendingState($state, $change);
-                self::appendEvent($state, $change, 'expired', $from, 'expired', 'system', null);
+                self::appendEvent(
+                    $state,
+                    $change,
+                    'expired',
+                    $from,
+                    'expired',
+                    'system',
+                    null,
+                    null,
+                    ['rejection_code' => 'approval_timeout']
+                );
 
                 return $change->fresh();
             });

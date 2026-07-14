@@ -23,6 +23,7 @@ class NezhaPaymentAddressChangeNotifier
     private const MERCHANT_EVENTS = [
         'requested',
         'distinct_admin_approved',
+        'distinct_admin_rejected',
         'admin_canceled',
         'expired',
         'applied',
@@ -272,13 +273,17 @@ class NezhaPaymentAddressChangeNotifier
                 '收款地址变更已通过独立复核',
                 "{$network} 候选地址已获不同管理员批准；当前地址仍未改变，系统正等待旧地址凭据排空。",
             ],
+            'distinct_admin_rejected' => [
+                '收款地址变更已被独立复核驳回',
+                "{$network} 地址变更申请已被独立复核员驳回，当前地址未改变。",
+            ],
             'admin_canceled' => [
                 '收款地址变更已取消',
                 "{$network} 地址变更申请已由管理员取消，当前地址未改变。",
             ],
             'expired' => [
-                '收款地址变更申请已过期',
-                "{$network} 地址变更申请未在有效期内完成，当前地址未改变。",
+                '收款地址变更已驳回（超时）',
+                "{$network} 地址变更申请因未在有效期内完成而由系统自动驳回，当前地址未改变。",
             ],
             'applied' => [
                 '新收款地址已生效',
@@ -303,6 +308,7 @@ class NezhaPaymentAddressChangeNotifier
             'merchant_confirmed' => 'notify_merchant_confirmed',
             'merchant_rejected' => 'notify_merchant_rejected',
             'distinct_admin_approved' => 'notify_admin_approved',
+            'distinct_admin_rejected' => 'notify_admin_rejected',
             'admin_canceled' => 'notify_admin_canceled',
             'expired' => 'notify_expired',
             'applied' => 'notify_applied',
