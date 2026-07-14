@@ -1,4 +1,4 @@
-- [ ] Codex(部署器固定 SHA / 竞态闸门·2026-07-14) 正在改 `deploy/nzdeploy-api.sh` 与本部署契约：强制完整目标 SHA、拒绝隐式 latest main、增加排队/current/ref 防漂移闸门；只提交并安装部署入口，不运行部署器、migration、release 切换或 FPM 重载。
+- [x] Codex(部署器固定 SHA / 竞态闸门·2026-07-14) 已完成：`58b3e22` 加完整目标 SHA 与排队/current/ref 防漂移闸门，`ddc67ee` 把实际运行入口已有的 origin 健康门、共享存储探针、队列同步重启和 P6.0 只读锁补回 Git 正本；同一 Git blob 已安装到仓库脚本与实际运行入口，无参/短 SHA 均 exit 64。生产 current 保持 `20260714-070255-e044d34`，未运行部署器、migration、release 切换或 FPM reload。
 - [x] Codex(Google address staging fix, 2026-07-13): complete in cacddaa; staging API + 390x844 browser QA passed; temporary address/user/token cleaned; no production deploy; no public storage.
 - [ ] Codex(形态C v2·2026-07-13) 接手顾客端商家卡三态：customer_availability/分页前排序 + 首页、餐厅/搜索/分类/菜系「仅预约/休息中」底部横条。仅 staging，不碰生产，不改 DESIGN_SYSTEM/产品文档。
 # AGENTS.md — 哪吒多窗口并发协调约定（所有 AI 窗口必读）
@@ -78,6 +78,7 @@
 ## 🔴🔴 后端部署契约已变更(2026-06-22 部署边界改造窗口) — 所有后端窗口必读
 **后端「存盘即上线」已废除。** production 现从 `/www/wwwroot/api-deploy/current`(→ releases/ 下不可变快照)跑,**只认 commit+push 到 origin/main 的代码**。
 - 改后端 = 工作树 `/www/wwwroot/api.nezha.am` 改 → 精确 `git add`+commit+**push** → 记录欲发布的完整 40 位 SHA → 跑 `node nz.js run "bash /www/wwwroot/api-deploy/nzdeploy-api.sh <40位完整commit SHA>"` 上线（目标必须可从 fetch 后的 `origin/main` 到达；干净ref+vendor硬链+排队/current/ref 防漂移+原子切current+健康门+自动回滚）。部署器拒绝无参、短 SHA 与隐式 latest main。
+- 2026-07-14 实测 `/www/wwwroot/api-deploy/nzdeploy-api.sh` 是独立普通文件，不是指向仓库正本的软链；部署器改动必须从已 push 的精确提交提取同一 blob，同时备份并安装到仓库 `deploy/nzdeploy-api.sh` 和该实际运行入口，再核对两者哈希一致。禁止假定软链后只更新其中一份。
 - **未提交/未push 的改动不会上线**(只停工作树)。这是有意为之的墙,不是 bug。
 - 🔴 storage 与 .env 已抽到 `api-deploy/shared/`(L1凭证持久层),别动;工作树 storage/.env 是软链。备份脚本已指 shared。
 - 回滚: `ln -sfn $(readlink /www/wwwroot/api-deploy/previous) /www/wwwroot/api-deploy/current && kill -USR2 $(cat /www/server/php/82/var/run/php-fpm.pid)`。
