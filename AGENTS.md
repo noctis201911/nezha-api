@@ -1,5 +1,5 @@
 - [x] Codex(部署器固定 SHA / 竞态闸门·2026-07-14) 已完成：`58b3e22` 加完整目标 SHA 与排队/current/ref 防漂移闸门，`ddc67ee` 把实际运行入口已有的 origin 健康门、共享存储探针、队列同步重启和 P6.0 只读锁补回 Git 正本；同一 Git blob 已安装到仓库脚本与实际运行入口，无参/短 SHA 均 exit 64。生产 current 保持 `20260714-070255-e044d34`，未运行部署器、migration、release 切换或 FPM reload。
-- [ ] Codex(商家候选批次预部署修复·2026-07-14) 正在隔离工作树修复 POS 免费配送仍展示可选配送档位的一致性缺陷并补回归；仅改 Admin/Vendor POSController、资金完整性契约测试与本认领，禁止部署、迁移、生产配置/数据写入；部署器 fail-open 另列 no-go，未获生产运行入口写权限前不改。
+- [x] Codex(商家候选批次预部署修复·2026-07-14) 已完成（f2c9505f）：Admin/Vendor POS 在实际配送费为 0 或低于区域最低配送费时不再返回可选配送档位，最终候选组合回归 53 tests/465 assertions、2 个变更 Blade 编译通过；生产 current 未变，未部署、迁移或写生产配置/数据。部署器关键步骤 fail-open 仍为预部署 no-go，未获生产运行入口写权限前不改。
 - [x] Codex(Google address staging fix, 2026-07-13): complete in cacddaa; staging API + 390x844 browser QA passed; temporary address/user/token cleaned; no production deploy; no public storage.
 - [ ] Codex(staging 订单支付闭环·2026-07-14) 正在修复商家订单页 `data-nz-ajax` 双 owner 重复提交并补契约测试；仅 staging，不碰状态机、资金、迁移、生产或其它 WIP。
 - [ ] Codex(形态C v2·2026-07-13) 接手顾客端商家卡三态：customer_availability/分页前排序 + 首页、餐厅/搜索/分类/菜系「仅预约/休息中」底部横条。仅 staging，不碰生产，不改 DESIGN_SYSTEM/产品文档。
