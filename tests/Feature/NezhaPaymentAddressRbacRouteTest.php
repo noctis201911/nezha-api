@@ -29,6 +29,7 @@ class NezhaPaymentAddressRbacRouteTest extends TestCase
             'admin.payment-address-review.pending',
             'admin.restaurant.payment-address-change.show',
             'admin.restaurant.payment-address-change.approve',
+            'admin.restaurant.payment-address-change.reject',
         ] as $name) {
             $middleware = $this->routeMiddleware($name);
             $this->assertContains('module:payment_address_review', $middleware, $name);
@@ -105,6 +106,7 @@ class NezhaPaymentAddressRbacRouteTest extends TestCase
         foreach ([
             'admin.payment-address-review.pending',
             'admin.restaurant.payment-address-change.approve',
+            'admin.restaurant.payment-address-change.reject',
             'admin.restaurant.payment-address-change.store',
             'admin.restaurant.payment-address-change.pause',
             'admin.dashboard',
@@ -121,6 +123,7 @@ class NezhaPaymentAddressRbacRouteTest extends TestCase
             'admin.payment-address-review.pending',
             'admin.restaurant.payment-address-change.show',
             'admin.restaurant.payment-address-change.approve',
+            'admin.restaurant.payment-address-change.reject',
             'admin.settings-password',
         ] as $routeName) {
             $this->assertTrue(
@@ -155,6 +158,9 @@ class NezhaPaymentAddressRbacRouteTest extends TestCase
         $create = file_get_contents(resource_path('views/admin-views/custom-role/create.blade.php'));
         $edit = file_get_contents(resource_path('views/admin-views/custom-role/edit.blade.php'));
         $bootstrap = file_get_contents(base_path('bootstrap/app.php'));
+        $reviewPage = file_get_contents(resource_path(
+            'views/admin-views/payment-address-review/index.blade.php'
+        ));
 
         $this->assertStringContainsString("where('state', 'pending_distinct_admin')", $controller);
         $this->assertStringContainsString("abort_unless(\$change->state === 'pending_distinct_admin', 404)", $controller);
@@ -164,6 +170,10 @@ class NezhaPaymentAddressRbacRouteTest extends TestCase
         $this->assertStringContainsString('value="payment_address_review"', $edit);
         $this->assertStringContainsString('value="payment_address_manage"', $edit);
         $this->assertStringContainsString("'reviewer.scope' => PaymentAddressReviewerScopeMiddleware::class", $bootstrap);
+        $this->assertStringContainsString('data-payment-address-review="reviewer-v2"', $reviewPage);
+        $this->assertStringContainsString('驳回原因 <span class="text-muted font-weight-normal">（选填）</span>', $reviewPage);
+        $this->assertStringContainsString('data-review-reject-form', $reviewPage);
+        $this->assertStringNotContainsString('required name="reason"', $reviewPage);
     }
 
     private function routeMiddleware(string $name): array

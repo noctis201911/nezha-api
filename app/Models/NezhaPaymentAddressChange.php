@@ -65,4 +65,14 @@ class NezhaPaymentAddressChange extends Model
     {
         return 'public_id';
     }
+
+    public function restaurant()
+    {
+        return $this->belongsTo(Restaurant::class);
+    }
+
+    public function requestedByAdmin()
+    {
+        return $this->belongsTo(Admin::class, 'requested_by_admin_id');
+    }
 }

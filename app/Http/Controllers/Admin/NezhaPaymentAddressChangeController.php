@@ -19,17 +19,26 @@ class NezhaPaymentAddressChangeController extends Controller
         }
 
         $changes = NezhaPaymentAddressChange::query()
+            ->with(['restaurant:id,name', 'requestedByAdmin:id,f_name,l_name,email'])
             ->where('state', 'pending_distinct_admin')
             ->orderBy('expires_at')
             ->orderBy('id')
             ->limit(100)
-            ->get()
+            ->get();
+
+        if (! $request->expectsJson()) {
+            return view('admin-views.payment-address-review.index', [
+                'changes' => $changes,
+            ]);
+        }
+
+        $resources = $changes
             ->map(fn (NezhaPaymentAddressChange $change): array => $this->resource($change))
             ->values();
 
         return response()->json([
-            'data' => $changes,
-            'count' => $changes->count(),
+            'data' => $resources,
+            'count' => $resources->count(),
         ]);
     }
 
@@ -76,6 +85,7 @@ class NezhaPaymentAddressChangeController extends Controller
             abort(404);
         }
         abort_unless($change->state === 'pending_distinct_admin', 404);
+        $change->loadMissing(['restaurant:id,name', 'requestedByAdmin:id,f_name,l_name,email']);
 
         return response()->json($this->resource($change));
     }
@@ -102,10 +112,39 @@ class NezhaPaymentAddressChangeController extends Controller
                 return response()->json($this->resource($approved));
             }
 
-            return $this->success(
-                (int) $approved->restaurant_id,
+            return $this->reviewSuccess(
                 '独立复核已通过；当前地址仍未改变，正在等待旧地址凭据排空。'
             );
+        } catch (\DomainException $e) {
+            return $this->domainError($request, $e);
+        }
+    }
+
+    public function reject(Request $request, NezhaPaymentAddressChange $change)
+    {
+        $validator = Validator::make($request->all(), [
+            'new_fingerprint' => ['required', 'string', 'regex:/^[0-9a-fA-F]{64}$/'],
+            'totp_code' => ['required', 'string', 'regex:/^\d{6}$/'],
+            'reason' => 'nullable|string|max:500',
+        ]);
+        if ($validator->fails()) {
+            return $this->validationError($request, $validator);
+        }
+
+        try {
+            $rejected = NezhaPaymentAddressChangeService::rejectChange(
+                auth('admin')->user(),
+                (string) $change->public_id,
+                (string) $request->input('new_fingerprint'),
+                (string) $request->input('totp_code'),
+                $request->input('reason')
+            );
+
+            if ($request->expectsJson()) {
+                return response()->json($this->resource($rejected));
+            }
+
+            return $this->reviewSuccess('独立复核已驳回；当前地址未改变，商家通知将按实际渠道投递并留痕。');
         } catch (\DomainException $e) {
             return $this->domainError($request, $e);
         }
@@ -177,9 +216,13 @@ class NezhaPaymentAddressChangeController extends Controller
 
     private function resource(NezhaPaymentAddressChange $change): array
     {
+        $requester = $change->requestedByAdmin;
+        $requesterName = trim((string) ($requester?->f_name.' '.$requester?->l_name));
+
         return [
             'change_id' => (string) $change->public_id,
             'restaurant_id' => (int) $change->restaurant_id,
+            'restaurant_name' => (string) ($change->restaurant?->name ?? '商家#'.$change->restaurant_id),
             'network' => (string) $change->network,
             'state' => (string) $change->state,
             'old_address' => (string) $change->old_address,
@@ -187,6 +230,9 @@ class NezhaPaymentAddressChangeController extends Controller
             'old_fingerprint' => (string) $change->old_fingerprint,
             'new_fingerprint' => (string) $change->new_fingerprint,
             'requested_by_admin_id' => (int) $change->requested_by_admin_id,
+            'requested_by_admin_name' => $requesterName !== ''
+                ? $requesterName
+                : (string) ($requester?->email ?? '管理员#'.$change->requested_by_admin_id),
             'merchant_confirmed_at' => $change->merchant_confirmed_at?->toIso8601String(),
             'approved_by_admin_id' => $change->approved_by_admin_id !== null
                 ? (int) $change->approved_by_admin_id
@@ -194,6 +240,8 @@ class NezhaPaymentAddressChangeController extends Controller
             'drain_until' => $change->drain_until?->toIso8601String(),
             'expires_at' => $change->expires_at?->toIso8601String(),
             'failure_code' => $change->failure_code,
+            'approve_url' => route('admin.restaurant.payment-address-change.approve', $change),
+            'reject_url' => route('admin.restaurant.payment-address-change.reject', $change),
         ];
     }
 
@@ -211,6 +259,13 @@ class NezhaPaymentAddressChangeController extends Controller
         Toastr::success($message);
 
         return redirect()->route('admin.restaurant.view', [$restaurantId, 'payment_info']);
+    }
+
+    private function reviewSuccess(string $message)
+    {
+        Toastr::success($message);
+
+        return redirect()->route('admin.payment-address-review.pending');
     }
 
     private function domainError(Request $request, \DomainException $e)

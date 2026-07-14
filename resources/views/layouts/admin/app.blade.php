@@ -3,6 +3,8 @@
 $site_direction = session()->get('site_direction');
 $country = \App\CentralLogics\Helpers::get_business_settings('country');
 $countryCode = strtolower($country ?? 'auto');
+$__paymentAddressReviewer = auth('admin')->check()
+    && \App\Http\Middleware\PaymentAddressReviewerScopeMiddleware::isReviewer(auth('admin')->user());
 ?>
 
 <html dir="{{ $site_direction }}" lang="{{ str_replace('_', '-', app()->getLocale()) }}"
@@ -69,8 +71,13 @@ $countryCode = strtolower($country ?? 'auto');
     <!-- End Builder -->
 
     <!-- JS Preview mode only -->
-    @include('layouts.admin.partials._header')
-    @include('layouts.admin.partials._sidebar')
+    @if($__paymentAddressReviewer)
+        @include('layouts.admin.partials._payment-address-reviewer-header')
+        @include('layouts.admin.partials._payment-address-reviewer-sidebar')
+    @else
+        @include('layouts.admin.partials._header')
+        @include('layouts.admin.partials._sidebar')
+    @endif
     <!-- END ONLY DEV -->
 
     <main id="content" role="main" class="main pointer-event">
@@ -965,13 +972,15 @@ $countryCode = strtolower($country ?? 'auto');
         @if (isset($fcm_credentials['apiKey']) && is_string($fcm_credentials['apiKey']) && strlen($fcm_credentials['apiKey']) > 3)
             startFCM();
         @endif
-        conversationList();
+        @unless($__paymentAddressReviewer)
+            conversationList();
 
-        if (getUrlParameter('conversation')) {
-            conversationView();
-            vendorConversationView();
-            dmConversationView();
-        }
+            if (getUrlParameter('conversation')) {
+                conversationView();
+                vendorConversationView();
+                dmConversationView();
+            }
+        @endunless
 
         $(document).on('click', '.call-demo', function (e) {
             @if(getEnvMode() == 'demo')
