@@ -22,7 +22,7 @@ class CustomRoleController extends Controller
         $request->validate([
             'name' => 'required|unique:admin_roles|max:191',
             'code_prefix' => 'nullable|alpha|max:10|unique:admin_roles,code_prefix',
-            'modules'=>'required|array|min:1'
+            'modules'=>$this->moduleRules()
         ],[
             'name.required'=>translate('messages.Role name is required!'),
             'modules.required'=>translate('messages.Please select atleast one module')
@@ -36,7 +36,8 @@ class CustomRoleController extends Controller
         $role = new AdminRole();
         $role->code_prefix = $request->filled('code_prefix') ? strtoupper(trim($request->code_prefix)) : null;
         $role->name = $request->name[array_search('default', $request->lang)];
-        $role->modules = json_encode($request['modules']);
+        $modules = $this->normalizedModules($request->input('modules', []));
+        $role->modules = json_encode($modules);
         $role->status = 1;
         $role->save();
         $data = [];
@@ -70,7 +71,7 @@ class CustomRoleController extends Controller
         // SEC-3 审计: 角色权限新增
         \App\Models\AdminAuditLog::record('admin_role_create', 'admin_role', $role->id, null, [
             'name'    => $role->name,
-            'modules' => $request['modules'],
+            'modules' => $modules,
         ]);
 
         Toastr::success(translate('messages.role_added_successfully'));
@@ -96,7 +97,7 @@ class CustomRoleController extends Controller
         $request->validate([
             'name' => 'required|max:191|unique:admin_roles,name,'.$id,
             'code_prefix' => 'nullable|alpha|max:10|unique:admin_roles,code_prefix,'.$id,
-            'modules'=>'required|array|min:1'
+            'modules'=>$this->moduleRules()
         ],[
             'name.required'=>translate('messages.Role name is required!'),
             'modules.required'=>translate('messages.Please select atleast one module')
@@ -114,13 +115,14 @@ class CustomRoleController extends Controller
             'modules' => json_decode($role->modules, true),
         ];
         $role->name = $request->name[array_search('default', $request->lang)];
-        $role->modules = json_encode($request['modules']);
+        $modules = $this->normalizedModules($request->input('modules', []));
+        $role->modules = json_encode($modules);
         $role->status = 1;
         $role->save();
 
         \App\Models\AdminAuditLog::record('admin_role_update', 'admin_role', $role->id, $auditBefore, [
             'name'    => $role->name,
-            'modules' => $request['modules'],
+            'modules' => $modules,
         ]);
 
         $default_lang = str_replace('_', '-', app()->getLocale());
@@ -193,5 +195,25 @@ class CustomRoleController extends Controller
             return (new FastExcel($withdraw_request))->download('CustomRole.csv');
         }
         return (new FastExcel($withdraw_request))->download('CustomRole.xlsx');
+    }
+
+    private function moduleRules(): array
+    {
+        return [
+            'required',
+            'array',
+            'min:1',
+            function (string $attribute, mixed $value, \Closure $fail): void {
+                $modules = $this->normalizedModules((array) $value);
+                if (in_array('payment_address_review', $modules, true) && $modules !== ['payment_address_review']) {
+                    $fail('payment_address_review must be an exclusive role module');
+                }
+            },
+        ];
+    }
+
+    private function normalizedModules(array $modules): array
+    {
+        return array_values(array_unique(array_map('strval', $modules)));
     }
 }

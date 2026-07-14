@@ -4624,6 +4624,20 @@ class Helpers
             'updated_at' => $user_data->updated_at ? $user_data->updated_at->format('Y-m-d H:i:s') : null,
         ];
 
+        // 顾客订单详情的 USDT 地址只允许来自下单时固化的地址版本证据。
+        // 白名单投影避免把链上自动核验细节或任何凭据密钥带到顾客端。
+        $addressCredential = data_get($user_data->nezha_auto_check, 'address_credential');
+        if (is_array($addressCredential)) {
+            $credentialKeys = [
+                'credential_id', 'address_version', 'network', 'address',
+                'issued_at', 'expires_at', 'state', 'is_current_address',
+            ];
+            $data['address_credential'] = array_intersect_key(
+                $addressCredential,
+                array_flip($credentialKeys)
+            );
+        }
+
         $result = [
             'input' => $userInputs,
             'data' => $data,

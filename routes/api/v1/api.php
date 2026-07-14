@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\V1\LoyaltyPointController;
 use App\Http\Controllers\Api\V1\NewsletterController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\OrderController;
+use App\Http\Controllers\Api\V1\PaymentAddressCredentialController;
 use App\Http\Controllers\Api\V1\OrderSubscriptionController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\RestaurantController;
@@ -418,6 +419,11 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         Route::get('/', [CuisineController::class, 'get_all_cuisines']);
         Route::get('get_restaurants/', [CuisineController::class, 'get_restaurants']);
     });
+
+    // 地址凭据闸关闭时游客也必须拿到明确的 compatibility code，前端才能保持现网旧路径。
+    // 闸开启后的登录门在控制器内 fail-closed；未登录绝不签发地址凭据。
+    Route::post('customer/payment/address-credential', [PaymentAddressCredentialController::class, 'store'])
+        ->middleware('rateLimiter');
 
     Route::group(['prefix' => 'customer', 'middleware' => 'auth:api'], function () {
         Route::get('notifications', [NotificationController::class, 'get_notifications']);
