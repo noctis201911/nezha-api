@@ -62,6 +62,14 @@
 
 > 2026-07-14 只读收口校准：第 4 项中的“保证金”只在未来启用 `nezha_deposit_mode_status`/佣金时才重新成为硬门；当前阶段必须签收的是店 12 营业时间、经营者、收款资料、通知和 `active`。六类 NO-GO 的唯一 owner、签收、自动/人工边界与动作包见 `docs/PRELAUNCH_CLOSURE_LEDGER_20260714.md`。
 
+## B1 外部签收包（已备妥、未签收）
+
+- 包入口：`docs/PRELAUNCH_B1_EXTERNAL_SIGNOFF_PACKAGE_20260714.md`；内含 26 类 demo 关联数据裁决、律师/会计固定事实、三项开关，以及物理设备/真实通知/专业渗透四类签收表。所有 owner 决策、批准目标值、回执和签名均保持空白，production 仍 NO-GO。
+- B1 开工前重新 fetch：API 基线 `589a5366633f951fc9692810cc2a4c21c553b629`，Web 基线 `b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed`；production current/previous 仍为 API `20260714-070255-e044d34` / `20260714-063310-75c6e4c`、Web `20260714-101004-2f81803` / `20260714-074400-b66c0d1`，Web BUILD 仍为 `Mguty8CEfSrUIu5FXJ52G`。
+- shared staging 只读复核仍为 Web HEAD `ef54278551a3f8818661380f919fa894e47cc50c`、BUILD `n4VGKngOQXDelVRDdK9yN`、10 tracked + 6 untracked；API detached HEAD `f766dd62bd949613898e31031cf5636527488d8f`、37 tracked + 2 untracked。没有清理/reset/部署这些 WIP。
+- production 两个 queue worker 本次均 online、累计重启各 83；Redis `PONG`、failed jobs=0。相较本报告较早快照的 80，新增累计符合 `--max-time=3600` 周期，但仍不能证明真实通知送达。
+- `e044d34..API 基线` migration 文件 diff=0，production Pending=0；根盘 83%、剩余约 13G，故继续磁盘冻结。本包使用本地干净独立 worktree，没有在服务器新增 worktree、运行 migration、备份脚本/demo 工具、发送真实通知或写 production/shared staging。
+
 ## 清场与回滚
 
 - 本轮只读收口动作包提交 `9c6b4c5bbbaeb7b27dc19a3c968625862debb233` 已进入 API `origin/main`，只包含文档、默认只读/fail-closed demo 工具和契约测试，migration/运行时代码 diff=0。一次性数据库 `nezha_qa_demo_goa_20260714`、用户 `nezha_qa_goa@localhost` 与 `/tmp/nezha-demo-*` 证据副本均已删除并复核为 0；shared staging 与 production 没有部署、配置/数据/开关/资金写入或进程重启。

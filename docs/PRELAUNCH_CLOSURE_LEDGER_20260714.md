@@ -10,6 +10,17 @@
 - shared staging 保持 Web `ef542785`、BUILD `n4VGKngOQXDelVRDdK9yN`、dirty 16；API `f766dd62`、dirty 39。禁止清理或 reset。
 - production→候选 migration 文件 diff=0。上线前仍须重新查 pending/new migration。
 
+## B1 外部签收工件
+
+2026-07-14 已从 API `589a5366633f951fc9692810cc2a4c21c553b629`、Web `b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed` 的重新 fetch/只读基线备妥 [B1 包入口](PRELAUNCH_B1_EXTERNAL_SIGNOFF_PACKAGE_20260714.md)：
+
+- [26 类 demo 关联数据裁决表](PRELAUNCH_B1_DEMO_ASSOCIATION_DECISIONS_20260714.md)
+- [律师／会计固定事实包](PRELAUNCH_B1_LEGAL_ACCOUNTING_FACTS_20260714.md)
+- [三项开关签收表](PRELAUNCH_B1_SWITCH_SIGNOFF_20260714.md)
+- [物理设备／真实通知／专业渗透签收表](PRELAUNCH_B1_EXTERNAL_QA_SIGNOFF_20260714.md)
+
+B1 只把外部问题、证据栏和签名门固定为仓库文档；所有裁决/批准/回执/签名仍为空白，六类 NO-GO 均未关闭。本包没有运行 production 备份/demo 工具、生成/外传备份、发送真实通知，或写入/deploy production/shared staging。
+
 ## 1. 隐私政策与静态加密
 
 - **当前事实**：192 张 InnoDB 表中 33 张无 `ENCRYPTION='Y'`；根盘普通 ext4、未见 LUKS；线上仍写“数据库整体采用静态加密”。
@@ -39,6 +50,8 @@
 - **视频只读证据**：从 production 当前 release（不是独立 worktree）直接读取 `LocalLifeMerchant#12` 并使用共享 storage 调用规范化方法，stored=2、normalized=2；两条均为 `https://v.douyin.com` 且 cover URL 存在。独立 worktree 会因隔离 storage 错报 normalized=0，不能作为线上素材存在性证据。公开详情 API 会写浏览计数，本轮为遵守零 production 写入没有调用；剩余仅为内容 owner 人工签收。
 
 签收：`[ ] preorder` `[ ] notif_async` `[ ] merchant_video` `[ ] autooffline 通知/阈值`
+
+逐项填写入口：`docs/PRELAUNCH_B1_SWITCH_SIGNOFF_20260714.md`。当前值只能填“只读事实”，批准目标值由对应 owner 留痕签字。
 
 ## 3. Demo 数据与 Banner
 
@@ -81,6 +94,8 @@
 
 签收：`[ ] 数据清理 owner` `[ ] 关联订单/内容逐项裁决` `[ ] 备份字符保真` `[ ] 平台负责人 production GO`
 
+逐类填写入口：`docs/PRELAUNCH_B1_DEMO_ASSOCIATION_DECISIONS_20260714.md`。26 类机器键、计数与 owner 路由已经固定，但 26/26 仍为 HOLD。
+
 ## 4. 店 12 真实营业就绪
 
 - **当前事实**：`active=0`、营业时间 0、38/38 菜品 active；支付宝码和 TRC20 有值，BEP20 无值。
@@ -110,6 +125,8 @@
 
 签收：`[ ] 主体负责人` `[ ] 律师` `[ ] 会计师` `[ ] USDT/AML 合规`
 
+书面意见入口：`docs/PRELAUNCH_B1_LEGAL_ACCOUNTING_FACTS_20260714.md`。固定事实与专业问题已分栏；AI/仓库维护者不能代签结论。
+
 ## 6. 专业渗透、真机与真实通知
 
 - **当前事实**：仓库安全自动化不等于独立渗透；物理 iPhone Safari、微信/TG WebView 未完成矩阵；真实通知无回执。
@@ -123,17 +140,19 @@
 
 签收：`[ ] QA/安全 owner` `[ ] 渗透报告` `[ ] 设备矩阵` `[ ] FCM` `[ ] 邮件` `[ ] Telegram`
 
+执行与回执入口：`docs/PRELAUNCH_B1_EXTERNAL_QA_SIGNOFF_20260714.md`。表单已备妥不等于授权测试；真实通知、受控订单、扫描/渗透另取精确 Go。
+
 ## 可立即关闭与必须等待
 
 | 状态 | 本轮结果 | 剩余边界 |
 |---|---|---|
 | 已关闭（零 production 写入） | 开关/店 12/静态加密事实漂移已校准；预约与异步通知 exact-main 自动语义通过；旧 demo 脚本风险已替换为版本化 fail-closed 入口；demo manifest 外关联已精确暴露；视频 stored=2/normalized=2 的技术可见性已核对 | 这些只关闭事实与自动化子项，不改变六类 NO-GO |
-| 可继续准备、不能代签 | 生成数据裁决表、律师/会计事实包、设备矩阵、渗透范围、真实通知用例和开关签收表 | 可以继续写文档/做隔离测试；不能发送真实通知、改配置/素材/数据或冒充 owner 签字 |
+| 已备妥、不能代签 | B1 已生成数据裁决表、律师/会计事实包、设备矩阵、渗透范围、真实通知用例和开关签收表 | 工件仍全部未签；不能发送真实通知、改配置/素材/数据或冒充 owner 签字 |
 | 必须等待外部负责人 | 隐私/亚美尼亚法/税务/USDT 意见；preorder/notification/video 产品运营签收；demo 关联数据裁决与备份恢复 owner；店 12 店主与收款归属；独立渗透、物理设备、真实渠道回执 | 任一未完成，production 仍 NO-GO |
 
 ## 推荐动作顺序与权限停点
 
-1. 非生产：版本化正本与 demo 工具；一次性恢复库演练；exact-main 预约/通知语义；制作外部签收包。
+1. 非生产准备已完成：版本化正本与 demo 工具；一次性恢复库演练；exact-main 预约/通知语义；B1 外部签收包。
 2. 等外部：律师、会计、渗透、真机/收件人。
 3. 另取精确 Go：隐私 CMS、开关回退（如需）、demo 数据/Banner、店 12 资料/激活/受控订单。
 4. 六类门全关后，才重新跑 production 部署必测门；部署候选仍是独立最终动作，不由本台账自动授权。

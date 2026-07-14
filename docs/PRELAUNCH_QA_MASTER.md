@@ -34,6 +34,17 @@ node nz.js run "bash /www/wwwroot/api.nezha.am/nzcheck-cod.sh"
 - 已接入 `nzhealth.sh`（[9] 节）与前后端部署脚本（`nzdeploy-api.sh`/`nzdeploy-web.sh` 部署后红字告警，不阻断部署）。
 - 由来：2026-06-23 PAYMENT-COD-CLEANUP；前端 COD 入口已移除(墙=后端开关，牌=前端入口)，本硬门防开关被误翻回。
 
+## 0.7 B1 外部签收包
+
+2026-07-14 已从 API `589a5366633f951fc9692810cc2a4c21c553b629`、Web `b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed` 的只读基线备妥 [B1 外部签收包](PRELAUNCH_B1_EXTERNAL_SIGNOFF_PACKAGE_20260714.md)，包含：
+
+- [26 类 demo 关联数据裁决表](PRELAUNCH_B1_DEMO_ASSOCIATION_DECISIONS_20260714.md)
+- [律师／会计固定事实包](PRELAUNCH_B1_LEGAL_ACCOUNTING_FACTS_20260714.md)
+- [三项开关签收表](PRELAUNCH_B1_SWITCH_SIGNOFF_20260714.md)
+- [物理设备／真实通知／专业渗透签收表](PRELAUNCH_B1_EXTERNAL_QA_SIGNOFF_20260714.md)
+
+状态仅为**已备妥、全部未签收**；不改变任何 18 维度结果，不授予测试、写入、通知、开关、demo rollback、部署或 production Go。外部签字必须附固定 SHA 与可回溯证据，不能用当前配置值或自动化结果代签。
+
 ## 1. 上线前 18 维度总表
 
 > 自动化分级：🟢 无人值守可跑(只读/grep/带token真机浏览) · 🟡 需你批准(money-write仿真/真下单/翻开关/破坏性) · 👤 需真人(AI够不到)
