@@ -4,6 +4,7 @@ namespace Tests;
 
 use Illuminate\Contracts\Console\Kernel;
 use Tests\Support\DatabaseSafety;
+use Tests\Support\IsolatedDatabaseFixtures;
 
 trait CreatesApplication
 {
@@ -18,6 +19,7 @@ trait CreatesApplication
 
         $app->make(Kernel::class)->bootstrap();
         DatabaseSafety::assertConfiguration($app['config']->get('database', []));
+        IsolatedDatabaseFixtures::ensure($app);
 
         return $app;
     }
