@@ -72,7 +72,7 @@ use App\Http\Controllers\Admin\ZoneController;
 
 Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
 
-    Route::group(['middleware' => ['admin', 'actch:admin_panel']], function () {
+    Route::group(['middleware' => ['admin', 'reviewer.scope', 'actch:admin_panel']], function () {
         Route::group(['prefix' => 'two-factor', 'as' => 'two-factor.'], function () {
             Route::get('setup', [\App\Http\Controllers\Admin\TwoFactorController::class, 'setup'])->name('setup');
             Route::post('enable', [\App\Http\Controllers\Admin\TwoFactorController::class, 'enable'])->name('enable');
@@ -364,6 +364,33 @@ Route::middleware('module:provide_dm_earning')->group(function () {
 
         Route::get('restaurant/get-restaurants', [VendorController::class, 'get_restaurants'])->name('restaurant.get-restaurants');
         Route::get('ajax-restaurant/get-restaurant-ratings', [VendorController::class, 'get_restaurant_ratings'])->name('restaurant.get-restaurant-ratings');
+        // USDT 地址管理权限不再借用 restaurant：管理者只能申请、取消与紧急暂停。
+        Route::group([
+            'prefix' => 'restaurant',
+            'as' => 'restaurant.',
+            'middleware' => ['module:payment_address_manage'],
+        ], function () {
+            Route::post('payment-address-change/{restaurant}', [NezhaPaymentAddressChangeController::class, 'store'])
+                ->name('payment-address-change.store');
+            Route::post('payment-address-change/{restaurant}/pause', [NezhaPaymentAddressChangeController::class, 'pause'])
+                ->name('payment-address-change.pause');
+            Route::post('payment-address-change/request/{change}/cancel', [NezhaPaymentAddressChangeController::class, 'cancel'])
+                ->name('payment-address-change.cancel');
+        });
+
+        // 独立复核后端契约；正式审核页面须在效果图确认后另行实现。
+        Route::group([
+            'prefix' => 'payment-address-review',
+            'middleware' => ['module:payment_address_review'],
+        ], function () {
+            Route::get('pending', [NezhaPaymentAddressChangeController::class, 'pending'])
+                ->name('payment-address-review.pending');
+            Route::get('request/{change}', [NezhaPaymentAddressChangeController::class, 'show'])
+                ->name('restaurant.payment-address-change.show');
+            Route::post('request/{change}/approve', [NezhaPaymentAddressChangeController::class, 'approve'])
+                ->name('restaurant.payment-address-change.approve');
+        });
+
         Route::group(['prefix' => 'restaurant', 'as' => 'restaurant.', 'middleware' => ['module:restaurant']], function () {
             Route::get('get-restaurants-data/{restaurant}', [VendorController::class, 'get_restaurant_data'])->name('get-restaurants-data');
             Route::get('restaurant-filter/{id}', [VendorController::class, 'restaurant_filter'])->name('restaurantfilter');
@@ -377,17 +404,6 @@ Route::middleware('module:provide_dm_earning')->group(function () {
                 Route::post('update/{restaurant}', [VendorController::class, 'update'])->name('update');
                 // 哪吒外卖 B方案: 管理员代录商家收款信息(收款码/USDT地址/收款人)
                 Route::post('update-payment-info/{restaurant}', [VendorController::class, 'updatePaymentInfo'])->name('update-payment-info');
-                // 默认关闭：USDT 地址必须经交易级 TOTP -> 商家 owner -> 不同管理员 -> 凭据排空。
-                Route::post('payment-address-change/{restaurant}', [NezhaPaymentAddressChangeController::class, 'store'])
-                    ->name('payment-address-change.store');
-                Route::post('payment-address-change/{restaurant}/pause', [NezhaPaymentAddressChangeController::class, 'pause'])
-                    ->name('payment-address-change.pause');
-                Route::get('payment-address-change/request/{change}', [NezhaPaymentAddressChangeController::class, 'show'])
-                    ->name('payment-address-change.show');
-                Route::post('payment-address-change/request/{change}/approve', [NezhaPaymentAddressChangeController::class, 'approve'])
-                    ->name('payment-address-change.approve');
-                Route::post('payment-address-change/request/{change}/cancel', [NezhaPaymentAddressChangeController::class, 'cancel'])
-                    ->name('payment-address-change.cancel');
                 // 哪吒外卖 B方案 组4: 管理员充值/调整商家预存佣金
                 Route::post('recharge-deposit/{restaurant}', [VendorController::class, 'rechargeDeposit'])->name('recharge-deposit');
                 // 哪吒外卖: 更新平台美元兑人民币汇率 (platform-wide setting)

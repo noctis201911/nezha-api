@@ -200,6 +200,20 @@
                             </div>
                             <div class="col-md-3">
                                 <div class="form-group form-check">
+                                    <input type="checkbox" name="modules[]" value="payment_address_review" class="form-check-input"
+                                           id="payment_address_review" {{in_array('payment_address_review',(array)json_decode($role['modules']))?'checked':''}}>
+                                    <label class="form-check-label text-dark" for="payment_address_review">{{translate('收款地址复核（独占岗位，强制 2FA）')}}</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group form-check">
+                                    <input type="checkbox" name="modules[]" value="payment_address_manage" class="form-check-input"
+                                           id="payment_address_manage" {{in_array('payment_address_manage',(array)json_decode($role['modules']))?'checked':''}}>
+                                    <label class="form-check-label text-dark" for="payment_address_manage">{{translate('收款地址管理（申请/取消/紧急暂停）')}}</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group form-check">
                                     <input type="checkbox" name="modules[]" value="report" class="form-check-input"
                                             id="report"  {{in_array('report',(array)json_decode($role['modules']))?'checked':''}}>
                                     <label class="form-check-label  text-dark" for="report">{{translate('messages.report')}}</label>
