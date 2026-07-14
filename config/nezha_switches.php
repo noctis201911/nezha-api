@@ -182,7 +182,7 @@ return [
         [
             'key' => 'nezha_payment_address_change_status', 'label' => 'USDT 收款地址受控变更状态机', 'section' => 'D', 'level' => 'L1-1邻',
             'expected' => 0, 'value_type' => 'bool',
-            'prereq' => '默认关闭。真开前须①至少2个独立管理员且均启用TOTP②地址凭据闸已稳定③网络状态初始化及对拍通过④管理员申请/商家owner确认/不同管理员复核/排空/应急暂停真机验收⑤迁移、监控、影响和回滚再次获批',
+            'prereq' => '默认关闭。真开前须①至少2个独立管理员且均启用TOTP②地址凭据闸已稳定③网络状态初始化及对拍通过④管理员申请/商家owner确认/不同管理员复核/批准后新地址立即生效/旧凭据按原到期时间继续/应急暂停真机验收⑤迁移、监控、影响和回滚再次获批',
             'settings_route' => null, 'ops_note' => "无专用后台开关 UI(DB flag)。开后旧 updatePaymentInfo 不得直写 USDT；紧急权限只暂停单商家单网络，不能自批替换地址",
         ],
         [

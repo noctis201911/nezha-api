@@ -4,7 +4,7 @@
         'paused' => '已暂停',
         'pending_merchant' => '待商家 owner 确认',
         'pending_distinct_admin' => '待不同管理员复核',
-        'draining' => '旧地址凭据排空中',
+        'draining' => '升级前旧记录排空中',
         'applying' => '正在原子切换',
         'applied' => '已生效',
         'rejected' => '商家已拒绝',
@@ -15,7 +15,7 @@
     $nextOwner = [
         'pending_merchant' => '商家 owner',
         'pending_distinct_admin' => '与申请人不同的管理员',
-        'draining' => '系统（等待旧凭据自然到期）',
+        'draining' => '系统（仅处理升级前遗留记录）',
         'applying' => '系统',
     ];
     $baseUrl = route('admin.restaurant.view', [$restaurant->id, 'payment_info']);
@@ -64,8 +64,8 @@
         </div>
         <div class="card-body py-3">
             <div class="alert alert-info mb-0">
-                当前地址只有在“商家 owner 确认 → 不同管理员 TOTP 复核 → 旧地址版本凭据排空”全部完成后才会切换。
-                打开申请、确认或审核页面都不会改变顾客当前看到的地址。
+                “商家 owner 确认 → 不同管理员 TOTP 复核”完成后，新地址会立即用于后续新付款。
+                批准前已签发的旧地址凭据只到各自原到期时间；打开申请、确认或审核页面本身不会改地址。
             </div>
         </div>
     </div>
@@ -259,8 +259,8 @@
             </div>
             <div class="nz-progress-step {{ $review->state === 'applied' ? 'done' : '' }}">
                 <span class="nz-progress-dot">3</span>
-                <div><strong>旧地址版本凭据排空后原子切换</strong><br><small class="text-muted">
-                    {{ $review->drain_until ? '最早排空时间 '.$review->drain_until->format('Y-m-d H:i') : '尚未进入排空阶段' }}
+                <div><strong>批准后立即切换新付款地址</strong><br><small class="text-muted">
+                    {{ $review->state === 'applied' ? '新付款已使用新地址；旧凭据仍只到原到期时间' : '普通换址不暂停新付款，也不延长旧凭据' }}
                 </small></div>
             </div>
         </div>
@@ -277,7 +277,7 @@
                         <input class="form-control" type="text" name="totp_code" inputmode="numeric"
                                autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required>
                     </div>
-                    <button class="btn btn-primary btn-block" type="submit">批准并进入旧凭据排空</button>
+                    <button class="btn btn-primary btn-block" type="submit">批准并立即切换新付款地址</button>
                 </form>
             @else
                 <div class="alert alert-danger">

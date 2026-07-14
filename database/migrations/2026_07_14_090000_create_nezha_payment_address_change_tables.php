@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
  *
  * Running this migration does not initialize network states, change an address,
  * or enable either feature switch. Address/reason/context values are encrypted
- * by model casts; tablespace encryption is an additional best-effort layer.
+ * by model casts; MySQL tablespace encryption is mandatory and verified.
  */
 return new class extends Migration
 {
@@ -34,8 +34,8 @@ return new class extends Migration
                 $table->unique(['restaurant_id', 'network'], 'nz_pay_net_rest_network_uq');
                 $table->index(['state', 'drain_until'], 'nz_pay_net_state_drain_idx');
             });
-            $this->enableTablespaceEncryption('nezha_payment_network_states');
         }
+        $this->assertTablespaceEncrypted('nezha_payment_network_states');
 
         if (! Schema::hasTable('nezha_payment_address_changes')) {
             Schema::create('nezha_payment_address_changes', function (Blueprint $table): void {
@@ -78,8 +78,8 @@ return new class extends Migration
                 $table->index(['state', 'expires_at'], 'nz_pay_chg_state_exp_idx');
                 $table->index(['state', 'drain_until'], 'nz_pay_chg_state_drain_idx');
             });
-            $this->enableTablespaceEncryption('nezha_payment_address_changes');
         }
+        $this->assertTablespaceEncrypted('nezha_payment_address_changes');
 
         if (! Schema::hasTable('nezha_payment_address_change_events')) {
             Schema::create('nezha_payment_address_change_events', function (Blueprint $table): void {
@@ -103,8 +103,8 @@ return new class extends Migration
                 $table->index(['change_id', 'id'], 'nz_pay_evt_change_id_idx');
                 $table->index(['network_state_id', 'id'], 'nz_pay_evt_network_id_idx');
             });
-            $this->enableTablespaceEncryption('nezha_payment_address_change_events');
         }
+        $this->assertTablespaceEncrypted('nezha_payment_address_change_events');
 
         $this->ensureSetting('nezha_payment_address_change_status', '0');
         $this->ensureSetting('nezha_payment_address_change_approval_ttl_min', '1440');
@@ -137,15 +137,28 @@ return new class extends Migration
         // production, so down() cannot safely identify migration-owned rows.
     }
 
-    private function enableTablespaceEncryption(string $table): void
+    private function assertTablespaceEncrypted(string $table): void
     {
         if (DB::connection()->getDriverName() !== 'mysql') {
             return;
         }
 
-        // Never report a successful production migration if sensitive address
-        // workflow tables could not be encrypted by MySQL.
+        // Run this for both new and pre-existing tables. MySQL DDL auto-commits,
+        // so a failed ALTER after CREATE must be repaired and re-verified when
+        // the migration is retried.
         DB::statement("ALTER TABLE `{$table}` ENCRYPTION='Y'");
+
+        $row = DB::selectOne(
+            'SELECT CREATE_OPTIONS AS create_options FROM information_schema.TABLES '
+            .'WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? LIMIT 1',
+            [DB::connection()->getDatabaseName(), $table]
+        );
+        $options = strtoupper((string) ($row->create_options ?? ''));
+
+        if (strpos($options, 'ENCRYPTION="Y"') === false
+            && strpos($options, "ENCRYPTION='Y'") === false) {
+            throw new \RuntimeException("MySQL tablespace encryption verification failed: {$table}");
+        }
     }
 
     private function ensureSetting(string $key, string $defaultValue): void

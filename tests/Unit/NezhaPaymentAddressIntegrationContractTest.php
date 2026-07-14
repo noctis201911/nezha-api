@@ -83,16 +83,48 @@ class NezhaPaymentAddressIntegrationContractTest extends TestCase
 
     public function test_sensitive_migrations_fail_closed_on_mysql_encryption_errors(): void
     {
-        foreach ([
-            'database/migrations/2026_07_13_210000_create_nezha_payment_address_credentials.php',
-            'database/migrations/2026_07_14_090000_create_nezha_payment_address_change_tables.php',
-        ] as $path) {
+        $paths = [
+            'database/migrations/2026_07_13_210000_create_nezha_payment_address_credentials.php' => [
+                'nezha_payment_address_credentials',
+            ],
+            'database/migrations/2026_07_14_090000_create_nezha_payment_address_change_tables.php' => [
+                'nezha_payment_network_states',
+                'nezha_payment_address_changes',
+                'nezha_payment_address_change_events',
+            ],
+            'database/migrations/2026_07_14_160000_add_retention_marker_to_nezha_payment_address_credentials.php' => [
+                'nezha_payment_address_credentials',
+            ],
+        ];
+
+        foreach ($paths as $path => $tables) {
             $migration = file_get_contents($this->path($path));
 
             $this->assertStringContainsString("getDriverName() !== 'mysql'", $migration, $path);
             $this->assertStringContainsString("ENCRYPTION='Y'", $migration, $path);
+            $this->assertStringContainsString('information_schema.TABLES', $migration, $path);
+            $this->assertStringContainsString('CREATE_OPTIONS AS create_options', $migration, $path);
+            $this->assertStringContainsString('tablespace encryption verification failed', $migration, $path);
             $this->assertStringNotContainsString('catch (\\Throwable', $migration, $path);
+
+            foreach ($tables as $table) {
+                $this->assertStringContainsString(
+                    "\$this->assertTablespaceEncrypted('{$table}')",
+                    $migration,
+                    $path
+                );
+            }
         }
+
+        $credentialMigration = file_get_contents($this->path(array_key_first($paths)));
+        $createEnd = strpos($credentialMigration, "        }\n\n        // MySQL DDL auto-commits");
+        $encryptionCheck = strpos(
+            $credentialMigration,
+            "\$this->assertTablespaceEncrypted('nezha_payment_address_credentials')"
+        );
+        $this->assertNotFalse($createEnd);
+        $this->assertNotFalse($encryptionCheck);
+        $this->assertGreaterThan($createEnd, $encryptionCheck);
     }
 
     public function test_confirmed_a_plus_c_ui_is_wired_to_real_state_machine_routes(): void

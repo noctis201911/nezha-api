@@ -2,7 +2,7 @@
     $stateLabels = [
         'pending_merchant' => '等待您核对',
         'pending_distinct_admin' => '等待不同管理员复核',
-        'draining' => '旧地址凭据排空中',
+        'draining' => '升级前旧记录排空中',
         'applying' => '系统正在切换',
     ];
     $openIds = ($security['open_changes'] ?? collect())->pluck('public_id')->all();
@@ -49,7 +49,7 @@
                         </div>
                     @else
                         <div class="alert alert-info">
-                            您已经完成核对；当前地址仍未切换。系统会等待不同管理员复核及旧地址版本凭据排空。
+                            您已经完成核对；当前地址仍未切换。不同管理员批准后，新付款会立即使用候选地址；批准前已签发的旧地址凭据只到各自原到期时间。
                         </div>
                     @endif
 
@@ -72,7 +72,7 @@
                             @if ($change->expires_at && in_array($change->state, ['pending_merchant', 'pending_distinct_admin'], true))
                                 · 有效至 {{ $change->expires_at->format('Y-m-d H:i') }}
                             @elseif ($change->drain_until)
-                                · 最早排空时间 {{ $change->drain_until->format('Y-m-d H:i') }}
+                                · 升级前遗留排空截至 {{ $change->drain_until->format('Y-m-d H:i') }}
                             @endif
                         </small>
                         <span class="text-success font-weight-bold">当前地址未改变</span>

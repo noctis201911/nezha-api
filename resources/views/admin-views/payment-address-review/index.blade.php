@@ -48,7 +48,21 @@
         .nz-review-toolbar{align-items:stretch;flex-direction:column}
         .nz-review-search{max-width:none}
         .nz-review-grid,.nz-review-actions{grid-template-columns:1fr}
-        .nz-review-table th:nth-child(3),.nz-review-table td:nth-child(3),.nz-review-table th:nth-child(4),.nz-review-table td:nth-child(4){display:none}
+        .nz-review-card .table-responsive{overflow:visible}
+        .nz-review-table thead{display:none}
+        .nz-review-table,.nz-review-table tbody,.nz-review-table tr,.nz-review-table td{display:block;width:100%}
+        .nz-review-table tbody tr{position:relative;padding:14px 16px;border-bottom:1px solid #edf0f4}
+        .nz-review-table tbody tr:last-child{border-bottom:0}
+        .nz-review-table td{padding:5px 0;border:0;overflow-wrap:anywhere}
+        .nz-review-table td::before{content:attr(data-label);display:inline-block;width:82px;color:#8a94a6;font-size:12px;vertical-align:top}
+        .nz-review-table td:first-child{padding-right:78px;margin-bottom:5px}
+        .nz-review-table td:first-child::before,.nz-review-table td:nth-child(2)::before,.nz-review-table td:last-child::before{display:none}
+        .nz-review-table td:nth-child(2){position:absolute;top:16px;right:16px;width:auto}
+        .nz-review-table td:last-child{padding-top:12px;text-align:left!important}
+        .nz-review-table td:last-child .btn{width:100%;min-height:40px}
+        .nz-review-fingerprint{font-size:11px;overflow-wrap:anywhere}
+        .nz-review-modal .modal-dialog{margin:8px;min-height:0;align-items:flex-start}
+        .nz-review-modal .modal-content{max-height:calc(100vh - 16px);max-height:calc(100dvh - 16px)}
         .nz-review-modal .modal-body{padding:18px}
     }
 </style>
@@ -131,23 +145,23 @@
                             <tr data-review-row data-search="{{ strtolower($searchText) }}"
                                 data-detail-url="{{ route('admin.restaurant.payment-address-change.show', $change) }}"
                                 tabindex="0" role="button" aria-label="查看 {{ $change->restaurant?->name ?? '商家#'.$change->restaurant_id }} 的地址变更详情">
-                                <td>
+                                <td data-label="商家">
                                     <div class="nz-review-shop">{{ $change->restaurant?->name ?? '商家#'.$change->restaurant_id }}</div>
                                     <div class="nz-review-muted">ID {{ $change->restaurant_id }}</div>
                                 </td>
-                                <td><span class="badge badge-soft-primary">{{ $change->network }}</span></td>
-                                <td><span class="nz-review-fingerprint">{{ substr($change->new_fingerprint, 0, 12) }}…{{ substr($change->new_fingerprint, -8) }}</span></td>
-                                <td>
+                                <td data-label="网络"><span class="badge badge-soft-primary">{{ $change->network }}</span></td>
+                                <td data-label="新地址指纹"><span class="nz-review-fingerprint">{{ substr($change->new_fingerprint, 0, 12) }}…{{ substr($change->new_fingerprint, -8) }}</span></td>
+                                <td data-label="申请人">
                                     <div>{{ $requesterName !== '' ? $requesterName : '管理员#'.$change->requested_by_admin_id }}</div>
                                     <div class="nz-review-muted">ID {{ $change->requested_by_admin_id }}</div>
                                 </td>
-                                <td>{{ $change->merchant_confirmed_at?->format('Y-m-d H:i') ?? '—' }}</td>
-                                <td>
+                                <td data-label="商家确认">{{ $change->merchant_confirmed_at?->format('Y-m-d H:i') ?? '—' }}</td>
+                                <td data-label="到期时间">
                                     <span class="{{ $change->expires_at && $change->expires_at->lte(now()->addHours(2)) ? 'text-danger font-weight-bold' : '' }}">
                                         {{ $change->expires_at?->format('Y-m-d H:i') ?? '—' }}
                                     </span>
                                 </td>
-                                <td class="text-right">
+                                <td class="text-right" data-label="操作">
                                     <button type="button" class="btn btn-sm btn-outline-primary" data-review-open>复核</button>
                                 </td>
                             </tr>
