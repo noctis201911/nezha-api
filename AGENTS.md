@@ -1,5 +1,4 @@
 - [x] Codex(部署器固定 SHA / 竞态闸门·2026-07-14) 已完成：`58b3e22` 加完整目标 SHA 与排队/current/ref 防漂移闸门，`ddc67ee` 把实际运行入口已有的 origin 健康门、共享存储探针、队列同步重启和 P6.0 只读锁补回 Git 正本；同一 Git blob 已安装到仓库脚本与实际运行入口，无参/短 SHA 均 exit 64。生产 current 保持 `20260714-070255-e044d34`，未运行部署器、migration、release 切换或 FPM reload。
-- [ ] Codex(商家自助/自动下线隔离SQLite回归·2026-07-14) 正在修 tests/Support/IsolatedDatabaseFixtures.php：只补 NezhaLocalMerchantSelfserveE2ETest / NezhaAutoOfflineTest 所需最小共享 schema+seed，先证夹具缺口后回归；不改 migration/生产代码/配置/数据，不部署。
 - [x] Codex(Google address staging fix, 2026-07-13): complete in cacddaa; staging API + 390x844 browser QA passed; temporary address/user/token cleaned; no production deploy; no public storage.
 - [ ] Codex(形态C v2·2026-07-13) 接手顾客端商家卡三态：customer_availability/分页前排序 + 首页、餐厅/搜索/分类/菜系「仅预约/休息中」底部横条。仅 staging，不碰生产，不改 DESIGN_SYSTEM/产品文档。
 # AGENTS.md — 哪吒多窗口并发协调约定（所有 AI 窗口必读）
