@@ -54,6 +54,117 @@ final class IsolatedDatabaseFixtures
             });
         }
 
+        if (! $schema->hasTable('vendors')) {
+            $schema->create('vendors', function (Blueprint $table): void {
+                $table->id();
+                $table->string('f_name');
+                $table->string('l_name')->nullable();
+                $table->string('phone')->unique();
+                $table->string('email')->unique();
+                $table->string('password');
+                $table->rememberToken();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('local_life_merchants')) {
+            $schema->create('local_life_merchants', function (Blueprint $table): void {
+                $table->id();
+                $table->string('name', 120);
+                $table->string('category', 60)->index();
+                $table->string('logo', 191)->nullable();
+                $table->json('images')->nullable();
+                $table->string('cover_image', 191)->nullable();
+                $table->string('wechat_qr', 191)->nullable();
+                $table->json('contacts')->nullable();
+                $table->decimal('rating', 2, 1)->default(5.0);
+                $table->decimal('google_rating', 2, 1)->nullable();
+                $table->string('google_rating_url', 255)->nullable();
+                $table->unsignedInteger('google_rating_count')->nullable();
+                $table->string('area', 60)->nullable()->index();
+                $table->string('address', 255)->nullable();
+                $table->decimal('latitude', 10, 7)->nullable();
+                $table->decimal('longitude', 10, 7)->nullable();
+                $table->json('open_days')->nullable();
+                $table->string('open_time', 5)->nullable();
+                $table->string('close_time', 5)->nullable();
+                $table->string('hours_note', 120)->nullable();
+                $table->text('intro')->nullable();
+                $table->json('services')->nullable();
+                $table->json('video_links')->nullable();
+                $table->boolean('has_offer')->default(false);
+                $table->string('offer_text', 120)->nullable();
+                $table->boolean('is_sensitive')->default(false);
+                $table->unsignedInteger('sort_order')->default(0);
+                $table->unsignedInteger('views')->default(0);
+                $table->boolean('status')->default(true);
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('local_life_merchant_accounts')) {
+            $schema->create('local_life_merchant_accounts', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('merchant_id')->unique();
+                $table->string('email', 191)->unique();
+                $table->string('password')->nullable();
+                $table->string('contact_name', 120)->nullable();
+                $table->boolean('status')->default(true);
+                $table->timestamp('last_login_at')->nullable();
+                $table->rememberToken();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('local_life_merchant_changes')) {
+            $schema->create('local_life_merchant_changes', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('merchant_id')->index();
+                $table->unsignedBigInteger('account_id')->nullable();
+                $table->json('payload');
+                $table->json('base_snapshot')->nullable();
+                $table->tinyInteger('status')->default(0)->index();
+                $table->string('review_note', 255)->nullable();
+                $table->unsignedBigInteger('reviewed_by')->nullable();
+                $table->timestamp('reviewed_at')->nullable();
+                $table->string('submit_ip', 45)->nullable();
+                $table->string('submit_ua', 255)->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('local_life_merchant_password_resets')) {
+            $schema->create('local_life_merchant_password_resets', function (Blueprint $table): void {
+                $table->string('email', 191)->index();
+                $table->string('token');
+                $table->timestamp('created_at')->nullable();
+            });
+        }
+
+        if (! $schema->hasTable('admin_roles')) {
+            $schema->create('admin_roles', function (Blueprint $table): void {
+                $table->id();
+                $table->string('name', 30);
+                $table->string('modules')->nullable();
+                $table->boolean('status')->default(true);
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('admins')) {
+            $schema->create('admins', function (Blueprint $table): void {
+                $table->id();
+                $table->string('f_name')->nullable();
+                $table->string('l_name')->nullable();
+                $table->string('phone')->nullable();
+                $table->string('email')->unique();
+                $table->string('password');
+                $table->unsignedBigInteger('role_id')->default(1);
+                $table->rememberToken();
+                $table->timestamps();
+            });
+        }
+
         if (! $schema->hasTable('restaurant_configs')) {
             $schema->create('restaurant_configs', function (Blueprint $table): void {
                 $table->id();
@@ -78,6 +189,8 @@ final class IsolatedDatabaseFixtures
             $schema->create('restaurants', function (Blueprint $table): void {
                 $table->id();
                 $table->string('name');
+                $table->string('phone')->nullable();
+                $table->string('email')->nullable();
                 $table->string('slug')->nullable();
                 $table->string('logo')->nullable();
                 $table->string('cover_photo')->nullable();
@@ -97,6 +210,52 @@ final class IsolatedDatabaseFixtures
                 $table->time('closeing_time')->nullable();
                 $table->text('gst')->nullable();
                 $table->text('free_delivery_distance')->nullable();
+                $table->boolean('nezha_order_suspended')->default(false);
+                $table->boolean('nezha_auto_offline')->default(false);
+                $table->string('nezha_auto_offline_reason')->nullable();
+                $table->timestamp('nezha_auto_offline_at')->nullable();
+                $table->string('nezha_notify_email')->nullable();
+                $table->string('telegram_chat_id')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('orders')) {
+            $schema->create('orders', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('restaurant_id')->index();
+                $table->decimal('restaurant_discount_amount', 24, 2)->default(0);
+                $table->string('order_status')->default('pending');
+                $table->boolean('scheduled')->default(false);
+                $table->timestamp('accepted')->nullable();
+                $table->timestamp('processing')->nullable();
+                $table->timestamp('handover')->nullable();
+                $table->timestamp('picked_up')->nullable();
+                $table->timestamp('delivered')->nullable();
+                $table->timestamp('canceled')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('nezha_order_timeout_events')) {
+            $schema->create('nezha_order_timeout_events', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('order_id')->index();
+                $table->string('action', 64);
+                $table->timestamp('fired_at')->nullable();
+                $table->text('detail')->nullable();
+                $table->timestamps();
+                $table->unique(['order_id', 'action'], 'nezha_oto_order_action_uq');
+            });
+        }
+
+        if (! $schema->hasTable('nezha_auto_offline_events')) {
+            $schema->create('nezha_auto_offline_events', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('restaurant_id')->index();
+                $table->string('action', 32);
+                $table->string('detail')->nullable();
+                $table->timestamp('fired_at')->nullable();
                 $table->timestamps();
             });
         }
@@ -358,6 +517,51 @@ final class IsolatedDatabaseFixtures
         $database->table('users')->updateOrInsert(
             ['id' => 1],
             ['f_name' => 'Fixture', 'l_name' => 'Customer', 'created_at' => now(), 'updated_at' => now()]
+        );
+        $database->table('vendors')->updateOrInsert(
+            ['id' => 1],
+            [
+                'f_name' => 'Fixture',
+                'l_name' => 'Vendor',
+                'phone' => 'fixture-vendor-1',
+                'email' => 'fixture-vendor@example.test',
+                'password' => 'not-used',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+        $database->table('admins')->updateOrInsert(
+            ['id' => 1],
+            [
+                'f_name' => 'Fixture',
+                'l_name' => 'Admin',
+                'email' => 'fixture-admin@example.test',
+                'password' => 'not-used',
+                'role_id' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+        $database->table('admin_roles')->updateOrInsert(
+            ['id' => 1],
+            [
+                'name' => 'Super Admin',
+                'modules' => null,
+                'status' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+        $database->table('local_life_merchants')->updateOrInsert(
+            ['id' => 1],
+            [
+                'name' => 'Fixture Local Merchant',
+                'category' => '本地服务',
+                'intro' => 'Fixture introduction',
+                'status' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
         );
         $database->table('restaurants')->updateOrInsert(
             ['id' => 6],
