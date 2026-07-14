@@ -68,8 +68,14 @@ REQUESTED_CURRENT=$(current_target)
 exec 9>"$LOCK" || { echo "[deploy] lock fail"; exit 1; }
 flock -w 300 9 || { echo "[deploy] wait-lock timeout, deploy in progress"; exit 1; }
 lock_current_unchanged || exit 75
-: > "$LOG"
-FPMPID=$(cat /www/server/php/82/var/run/php-fpm.pid)
+if ! : > "$LOG"; then
+    echo "[deploy] FATAL: cannot initialize deploy log $LOG" >&2
+    exit 1
+fi
+if ! FPMPID=$(cat /www/server/php/82/var/run/php-fpm.pid) || ! [[ "$FPMPID" =~ ^[0-9]+$ ]]; then
+    echo "[deploy] FATAL: cannot read a valid PHP-FPM master pid" >&2
+    exit 1
+fi
 
 # 哪吒[2026-07-01]: 健康检查直连 origin(127.0.0.1)绕过 Cloudflare 托管质询。健康门应测新版本应用本身,而非CF边缘bot防护;
 # 否则CF对服务器出口IP发challenge(cf-mitigated: challenge)→403→误判不健康→回滚(本次事故根因)。
@@ -79,7 +85,68 @@ nz_wwrite(){ sudo -u www -H bash -c 'touch /www/wwwroot/api-deploy/shared/storag
 healthy(){ [ "$(code /api/v1/config)" = 200 ] && [ "$(code /api/v1/zone/list)" = 200 ] && [ "$(code /login/restaurant)" = 200 ] && nz_wwrite; }
 # 哪吒[R1 通知异步化 2026-07-01]: 切 current 后立即重启所有 queue worker, 让 worker 与 FPM 同步载新代码,
 # 压缩 split-brain 窗口(新 FPM 派 job·旧 worker 无新 Job 类→反序列化丢)。覆盖多 worker; 新增 queue worker 名字加进下面循环。
-restart_queue_workers(){ for w in nezha-queue nezha-queue-2; do ( cd /home/www && sudo -u www -H PM2_HOME=/home/www/.pm2 /usr/bin/pm2 restart "$w" --update-env ) >/dev/null 2>&1; done; }
+restart_queue_workers(){
+    local failed=0 w
+    for w in nezha-queue nezha-queue-2; do
+        if ! ( cd /home/www && sudo -u www -H PM2_HOME=/home/www/.pm2 /usr/bin/pm2 restart "$w" --update-env ) >>"$LOG" 2>&1; then
+            echo "[deploy] ERROR: queue worker restart failed: $w" >&2
+            failed=1
+        fi
+    done
+    [ "$failed" -eq 0 ]
+}
+reload_fpm(){
+    if ! kill -USR2 "$FPMPID"; then
+        echo "[deploy] ERROR: PHP-FPM reload failed for pid $FPMPID" >&2
+        return 1
+    fi
+    return 0
+}
+p6_deny_probe(){
+    local current routes probe
+    current=$(current_target)
+    routes="$current/routes"
+    probe="$routes/.nzp6probe"
+    if [ -z "$current" ] || [ ! -d "$routes" ]; then
+        echo "[deploy] ERROR: P6 deny-probe target is missing: $routes" >&2
+        return 1
+    fi
+    if sudo -u www -H touch "$probe" 2>/dev/null; then
+        rm -f "$probe" || true
+        echo "[deploy] ERROR: P6 deny-probe failed: www can still write $routes" >&2
+        return 1
+    fi
+    echo "[deploy] P6 deny-probe OK: www cannot write code tree"
+    return 0
+}
+rollback_after_switch(){
+    local reason="$1" rollback_failed=0
+    echo "[deploy] $reason -> rollback to previous" >&2
+    if [ -z "$PREV_TARGET" ]; then
+        echo "[deploy] ERROR: no previous target is available for rollback" >&2
+        rollback_failed=1
+    elif ! ln -sfn "$PREV_TARGET" "$DEPLOY/current"; then
+        echo "[deploy] ERROR: failed to restore current -> $PREV_TARGET" >&2
+        rollback_failed=1
+    fi
+    if ! reload_fpm; then
+        rollback_failed=1
+    fi
+    if ! restart_queue_workers; then
+        rollback_failed=1
+    fi
+    sleep 2
+    if [ -n "$PREV_TARGET" ] && ! healthy; then
+        echo "[deploy] ERROR: previous release is unhealthy after rollback" >&2
+        rollback_failed=1
+    fi
+    if [ "$rollback_failed" -eq 0 ]; then
+        echo "[deploy] rollback OK current=$(current_target) bad-release-kept=$REL log=$LOG"
+    else
+        echo "[deploy] ROLLBACK DEGRADED current=$(current_target) wanted=$PREV_TARGET bad-release-kept=$REL log=$LOG" >&2
+    fi
+    return 1
+}
 
 echo "[deploy] $(date '+%H:%M:%S') fetch origin/main"
 if ! git -C "$SRC" fetch origin main >>"$LOG" 2>&1; then
@@ -91,27 +158,44 @@ validate_target_against_main || exit 65
 assert_deploy_snapshot "after fetch" || exit 75
 REL="$DEPLOY/releases/$(date +%Y%m%d-%H%M%S)-$SHORT_SHA"
 echo "[deploy] release=$REL target=$TARGET_SHA fetched-main=$FETCHED_MAIN"
-mkdir -p "$REL"
+if ! mkdir -p "$REL"; then
+    echo "[deploy] FATAL: cannot create release directory $REL" >&2
+    exit 1
+fi
 if ! git -C "$SRC" archive "$TARGET_SHA" | tar -x -C "$REL"; then
     echo "[deploy] FATAL: archive extraction failed for target $TARGET_SHA" >&2
     exit 1
 fi
-printf '%s\n' "$TARGET_SHA" > "$REL/.nz-deploy-sha"
-mkdir -p "$REL/bootstrap/cache"
-rm -rf "$REL/storage"; ln -s "$SHARED/storage" "$REL/storage"
-rm -f "$REL/.env"; ln -s "$SHARED/.env" "$REL/.env"
-ln -sfn "$REL/storage/app/public" "$REL/public/storage"
+if ! { printf '%s\n' "$TARGET_SHA" > "$REL/.nz-deploy-sha" \
+    && mkdir -p "$REL/bootstrap/cache" \
+    && rm -rf "$REL/storage" \
+    && ln -s "$SHARED/storage" "$REL/storage" \
+    && rm -f "$REL/.env" \
+    && ln -s "$SHARED/.env" "$REL/.env" \
+    && ln -sfn "$REL/storage/app/public" "$REL/public/storage"; }; then
+    echo "[deploy] FATAL: release shared-path preparation failed; current was not switched" >&2
+    exit 1
+fi
 
 CUR="$LOCKED_CURRENT"
 if [ -n "$CUR" ] && [ -f "$CUR/composer.lock" ] && [ -d "$CUR/vendor" ] && cmp -s "$REL/composer.lock" "$CUR/composer.lock" && cp -al "$CUR/vendor" "$REL/vendor"; then
     VMODE="vendor-hardlink-reuse"
 else
     # 哪吒[防 vendor 级联 2026-06-24]: 上个 release 无 vendor/ 或硬链失败时不留空 vendor, 回退 composer install。
-    rm -rf "$REL/vendor"
+    if ! rm -rf "$REL/vendor"; then
+        echo "[deploy] FATAL: cannot clear incomplete vendor directory" >&2
+        exit 1
+    fi
     VMODE="composer-install"
 fi
-chown -R www:www "$REL"
-[ "$VMODE" = "composer-install" ] && (cd "$REL" && sudo -u www -H composer install --no-dev --optimize-autoloader >>"$LOG" 2>&1)
+if ! chown -R www:www "$REL"; then
+    echo "[deploy] FATAL: cannot assign release build ownership" >&2
+    exit 1
+fi
+if [ "$VMODE" = "composer-install" ] && ! (cd "$REL" && sudo -u www -H composer install --no-dev --optimize-autoloader >>"$LOG" 2>&1); then
+    echo "[deploy] FATAL: composer install failed; current was not switched" >&2
+    exit 1
+fi
 echo "[deploy] $VMODE"
 
 # 哪吒[vendor 断言 2026-06-24]: 无论哪种模式 autoload 必须就位, 否则整个 release 不可用→worker 回收即全站500。fail-fast 不切 current, 线上仍跑旧 release。
@@ -121,10 +205,21 @@ if [ ! -f "$REL/vendor/autoload.php" ]; then
 fi
 
 assert_deploy_snapshot "before package preparation" || exit 75
-(cd "$REL" && sudo -u www -H php artisan package:discover --ansi >>"$LOG" 2>&1)
+if ! (cd "$REL" && sudo -u www -H php artisan package:discover --ansi >>"$LOG" 2>&1); then
+    echo "[deploy] FATAL: package discovery failed; current was not switched" >&2
+    exit 1
+fi
 assert_deploy_snapshot "before migration" || exit 75
-(cd "$REL" && sudo -u www -H php artisan migrate --force >>"$LOG" 2>&1)
-(cd "$REL" && sudo -u www -H php artisan generate:admin-route >>"$LOG" 2>&1; sudo -u www -H php artisan generate:restaurant-route >>"$LOG" 2>&1)
+if ! (cd "$REL" && sudo -u www -H php artisan migrate --force >>"$LOG" 2>&1); then
+    echo "[deploy] FATAL: migration failed; current was not switched" >&2
+    exit 1
+fi
+if ! (cd "$REL" \
+    && sudo -u www -H php artisan generate:admin-route >>"$LOG" 2>&1 \
+    && sudo -u www -H php artisan generate:restaurant-route >>"$LOG" 2>&1); then
+    echo "[deploy] FATAL: generated login route preparation failed; current was not switched" >&2
+    exit 1
+fi
 assert_deploy_snapshot "after package preparation" || exit 75
 
 # 哪吒[blade 编译探针 2026-06-26]: 切 current 前, 对本次相对上个 release 改动的 blade 做真实编译检查。
@@ -146,21 +241,48 @@ fi
 # 哪吒[P6.0 代码属主 root 化 2026-07-11]: 构建完成、原子切换前把代码树翻 root:www 只读(www 经组读、不可写→堵 webshell落地/改路由/持久化)。
 # --no-dereference + find -type 不碰 storage/.env symlink 指向的 shared(保 www 可写)。P6.0 保留 bootstrap/cache www 可写(P6.1 再收只读)。
 [ -s "$REL/bootstrap/cache/services.php" ] || { echo "[deploy] FATAL: bootstrap/cache/services.php 缺失 -- 不切 current, 线上仍跑旧 release"; exit 1; }
-chown -R --no-dereference root:www "$REL"
-find "$REL" -type d -exec chmod 750 {} +
-find "$REL" -type f -exec chmod 640 {} +
-find "$REL" -type f -name '*.sh' -exec chmod 750 {} +
-chown -R www:www "$REL/bootstrap/cache"; chmod 775 "$REL/bootstrap/cache"; find "$REL/bootstrap/cache" -type f -exec chmod 664 {} +
-chown root:www "$SHARED/.env"; chmod 640 "$SHARED/.env"
+if ! chown -R --no-dereference root:www "$REL" \
+    || ! find "$REL" -type d -exec chmod 750 {} + \
+    || ! find "$REL" -type f -exec chmod 640 {} + \
+    || ! find "$REL" -type f -name '*.sh' -exec chmod 750 {} + \
+    || ! chown -R www:www "$REL/bootstrap/cache" \
+    || ! chmod 775 "$REL/bootstrap/cache" \
+    || ! find "$REL/bootstrap/cache" -type f -exec chmod 664 {} + \
+    || ! chown root:www "$SHARED/.env" \
+    || ! chmod 640 "$SHARED/.env"; then
+    echo "[deploy] FATAL: P6.0 ownership/permission lock failed; current was not switched" >&2
+    exit 1
+fi
 echo "[deploy] P6.0 lock: code root:www 640/750 sh750 - bootstrap/cache www writable - .env root:www 640"
 
 assert_deploy_snapshot "before current switch" || exit 75
 PREV_TARGET="$CUR"
-ln -sfn "$REL" "$DEPLOY/current"
-[ -n "$PREV_TARGET" ] && ln -sfn "$PREV_TARGET" "$DEPLOY/previous"
-kill -USR2 "$FPMPID"
-restart_queue_workers
+if ! ln -sfn "$REL" "$DEPLOY/current"; then
+    echo "[deploy] FATAL: current switch failed; previous release remains active" >&2
+    exit 1
+fi
+if [ -n "$PREV_TARGET" ] && ! ln -sfn "$PREV_TARGET" "$DEPLOY/previous"; then
+    rollback_after_switch "previous symlink update failed"
+    exit 1
+fi
+if ! reload_fpm; then
+    rollback_after_switch "PHP-FPM reload failed after current switch"
+    exit 1
+fi
+if ! restart_queue_workers; then
+    rollback_after_switch "queue worker restart failed after current switch"
+    exit 1
+fi
 sleep 2
+
+if ! healthy; then
+    rollback_after_switch "health gate failed"
+    exit 1
+fi
+if ! p6_deny_probe; then
+    rollback_after_switch "P6 deny-probe failed"
+    exit 1
+fi
 
 if healthy; then
     echo "[deploy] OK $TARGET_SHA  config=$(code /api/v1/config) zone=$(code /api/v1/zone/list) login=$(code /login/restaurant)"
@@ -168,7 +290,6 @@ if healthy; then
     echo "[deploy] --- 上线前硬自检: COD 必须关闭 ---"
     bash /www/wwwroot/api.nezha.am/nzcheck-cod.sh || echo "[deploy] [31m🔴 警告: COD 自检未通过(见上), 不阻断部署但请立即去后台关闭货到付款![0m"
     CURT=$(readlink "$DEPLOY/current"); PRVT=$(readlink "$DEPLOY/previous" 2>/dev/null)
-    if sudo -u www -H touch "$CURT/routes/.nzp6probe" 2>/dev/null; then rm -f "$CURT/routes/.nzp6probe"; echo "[deploy] P6 WARN: routes/ still www-writable -- P6 lock not effective?"; else echo "[deploy] P6 deny-probe OK: www cannot write code tree"; fi
     ls -1dt "$DEPLOY"/releases/*/ 2>/dev/null | tail -n +$((KEEP+1)) | while read d; do
         dd="${d%/}"
         [ "$dd" = "$CURT" ] && continue
@@ -176,9 +297,6 @@ if healthy; then
         rm -rf "$dd"
     done
 else
-    echo "[deploy] HEALTH FAIL -> rollback to previous"
-    [ -n "$PREV_TARGET" ] && ln -sfn "$PREV_TARGET" "$DEPLOY/current"
-    kill -USR2 "$FPMPID"; restart_queue_workers; sleep 2
-    echo "[deploy] after-rollback config=$(code /api/v1/config)  bad-release kept=$REL  log=$LOG"
+    rollback_after_switch "health gate changed after initial success"
     exit 1
 fi
