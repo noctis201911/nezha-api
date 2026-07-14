@@ -22,6 +22,7 @@ use App\Models\RefundReason;
 use App\Models\Subscription;
 use Illuminate\Http\Request;
 use App\CentralLogics\Helpers;
+use App\CentralLogics\NezhaPaymentAddressCredentialService;
 use App\Models\OrderReference;
 use App\Models\BusinessSetting;
 use App\Models\CashBackHistory;
@@ -2159,6 +2160,38 @@ class OrderController extends Controller
             ], 403);
         }
 
+        $addressCredential = null;
+        $addressCredentialTxHash = null;
+        $isUsdtMethod = NezhaPaymentAddressCredentialService::networkForMethod($method) !== null;
+        if ($isUsdtMethod && NezhaPaymentAddressCredentialService::enabled()) {
+            // 凭据闸开启时禁止回退 live restaurants 地址；游客也不能取得可归属的版本凭据。
+            if (! $request->user) {
+                return response()->json([
+                    'errors' => [[
+                        'code' => 'address_credential_login_required',
+                        'message' => '请登录后重新获取 USDT 付款地址',
+                    ]],
+                ], 403);
+            }
+
+            try {
+                $addressCredential = NezhaPaymentAddressCredentialService::resolveForProof(
+                    (string) $request->input('address_credential_token', ''),
+                    (int) $request->user->id,
+                    (int) $order->restaurant_id,
+                    (int) $method->id,
+                    (int) $order->id
+                );
+            } catch (\DomainException $credentialError) {
+                return response()->json([
+                    'errors' => [[
+                        'code' => $credentialError->getMessage(),
+                        'message' => '付款地址凭据无效，请重新打开付款页面后再提交',
+                    ]],
+                ], 403);
+            }
+        }
+
         try{
             // 哪吒: 顾客凭证字段名取自 method_fields 的 input_field_name。
             // 本站 method_informations 列被用作纯文字说明(cast→null),沿用原逻辑会丢弃顾客输入(如USDT交易哈希),
@@ -2217,6 +2250,7 @@ class OrderController extends Controller
 
             // 哪吒[自动核验]: 法币实付金额比对 + USDT 上链核验 + 图片软门标记。
             // 仅辅助商家判断真到账, 不改资金机制(平台不碰钱), 不阻断下单 —— 任何异常都吞掉。
+            $autoCheck = null;
             try {
                 $autoCheck = ['method_name' => $method->method_name, 'checked_at' => now()->toIso8601String()];
                 $expectedAmd = (float) ($order->order_amount ?? 0);
@@ -2224,7 +2258,6 @@ class OrderController extends Controller
                 $rateUsd = (float) (DB::table('business_settings')->where('key', 'nezha_rate_usd_to_amd')->value('value') ?: 400);
                 $expectedUsdt = $rateUsd > 0 ? round($expectedAmd / $rateUsd, 2) : 0;
                 $expectedRmb  = $rateCny > 0 ? round($expectedAmd / $rateCny) : 0;
-                $isUsdtMethod = (bool) preg_match('/usdt/i', $method->method_name);
                 $autoCheck['expected_amd'] = $expectedAmd;
                 $autoCheck['expected_usdt'] = $expectedUsdt;
                 $autoCheck['expected_rmb'] = $expectedRmb;
@@ -2247,20 +2280,31 @@ class OrderController extends Controller
 
                 // USDT 上链核验
                 if ($isUsdtMethod) {
+                    if ($addressCredential) {
+                        $autoCheck['address_credential'] = NezhaPaymentAddressCredentialService::evidence(
+                            $addressCredential
+                        );
+                    }
                     $hash = null;
                     foreach ($offline_payment_info as $k => $v) {
                         if (in_array($k, ['method_id', 'method_name'], true)) continue;
                         if (is_string($v) && \App\CentralLogics\NezhaChainVerifier::isValidHashFormat($v)) { $hash = $v; break; }
                     }
+                    $addressCredentialTxHash = $hash;
                     $autoCheck['tx_hash'] = $hash;
                     if ($hash) {
                         $reused = OfflinePayments::where('order_id', '!=', $order->id)
                             ->where('payment_info', 'like', '%'.$hash.'%')->exists();
-                        $rest = DB::table('restaurants')->where('id', $order->restaurant_id)->first();
-                        // 按所选 USDT 方式确定链与应收地址: BEP20 方式→usdt_bep20_address; 否则波场TRC20→usdt_address。
-                        $isBep20 = (bool) preg_match('/bep ?20|bsc|bnb/i', $method->method_name);
-                        $expectNet = $isBep20 ? 'BEP20' : 'TRC20';
-                        $expectAddr = $isBep20 ? ($rest->usdt_bep20_address ?? '') : ($rest->usdt_address ?? '');
+                        if ($addressCredential) {
+                            $expectNet = (string) $addressCredential->network;
+                            $expectAddr = (string) $addressCredential->address_snapshot;
+                        } else {
+                            // 两个新闸均关闭时保持现行行为；凭据闸一旦开启，本分支不会走到这里。
+                            $rest = DB::table('restaurants')->where('id', $order->restaurant_id)->first();
+                            $isBep20 = (bool) preg_match('/bep ?20|bsc|bnb/i', $method->method_name);
+                            $expectNet = $isBep20 ? 'BEP20' : 'TRC20';
+                            $expectAddr = $isBep20 ? ($rest->usdt_bep20_address ?? '') : ($rest->usdt_address ?? '');
+                        }
                         $autoCheck['usdt_network'] = $expectNet;
                         $verify = \App\CentralLogics\NezhaChainVerifier::verifyUsdt(
                             $hash,
@@ -2286,6 +2330,20 @@ class OrderController extends Controller
             DB::beginTransaction();
             $OfflinePayments->save();
             $order->save();
+            if ($addressCredential) {
+                $addressCredential = NezhaPaymentAddressCredentialService::consume(
+                    $addressCredential,
+                    (int) $order->id,
+                    $addressCredentialTxHash
+                );
+                if (is_array($autoCheck)) {
+                    $autoCheck['address_credential'] = NezhaPaymentAddressCredentialService::evidence(
+                        $addressCredential
+                    );
+                    $OfflinePayments->nezha_auto_check = $autoCheck;
+                    $OfflinePayments->save();
+                }
+            }
             DB::commit();
 
             Helpers::sentAdminPanelNotification($order);
