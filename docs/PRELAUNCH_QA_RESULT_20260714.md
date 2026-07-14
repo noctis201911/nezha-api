@@ -1,12 +1,12 @@
 # 2026-07-14 上线前全平台 QA 结果
 
-结论：**NO-GO**。可由自动化和隔离环境安全覆盖的测试已经完成；商家移动付款凭证审核入口、`/checkout` 登录态购物车恢复与直付退款阶段语义均已在 staging 关闭，但当前 production 尚未包含这些修复，且仍有 API、性能、合规、开关、演示数据和真实商家就绪硬阻断。本轮没有部署 production、没有切换 production release，也没有执行演示数据破坏性回退。
+结论：**NO-GO**。可由自动化和隔离环境安全覆盖的测试已经完成；商家移动付款凭证审核入口、`/checkout` 登录态购物车恢复、直付退款阶段语义、首页 N+1/轻负载与 exact-main 测试/格式门均已关闭，但当前 production 尚未包含这些修复，且合规、开关、演示数据、真实商家就绪和外部人工签收仍是硬阻断。本轮没有部署 production、没有切换 production release，也没有执行演示数据破坏性回退。
 
 ## 验收对象与深度
 
-- 生产前端：应用提交 `2f81803`，release `20260714-101004-2f81803`，BUILD `Mguty8CEfSrUIu5FXJ52G`；直付退款阶段前端候选为 `b516b8a`，共享 staging BUILD `n4VGKngOQXDelVRDdK9yN`。首页性能候选为 `6be4453`，已在不触碰 dirty shared staging 的 fixed-SHA 平行 staging 环境完成 build/Chromium/load 验收（BUILD `Jgmj0TjeB-wDfR03cUi0T`），未部署 shared staging 或 production。
+- 生产前端：应用提交 `2f81803`，release `20260714-101004-2f81803`，BUILD `Mguty8CEfSrUIu5FXJ52G`；共享 staging 仍为直付退款阶段 BUILD `n4VGKngOQXDelVRDdK9yN`。首页性能应用 `6be4453` 已在 fixed-SHA 平行 staging 完成 build/Chromium/load 验收；随后 exact-main 格式/浏览器门以应用提交 `a9e5007` 收口，最终隔离 production BUILD 为 `n-lmCUI6GWVnOkqc1cDMo`。两者均未部署 shared staging 或 production。
 - 生产后端：应用提交/release `e044d34` / `20260714-070255-e044d34`。
-- 最新后端应用候选：首页餐厅批量取数修复 `6cf7cf9`（包含此前直付退款阶段 `fa13808`）；本任务没有新增 migration，production/staging 均为 0 pending，且未运行 API reset/migration/restart。
+- 最新后端 main 候选为 `ab346c42`，包含首页餐厅批量取数修复 `6cf7cf9`、此前直付退款阶段 `fa13808`、隔离测试夹具/SQLite 兼容修复 `69502957` 与退款阶段契约对齐；相对 production `e044d34` 的 migration 文件 diff 为 0，且未运行 API reset/migration/restart。
 - 浏览器深度：真实 Chromium 390×844 与 1440×900；生产公共页、生产登录态临时顾客（已由前序 QA 清零）以及本轮生产备份隔离恢复环境。Firefox 因服务器缺 `libgtk-3.so.0` 未启动，WebKit/物理 iPhone Safari 不冒充已测。
 - 写入深度：生产备份恢复到一次性数据库后完成真实 API/浏览器写流程、资金账本和并发竞态；没有真实付款、链上广播或生产订单。
 
@@ -35,9 +35,9 @@
 
 ## 自动化与浏览器证据
 
-- 后端主 QA 基线（含已推送但未合入 main 的测试夹具修复 `0a87741`）：Unit `13 passed / 29 assertions`；Feature `177 passed / 914 assertions`。随后 `origin/main` 又增加候选修复；最新金额完整性与商家订单 UI 目标测试 `19 passed / 143 assertions`。
-- 精确 `origin/main e3ea7fb` 的完整套件并非全绿：Unit `13/29` 通过；Feature 共 180 项、883 assertions，出现 9 errors + 1 failure。9 项均为广告测试夹具缺少 `restaurants.nezha_commission_enabled`，1 项为 Example 临时环境缺 `DOMAIN_POINTED_DIRECTORY`；这正是 `0a87741` 修复但尚未合入 main 的测试基础设施缺口。不得把修复分支的全绿冒充当前 main 全绿。
-- 最新前端 `67ec497` 的两个 Node 回归测试通过，隔离 production build 通过（BUILD `LZ2iR9fEWbrIxLrHG4yGE`）；但仓库指定 Prettier 2.5.1 对候选 6 个改动文件全部报格式不合格，且该提交属于尚未闭环的 staging 订单支付任务。它只补充优惠券上下文等待，没有引入 `/checkout` 直达时的购物车初始化请求，已证实的空购物车阻断仍未关闭。
+- exact-main API 红灯已关闭：`69502957` 将隔离夹具与 SQLite 日期平均值兼容修复合入当前线，`ab346c42` 对齐“商家已标记退款”契约；最终 Feature 186 tests/962 assertions、Unit 15 tests/46 assertions 均 exit 0，push 前 L1/IDOR/在场感知墙 20 tests/100 assertions 通过。输出仍含既有 PHPUnit XML/doc-comment deprecation 与缺测试表的启动日志，但没有失败；不得把 warning 隐去或记成失败。
+- exact-main Web 格式门已关闭：`a9e5007` 对 13 个候选文件执行仓库固定 Prettier 2.5.1，全部 `src/utils/*.test.js`、首页性能契约、页面数据契约、`git diff --check` 与 Next 15.5.20 production build 通过，BUILD `n-lmCUI6GWVnOkqc1cDMo`。格式化前不稳定的页面数据正则已改为允许 JSX 空白，不改变动作 owner。
+- Web Chromium 390×844/1365×900 复核 `/home`、`/checkout`、`/tracking`：首页/空车/追踪表单无横向溢出、破图或基线 console error。回归额外发现历史提交 `eb3ecd4` 无条件删除追踪手机号输入，而匿名 API 仍要求 `contact_number`；`a9e5007` 恢复为“仅匿名用户显示并校验手机号，数字不足 8 位不发请求，登录用户仍只按订单号”。空号验证显示中文“手机号为必填项”，网络中没有 `/order/track`；填入号码后只读负例带正确 `contact_number` 并得到预期 404/“订单不存在”。证据位于 `output/playwright/exact-main-format-gate-20260714/`。
 - 商家移动付款凭证审核 `e42035c`：聚焦契约 1 test/11 assertions 通过；整组 `NezhaMerchantOrderUiContractTest` 为 16 tests/125 assertions，其中 14 通过，2 个既存 staging 树/夹具契约（移动订单列表 CSS、跨店发票 fixture）失败，不冒充整组全绿。Blade 编译、compiled PHP lint 和 diff check 通过。
 - 顾客拒绝态重传 `6dad4fd`：页面数据契约与 production build 通过，最终 staging BUILD `HzPSvq6ar3kDsNwz35-_X`。Prettier 对三个触及的旧文件仍报红，且同三文件的 `HEAD` 基线通过 stdin 复核也为红；本任务没有以全文件格式化扩大 diff，该格式门仍须在发布候选收口。
 - 直付退款阶段 `fa13808` / `b516b8a`：后端聚焦回归 `42 tests / 220 assertions` 通过（1 个既存 PHPUnit deprecation），全部触及 PHP lint 与 diff check 通过；前端状态契约 `30/30`、样式契约 `29/29` 与 production build 通过。最终 staging BUILD `n4VGKngOQXDelVRDdK9yN` 在 Chromium 390×844 覆盖 `pending_merchant_refund`、`merchant_refunded`、`disputed`、刷新和离开后返回，无横向溢出、0 console error、0 第一方失败请求。测试使用浏览器路由合成只读订单 `990001`，没有创建订单、付款、退款、点击提醒/确认按钮或发送外部通知；当前没有 staging 管理员/商家认证夹具，因此两端真实登录浏览器仅沿用前序覆盖，本轮以控制器/Blade 契约和聚焦测试验证新阶段文案与动作 owner，不冒充本轮三端都做了登录态浏览器实操。
@@ -51,11 +51,12 @@
 
 ## 当前必须先修的工程阻断
 
+已关闭但尚未进入 production 的工程门：首页 N+1/轻负载与 exact-main API 全量测试/Web 格式门。以下仍是 NO-GO 阻断：
+
 1. 收敛 production 与已验 staging 候选的版本差：production Web 仍缺 `/checkout` hydration、顾客重传与退款阶段修复，production API 仍缺商家凭证审核及退款阶段修复；只能在其余发布门通过并取得 production Go 后用固定 SHA 部署、再做只读与浏览器验收。
 2. 首页性能阻断已由 fixed-SHA 平行 staging 验收关闭；shared staging 仍保留 Web 10 tracked + 6 untracked、API 37 tracked + 2 untracked WIP，现有脚本仍会对移动 ref 执行 `reset --hard`，API 脚本还无条件 `migrate --force`，不得为追平候选而运行。任何后续 shared-staging/production 动作必须先由 WIP owner checkpoint/迁移，再用精确 40-hex SHA、零 migration diff/pending 和新的明确授权。
 3. 让隐私政策的静态加密陈述与真实存储保护一致；这是安全/合规改造，不得边测边批量 ALTER 33 表。
 4. 对三项开关漂移逐项取得 owner 签收，并清理演示数据、确认真实商家营业/保证金/收款资料。
-5. 合并/复核 API 测试夹具修复，关闭 exact-main 全量测试红灯，并收敛前端候选 Prettier 红灯；不得把聚焦测试通过冒充最新 main 发布候选全绿。
 
 ## 清场与回滚
 
@@ -64,4 +65,5 @@
 - 商家付款凭证 staging QA 已精确删除 1 用户、1 订单、1 order detail、1 offline payment、2 任务日志、2 通知和全部明确用户依赖及 1 个当前 proof 文件；marker 与当前/被替换凭证路径均为 0，商家、设备 token、支付方式、业务/全局/餐厅通知设置与封存原值逐字段一致。
 - 直付退款阶段 staging 只精确叠加应用补丁，没有清理既存 WIP、没有 migration、没有 PHP-FPM/queue/production 重启。API 源码回滚备份为 `/tmp/nezha-refundstage-api-fa13808.bak`；Web 源码回滚备份为 `/tmp/nezha-refundstage-web-b516b8a.bak`，构建回滚目录为 `.next.rollback-refundstage-_AakD0DH68L10ntvMVZOu`，API/Web 反向补丁 `git apply -R --check` 均通过。
 - 首页性能候选只进入一次性回环平行环境，未部署 shared staging 或 production；当前代码回滚仍仅需分别 `git revert 6cf7cf9` 与 `git revert 6be4453` 形成可审计反向提交。平行 API/Web 服务、本机隧道、含 staging 配置/密钥副本的临时目录和探针已精确停止/删除，19080/19081 无监听；shared staging 的 10+6 / 37+2 WIP、BUILD `n4VGKngOQXDelVRDdK9yN` 和 production current/previous 均未改变。不得通过清理或硬重置现有 staging WIP 来制造“干净环境”。
+- exact-main 收口只在独立 worktree 和 127.0.0.1:19082 临时服务中进行；Chromium 会话、本机隧道、回环服务、依赖/配置副本与独立 worktree 已停止/删除，19082 无监听。应用提交为 Web `a9e5007`、API `ab346c42`；没有 migration、shared staging/production 部署、开关/配置/业务数据写入。代码回滚使用对应 `git revert`，生产运行回滚点因未部署而不变。
 - 当前前端回滚点：`20260714-074400-b66c0d1`；当前后端回滚点：`20260714-063310-75c6e4c`。因本轮未切生产，未产生新的部署回滚点。
