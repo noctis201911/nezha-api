@@ -194,6 +194,20 @@
                     </div>
                     <div class="check-item">
                         <div class="form-group form-check form--check">
+                            <input type="checkbox" name="modules[]" value="payment_address_review" class="form-check-input"
+                                    id="payment_address_review" data-exclusive-module>
+                            <label class="form-check-label ml-2 ml-sm-3 text-dark" for="payment_address_review">{{translate('收款地址复核（独占岗位，强制 2FA）')}}</label>
+                        </div>
+                    </div>
+                    <div class="check-item">
+                        <div class="form-group form-check form--check">
+                            <input type="checkbox" name="modules[]" value="payment_address_manage" class="form-check-input"
+                                    id="payment_address_manage">
+                            <label class="form-check-label ml-2 ml-sm-3 text-dark" for="payment_address_manage">{{translate('收款地址管理（申请/取消/紧急暂停）')}}</label>
+                        </div>
+                    </div>
+                    <div class="check-item">
+                        <div class="form-group form-check form--check">
                             <input type="checkbox" name="modules[]" value="report" class="form-check-input"
                                     id="report">
                             <label class="form-check-label ml-2 ml-sm-3  text-dark" for="report">{{translate('messages.report')}}</label>
@@ -503,9 +517,22 @@
 
     $('#select-all').on('change', function(){
         if(this.checked === true) {
-            $('.check--item-wrapper .check-item .form-check-input').attr('checked', true)
+            $('.check--item-wrapper .check-item .form-check-input:not([data-exclusive-module])').attr('checked', true)
         } else {
             $('.check--item-wrapper .check-item .form-check-input').attr('checked', false)
+        }
+    })
+
+    $('[data-exclusive-module]').on('change', function(){
+        if(this.checked === true) {
+            $('.check--item-wrapper .check-item .form-check-input').not(this).attr('checked', false).prop('checked', false)
+            $('#select-all').attr('checked', false).prop('checked', false)
+        }
+    })
+
+    $('.check--item-wrapper .check-item .form-check-input:not([data-exclusive-module])').on('change', function(){
+        if(this.checked === true) {
+            $('[data-exclusive-module]').attr('checked', false).prop('checked', false)
         }
     })
 
