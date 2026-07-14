@@ -71,8 +71,15 @@ lock_current_unchanged || exit 75
 : > "$LOG"
 FPMPID=$(cat /www/server/php/82/var/run/php-fpm.pid)
 
-code(){ curl -s -o /dev/null -m8 -w '%{http_code}' "https://api.nezha.am$1"; }
-healthy(){ [ "$(code /api/v1/config)" = 200 ] && [ "$(code /api/v1/zone/list)" = 200 ] && [ "$(code /login/restaurant)" = 200 ]; }
+# 哪吒[2026-07-01]: 健康检查直连 origin(127.0.0.1)绕过 Cloudflare 托管质询。健康门应测新版本应用本身,而非CF边缘bot防护;
+# 否则CF对服务器出口IP发challenge(cf-mitigated: challenge)→403→误判不健康→回滚(本次事故根因)。
+# --resolve 保留 SNI/Host=api.nezha.am, nginx 认 vhost + 证书匹配, 只是把连接强制打到本机 nginx。
+code(){ curl -s -k -o /dev/null -m8 --resolve api.nezha.am:443:127.0.0.1 -w '%{http_code}' "https://api.nezha.am$1"; }
+nz_wwrite(){ sudo -u www -H bash -c 'touch /www/wwwroot/api-deploy/shared/storage/framework/.nzp6probe && rm -f /www/wwwroot/api-deploy/shared/storage/framework/.nzp6probe' 2>/dev/null; }
+healthy(){ [ "$(code /api/v1/config)" = 200 ] && [ "$(code /api/v1/zone/list)" = 200 ] && [ "$(code /login/restaurant)" = 200 ] && nz_wwrite; }
+# 哪吒[R1 通知异步化 2026-07-01]: 切 current 后立即重启所有 queue worker, 让 worker 与 FPM 同步载新代码,
+# 压缩 split-brain 窗口(新 FPM 派 job·旧 worker 无新 Job 类→反序列化丢)。覆盖多 worker; 新增 queue worker 名字加进下面循环。
+restart_queue_workers(){ for w in nezha-queue nezha-queue-2; do ( cd /home/www && sudo -u www -H PM2_HOME=/home/www/.pm2 /usr/bin/pm2 restart "$w" --update-env ) >/dev/null 2>&1; done; }
 
 echo "[deploy] $(date '+%H:%M:%S') fetch origin/main"
 if ! git -C "$SRC" fetch origin main >>"$LOG" 2>&1; then
@@ -136,18 +143,32 @@ if [ -n "$CUR" ]; then
     fi
 fi
 
+# 哪吒[P6.0 代码属主 root 化 2026-07-11]: 构建完成、原子切换前把代码树翻 root:www 只读(www 经组读、不可写→堵 webshell落地/改路由/持久化)。
+# --no-dereference + find -type 不碰 storage/.env symlink 指向的 shared(保 www 可写)。P6.0 保留 bootstrap/cache www 可写(P6.1 再收只读)。
+[ -s "$REL/bootstrap/cache/services.php" ] || { echo "[deploy] FATAL: bootstrap/cache/services.php 缺失 -- 不切 current, 线上仍跑旧 release"; exit 1; }
+chown -R --no-dereference root:www "$REL"
+find "$REL" -type d -exec chmod 750 {} +
+find "$REL" -type f -exec chmod 640 {} +
+find "$REL" -type f -name '*.sh' -exec chmod 750 {} +
+chown -R www:www "$REL/bootstrap/cache"; chmod 775 "$REL/bootstrap/cache"; find "$REL/bootstrap/cache" -type f -exec chmod 664 {} +
+chown root:www "$SHARED/.env"; chmod 640 "$SHARED/.env"
+echo "[deploy] P6.0 lock: code root:www 640/750 sh750 - bootstrap/cache www writable - .env root:www 640"
+
 assert_deploy_snapshot "before current switch" || exit 75
 PREV_TARGET="$CUR"
 ln -sfn "$REL" "$DEPLOY/current"
 [ -n "$PREV_TARGET" ] && ln -sfn "$PREV_TARGET" "$DEPLOY/previous"
 kill -USR2 "$FPMPID"
+restart_queue_workers
 sleep 2
 
 if healthy; then
     echo "[deploy] OK $TARGET_SHA  config=$(code /api/v1/config) zone=$(code /api/v1/zone/list) login=$(code /login/restaurant)"
+    echo "[deploy] queue workers reloaded (restart_queue_workers)"
     echo "[deploy] --- 上线前硬自检: COD 必须关闭 ---"
     bash /www/wwwroot/api.nezha.am/nzcheck-cod.sh || echo "[deploy] [31m🔴 警告: COD 自检未通过(见上), 不阻断部署但请立即去后台关闭货到付款![0m"
     CURT=$(readlink "$DEPLOY/current"); PRVT=$(readlink "$DEPLOY/previous" 2>/dev/null)
+    if sudo -u www -H touch "$CURT/routes/.nzp6probe" 2>/dev/null; then rm -f "$CURT/routes/.nzp6probe"; echo "[deploy] P6 WARN: routes/ still www-writable -- P6 lock not effective?"; else echo "[deploy] P6 deny-probe OK: www cannot write code tree"; fi
     ls -1dt "$DEPLOY"/releases/*/ 2>/dev/null | tail -n +$((KEEP+1)) | while read d; do
         dd="${d%/}"
         [ "$dd" = "$CURT" ] && continue
@@ -157,7 +178,7 @@ if healthy; then
 else
     echo "[deploy] HEALTH FAIL -> rollback to previous"
     [ -n "$PREV_TARGET" ] && ln -sfn "$PREV_TARGET" "$DEPLOY/current"
-    kill -USR2 "$FPMPID"; sleep 2
+    kill -USR2 "$FPMPID"; restart_queue_workers; sleep 2
     echo "[deploy] after-rollback config=$(code /api/v1/config)  bad-release kept=$REL  log=$LOG"
     exit 1
 fi
