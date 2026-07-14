@@ -106,25 +106,16 @@ return new class extends Migration
             $this->enableTablespaceEncryption('nezha_payment_address_change_events');
         }
 
-        DB::table('business_settings')->insertOrIgnore([
-            'key' => 'nezha_payment_address_change_status',
-            'value' => '0',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-        DB::table('business_settings')->insertOrIgnore([
-            'key' => 'nezha_payment_address_change_approval_ttl_min',
-            'value' => '1440',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        $this->ensureSetting('nezha_payment_address_change_status', '0');
+        $this->ensureSetting('nezha_payment_address_change_approval_ttl_min', '1440');
     }
 
     public function down(): void
     {
-        if ((string) DB::table('business_settings')
+        if (DB::table('business_settings')
             ->where('key', 'nezha_payment_address_change_status')
-            ->value('value') === '1') {
+            ->where('value', '1')
+            ->exists()) {
             throw new \RuntimeException('Refusing rollback while payment address changes are enabled.');
         }
         foreach ([
@@ -142,14 +133,8 @@ return new class extends Migration
         Schema::dropIfExists('nezha_payment_address_changes');
         Schema::dropIfExists('nezha_payment_network_states');
 
-        DB::table('business_settings')
-            ->where('key', 'nezha_payment_address_change_status')
-            ->where('value', '0')
-            ->delete();
-        DB::table('business_settings')
-            ->where('key', 'nezha_payment_address_change_approval_ttl_min')
-            ->where('value', '1440')
-            ->delete();
+        // Preserve setting rows. business_settings.key is not unique in
+        // production, so down() cannot safely identify migration-owned rows.
     }
 
     private function enableTablespaceEncryption(string $table): void
@@ -158,6 +143,24 @@ return new class extends Migration
             DB::statement("ALTER TABLE `{$table}` ENCRYPTION='Y'");
         } catch (\Throwable $e) {
             // SQLite and MySQL without keyring support must still remain migratable.
+        }
+    }
+
+    private function ensureSetting(string $key, string $defaultValue): void
+    {
+        $count = (int) DB::table('business_settings')->where('key', $key)->count();
+
+        if ($count > 1) {
+            throw new \RuntimeException("Refusing migration with duplicate business setting: {$key}");
+        }
+
+        if ($count === 0) {
+            DB::table('business_settings')->insert([
+                'key' => $key,
+                'value' => $defaultValue,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
         }
     }
 };

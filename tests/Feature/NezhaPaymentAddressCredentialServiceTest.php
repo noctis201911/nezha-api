@@ -81,6 +81,45 @@ class NezhaPaymentAddressCredentialServiceTest extends TestCase
 
         $migration->down();
         $this->assertFalse(Schema::hasTable('nezha_payment_address_credentials'));
+        $this->assertSame(1, DB::table('business_settings')
+            ->where('key', NezhaPaymentAddressCredentialService::SWITCH_KEY)->count());
+    }
+
+    public function test_credential_migration_is_idempotent_without_a_unique_setting_key(): void
+    {
+        Schema::dropIfExists('nezha_payment_address_credentials');
+        DB::table('business_settings')
+            ->where('key', NezhaPaymentAddressCredentialService::SWITCH_KEY)
+            ->delete();
+
+        $migration = require database_path(
+            'migrations/2026_07_13_210000_create_nezha_payment_address_credentials.php'
+        );
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('business_settings')
+            ->where('key', NezhaPaymentAddressCredentialService::SWITCH_KEY)->count());
+        $this->assertSame('0', (string) DB::table('business_settings')
+            ->where('key', NezhaPaymentAddressCredentialService::SWITCH_KEY)->value('value'));
+    }
+
+    public function test_credential_migration_rollback_detects_any_enabled_duplicate(): void
+    {
+        DB::table('business_settings')
+            ->where('key', NezhaPaymentAddressCredentialService::SWITCH_KEY)
+            ->delete();
+        DB::table('business_settings')->insert([
+            ['key' => NezhaPaymentAddressCredentialService::SWITCH_KEY, 'value' => '0'],
+            ['key' => NezhaPaymentAddressCredentialService::SWITCH_KEY, 'value' => '1'],
+        ]);
+        $migration = require database_path(
+            'migrations/2026_07_13_210000_create_nezha_payment_address_credentials.php'
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('enabled');
+        $migration->down();
     }
 
     public function test_credential_migration_refuses_to_drop_non_empty_evidence(): void
@@ -457,7 +496,7 @@ class NezhaPaymentAddressCredentialServiceTest extends TestCase
 
         Schema::create('business_settings', function (Blueprint $table) {
             $table->id();
-            $table->string('key')->unique();
+            $table->string('key');
             $table->text('value')->nullable();
             $table->timestamps();
         });

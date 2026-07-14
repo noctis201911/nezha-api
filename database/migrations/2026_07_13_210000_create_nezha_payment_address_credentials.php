@@ -53,12 +53,7 @@ return new class extends Migration
             }
         }
 
-        DB::table('business_settings')->insertOrIgnore([
-            'key' => 'nezha_payment_address_credential_status',
-            'value' => '0',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        $this->ensureSetting('nezha_payment_address_credential_status', '0');
     }
 
     public function down(): void
@@ -69,15 +64,33 @@ return new class extends Migration
                 'Refusing to drop non-empty payment address credential evidence; use an approved retention procedure.'
             );
         }
-        if ((string) DB::table('business_settings')
+        if (DB::table('business_settings')
             ->where('key', 'nezha_payment_address_credential_status')
-            ->value('value') === '1') {
+            ->where('value', '1')
+            ->exists()) {
             throw new \RuntimeException('Refusing rollback while payment address credentials are enabled.');
         }
         Schema::dropIfExists('nezha_payment_address_credentials');
-        DB::table('business_settings')
-            ->where('key', 'nezha_payment_address_credential_status')
-            ->where('value', '0')
-            ->delete();
+        // Preserve the disabled switch row. business_settings.key is not unique
+        // in production, so a down migration cannot prove which matching row it
+        // originally inserted without risking deletion of operator-owned data.
+    }
+
+    private function ensureSetting(string $key, string $defaultValue): void
+    {
+        $count = (int) DB::table('business_settings')->where('key', $key)->count();
+
+        if ($count > 1) {
+            throw new \RuntimeException("Refusing migration with duplicate business setting: {$key}");
+        }
+
+        if ($count === 0) {
+            DB::table('business_settings')->insert([
+                'key' => $key,
+                'value' => $defaultValue,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
     }
 };
