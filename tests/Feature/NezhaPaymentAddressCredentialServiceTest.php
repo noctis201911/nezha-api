@@ -83,6 +83,11 @@ class NezhaPaymentAddressCredentialServiceTest extends TestCase
         $this->assertFalse(Schema::hasTable('nezha_payment_address_credentials'));
         $this->assertSame(1, DB::table('business_settings')
             ->where('key', NezhaPaymentAddressCredentialService::SWITCH_KEY)->count());
+
+        $migration->up();
+        $this->assertTrue(Schema::hasTable('nezha_payment_address_credentials'));
+        $this->assertSame(1, DB::table('business_settings')
+            ->where('key', NezhaPaymentAddressCredentialService::SWITCH_KEY)->count());
     }
 
     public function test_credential_migration_is_idempotent_without_a_unique_setting_key(): void
@@ -120,6 +125,48 @@ class NezhaPaymentAddressCredentialServiceTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('enabled');
         $migration->down();
+    }
+
+    public function test_credential_migration_preserves_an_existing_switch_value(): void
+    {
+        Schema::dropIfExists('nezha_payment_address_credentials');
+        DB::table('business_settings')
+            ->where('key', NezhaPaymentAddressCredentialService::SWITCH_KEY)
+            ->delete();
+        DB::table('business_settings')->insert([
+            'key' => NezhaPaymentAddressCredentialService::SWITCH_KEY,
+            'value' => '1',
+        ]);
+        $migration = require database_path(
+            'migrations/2026_07_13_210000_create_nezha_payment_address_credentials.php'
+        );
+
+        $migration->up();
+
+        $this->assertSame(1, DB::table('business_settings')
+            ->where('key', NezhaPaymentAddressCredentialService::SWITCH_KEY)->count());
+        $this->assertSame('1', (string) DB::table('business_settings')
+            ->where('key', NezhaPaymentAddressCredentialService::SWITCH_KEY)->value('value'));
+    }
+
+    public function test_credential_migration_rollback_preserves_duplicate_disabled_rows(): void
+    {
+        DB::table('business_settings')
+            ->where('key', NezhaPaymentAddressCredentialService::SWITCH_KEY)
+            ->delete();
+        DB::table('business_settings')->insert([
+            ['key' => NezhaPaymentAddressCredentialService::SWITCH_KEY, 'value' => '0'],
+            ['key' => NezhaPaymentAddressCredentialService::SWITCH_KEY, 'value' => '0'],
+        ]);
+        $migration = require database_path(
+            'migrations/2026_07_13_210000_create_nezha_payment_address_credentials.php'
+        );
+
+        $migration->down();
+
+        $this->assertFalse(Schema::hasTable('nezha_payment_address_credentials'));
+        $this->assertSame(2, DB::table('business_settings')
+            ->where('key', NezhaPaymentAddressCredentialService::SWITCH_KEY)->count());
     }
 
     public function test_credential_migration_refuses_to_drop_non_empty_evidence(): void

@@ -46,11 +46,7 @@ return new class extends Migration
                 );
             });
 
-            try {
-                DB::statement("ALTER TABLE `nezha_payment_address_credentials` ENCRYPTION='Y'");
-            } catch (\Throwable $e) {
-                // SQLite/无 keyring 环境不阻断迁移；生产部署门会单独核验表空间加密。
-            }
+            $this->enableTablespaceEncryption('nezha_payment_address_credentials');
         }
 
         $this->ensureSetting('nezha_payment_address_credential_status', '0');
@@ -92,5 +88,16 @@ return new class extends Migration
                 'updated_at' => now(),
             ]);
         }
+    }
+
+    private function enableTablespaceEncryption(string $table): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            return;
+        }
+
+        // Sensitive evidence must not silently fall back to an unencrypted
+        // MySQL table when keyring/encryption support is unavailable.
+        DB::statement("ALTER TABLE `{$table}` ENCRYPTION='Y'");
     }
 };
