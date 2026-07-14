@@ -378,7 +378,7 @@ Route::middleware('module:provide_dm_earning')->group(function () {
                 ->name('payment-address-change.cancel');
         });
 
-        // 独立复核后端契约；正式审核页面须在效果图确认后另行实现。
+        // 独立复核入口：队列/详情只读，批准与驳回均需交易级 TOTP。
         Route::group([
             'prefix' => 'payment-address-review',
             'middleware' => ['module:payment_address_review'],
@@ -389,6 +389,8 @@ Route::middleware('module:provide_dm_earning')->group(function () {
                 ->name('restaurant.payment-address-change.show');
             Route::post('request/{change}/approve', [NezhaPaymentAddressChangeController::class, 'approve'])
                 ->name('restaurant.payment-address-change.approve');
+            Route::post('request/{change}/reject', [NezhaPaymentAddressChangeController::class, 'reject'])
+                ->name('restaurant.payment-address-change.reject');
         });
 
         Route::group(['prefix' => 'restaurant', 'as' => 'restaurant.', 'middleware' => ['module:restaurant']], function () {
