@@ -9,8 +9,8 @@
 > **每个窗口开工前先读本文件，并遵守下面四条。**
 
 ## 0. 构建方式：排队脚本自行构建（不依赖人盯）〔2026-06-16 定〕
-- 构建上线**一律走排队脚本**：`node nz.js run "bash /www/wwwroot/nezha.am/nzbuild.sh"`，**绝不裸跑 `npm run build`**。
-- 脚本用 **flock 串行化**：两个窗口同时要构建会自动排队，不会并发写坏 `.next`（那才是全站 500 的真凶，已被它解决）；失败不切换、健康门自动回滚。
+- 构建上线**一律走固定 SHA 排队脚本**：`node nz.js run "bash /www/wwwroot/nezha.am/nzbuild.sh <40位完整commit SHA>"`，无参/短 SHA 会被拒绝，**绝不裸跑 `npm run build`**。
+- 脚本用 **flock 串行化**，并核对排队前后的 current、fetch 后的 `origin/main` 与完整目标 SHA；等待期间 current 改变或构建期间 ref 漂移会拒绝切换。失败不切换、健康门自动回滚。
 - **任何窗口都可自行构建，不需要等谁手动把关**——用户不一定在电脑前。
 - 残余风险（构建可能带上别人未提交的半成品）靠第 1 条「一窗一提交不留 WIP」降到最低，不靠人盯。
 
