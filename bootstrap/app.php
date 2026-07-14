@@ -13,6 +13,7 @@ use App\Http\Middleware\LocalizationMiddleware;
 use App\Http\Middleware\MaintenanceMode;
 // Custom middleware
 use App\Http\Middleware\ModulePermissionMiddleware;
+use App\Http\Middleware\PaymentAddressReviewerScopeMiddleware;
 use App\Http\Middleware\RateLimiterMiddleware;
 use App\Http\Middleware\ReactValid;
 use App\Http\Middleware\RedirectIfAuthenticated;
@@ -69,6 +70,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'vendor.api' => VendorTokenIsValid::class,
             'dm.api' => DmTokenIsValid::class,
             'module' => ModulePermissionMiddleware::class,
+            'reviewer.scope' => PaymentAddressReviewerScopeMiddleware::class,
             'vmodule' => \App\Http\Middleware\VendorApiModulePermission::class,
             'installation-check' => InstallationMiddleware::class,
             'actch' => ActivationCheckMiddleware::class,

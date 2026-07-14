@@ -211,6 +211,14 @@ active(A)
    - 成功后才恢复该网络为 `active(B)` 并允许签发新凭据。
    - 失败时旧地址 A 不变；网络保持 `paused` 等人工复核，不能半写或自动反向覆盖。
 
+### 3.3.1 管理员最小权限与 reviewer 2FA 门
+
+- `payment_address_manage` 只拥有地址变更申请、取消和指定商家+网络的紧急暂停；紧急暂停不授予 reviewer。
+- `payment_address_review` 是独占角色模块，不能与 `restaurant`、`payment_address_manage` 或其它模块组合；其数据面只返回 `pending_distinct_admin` 队列、单条待复核详情和批准动作。
+- reviewer 即使因历史脏数据被误配其它模块，仍由全局 scope 限制：未完成 2FA 注册时只允许 setup、enable、修改本人密码和退出；完成注册且当前会话通过第二因子后，只允许 pending/show/approve、修改本人密码和退出，不能关闭 2FA。
+- 餐厅 CRUD、旧 `updatePaymentInfo` 地址直改、押金充值、汇率、折扣、申请、取消和暂停均不属于 reviewer；超管仍由既有 `role_id=1` 旁路处理，但地址批准继续受“请求人不得自批”和交易级 TOTP 约束。
+- 当前仅完成隔离后端/角色配置代码；未创建或修改生产角色/管理员。独立审核入口正式 UI 必须在真实后台页面效果图确认后再实现。
+
 ### 3.4 应急流程
 
 “暂停收款”和“改成新地址”必须分开：

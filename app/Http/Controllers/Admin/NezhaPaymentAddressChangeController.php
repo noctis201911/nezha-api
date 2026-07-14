@@ -12,6 +12,27 @@ use Illuminate\Support\Facades\Validator;
 
 class NezhaPaymentAddressChangeController extends Controller
 {
+    public function pending(Request $request)
+    {
+        if (! NezhaPaymentAddressChangeService::enabled()) {
+            abort(404);
+        }
+
+        $changes = NezhaPaymentAddressChange::query()
+            ->where('state', 'pending_distinct_admin')
+            ->orderBy('expires_at')
+            ->orderBy('id')
+            ->limit(100)
+            ->get()
+            ->map(fn (NezhaPaymentAddressChange $change): array => $this->resource($change))
+            ->values();
+
+        return response()->json([
+            'data' => $changes,
+            'count' => $changes->count(),
+        ]);
+    }
+
     public function store(Request $request, Restaurant $restaurant)
     {
         $validator = Validator::make($request->all(), [
@@ -54,15 +75,9 @@ class NezhaPaymentAddressChangeController extends Controller
             }
             abort(404);
         }
+        abort_unless($change->state === 'pending_distinct_admin', 404);
 
-        if ($request->expectsJson()) {
-            return response()->json($this->resource($change));
-        }
-
-        return redirect()->to(
-            route('admin.restaurant.view', [$change->restaurant_id, 'payment_info'])
-            .'?review='.rawurlencode((string) $change->public_id)
-        );
+        return response()->json($this->resource($change));
     }
 
     public function approve(Request $request, NezhaPaymentAddressChange $change)
