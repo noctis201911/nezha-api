@@ -20,22 +20,23 @@
 | 4 | 资金合规 | staging 语义通过，production 版本阻断 | COD 数据库与 API 自检为关闭；直付退款原路锁定、禁止第三方地址、账本回滚通过。`fa13808` 以 `nezha_refund_records.status` 为阶段 owner：管理员批准只进入“待商家退款”，商家原子认领成功后才进入“商家已标记退款”，平台人工核实使用“平台已核实退款”。production 尚未包含。 |
 | 5 | 资金闭环 | 隔离全链通过 | 订单 `2000000114` 从下单、商家确认、制作、配送、送达、管理员退款到商家标记退款完整跑通；优惠后应付 7,200，佣金/平台券/保证金扣回及退款反转后保证金精确回到 1,000,000。没有真实资金对账。 |
 | 6 | 性能/负载/N+1 | fixed-SHA 平行 staging 通过，production 版本阻断 | 生产只读数据旧实现 N=1/2/7 为 49/65/145 SQL，API `6cf7cf9` 为 51/51/51，N=7 完整响应 98,422 B 且 SHA-256 `231e5a7e451405604f0998592636b8ee097efab7f5a019d7500fa54c014a1b78` 与旧实现逐字节一致。staging-config/data 平行环境中，精确旧 baseline `0626875` 为 49/66/66，候选为 48/48/48，N=1/2/7 完整响应逐字节一致；优惠券、订阅餐厅、自配送与车辆距离边界矩阵 6 tests/35 assertions 通过。Web `6be4453` 的 Chromium 390×844/1365×900 首页、首卡跳转、刷新、console/请求/图片/溢出通过；同口径 5 并发/5 秒为 215/215 HTTP 200、42.21 req/s、p50 95.71 ms、p95 210.14 ms、p99 238.77 ms，相比此前 p95 2768.63 ms 红灯下降约 92.4%。候选未部署 shared staging 或 production。 |
-| 7 | 容灾/备份恢复 | 隔离自动恢复通过 | 最新加密文件备份 70,153,072 B、数据库备份 1,190,112 B；隔离恢复得到 192 表、orders=44/users=8/settings=254，`mysqlcheck` bad=0，临时数据库已销毁。未做真人整机/跨机故障切换。 |
+| 7 | 容灾/备份恢复 | 结构通过、字符保真失败 | 17:26 加密数据库备份可恢复 192 表、orders=44，`mysqlcheck` bad=0；但行级指纹发现 21 行 `local_life_posts.cover_emoji` 在备份中均为 `?`（hex `3F`），production 为 4-byte emoji，且备份脚本 `mysqldump` 未显式固定 `utf8mb4`。因此此前“恢复通过”只覆盖结构/计数，不能证明字符保真或作为 demo 清理唯一回滚点。需修备份参数、生成新加密备份并在全新隔离库做 `utf8mb4`/行指纹复核；真人整机/跨机故障切换仍未做。 |
 | 8 | 兼容/多端 | 部分通过 | Chromium 390×844/1440×900 无横向溢出；Firefox/WebKit、物理 iPhone Safari、微信/TG WebView 未测。Chromium 返回为 `navigationType=back_forward`，但 `pageshow.persisted=false`，不能证明 iOS bfcache 命中。 |
 | 9 | i18n/币种 | 当前单语言通过 | 顾客端语言列表实际只有简体中文；֏ 主币种及 ¥/$ 参考换算在顾客/商家/后台显示。不能把浏览器 English locale 仍显示中文称为英文 UI 验收。 |
 | 10 | 三方交叉流程 | staging 完整通过，production 版本待升级 | 顾客↔商家↔平台正向、退款逆向、凭证金额不一致负向、无重复转账提示均跑通；`e42035c` 已将截图/渠道/金额/后果与确认、拒绝统一到可见现代详情 owner，390×844、320×720、1365×900 完成拒绝→重传→确认，单次请求/写入/通知成立。production 尚未包含。 |
-| 11 | 演示数据清除 | 阻断 | 只运行无写入预览；vendors=7、restaurants=7、local_life_merchants=6、local_life_posts=21 仍带 demo，且 `/config` 仍返回 `Demo Banner`。没有执行 `nzdemo-rollback.sh GO`。 |
-| 12 | 真实商家就绪 | 阻断 | 店 12 在营业时间内仍 `active=0`、钱包保证金/余额为 0；38/38 菜品虽上架，但真实首页商家均不可下单。收款方式列表存在支付宝和 USDT TRC20/BEP20，不等于商家已完成上线签收。 |
-| 13 | 开关上线态 | 阻断 | 56 个开关中 `nezha_preorder_status=1`、`nezha_notif_async_status=1`、`nezha_merchant_video_status=1` 与当前上线正本/签收状态不闭环；禁止静默把“当前值”改写成“已批准值”。 |
-| 14 | 通知送达 | staging 语义/幂等通过，真渠道未测 | 首次创建 `pending_merchant_refund` 才生成顾客“待商家退款”；商家或平台完成通知只由原子状态转换赢家生成，重复操作不重复投递。外部 FCM/邮件/Telegram 没有启用或实发，物理设备收达与 production 真实推送未验。 |
+| 11 | 演示数据清除 | 阻断（工具已 fail closed） | marker 精确命中 vendors=7、restaurants=7、local_life_merchants=6、local_life_posts=21，总表行数分别为 9/9/10/21，二者不可混用；`/config` 仍返回 `Demo Banner`。版本化工具的精确 scope 覆盖 31 订单、22 评价、0 add-on 和 6 个商家当前名称；补齐备份已损失的 21 个 emoji 后，production 只读 PLAN `c13203f4…` 与隔离库 PLAN `55bdf110…` 的 20/20 类目标行指纹一致。schema 全列审计的 48 个非零引用入口收敛为 26 类 manifest 外 blocker，新增关键项包括 seed category 关联但 manifest 外 food 58、coupon claim 4、message 2、order timeout event 38、review report 1、offline payment 23；两端 blocker/计数一致，rehearsal 在事务前 exit 4 拒绝。旧 production 本地 untracked 8 子脚本禁止直接执行；先由数据 owner 逐类裁决并补可逆证据。 |
+| 12 | 真实商家就绪 | 阻断 | 店 12 `active=0`、营业时间记录=0，38/38 菜品上架；支付宝码和 TRC20 地址存在，BEP20 地址不存在。当前 `nezha_deposit_mode_status=0`、最低保证金阈值=0、店 12 佣金关闭，因此保证金/余额为 0 **不是当前免佣免押阶段的独立阻断**。硬门是营业时间、实际经营者、收款资料归属、通知接收和最终激活均未签收。 |
+| 13 | 开关上线态 | 阻断 | 56 个开关中 `nezha_preorder_status=1`、`nezha_notif_async_status=1`、`nezha_merchant_video_status=1` 与签收状态不闭环；`schedule_order=true`，故预订单是“依赖已开但 owner 未签”，不是隐藏依赖仍关。视频开关虽为 1，但商户 12 的 2 条记录都缺 public cover，规范化输出 0、前端整卡隐藏，需补素材签收或另批回退 0。`nezha_autooffline_status=1` 符合 A 类目标，仅原台账现值过期。禁止静默把当前值改写成批准值。 |
+| 14 | 通知送达 | staging 语义/幂等通过，真渠道未测 | 首次创建 `pending_merchant_refund` 才生成顾客“待商家退款”；商家或平台完成通知只由原子状态转换赢家生成，重复操作不重复投递。queue/Redis 正常且 `/config is_mail_active=true`，但配置声明不等于 FCM/邮件/Telegram 真实送达；物理设备回执与 production 真实推送未验。 |
 | 15 | 手册/客服/退款流程 | staging 通过，production 版本阻断 | B 方案“平台不碰钱、商家原路退”与产品语义现已一致；顾客、商家、管理员列表/详情均区分待商家退款、争议核实中和已标记退款。production 尚未包含。 |
-| 16 | 法律/政策 | 阻断 | 隐私政策声称数据库整体静态加密；实测 33 个 InnoDB 表无 `ENCRYPTION='Y'`，系统盘为普通 ext4、未见 LUKS/全盘加密，事实与政策不一致。仍需亚美尼亚律师审校。 |
+| 16 | 法律/政策 | 阻断 | 隐私政策声称数据库整体静态加密；2026-07-14 复核共 192 个 InnoDB 表，其中 33 个无 `ENCRYPTION='Y'`，系统盘为普通 ext4、未见 LUKS/全盘加密，事实与政策不一致。仍需亚美尼亚律师审校。 |
 | 17 | 专业渗透 | 未完成 | 已有仓库级安全回归不能替代独立专业渗透。 |
 | 18 | 实体/税务/跨境合规 | 未完成 | 需律师/会计/合规负责人确认，AI 无法签收。 |
 
 ## 自动化与浏览器证据
 
 - exact-main API 红灯已关闭：`69502957` 将隔离夹具与 SQLite 日期平均值兼容修复合入当前线，`ab346c42` 对齐“商家已标记退款”契约；最终 Feature 186 tests/962 assertions、Unit 15 tests/46 assertions 均 exit 0，push 前 L1/IDOR/在场感知墙 20 tests/100 assertions 通过。输出仍含既有 PHPUnit XML/doc-comment deprecation 与缺测试表的启动日志，但没有失败；不得把 warning 隐去或记成失败。
+- 开关非生产收口：API exact-main 在 bootstrap 强制 SQLite `:memory:` 安全门下，DB 安全门 + 异步通知 + 全部预约聚焦文件合计 `63 tests / 162 assertions` 通过（预约 53、异步通知 7、安全门 3）；Web exact-main `src/utils/nezhaCancelAction.test.js` 通过。仅有既存 PHPUnit schema/doc-comment deprecation 与 SQLite 无 `business_settings` 的测试日志。自动语义已关闭，但预约真实浏览器完整链、FCM/邮件/TG 真实收达和 owner 签收仍未完成。
 - exact-main Web 格式门已关闭：`a9e5007` 对 13 个候选文件执行仓库固定 Prettier 2.5.1，全部 `src/utils/*.test.js`、首页性能契约、页面数据契约、`git diff --check` 与 Next 15.5.20 production build 通过，BUILD `n-lmCUI6GWVnOkqc1cDMo`。格式化前不稳定的页面数据正则已改为允许 JSX 空白，不改变动作 owner。
 - Web Chromium 390×844/1365×900 复核 `/home`、`/checkout`、`/tracking`：首页/空车/追踪表单无横向溢出、破图或基线 console error。回归额外发现历史提交 `eb3ecd4` 无条件删除追踪手机号输入，而匿名 API 仍要求 `contact_number`；`a9e5007` 恢复为“仅匿名用户显示并校验手机号，数字不足 8 位不发请求，登录用户仍只按订单号”。空号验证显示中文“手机号为必填项”，网络中没有 `/order/track`；填入号码后只读负例带正确 `contact_number` 并得到预期 404/“订单不存在”。证据位于 `output/playwright/exact-main-format-gate-20260714/`。
 - 商家移动付款凭证审核 `e42035c`：聚焦契约 1 test/11 assertions 通过；整组 `NezhaMerchantOrderUiContractTest` 为 16 tests/125 assertions，其中 14 通过，2 个既存 staging 树/夹具契约（移动订单列表 CSS、跨店发票 fixture）失败，不冒充整组全绿。Blade 编译、compiled PHP lint 和 diff check 通过。
@@ -57,6 +58,8 @@
 2. 首页性能阻断已由 fixed-SHA 平行 staging 验收关闭；shared staging 仍保留 Web 10 tracked + 6 untracked、API 37 tracked + 2 untracked WIP，现有脚本仍会对移动 ref 执行 `reset --hard`，API 脚本还无条件 `migrate --force`，不得为追平候选而运行。任何后续 shared-staging/production 动作必须先由 WIP owner checkpoint/迁移，再用精确 40-hex SHA、零 migration diff/pending 和新的明确授权。
 3. 让隐私政策的静态加密陈述与真实存储保护一致；这是安全/合规改造，不得边测边批量 ALTER 33 表。
 4. 对三项开关漂移逐项取得 owner 签收，并清理演示数据、确认真实商家营业/保证金/收款资料。
+
+> 2026-07-14 只读收口校准：第 4 项中的“保证金”只在未来启用 `nezha_deposit_mode_status`/佣金时才重新成为硬门；当前阶段必须签收的是店 12 营业时间、经营者、收款资料、通知和 `active`。六类 NO-GO 的唯一 owner、签收、自动/人工边界与动作包见 `docs/PRELAUNCH_CLOSURE_LEDGER_20260714.md`。
 
 ## 清场与回滚
 

@@ -47,17 +47,17 @@ node nz.js run "bash /www/wwwroot/api.nezha.am/nzcheck-cod.sh"
 | 4 | 资金合规(L1 红线真生效) | `FUNDS_COMPLIANCE_QA_PLAYBOOK`(8轴) | 🔴硬门 | 🟡(机制靠回滚仿真+翻开关) | ✅机制 |
 | 5 | 资金闭环(下单→扣佣→退款) | `QA_FUNDLOOP_PLAYBOOK` | gate | 🟡(回滚仿真=money-write拦) | 🔶仿真(无真实数据对账) |
 | 6 | 性能/负载/N+1 | `PERF_LOAD_QA_PLAYBOOK`(+G轴) | gate | 🟢轻量·🟡重压测 | ✅ |
-| 7 | **容灾/备份恢复演练** | QA_MASTER 第7层 | 🔴硬门 | 👤(恢复演练需真人/隔离环境) | ⬜**从没演练过(没演练≈没备份)** |
+| 7 | **容灾/备份恢复演练** | QA_MASTER 第7层 | 🔴硬门 | 🟢隔离结构/字符指纹·👤整机/跨机 | 结构/计数✅；`utf8mb4` 字符保真❌（21 个 emoji→`?`）；整机⬜ |
 | 8 | 兼容/多端真机矩阵 | QA_MASTER 第8层 | gate | 👤(真设备矩阵) | ⬜无矩阵化(零散真机已修) |
 | 9 | i18n/币种֏+¥/$ | `I18N_QA_PLAYBOOK`(8轴) | gate | 🟢 | ✅ |
 | **B 业务流程交叉验证（第10层·核心）** ||||||
 | 10 | 三方(顾客↔商家↔平台)×四类路径(正向/逆向/异常/合规)×两登录态 | `CROSSCHECK_QA_PLAYBOOK` | 🔴核心 | 🟢正向只读浏览/登录态·🟡逆向异常资金(下单/仿真)·👤limbo脏单 | 正向✅/逆向🔶⬜/登录态⬜ |
 | ↳ | **轴 I 跨界面数字一致性/不变量**(横幅==徽标==列表;裸DB计数代码味道) | 同上 §2轴I | gate | 🟢grep+只读对账·👤limbo脏单真人盯 | ⬜(横幅幽灵数已暴露; SystemController:20 孪生待修) |
 | **C 上线就绪（非测试·易漏）** ||||||
-| 11 | **演示数据清除**(一键编排 `bash nzdemo-rollback.sh GO` —— 顺序跑全部 8 个回退脚本: `_demo_addons` / `_demo_announcement` / `_demo_review_names` / `rollback_socialproof` / `_demo_locallife_service` / `_demo_locallife_v2` / `_ll_merchants` / `_demo_rollback`, 每步查退出码+成功标记, 末尾 `_nzdemo_residual_assert.php` 断言残留=0。🔴不带 GO=仅预览不执行) | [[nezha-demo-seed-data]] | 🔴硬门 | 🟡(破坏性,必须拍板·GO 显式确认) | ⬜**没跑=真顾客看到假店/假帖/假订单** |
-| 12 | 真实商家就绪(店12 营业时间/收款码/USDT地址/上架) | 现店12 无营业时间→下不了单 | 🔴硬门 | 🟡/👤(商家或你设置) | ⬜ |
+| 11 | **演示数据清除**（唯一入口 `bash nzdemo-rollback.sh`）：`PLAN <evidence-dir>` 默认只读并输出计划 SHA；`REHEARSE <dir> <sha>` 只许 `nezha_qa_*` 一次性数据库、执行后事务回滚；`GO <dir> <sha>` 还必须显式 `NZ_DEMO_ALLOW_COMMIT=YES`。manifest/备份校验固定 SHA，订单/评价/add-on 必须进入精确 scope，目标当前行也进入计划指纹；manifest 外业务/资金/通知/用户关联一律 fail closed。2026-07-14 schema 全列审计收敛出 26 类 blocker，隔离演练在事务前被正确拒绝；先走数据 owner 裁决包。旧服务器本地 8 子脚本不得再直接执行。Banner 是独立配置写入，不由数据工具顺手修改。 | `docs/PRELAUNCH_CLOSURE_LEDGER_20260714.md` | 🔴硬门 | 🟢PLAN·🟡REHEARSE/GO | ⬜生产未执行 |
+| 12 | 真实商家就绪（店12 营业时间/实际经营者/收款归属/通知/上架/激活） | `active=0` 且无营业时间；当前免佣免押，余额 0 不是独立阻断 | 🔴硬门 | 🟡/👤（商家或平台运营设置并签收） | ⬜ |
 | 13 | **开关上线态逐个确认**(deposit_mode/guest_checkout/refund_control/sanction/risk/wallet_add_refund 目标值+CHANGELOG留痕) | INVARIANTS L2 | 🔴硬门 | 🟢现值只读核·🟡翻动需拍板 | ⬜逐个核 |
-| 14 | 通知送达真机(FCM/邮件/Telegram·iOS推送坑) | [[nezha-order-notifications]] | gate | 🟢站内信入库只读验·👤真机收推送 | 部分✅ |
+| 14 | 通知送达真机(FCM/邮件/Telegram·iOS推送坑) | [[nezha-order-notifications]] | gate | 🟢站内信入库/queue 只读验·👤真机收推送 | 语义✅／真实渠道⬜ |
 | 15 | 手册就绪(ADMIN/MERCHANT_GUIDE)+客服+退款流程(B方案联系商家原路退) | [[nezha-bfang-refund-contact-merchant]] | gate | 🟢(读文档核对) | 多数✅ |
 | **D 人工门（AI 够不到，只能打底稿）** ||||||
 | 16 | 法律/政策审校(协议/隐私/退款/AML·亚美尼亚+B模式) | `docs/legal` | 🔴硬门 | 👤律师 | ⬜ |
