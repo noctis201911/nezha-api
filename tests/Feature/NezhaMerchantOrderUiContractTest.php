@@ -214,6 +214,16 @@ class NezhaMerchantOrderUiContractTest extends TestCase
         $this->assertStringContainsString('data-nz-auto-print-invoice', $blade);
     }
 
+    public function testMerchantOrderDetailDoesNotDoubleSubmitGlobalAjaxForms(): void
+    {
+        $blade = file_get_contents(resource_path('views/vendor-views/order/order-view.blade.php'));
+
+        $this->assertStringContainsString(
+            "if (form.hasAttribute('data-nz-ajax')) return false;",
+            $blade
+        );
+    }
+
     public function testStandardReceiptTemplateProtectsPrivacyAndPrintsAutomaticallyWhenRequested(): void
     {
         $blade = file_get_contents(resource_path('views/new_invoice.blade.php'));

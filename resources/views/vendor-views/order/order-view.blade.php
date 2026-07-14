@@ -3337,6 +3337,9 @@
 
     function isTargetForm(form){
         if (!form || form.tagName !== 'FORM') return false;
+        // 全站 _nz_ui_kit 是 data-nz-ajax 的唯一提交 owner。这里若再次接管，
+        // 无确认表单会同一次点击发出两次 POST（配送中通知因此重复入库）。
+        if (form.hasAttribute('data-nz-ajax')) return false;
         var action = (form.action || '').toString();
         for (var i = 0; i < TARGET_ACTION_KEYS.length; i++){
             if (action.indexOf(TARGET_ACTION_KEYS[i]) !== -1) return true;
