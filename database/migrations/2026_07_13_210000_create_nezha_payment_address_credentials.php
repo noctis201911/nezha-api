@@ -9,8 +9,8 @@ use Illuminate\Support\Facades\Schema;
  * 顾客付款地址凭据账本。
  *
  * 只记录平台向已登录顾客展示过的 USDT 地址版本，不创建订单、不冻结金额、
- * 不触碰资金。地址与交易哈希由模型 encrypted cast 做应用层加密；表空间再尽力
- * 启用 MySQL ENCRYPTION='Y'。功能开关默认 0，迁移本身不改变现行付款链路。
+ * 不触碰资金。地址与交易哈希由模型 encrypted cast 做应用层加密；MySQL 表空间
+ * 必须确认 ENCRYPTION='Y'。功能开关默认 0，迁移本身不改变现行付款链路。
  */
 return new class extends Migration
 {
@@ -46,9 +46,12 @@ return new class extends Migration
                 );
             });
 
-            $this->enableTablespaceEncryption('nezha_payment_address_credentials');
         }
 
+        // MySQL DDL auto-commits. If CREATE succeeded but encryption failed,
+        // a retry sees the existing table; therefore encryption verification
+        // must run outside the create-only branch on every invocation.
+        $this->assertTablespaceEncrypted('nezha_payment_address_credentials');
         $this->ensureSetting('nezha_payment_address_credential_status', '0');
     }
 
@@ -90,14 +93,27 @@ return new class extends Migration
         }
     }
 
-    private function enableTablespaceEncryption(string $table): void
+    private function assertTablespaceEncrypted(string $table): void
     {
         if (DB::connection()->getDriverName() !== 'mysql') {
             return;
         }
 
         // Sensitive evidence must not silently fall back to an unencrypted
-        // MySQL table when keyring/encryption support is unavailable.
+        // MySQL table when keyring/encryption support is unavailable. ALTER is
+        // deliberately idempotent so a partial first run is repaired on retry.
         DB::statement("ALTER TABLE `{$table}` ENCRYPTION='Y'");
+
+        $row = DB::selectOne(
+            'SELECT CREATE_OPTIONS AS create_options FROM information_schema.TABLES '
+            .'WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? LIMIT 1',
+            [DB::connection()->getDatabaseName(), $table]
+        );
+        $options = strtoupper((string) ($row->create_options ?? ''));
+
+        if (strpos($options, 'ENCRYPTION="Y"') === false
+            && strpos($options, "ENCRYPTION='Y'") === false) {
+            throw new \RuntimeException("MySQL tablespace encryption verification failed: {$table}");
+        }
     }
 };

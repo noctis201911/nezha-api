@@ -53,6 +53,8 @@ class NezhaPaymentAddressUiRenderTest extends TestCase
         $this->assertStringContainsString('亚美零食槟榔', $html);
         $this->assertStringContainsString('驳回原因', $html);
         $this->assertStringContainsString('（选填）', $html);
+        $this->assertStringContainsString('之后的新付款立即使用新地址', $html);
+        $this->assertStringContainsString('已签发的旧地址凭据只保留到各自到期', $html);
         $this->assertStringNotContainsString('TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', $html);
 
         if ($previewDir = getenv('NEZHA_REVIEW_UI_PREVIEW_DIR')) {
@@ -145,6 +147,8 @@ class NezhaPaymentAddressUiRenderTest extends TestCase
         $this->assertStringContainsString('data-payment-address-security="admin-a"', $adminHtml);
         $this->assertStringContainsString('data-payment-address-review-drawer="admin-c"', $adminHtml);
         $this->assertStringContainsString('当前账号是申请人，不能自批', $adminHtml);
+        $this->assertStringContainsString('批准后立即切换新付款地址', $adminHtml);
+        $this->assertStringContainsString('普通换址不暂停新付款，也不延长旧凭据', $adminHtml);
         $this->assertStringContainsString($change->old_address, $adminHtml);
         $this->assertStringContainsString($change->new_address, $adminHtml);
         $adminMainSecurity = $security;
