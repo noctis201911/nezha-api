@@ -25,6 +25,7 @@ class NezhaPaymentAddressCredential extends Model
         'submitted_tx_hash',
         'revoked_at',
         'revoked_reason',
+        'redacted_at',
     ];
 
     protected $hidden = [
@@ -46,5 +47,6 @@ class NezhaPaymentAddressCredential extends Model
         'expires_at' => 'datetime',
         'consumed_at' => 'datetime',
         'revoked_at' => 'datetime',
+        'redacted_at' => 'datetime',
     ];
 }

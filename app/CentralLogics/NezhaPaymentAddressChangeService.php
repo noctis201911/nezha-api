@@ -10,7 +10,6 @@ use App\Models\NezhaPaymentNetworkState;
 use App\Models\Restaurant;
 use App\Models\Vendor;
 use Illuminate\Database\QueryException;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
@@ -21,7 +20,8 @@ use Illuminate\Support\Str;
  *
  * This service changes no behaviour while SWITCH_KEY is 0. When enabled, it
  * is the only allowed path for USDT address writes: admin step-up -> merchant
- * owner confirmation -> a distinct admin step-up -> credential drain -> one
+ * owner confirmation -> a distinct admin step-up -> atomic activation for new
+ * payments while already-issued credentials keep their signed snapshot -> one
  * atomic address write. TOTP codes are never persisted or logged.
  */
 class NezhaPaymentAddressChangeService
@@ -305,38 +305,78 @@ class NezhaPaymentAddressChangeService
                 throw new \DomainException('address_change_network_not_approvable');
             }
 
-            $maxExpiry = NezhaPaymentAddressCredential::where('restaurant_id', $change->restaurant_id)
+            $overlappingCredentials = NezhaPaymentAddressCredential::where('restaurant_id', $change->restaurant_id)
                 ->where('network', $change->network)
                 ->whereNull('consumed_at')
                 ->whereNull('revoked_at')
                 ->where('expires_at', '>', now())
-                ->max('expires_at');
-            $drainUntil = $maxExpiry ? Carbon::parse($maxExpiry) : now();
+                ->count();
 
-            $change->state = 'draining';
+            $change->state = 'applying';
             $change->approved_by_admin_id = $admin->id;
             $change->approved_at = now();
-            $change->drain_until = $drainUntil;
+            $change->drain_until = null;
             $change->save();
-
-            $state->state = 'draining';
-            $state->drain_until = $drainUntil;
-            $state->save();
             self::appendEvent(
                 $state,
                 $change,
                 'distinct_admin_approved',
                 'pending_distinct_admin',
-                'draining',
+                'applying',
                 'admin',
                 (int) $admin->id,
                 $counter,
-                ['drain_until' => $drainUntil->toIso8601String()]
+                [
+                    'activation_mode' => 'immediate_with_credential_overlap',
+                    'overlapping_unconsumed_credentials' => $overlappingCredentials,
+                ]
             );
+
+            $restaurant = DB::table('restaurants')
+                ->where('id', $change->restaurant_id)
+                ->lockForUpdate()
+                ->first();
+            if (! $restaurant) {
+                return self::failLocked($state, $change, 'restaurant_missing');
+            }
+            $currentAddress = self::addressFromRow($restaurant, $change->network);
+            $currentFingerprint = NezhaUsdtAddress::fingerprint($currentAddress, $change->network);
+            if ($currentFingerprint === null
+                || ! hash_equals((string) $change->old_fingerprint, $currentFingerprint)) {
+                return self::failLocked($state, $change, 'old_address_drift');
+            }
+            if ((int) $state->active_version !== (int) $change->expected_version
+                || ! hash_equals((string) $state->active_address_fingerprint, (string) $change->old_fingerprint)) {
+                return self::failLocked($state, $change, 'network_version_drift');
+            }
+
+            $column = NezhaUsdtAddress::columnForNetwork($change->network);
+            DB::table('restaurants')->where('id', $change->restaurant_id)->update([
+                $column => $change->new_address,
+                'updated_at' => now(),
+            ]);
+
+            $state->state = 'active';
+            $state->active_address_fingerprint = $change->new_fingerprint;
+            $state->active_version = (int) $state->active_version + 1;
+            $state->pending_change_id = null;
+            $state->drain_until = null;
+            $state->paused_at = null;
+            $state->paused_by_admin_id = null;
+            $state->pause_reason = null;
+            $state->save();
+
+            $change->state = 'applied';
+            $change->applied_at = now();
+            $change->save();
+            self::appendEvent($state, $change, 'applied', 'applying', 'applied', 'system', null);
 
             return $change->fresh();
         });
-        NezhaPaymentAddressChangeNotifier::change($change, 'distinct_admin_approved');
+        NezhaPaymentAddressChangeNotifier::change(
+            $change,
+            $change->state === 'applied' ? 'applied' : 'apply_failed'
+        );
 
         return $change;
     }
