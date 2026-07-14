@@ -501,21 +501,23 @@ class NezhaPaymentAddressChangeServiceTest extends TestCase
         $this->assertSame(self::TRON_A, DB::table('restaurants')->where('id', 20)->value('usdt_address'));
     }
 
-    public function test_admin_can_cancel_a_draining_change_but_cannot_write_an_address(): void
+    public function test_an_applied_change_cannot_be_canceled_or_restore_the_old_address(): void
     {
         $change = $this->confirmedChange('admin-cancel-0001');
         $approved = NezhaPaymentAddressChangeService::approveChange(
             $this->admin(2), $change->public_id, $change->new_fingerprint, $this->totp(self::SECRET_B)
         );
-        $canceled = NezhaPaymentAddressChangeService::cancelChange(
-            $this->admin(1), $approved->public_id, $this->totp(self::SECRET_A, 1)
-        );
+        $this->expectDomainCode('address_change_state_invalid', function () use ($approved): void {
+            NezhaPaymentAddressChangeService::cancelChange(
+                $this->admin(1), $approved->public_id, $this->totp(self::SECRET_A, 1)
+            );
+        });
 
-        $this->assertSame('canceled', $canceled->state);
+        $this->assertSame('applied', $approved->fresh()->state);
         $state = NezhaPaymentNetworkState::firstOrFail();
         $this->assertSame('active', $state->state);
         $this->assertNull($state->pending_change_id);
-        $this->assertSame(self::TRON_A, DB::table('restaurants')->where('id', 20)->value('usdt_address'));
+        $this->assertSame(self::TRON_B, DB::table('restaurants')->where('id', 20)->value('usdt_address'));
     }
 
     public function test_stale_unapproved_change_expires_and_releases_the_network(): void
@@ -538,14 +540,14 @@ class NezhaPaymentAddressChangeServiceTest extends TestCase
         $this->assertSame(self::TRON_A, DB::table('restaurants')->where('id', 20)->value('usdt_address'));
     }
 
-    public function test_approval_drains_existing_credentials_then_applies_atomically(): void
+    public function test_approval_activates_b_immediately_while_issued_a_remains_valid_until_expiry(): void
     {
         NezhaPaymentAddressChangeService::initializeNetworkState(20, 'TRC20');
         $issued = NezhaPaymentAddressCredentialService::issue(200, 20, 30);
         $credential = $issued['credential'];
         $this->assertSame(self::TRON_A, $credential->address_snapshot);
 
-        $change = $this->confirmedChange('drain-request-0001');
+        $change = $this->confirmedChange('overlap-request-0001');
         $approved = NezhaPaymentAddressChangeService::approveChange(
             $this->admin(2),
             $change->public_id,
@@ -553,25 +555,8 @@ class NezhaPaymentAddressChangeServiceTest extends TestCase
             $this->totp(self::SECRET_B)
         );
 
-        $this->assertSame('draining', $approved->state);
-        $this->assertTrue($approved->drain_until->equalTo($credential->expires_at));
-        $this->expectDomainCode('credential_network_unavailable', function (): void {
-            NezhaPaymentAddressCredentialService::issue(200, 20, 30);
-        });
-        $this->expectDomainCode('address_change_drain_pending', function () use ($approved): void {
-            NezhaPaymentAddressChangeService::applyReadyChange($approved->public_id);
-        });
-        $this->assertSame(self::TRON_A, DB::table('restaurants')->where('id', 20)->value('usdt_address'));
-
-        DB::table('nezha_payment_address_credentials')->where('id', $credential->id)
-            ->update(['expires_at' => now()->subSecond()]);
-        DB::table('nezha_payment_address_changes')->where('id', $approved->id)
-            ->update(['drain_until' => now()->subSecond()]);
-        DB::table('nezha_payment_network_states')->where('restaurant_id', 20)->where('network', 'TRC20')
-            ->update(['drain_until' => now()->subSecond()]);
-
-        $applied = NezhaPaymentAddressChangeService::applyReadyChange($approved->public_id);
-        $this->assertSame('applied', $applied->state);
+        $this->assertSame('applied', $approved->state);
+        $this->assertNull($approved->drain_until);
         $this->assertSame(self::TRON_B, DB::table('restaurants')->where('id', 20)->value('usdt_address'));
 
         $network = NezhaPaymentNetworkState::where('restaurant_id', 20)->where('network', 'TRC20')->firstOrFail();
@@ -579,23 +564,34 @@ class NezhaPaymentAddressChangeServiceTest extends TestCase
         $this->assertSame(2, $network->active_version);
         $this->assertNull($network->pending_change_id);
 
+        $oldResolved = NezhaPaymentAddressCredentialService::resolveForProof(
+            $issued['token'], 200, 20, 30, 8800
+        );
+        $this->assertSame(self::TRON_A, $oldResolved->address_snapshot);
+
         $next = NezhaPaymentAddressCredentialService::issue(200, 20, 30);
         $this->assertSame(self::TRON_B, $next['credential']->address_snapshot);
+
+        $event = NezhaPaymentAddressChangeEvent::where('change_id', $change->id)
+            ->where('event_type', 'distinct_admin_approved')
+            ->firstOrFail();
+        $this->assertSame('immediate_with_credential_overlap', $event->context['activation_mode']);
+        $this->assertSame(1, $event->context['overlapping_unconsumed_credentials']);
+
+        DB::table('nezha_payment_address_credentials')->where('id', $credential->id)
+            ->update(['expires_at' => now()->subSecond()]);
+        $this->expectDomainCode('credential_expired', function () use ($issued): void {
+            NezhaPaymentAddressCredentialService::resolveForProof($issued['token'], 200, 20, 30, 8800);
+        });
     }
 
-    public function test_apply_detects_out_of_band_address_drift_and_pauses_without_overwrite(): void
+    public function test_approval_detects_out_of_band_address_drift_and_pauses_without_overwrite(): void
     {
         $change = $this->confirmedChange('drift-request-0001');
-        $approved = NezhaPaymentAddressChangeService::approveChange(
+        DB::table('restaurants')->where('id', 20)->update(['usdt_address' => 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8']);
+        $failed = NezhaPaymentAddressChangeService::approveChange(
             $this->admin(2), $change->public_id, $change->new_fingerprint, $this->totp(self::SECRET_B)
         );
-        DB::table('restaurants')->where('id', 20)->update(['usdt_address' => 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8']);
-        DB::table('nezha_payment_address_changes')->where('id', $approved->id)
-            ->update(['drain_until' => now()->subSecond()]);
-        DB::table('nezha_payment_network_states')->where('restaurant_id', 20)->where('network', 'TRC20')
-            ->update(['drain_until' => now()->subSecond()]);
-
-        $failed = NezhaPaymentAddressChangeService::applyReadyChange($approved->public_id);
         $this->assertSame('failed', $failed->state);
         $this->assertSame('old_address_drift', $failed->failure_code);
         $this->assertSame('paused', NezhaPaymentNetworkState::first()->state);

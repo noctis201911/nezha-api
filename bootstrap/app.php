@@ -127,9 +127,12 @@ return Application::configure(basePath: dirname(__DIR__))
         //   每分钟扫描, 据阈值执行幂等动作(提醒商家/自动取消未付款单/已付款单待退款留痕+通知商家退款/备餐超时升级客服)。
         //   总开关 business_settings.nezha_timeout_status(默认1开)。
         $schedule->command('nezha:order-timeout-sweep')->everyMinute()->withoutOverlapping();
-        // 默认关闭：地址变更闸为 0 或迁移未启用时命令只返回 disabled；开启后才清理过期审批、
-        // 对已按凭据自然排空的变更执行一次原子切换。禁止在命令里绕过商家/不同管理员审批。
+        // 默认关闭：地址变更闸为 0 或迁移未启用时命令只返回 disabled；开启后清理过期审批，
+        // 并只为升级前遗留的 draining 记录完成兼容收尾。新审批会原子切换，不再阻断新凭据。
         $schedule->command('nezha:payment-address-maintain')->everyMinute()->withoutOverlapping();
+        // 地址凭据隐私留存：未消费且过期/撤销满 30 天后，只清除加密地址快照和 secret hash；
+        // 已消费订单证据、绑定、指纹、状态和时间戳不动。迁移未就绪时命令只返回 not_ready。
+        $schedule->command('nezha:payment-address-credential-retain')->dailyAt('03:35')->withoutOverlapping();
         // 哪吒商家版App: 新单报警兜底网(内联只是best-effort, 真正保底靠这里每分钟重试)
         $schedule->command('nezha:vendor-alarm-sweep')->everyMinute()->withoutOverlapping();
         // 哪吒 忙碌模式/定时挂起到期兜底: 每分钟把到期的定时挂起翻回营业、清到期忙碌态。

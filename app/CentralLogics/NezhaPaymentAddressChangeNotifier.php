@@ -271,7 +271,7 @@ class NezhaPaymentAddressChangeNotifier
             ],
             'distinct_admin_approved' => [
                 '收款地址变更已通过独立复核',
-                "{$network} 候选地址已获不同管理员批准；当前地址仍未改变，系统正等待旧地址凭据排空。",
+                "{$network} 候选地址已获不同管理员批准并立即用于新付款；已签发的旧地址凭据只保留到各自到期。",
             ],
             'distinct_admin_rejected' => [
                 '收款地址变更已被独立复核驳回',
@@ -287,7 +287,7 @@ class NezhaPaymentAddressChangeNotifier
             ],
             'applied' => [
                 '新收款地址已生效',
-                "{$network} 收款地址已按审批流程切换。请立即登录商家后台核对当前完整地址。",
+                "{$network} 收款地址已按审批流程切换并用于新付款；已签发的旧地址凭据只保留到各自到期。请立即登录商家后台核对当前完整地址。",
             ],
             'apply_failed' => [
                 '收款地址变更未生效',

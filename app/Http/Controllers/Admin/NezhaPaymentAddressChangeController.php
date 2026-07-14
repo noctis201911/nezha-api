@@ -113,7 +113,7 @@ class NezhaPaymentAddressChangeController extends Controller
             }
 
             return $this->reviewSuccess(
-                '独立复核已通过；当前地址仍未改变，正在等待旧地址凭据排空。'
+                '独立复核已通过，新地址已用于新付款；已签发的旧地址凭据只保留到各自到期。'
             );
         } catch (\DomainException $e) {
             return $this->domainError($request, $e);

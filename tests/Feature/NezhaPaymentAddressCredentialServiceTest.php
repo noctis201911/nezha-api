@@ -220,6 +220,47 @@ class NezhaPaymentAddressCredentialServiceTest extends TestCase
         $this->assertStringNotContainsString(substr($issued['token'], 37), (string) $raw->secret_hash);
     }
 
+    public function test_issue_reuses_a_presented_active_token_without_creating_another_row(): void
+    {
+        $this->seedBase('1');
+        $first = NezhaPaymentAddressCredentialService::issue(10, 20, 30);
+
+        $reused = NezhaPaymentAddressCredentialService::issue(10, 20, 30, $first['token']);
+
+        $this->assertTrue($reused['reused']);
+        $this->assertSame($first['token'], $reused['token']);
+        $this->assertSame($first['credential']->id, $reused['credential']->id);
+        $this->assertSame(1, NezhaPaymentAddressCredential::count());
+
+        $differentUser = NezhaPaymentAddressCredentialService::issue(11, 20, 30, $first['token']);
+        $this->assertFalse($differentUser['reused']);
+        $this->assertNotSame($first['credential']->id, $differentUser['credential']->id);
+        $this->assertSame(2, NezhaPaymentAddressCredential::count());
+    }
+
+    public function test_reuse_never_extends_expiry_and_rejects_stale_or_old_address_tokens(): void
+    {
+        $this->seedBase('1');
+        $first = NezhaPaymentAddressCredentialService::issue(10, 20, 30);
+        $expiresAt = $first['credential']->expires_at->copy();
+
+        $reused = NezhaPaymentAddressCredentialService::issue(10, 20, 30, $first['token']);
+        $this->assertTrue($reused['credential']->expires_at->equalTo($expiresAt));
+
+        DB::table('restaurants')->where('id', 20)->update([
+            'usdt_address' => 'TJnwC8FcWiJQCQFzTYHxCj4DSW2iGwESVf',
+        ]);
+        $newAddress = NezhaPaymentAddressCredentialService::issue(10, 20, 30, $first['token']);
+        $this->assertFalse($newAddress['reused']);
+        $this->assertSame('TJnwC8FcWiJQCQFzTYHxCj4DSW2iGwESVf', $newAddress['credential']->address_snapshot);
+
+        $newAddress['credential']->expires_at = now()->subSecond();
+        $newAddress['credential']->save();
+        $afterExpiry = NezhaPaymentAddressCredentialService::issue(10, 20, 30, $newAddress['token']);
+        $this->assertFalse($afterExpiry['reused']);
+        $this->assertSame(3, NezhaPaymentAddressCredential::count());
+    }
+
     public function test_invalid_current_address_is_rejected_before_ledger_write(): void
     {
         $this->seedBase('1', substr(self::TRON_ADDRESS, 0, -1).'u');
@@ -291,6 +332,26 @@ class NezhaPaymentAddressCredentialServiceTest extends TestCase
         $this->assertSame(0, DB::table('orders')->count());
         $this->assertSame(0, DB::table('carts')->count());
         $this->assertSame(0, DB::table('coupon_uses')->count());
+    }
+
+    public function test_issue_endpoint_returns_the_same_presented_active_credential(): void
+    {
+        $this->seedBase('1');
+        $first = NezhaPaymentAddressCredentialService::issue(10, 20, 30);
+        $request = Request::create('/api/v1/customer/payment/address-credential', 'POST', [
+            'restaurant_id' => 20,
+            'method_id' => 30,
+            'existing_credential_token' => $first['token'],
+        ]);
+        $request->setUserResolver(static fn () => (object) ['id' => 10]);
+
+        $response = (new PaymentAddressCredentialController)->store($request);
+        $payload = $response->getData(true);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertTrue($payload['reused']);
+        $this->assertSame($first['token'], $payload['credential_token']);
+        $this->assertSame(1, NezhaPaymentAddressCredential::count());
     }
 
     public function test_guest_gets_disabled_compatibility_code_but_cannot_issue_when_enabled(): void
@@ -451,6 +512,67 @@ class NezhaPaymentAddressCredentialServiceTest extends TestCase
         $this->assertSame('revoked', NezhaPaymentAddressCredentialService::evidence($credential->fresh())['state']);
     }
 
+    public function test_unconsumed_sensitive_fields_are_redacted_after_30_days_but_consumed_evidence_remains(): void
+    {
+        $this->seedBase('1');
+        $expired = NezhaPaymentAddressCredentialService::issue(10, 20, 30);
+        $revoked = NezhaPaymentAddressCredentialService::issue(11, 20, 30);
+        $recent = NezhaPaymentAddressCredentialService::issue(12, 20, 30);
+        $consumed = NezhaPaymentAddressCredentialService::issue(13, 20, 30);
+
+        $expired['credential']->update(['expires_at' => now()->subDays(31)]);
+        $revoked['credential']->update([
+            'expires_at' => now()->addMinute(),
+            'revoked_at' => now()->subDays(31),
+            'revoked_reason' => 'approved test revocation',
+        ]);
+        $recent['credential']->update(['expires_at' => now()->subDays(29)]);
+        $consumed['credential']->update([
+            'expires_at' => now()->subDays(31),
+            'consumed_at' => now()->subDays(31),
+            'consumed_order_id' => 901,
+        ]);
+
+        $result = NezhaPaymentAddressCredentialService::redactExpiredUnconsumed();
+        $this->assertSame(['status' => 'ok', 'redacted' => 2], $result);
+
+        foreach ([$expired, $revoked] as $entry) {
+            $credential = $entry['credential']->fresh();
+            $this->assertSame('', $credential->address_snapshot);
+            $this->assertSame(str_repeat('0', 64), $credential->secret_hash);
+            $this->assertNotNull($credential->redacted_at);
+            $this->assertNotSame('', $credential->address_fingerprint);
+        }
+        $this->assertSame(self::TRON_ADDRESS, $recent['credential']->fresh()->address_snapshot);
+        $this->assertSame(self::TRON_ADDRESS, $consumed['credential']->fresh()->address_snapshot);
+        $this->assertNull($recent['credential']->fresh()->redacted_at);
+        $this->assertNull($consumed['credential']->fresh()->redacted_at);
+        $this->assertSame(['status' => 'ok', 'redacted' => 0],
+            NezhaPaymentAddressCredentialService::redactExpiredUnconsumed());
+    }
+
+    public function test_retention_marker_migration_is_additive_and_refuses_to_drop_used_audit(): void
+    {
+        Schema::table('nezha_payment_address_credentials', function (Blueprint $table): void {
+            $table->dropColumn('redacted_at');
+        });
+        $migration = require database_path(
+            'migrations/2026_07_14_160000_add_retention_marker_to_nezha_payment_address_credentials.php'
+        );
+        $migration->up();
+        $migration->up();
+        $this->assertTrue(Schema::hasColumn('nezha_payment_address_credentials', 'redacted_at'));
+
+        $this->seedBase('1');
+        $issued = NezhaPaymentAddressCredentialService::issue(10, 20, 30);
+        DB::table('nezha_payment_address_credentials')->where('id', $issued['credential']->id)
+            ->update(['redacted_at' => now()]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('retention evidence');
+        $migration->down();
+    }
+
     public function test_consumption_rechecks_expiry_and_preserves_first_submitted_hash(): void
     {
         $this->seedBase('1');
@@ -577,6 +699,7 @@ class NezhaPaymentAddressCredentialServiceTest extends TestCase
             $table->text('submitted_tx_hash')->nullable();
             $table->timestamp('revoked_at')->nullable();
             $table->text('revoked_reason')->nullable();
+            $table->timestamp('redacted_at')->nullable();
             $table->timestamps();
         });
         Schema::create('nezha_payment_network_states', function (Blueprint $table) {
