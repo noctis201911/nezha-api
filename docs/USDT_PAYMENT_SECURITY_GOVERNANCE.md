@@ -199,6 +199,8 @@ active(A)
 3. **不同管理员复核**
    - `approved_by != requested_by`，复核管理员必须已启用 TOTP，并再次做交易级 TOTP。
    - 复核看到旧/新地址、网络、商家确认时间、请求来源和通知结果。
+   - 用户 2026-07-14 最新裁决：复核管理员必须能明确“批准”或“驳回”，不能只靠不批准、等待超时或让管理管理员取消来处理可疑申请；批准与驳回都必须经过交易级 TOTP，并分别记录真实 actor、时间、状态和通知结果。
+   - 驳回只允许发生在 `pending_distinct_admin`，地址保持不变，释放该商家+网络的 pending 占用；它是人工审核结论，不能与系统超时产生的 `expired` 混写。驳回原因是否强制必填随正式 UI 效果图一并确认。
    - 当前只有 1 个管理员，因此在第二管理员建立前必须硬失败，不能提供“紧急自批地址替换”。
 
 4. **排空**
@@ -215,10 +217,10 @@ active(A)
 ### 3.3.1 管理员最小权限与 reviewer 2FA 门
 
 - `payment_address_manage` 只拥有地址变更申请、取消和指定商家+网络的紧急暂停；紧急暂停不授予 reviewer。
-- `payment_address_review` 是独占角色模块，不能与 `restaurant`、`payment_address_manage` 或其它模块组合；其数据面只返回 `pending_distinct_admin` 队列、单条待复核详情和批准动作。
-- reviewer 即使因历史脏数据被误配其它模块，仍由全局 scope 限制：未完成 2FA 注册时只允许 setup、enable、修改本人密码和退出；完成注册且当前会话通过第二因子后，只允许 pending/show/approve、修改本人密码和退出，不能关闭 2FA。
+- `payment_address_review` 是独占角色模块，不能与 `restaurant`、`payment_address_manage` 或其它模块组合；其数据面只返回 `pending_distinct_admin` 队列、单条待复核详情、批准和驳回动作。
+- reviewer 即使因历史脏数据被误配其它模块，仍由全局 scope 限制：未完成 2FA 注册时只允许 setup、enable、修改本人密码和退出；完成注册且当前会话通过第二因子后，只允许 pending/show/approve/reject、修改本人密码和退出，不能关闭 2FA。
 - 餐厅 CRUD、旧 `updatePaymentInfo` 地址直改、押金充值、汇率、折扣、申请、取消和暂停均不属于 reviewer；超管仍由既有 `role_id=1` 旁路处理，但地址批准继续受“请求人不得自批”和交易级 TOTP 约束。
-- 当前仅完成隔离后端/角色配置代码；未创建或修改生产角色/管理员。独立审核入口正式 UI 必须在真实后台页面效果图确认后再实现。
+- 当前隔离提交 `9a8d90c7` 仅完成 pending/show/approve，尚未实现用户最新裁决的 reviewer reject；这是明确实现缺口，不能把现有测试通过表述成最终复核闭环完成。未创建或修改生产角色/管理员。独立审核入口正式 UI 必须在真实后台页面效果图确认后再实现。
 
 ### 3.4 应急流程
 
