@@ -11,6 +11,8 @@ use App\Models\Coupon;
 use App\Models\ItemCampaign;
 use App\Scopes\RestaurantScope;
 use App\CentralLogics\Helpers;
+use App\CentralLogics\DeliveryOptionLogic;
+use App\CentralLogics\PosOrderInput;
 use App\Models\BusinessSetting;
 use App\CentralLogics\CouponLogic;
 use App\Models\AddOn;
@@ -196,7 +198,25 @@ trait PlaceNewOrder
                         $price = $product['price'];
                     }
                     $product = Helpers::product_data_formatting(data: $product, multi_data: false, trans: false, local: app()->getLocale(), maxDiscount: false);
-                    $addon_data = Helpers::calculate_addon_price(AddOn::whereIn('id', $c['add_ons'])->get(), $c['add_on_qtys']);
+                    $addon_data = PosOrderInput::resolveAddons(
+                        (int) $restaurant->id,
+                        $c['add_ons'],
+                        $c['add_on_qtys']
+                    );
+                    if ($addon_data === null) {
+                        return [
+                            'status_code' => 403,
+                            'code' => 'invalid_addon',
+                            'message' => translate('Invalid addon'),
+                        ];
+                    }
+                    if (data_get($addon_data, 'out_of_stock') !== null) {
+                        return [
+                            'status_code' => 403,
+                            'code' => 'stock_out',
+                            'message' => data_get($addon_data, 'out_of_stock'),
+                        ];
+                    }
                     $product_discount = Helpers::food_discount_calculate($product, $price, $restaurant, false);
 
                     $or_d = [
@@ -820,6 +840,11 @@ trait PlaceNewOrder
             if (count($cart) == 0 || !data_get($cart,0) ) {
                 return ['code' => 'cart', 'status_code' => 403, 'message' => translate('cart_is_empty')];
             }
+
+            $cartInputError = PosOrderInput::validateCart($cart);
+            if ($cartInputError !== null) {
+                return ['code' => $cartInputError, 'status_code' => 403, 'message' => translate('Invalid quantity')];
+            }
             
             $total_addon_price = 0;
             $product_price = 0;
@@ -923,8 +948,13 @@ trait PlaceNewOrder
                 $order->delivery_charge = $calculateDeliveryCharge['delivery_charge'];
                 $order->original_delivery_charge = $calculateDeliveryCharge['original_delivery_charge'];
                 $order->free_delivery_by = $calculateDeliveryCharge['free_delivery_by'];
-                $order->delivery_type = $request->delivery_type;
-                $order->delivery_type_charge = abs($request->delivery_type_charge ?? 0);
+                $deliveryOption = DeliveryOptionLogic::resolve(
+                    $restaurant->zone,
+                    $request->delivery_type,
+                    (float) $order->delivery_charge
+                );
+                $order->delivery_type = $deliveryOption['delivery_type'];
+                $order->delivery_type_charge = $deliveryOption['delivery_type_charge'];
             } elseif (in_array($order->order_type, ['dine_in', 'take_away'])) {
                 $order->distance = 0;
                 $order->vehicle_id = null;
@@ -953,9 +983,9 @@ trait PlaceNewOrder
             $order->total_tax_amount = $tax_amount;
 
             $order->order_amount = $total_price + $tax_amount + $order->delivery_charge + $order->additional_charge + $order->extra_packaging_amount;
-            if($request->delivery_type == 'slightly_delay'){
+            if ($order->delivery_type === 'slightly_delay') {
                 $order->order_amount -= $order->delivery_type_charge ?? 0;
-            }else{
+            } else {
                 $order->order_amount += $order->delivery_type_charge ?? 0;
             }
             $order->adjusment = $request?->amount ?? $order->order_amount;
@@ -1008,6 +1038,8 @@ trait PlaceNewOrder
             Session::forget('tax_included');
             Session::forget('delivery_charge');
             Session::forget('delivery_charge_display');
+            Session::forget('delivery_type');
+            Session::forget('delivery_type_charge');
             Session::forget('order_type');
             Session::forget('customer_id');
             Session::forget('address_id');

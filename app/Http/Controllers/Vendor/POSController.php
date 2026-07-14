@@ -13,7 +13,9 @@ use App\Models\Order;
 use App\Mail\PlaceOrder;
 use App\Models\Category;
 use Illuminate\Http\Request;
+use App\CentralLogics\DeliveryOptionLogic;
 use App\CentralLogics\Helpers;
+use App\CentralLogics\PosOrderInput;
 use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
 use App\Models\CustomerAddress;
@@ -84,6 +86,11 @@ class POSController extends Controller
 
     public function variant_price(Request $request)
     {
+        $quantity = PosOrderInput::positiveInteger($request->quantity);
+        if ($quantity === null) {
+            return response()->json(['data' => 'quantity_error', 'message' => translate('Invalid quantity')], 422);
+        }
+
         $product = Food::find($request->id);
         $price = $product->price;
         $addon_price = 0;
@@ -93,10 +100,28 @@ class POSController extends Controller
             foreach ($request['addon_id'] as $id) {
                 $add_on_ids[] = $id;
                 $add_on_qtys[] = $request['addon-quantity' . $id];
-                $addon_price += $request['addon-price' . $id] * $request['addon-quantity' . $id];
             }
         }
-        $addonAndVariationStock = Helpers::addonAndVariationStockCheck(product: $product, quantity: $request->quantity, add_on_qtys: $add_on_qtys, variation_options: explode(',', $request?->option_ids), add_on_ids: $add_on_ids);
+        if (PosOrderInput::validateCart([['quantity' => $quantity, 'add_ons' => $add_on_ids, 'add_on_qtys' => $add_on_qtys]]) !== null) {
+            return response()->json(['data' => 'quantity_error', 'message' => translate('Invalid quantity')], 422);
+        }
+
+        $addonData = PosOrderInput::resolveAddons((int) $product->restaurant_id, $add_on_ids, $add_on_qtys);
+        if ($addonData === null) {
+            return response()->json(['data' => 'addon_error', 'message' => translate('Invalid addon')], 422);
+        }
+        if (data_get($addonData, 'out_of_stock') !== null) {
+            return response()->json([
+                'error' => 'stock_out',
+                'message' => data_get($addonData, 'out_of_stock'),
+                'current_stock' => data_get($addonData, 'current_stock'),
+                'id' => data_get($addonData, 'id'),
+                'type' => data_get($addonData, 'type'),
+            ], 203);
+        }
+        $addon_price = (float) $addonData['total_add_on_price'];
+
+        $addonAndVariationStock = Helpers::addonAndVariationStockCheck(product: $product, quantity: $quantity, add_on_qtys: $add_on_qtys, variation_options: explode(',', $request?->option_ids), add_on_ids: $add_on_ids);
         if (data_get($addonAndVariationStock, 'out_of_stock') != null) {
             return response()->json([
                 'error' => 'stock_out',
@@ -114,13 +139,18 @@ class POSController extends Controller
         } else {
             $price = $product->price - Helpers::product_discount_calculate(product: $product, price: $product->price, restaurant: Helpers::get_restaurant_data());
         }
-        return array('price' => Helpers::format_currency(($price * $request->quantity) + $addon_price));
+        return array('price' => Helpers::format_currency(($price * $quantity) + $addon_price));
     }
 
 
 
     public function addToCart(Request $request)
     {
+        $quantity = PosOrderInput::positiveInteger($request->quantity);
+        if ($quantity === null) {
+            return response()->json(['data' => 'quantity_error', 'message' => translate('Invalid quantity')], 422);
+        }
+
         $product = Food::find($request->id);
 
         $data = array();
@@ -167,7 +197,7 @@ class POSController extends Controller
         $price = $product->price + $variation_price;
         $data['variation_price'] = $variation_price;
 
-        $data['quantity'] = $request['quantity'];
+        $data['quantity'] = $quantity;
         $data['price'] = $price;
         $data['name'] = $product->name;
         $product_discount =  Helpers::food_discount_calculate($product, $price, $product->restaurant, false);
@@ -183,12 +213,32 @@ class POSController extends Controller
             foreach ($request['addon_id'] as $id) {
                 $add_on_ids[] = $id;
                 $add_on_qtys[] = $request['addon-quantity' . $id];
-                $addon_price += $request['addon-price' . $id] * $request['addon-quantity' . $id];
-                $data['add_on_qtys'][] = $request['addon-quantity' . $id];
             }
-            $data['add_ons'] = $request['addon_id'];
         }
-        $addonAndVariationStock = Helpers::addonAndVariationStockCheck(product: $product, quantity: $request->quantity, add_on_qtys: $add_on_qtys, variation_options: explode(',', $request?->option_ids), add_on_ids: $add_on_ids);
+        if (PosOrderInput::validateCart([['quantity' => $quantity, 'add_ons' => $add_on_ids, 'add_on_qtys' => $add_on_qtys]]) !== null) {
+            return response()->json(['data' => 'quantity_error', 'message' => translate('Invalid quantity')], 422);
+        }
+
+        $addonData = PosOrderInput::resolveAddons((int) $product->restaurant_id, $add_on_ids, $add_on_qtys);
+        if ($addonData === null) {
+            return response()->json(['data' => 'addon_error', 'message' => translate('Invalid addon')], 422);
+        }
+        if (data_get($addonData, 'out_of_stock') !== null) {
+            return response()->json([
+                'data' => 'stock_out',
+                'message' => data_get($addonData, 'out_of_stock'),
+                'current_stock' => data_get($addonData, 'current_stock'),
+                'id' => data_get($addonData, 'id'),
+                'type' => data_get($addonData, 'type'),
+            ], 203);
+        }
+        $addon_price = (float) $addonData['total_add_on_price'];
+        $data['add_ons'] = array_column($addonData['addons'], 'id');
+        $data['add_on_qtys'] = array_column($addonData['addons'], 'quantity');
+        $add_on_ids = $data['add_ons'];
+        $add_on_qtys = $data['add_on_qtys'];
+
+        $addonAndVariationStock = Helpers::addonAndVariationStockCheck(product: $product, quantity: $quantity, add_on_qtys: $add_on_qtys, variation_options: explode(',', $request?->option_ids), add_on_ids: $add_on_ids);
         if (data_get($addonAndVariationStock, 'out_of_stock') != null) {
             return response()->json([
                 'data' => 'stock_out',
@@ -259,9 +309,14 @@ class POSController extends Controller
     //updated the quantity for a cart item
     public function updateQuantity(Request $request)
     {
+        $quantity = PosOrderInput::positiveInteger($request->quantity);
+        if ($quantity === null) {
+            return response()->json(['data' => 'quantity_error', 'message' => translate('Invalid quantity')], 422);
+        }
+
         $product = Food::find($request->food_id);
         if ($request->option_ids) {
-            $addonAndVariationStock = Helpers::addonAndVariationStockCheck(product: $product, quantity: $request->quantity, variation_options: explode(',', $request?->option_ids));
+            $addonAndVariationStock = Helpers::addonAndVariationStockCheck(product: $product, quantity: $quantity, variation_options: explode(',', $request?->option_ids));
             if (data_get($addonAndVariationStock, 'out_of_stock') != null) {
                 return response()->json([
                     'data' => 'stock_out',
@@ -274,9 +329,9 @@ class POSController extends Controller
         }
 
         $cart = $request->session()->get('cart', collect([]));
-        $cart = $cart->map(function ($object, $key) use ($request) {
+        $cart = $cart->map(function ($object, $key) use ($request, $quantity) {
             if ($key == $request->key) {
-                $object['quantity'] = $request->quantity;
+                $object['quantity'] = $quantity;
             }
             return $object;
         });
@@ -401,7 +456,6 @@ class POSController extends Controller
         $cart = $request->session()->get('cart');
         $request->merge([
             'delivery_type' => session('delivery_type', 'standard'),
-            'delivery_type_charge' => session('delivery_type_charge', 0)
         ]);
         DB::beginTransaction();
         $order = $this->placePosOrder($cart, $request, $restaurant, $this->getDistance($restaurant));
@@ -564,6 +618,8 @@ class POSController extends Controller
             Session::forget('address_id');
             Session::forget('delivery_charge');
             Session::forget('delivery_charge_display');
+            Session::forget('delivery_type');
+            Session::forget('delivery_type_charge');
         }
 
         return response()->json([$request->type], 200);
@@ -573,6 +629,8 @@ class POSController extends Controller
         Session::forget('cart_total_price');
         Session::forget('delivery_charge');
         Session::forget('delivery_charge_display');
+        Session::forget('delivery_type');
+        Session::forget('delivery_type_charge');
         Session::forget('order_type');
         Session::forget('customer_id');
         Session::forget('address_id');
@@ -636,14 +694,23 @@ class POSController extends Controller
 
     public function setDeliveryType(Request $request)
     {
-        session()->put('delivery_type', $request->delivery_type);
-        session()->put('delivery_type_charge', $request->delivery_type_charge);
-        return response()->json(['status' => 'success']);
+        $restaurant = Helpers::get_restaurant_data();
+        $resolution = DeliveryOptionLogic::resolve(
+            $restaurant?->zone,
+            $request->delivery_type,
+            (float) Session::get('delivery_charge', 0)
+        );
+
+        Session::put('delivery_type', $resolution['delivery_type']);
+        Session::put('delivery_type_charge', $resolution['delivery_type_charge']);
+
+        return response()->json(['status' => 'success'] + $resolution);
     }
 
     public function getDeliveryTypes(Request $request)
     {
-        $zone = Zone::with('deliveryOptions')->active()->find($request->zone_id);
+        $restaurant = Helpers::get_restaurant_data();
+        $zone = Zone::with('deliveryOptions')->active()->find($restaurant?->zone_id);
 
         if (!$zone || !$zone->additional_delivery_option_status) {
             return response()->json([]);

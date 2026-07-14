@@ -27,6 +27,14 @@ final class IsolatedDatabaseFixtures
             });
         }
 
+        if (! $schema->hasTable('cache')) {
+            $schema->create('cache', function (Blueprint $table): void {
+                $table->string('key')->primary();
+                $table->mediumText('value');
+                $table->integer('expiration');
+            });
+        }
+
         if (! $schema->hasTable('offline_payments')) {
             $schema->create('offline_payments', function (Blueprint $table): void {
                 $table->id();
@@ -130,7 +138,13 @@ final class IsolatedDatabaseFixtures
         if (! $schema->hasTable('add_ons')) {
             $schema->create('add_ons', function (Blueprint $table): void {
                 $table->id();
+                $table->string('name')->nullable();
+                $table->decimal('price', 24, 2)->default(0);
+                $table->unsignedBigInteger('restaurant_id')->index();
                 $table->boolean('status')->default(true);
+                $table->string('stock_type')->default('unlimited');
+                $table->integer('addon_stock')->default(0);
+                $table->integer('sell_count')->default(0);
                 $table->timestamps();
             });
         }
@@ -229,7 +243,7 @@ final class IsolatedDatabaseFixtures
                 $table->id();
                 $table->string('data_type');
                 $table->unsignedBigInteger('data_id');
-                $table->string('key');
+                $table->string('key')->nullable();
                 $table->text('value')->nullable();
                 $table->timestamps();
             });

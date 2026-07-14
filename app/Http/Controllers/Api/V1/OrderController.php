@@ -21,6 +21,7 @@ use App\Models\ItemCampaign;
 use App\Models\RefundReason;
 use App\Models\Subscription;
 use Illuminate\Http\Request;
+use App\CentralLogics\DeliveryOptionLogic;
 use App\CentralLogics\Helpers;
 use App\Models\OrderReference;
 use App\Models\BusinessSetting;
@@ -684,26 +685,21 @@ class OrderController extends Controller
 
         // Delivery type charge
 
-        $additional_delivery_option_status = $order?->zone?->additional_delivery_option_status;
-
-        if($additional_delivery_option_status == 1 && isset($request->delivery_type) && $order->order_type == 'delivery'){
-            $deliveryOption = is_numeric($request->delivery_type)
-                ? ZoneDeliveryOption::find($request->delivery_type)
-                : ZoneDeliveryOption::where('delivery_type', $request->delivery_type)->where('zone_id', $order->zone_id)->first();
-
-            if($deliveryOption && $deliveryOption->delivery_type != 'standard'){
-                $order->delivery_type = $deliveryOption->delivery_type;
-                $order->delivery_type_charge = $deliveryOption->delivery_type == 'express' ? $deliveryOption->extra_charge : $deliveryOption->reduce_charge;
-            }
-        }
+        $deliveryOption = DeliveryOptionLogic::resolve(
+            $order?->zone,
+            $order->order_type === 'delivery' ? $request->delivery_type : null,
+            (float) $order->delivery_charge
+        );
+        $order->delivery_type = $deliveryOption['delivery_type'];
+        $order->delivery_type_charge = $deliveryOption['delivery_type_charge'];
 
         $order->coupon_created_by = $coupon_created_by;
         $order_amount = round($total_price + $tax_amount + $order->delivery_charge + $order->additional_charge + $order->extra_packaging_amount, config('round_up_to_digit'));
         $order->total_tax_amount= round($tax_amount, config('round_up_to_digit'));
         $order->order_amount = $order_amount + $order->dm_tips;
-        if($request->delivery_type == 'slightly_delay'){
+        if ($order->delivery_type === 'slightly_delay') {
             $order->order_amount -= $order->delivery_type_charge;
-        }else{
+        } else {
             $order->order_amount += $order->delivery_type_charge;
         }
         // 哪吒[资金完整性·风控入参]: 用服务端重算的权威订单金额复评风控, 堵住"前端低报 order_amount
