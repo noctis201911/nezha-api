@@ -208,11 +208,15 @@ class RecomputeAdAuction extends Command
         $out = [];
 
         // 完单率 + 出餐速度(orders)
+        $averagePrepExpression = DB::connection()->getDriverName() === 'sqlite'
+            ? "AVG(CASE WHEN confirmed IS NOT NULL AND processing IS NOT NULL AND processing >= confirmed THEN (julianday(processing) - julianday(confirmed)) * 1440 END) as avg_prep_min"
+            : "AVG(CASE WHEN confirmed IS NOT NULL AND processing IS NOT NULL AND processing >= confirmed THEN TIMESTAMPDIFF(MINUTE, confirmed, processing) END) as avg_prep_min";
+
         $orderStats = DB::table('orders')
             ->select('restaurant_id')
             ->selectRaw("SUM(order_status='delivered') as delivered")
             ->selectRaw("SUM(order_status='canceled') as canceled")
-            ->selectRaw("AVG(CASE WHEN confirmed IS NOT NULL AND processing IS NOT NULL AND processing >= confirmed THEN TIMESTAMPDIFF(MINUTE, confirmed, processing) END) as avg_prep_min")
+            ->selectRaw($averagePrepExpression)
             ->whereIn('restaurant_id', $restaurantIds)
             ->where('created_at', '>=', $since)
             ->groupBy('restaurant_id')
