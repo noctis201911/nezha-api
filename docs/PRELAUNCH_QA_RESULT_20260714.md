@@ -4,9 +4,9 @@
 
 ## 验收对象与深度
 
-- 生产前端：应用提交 `2f81803`，release `20260714-101004-2f81803`，BUILD `Mguty8CEfSrUIu5FXJ52G`；`origin/main` 为文档闭环提交 `1064ee8`。
+- 生产前端：应用提交 `2f81803`，release `20260714-101004-2f81803`，BUILD `Mguty8CEfSrUIu5FXJ52G`；复核时 `origin/main` 已推进到在途 staging 修复 `7098a64`，尚未部署 production。
 - 生产后端：应用提交/release `e044d34` / `20260714-070255-e044d34`。
-- 最新后端候选：`origin/main` `ba7730c`；相对生产无 migration 差异，包含租户隔离、服务端金额权威、商家移动订单摘要和跨商户发票 404 修复。
+- 最新后端候选：复核时 `origin/main` `d6378c4`；相对生产无 migration 差异，包含租户隔离、服务端金额权威、商家移动订单摘要、跨商户发票 404、POS 配送资格和商家订单防重复提交修复。
 - 浏览器深度：真实 Chromium 390×844 与 1440×900；生产公共页、生产登录态临时顾客（已由前序 QA 清零）以及本轮生产备份隔离恢复环境。Firefox 因服务器缺 `libgtk-3.so.0` 未启动，WebKit/物理 iPhone Safari 不冒充已测。
 - 写入深度：生产备份恢复到一次性数据库后完成真实 API/浏览器写流程、资金账本和并发竞态；没有真实付款、链上广播或生产订单。
 
@@ -35,7 +35,9 @@
 
 ## 自动化与浏览器证据
 
-- 最新候选后端：Unit `13 passed / 29 assertions`；Feature `177 passed / 914 assertions`。有 PHPUnit doc-comment/schema 弃用警告和测试启动前 `business_settings` 尚未建表的已知日志噪音，无失败。
+- 后端主 QA 基线（含已推送但未合入 main 的测试夹具修复 `0a87741`）：Unit `13 passed / 29 assertions`；Feature `177 passed / 914 assertions`。随后 `origin/main` 又增加两项候选修复；其增量目标测试 `18 passed / 140 assertions`，PHP 语法通过。
+- 精确 `origin/main d6378c4` 的完整套件并非全绿：Unit `13/29` 通过；Feature 共 179 项，出现 9 errors + 1 failure。9 项均为广告测试夹具缺少 `restaurants.nezha_commission_enabled`，1 项为 Example 临时环境缺 `DOMAIN_POINTED_DIRECTORY`；这正是 `0a87741` 修复但尚未合入 main 的测试基础设施缺口。不得把修复分支的全绿冒充当前 main 全绿。
+- 最新前端 `7098a64` 的两个 Node 回归测试通过，隔离 production build 通过（BUILD `pshaMtyYGeT0iXET7rmTT`）；但仓库指定 Prettier 2.5.1 对本提交 6 个改动文件全部报格式不合格，且该提交属于尚未闭环的 staging 订单支付任务。
 - 订单并发：三组各 20 单。cancel vs confirm 全部 canceled 且最多一条退款；confirm 后 cancel 全部 processing、cancel=403；double cancel 全部 canceled 且最多一条退款；违规数均 0。
 - 维护模式：按后台实际数据形态设置 `react_website` 后，`/home` 与 `/checkout` 均 307 到 `/maintenance`，保留 `private, no-cache, max-age=0, must-revalidate`；测试后在隔离库恢复关闭。
 - 顾客浏览器：餐厅图片/菜系兜底/列表返回、空车、登录门、登录态有车、服务器权威价、优惠、默认地址、Google 地址入口、支付抽屉、订单历史、凭证驳回和重新上传均覆盖；无 `/restaurants/null`、无第一方失败请求、无横向溢出。隔离域名 Google Maps 因 referer 白名单拒绝，生产登录态真实 Google 搜索/详情/保存证据沿用前序已清零 QA。
@@ -51,6 +53,7 @@
 5. 解决餐厅接口 N+1 与 home 轻量负载 p95 红灯。
 6. 让隐私政策的静态加密陈述与真实存储保护一致；这是安全/合规改造，不得边测边批量 ALTER 33 表。
 7. 对三项开关漂移逐项取得 owner 签收，并清理演示数据、确认真实商家营业/保证金/收款资料。
+8. 先把测试夹具修复合入最新 API main，并修正最新前端 6 个文件的 Prettier 红灯；在途 staging 任务闭环前不能把移动中的 `origin/main` 当作已验收发布候选。
 
 ## 清场与回滚
 
