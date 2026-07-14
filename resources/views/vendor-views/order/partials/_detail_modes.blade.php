@@ -56,6 +56,15 @@
         .nzo-ip { width:100%; box-sizing:border-box; border:1px solid #D6DBE1; border-radius:8px; padding:8px 10px; font-size:13px; margin-top:6px; background:#fff; color:var(--ink); }
         .nzo-ck { display:flex; align-items:flex-start; gap:8px; font-size:12.5px; color:var(--ink); margin-bottom:8px; line-height:1.5; }
         .nzo-note { background:#FBFAF6; border:1px solid #EFE7D4; color:#7A6320; border-radius:8px; padding:8px 10px; font-size:11.5px; line-height:1.55; margin-top:8px; }
+        .nzo-payment-review { border-color:var(--amber-l); }
+        .nzo-payment-review .nzo-ch { background:var(--amber-b); border-bottom-color:var(--amber-l); }
+        .nzo-proof-grid { display:grid; grid-template-columns:minmax(180px,240px) minmax(0,1fr); gap:14px; align-items:start; }
+        .nzo-proof-link { display:block; border:1px solid var(--line); border-radius:10px; overflow:hidden; background:#F8FAFC; }
+        .nzo-proof-link img { display:block; width:100%; height:auto; max-height:260px; object-fit:contain; background:#fff; }
+        .nzo-payment-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+        .nzo-payment-actions form { margin:0; }
+        .nzo-btn-danger { background:#fff; border:1px solid var(--red-l); color:var(--red-t); }
+        .nzo-btn-danger:hover { background:var(--red-b); color:var(--red-t); }
         .nzo-legacy { text-align:right; margin-top:2px; }
         .nzo-legacy button { background:transparent; border:1px solid #D6DBE1; color:#6B7280; border-radius:8px; padding:5px 11px; font-size:12px; cursor:pointer; }
         .nzo-tabs { display:inline-flex; gap:4px; padding:4px; border:1px solid #D8E0EA; border-radius:10px; background:#F7F9FC; margin-bottom:12px; }
@@ -65,7 +74,16 @@
         .nzo-kpi { padding:12px 14px; border:1px solid var(--line); border-radius:10px; background:#F8FAFC; }
         .nzo-kpi span { display:block; color:var(--meta); font-size:12px; font-weight:700; }
         .nzo-kpi strong { display:block; margin-top:4px; color:var(--ink); font-size:18px; font-weight:800; }
-        @media (max-width:575.98px){ .nzo-kpis { grid-template-columns:1fr; } }
+        @media (max-width:575.98px){
+            .nzo-kpis { grid-template-columns:1fr; }
+            .nzo-step { min-width:0; flex-direction:column; justify-content:center; gap:4px; padding:7px 3px; font-size:11.5px; line-height:1.25; text-align:center; overflow-wrap:anywhere; }
+            .nzo-proof-grid { grid-template-columns:1fr; }
+            .nzo-payment-actions, .nzo-payment-actions form, .nzo-payment-actions .nzo-btn { width:100%; }
+            .nzo-payment-actions .nzo-btn { justify-content:center; min-height:44px; }
+            .nzo-payment-modal .modal-dialog { margin:8px; min-height:0; align-items:flex-start; }
+            .nzo-payment-modal .modal-content { max-height:calc(100vh - 16px); max-height:calc(100dvh - 16px); }
+            .nzo-payment-modal .modal-body { min-height:0; overflow-y:auto; }
+        }
         @media (max-width:991.98px){ .nzo-grid{ grid-template-columns:1fr; } .nzo-3{ grid-template-columns:1fr; } .nzo-head{ border-radius:14px; } .nzo-hamt{ text-align:left; } }
     </style>
 @endonce
@@ -185,7 +203,7 @@
                 <button type="button" class="nzo-btn nzo-btn-primary" data-toggle="modal" data-target="#nzoMarkRefunded-{{ $order['id'] }}"><i class="tio-checkmark-circle"></i> 标记已退款</button>
             @elseif ($nzPrimary['visible'] && $nzPrimary['kind'] == 'form' && !empty($nzPrimary['combined_yandex']))
                 <a href="#nzYandexCard-{{ $order['id'] }}" onclick="var c=document.getElementById('nzYandexCard-{{ $order['id'] }}');if(c){c.scrollIntoView({behavior:'smooth',block:'center'});}return false;" class="nzo-btn nzo-btn-blue">↓ {{ $nzPrimary['label'] }}</a>
-            @elseif ($nzPrimary['visible'] && $nzPrimary['kind'] == 'form')
+            @elseif ($nzPrimary['visible'] && $nzPrimary['kind'] == 'form' && !$nzOffPending)
                 <form action="{{ $nzPrimary['route'] }}" method="post" style="margin:0;" data-nz-auto-print-invoice="{{ route('vendor.order.generate-invoice', [$order['id']]) }}?nz_auto_print=1" data-nz-auto-print-action="{{ $nzOffPending ? '1' : '0' }}" @if ($nzPrimary['confirm']) data-nz-confirm-msg="{{ $nzPrimary['confirm'] }}{{ $nzScheduleLabel ? ' 本单预约送达：'.$nzScheduleLabel.'；确认后请按预约时间安排备餐和叫车。' : '' }}" @endif>
                     @csrf @method($nzPrimary['method'])
                     <button type="submit" class="nzo-btn nzo-btn-primary"><i class="tio-checkmark-circle"></i> {{ $nzPrimary['label'] }}</button>
@@ -362,7 +380,77 @@
                 <div class="nzo-sec" data-tab-in="wb fin">@include('vendor-views.order.partials._nzo_fees')</div>
             @else
                 @if ($nzOffPending)
-                    <div class="nzo-card nzo-sec" data-tab-in="wb fin"><div class="nzo-cb"><div class="nzo-warn"><i class="tio-wallet"></i> 顾客选择线下支付。请在自己的账户核对已收到货款后，点上方「{{ $nzPrimary['label'] ?? '确认收款' }}」再出餐。</div></div></div>
+                    <div class="nzo-card nzo-sec nzo-payment-review" data-tab-in="wb fin" data-nzo-payment-review>
+                        <div class="nzo-ch">
+                            <h3>付款凭证待审核</h3>
+                            <span class="nzo-badge b-amber">待确认收款</span>
+                        </div>
+                        <div class="nzo-cb">
+                            <div class="nzo-warn">
+                                <i class="tio-warning"></i>
+                                <span>请先在自己的收款账户核对实际到账与应收金额一致。确认后订单将进入履约；拒绝后订单保持待处理，顾客会看到原因并可重新上传凭证，不会在平台触发扣款或退款。</span>
+                            </div>
+                            <div class="nzo-proof-grid">
+                                <div>
+                                    <div style="font-size:12px;color:var(--meta);font-weight:700;margin-bottom:6px;">顾客付款截图</div>
+                                    @if ($nzoProof)
+                                        <a class="nzo-proof-link" href="{{ $nzoProof }}" target="_blank" rel="noopener" onclick="return nzShowProof('{{ $nzoProof }}');">
+                                            <img src="{{ $nzoProof }}" alt="顾客付款凭证截图">
+                                        </a>
+                                        <div style="font-size:11.5px;color:var(--faint);margin-top:5px;">点击图片可放大核对</div>
+                                    @else
+                                        <div class="nzo-note" style="margin-top:0;">凭证图片暂不可用，请刷新后重试；在看清凭证前不要确认收款。</div>
+                                    @endif
+                                </div>
+                                <div>
+                                    <div class="nzo-row"><span class="k">付款渠道</span><span class="v">{{ $nzoChannel }}</span></div>
+                                    <div class="nzo-row"><span class="k">应收金额</span><span class="v">{{ Helpers::format_currency($nzoAmt) }}</span></div>
+                                    <div class="nzo-row"><span class="k">提交时间</span><span class="v">{{ $nzoFmt($nzoPayTime) ?: '—' }}</span></div>
+                                    <div class="nzo-row"><span class="k">顾客备注</span><span class="v">{{ $nzoOp->customer_note ?: '—' }}</span></div>
+                                    <div class="nzo-payment-actions">
+                                        <form action="{{ $nzPrimary['route'] }}" method="post" data-nzo-offline-confirm
+                                            data-nz-auto-print-invoice="{{ route('vendor.order.generate-invoice', [$order['id']]) }}?nz_auto_print=1"
+                                            data-nz-auto-print-action="1"
+                                            @if ($nzPrimary['confirm']) data-nz-confirm-msg="{{ $nzPrimary['confirm'] }}{{ $nzScheduleLabel ? ' 本单预约送达：'.$nzScheduleLabel.'；确认后请按预约时间安排备餐和叫车。' : '' }}" @endif>
+                                            @csrf @method($nzPrimary['method'])
+                                            <button type="submit" class="nzo-btn nzo-btn-primary"><i class="tio-checkmark-circle"></i> 确认收款</button>
+                                        </form>
+                                        <button type="button" class="nzo-btn nzo-btn-danger" data-nzo-offline-deny data-toggle="modal" data-target="#nzDenyOffline-{{ $order['id'] }}"><i class="tio-clear-circle"></i> 拒绝凭证</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal fade nzo-payment-modal" id="nzDenyOffline-{{ $order['id'] }}" tabindex="-1" role="dialog" aria-hidden="true" aria-describedby="nzDenyOfflineHelp-{{ $order['id'] }}">
+                        <div class="modal-dialog modal-dialog-centered" role="document">
+                            <div class="modal-content" style="border-radius:12px;">
+                                <form action="{{ route('vendor.order.deny-offline-payment', ['id' => $order['id']]) }}" method="post" data-nzo-offline-deny-form>
+                                    @csrf @method('PUT')
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">拒绝付款凭证</h5>
+                                        <button type="button" class="close" data-dismiss="modal" aria-label="关闭"><span aria-hidden="true">&times;</span></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <p id="nzDenyOfflineHelp-{{ $order['id'] }}" style="font-size:13px;color:#555;line-height:1.65;margin-bottom:10px;">请说明无法确认收款的原因。提交后顾客会看到该原因并可重新上传凭证；订单保持待处理，不会触发平台扣款或退款。</p>
+                                        <div class="nz-deny-reasons mb-2" data-target="nzDenyOfflineNote-{{ $order['id'] }}" style="display:flex;flex-wrap:wrap;gap:6px;">
+                                            <button type="button" class="btn btn-sm" style="background:#FFF8F8;border:1px solid #FAD4D6;border-radius:16px;color:#C4193E;font-size:13px;padding:4px 12px;" data-reason="截图金额对不上">截图金额对不上</button>
+                                            <button type="button" class="btn btn-sm" style="background:#F7F8FA;border:1px solid #E5E7EB;border-radius:16px;color:#4B5563;font-size:13px;padding:4px 12px;" data-reason="截图模糊看不清">截图模糊看不清</button>
+                                            <button type="button" class="btn btn-sm" style="background:#F7F8FA;border:1px solid #E5E7EB;border-radius:16px;color:#4B5563;font-size:13px;padding:4px 12px;" data-reason="付款方式不对">付款方式不对</button>
+                                            <button type="button" class="btn btn-sm" style="background:#F7F8FA;border:1px solid #E5E7EB;border-radius:16px;color:#4B5563;font-size:13px;padding:4px 12px;" data-reason="不是支付给本店">不是支付给本店</button>
+                                            <button type="button" class="btn btn-sm" style="background:#F7F8FA;border:1px solid #E5E7EB;border-radius:16px;color:#4B5563;font-size:13px;padding:4px 12px;" data-reason="__other__">其他（自填）</button>
+                                        </div>
+                                        <label for="nzDenyOfflineNote-{{ $order['id'] }}" style="font-size:13px;color:#555;">拒绝原因（必填）</label>
+                                        <textarea id="nzDenyOfflineNote-{{ $order['id'] }}" name="note" required maxlength="255" rows="3" class="form-control" style="border-radius:8px;" placeholder="请填写顾客可理解的拒绝原因，最多 255 字"></textarea>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">取消</button>
+                                        <button type="submit" class="btn btn--danger btn-sm">确认拒绝凭证</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
                 @elseif ((($nzPrimary['kind'] ?? null) == 'wait'))
                     {{-- 哪吒P1b-B 裁决①: 无凭证离线单——无主CTA·灰条等凭证 --}}
                     <div class="nzo-card nzo-sec" data-tab-in="wb fin"><div class="nzo-cb"><div style="background:#F1F3F5;border:1px solid #E4E8EC;border-radius:10px;padding:12px 14px;"><div style="font-weight:700;color:#344054;margin-bottom:4px;"><i class="tio-time"></i> 顾客尚未上传付款凭证</div><div style="font-size:12.5px;line-height:1.6;color:#5A6472;">等顾客提交凭证后，这里会出现「确认收款」按钮；若超时未传，系统会自动取消本单，无需您操作。</div></div></div></div>

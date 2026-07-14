@@ -234,6 +234,24 @@ class NezhaMerchantOrderUiContractTest extends TestCase
         $this->assertStringNotContainsString('顾客申请取消本单', $blade);
     }
 
+    public function testOfflinePaymentReviewActionsLiveOnlyInTheVisibleDetailMode(): void
+    {
+        $blade = file_get_contents(resource_path('views/vendor-views/order/order-view.blade.php'));
+        $detailMode = file_get_contents(resource_path('views/vendor-views/order/partials/_detail_modes.blade.php'));
+
+        $this->assertStringContainsString('data-nzo-payment-review', $detailMode);
+        $this->assertStringContainsString('顾客付款凭证截图', $detailMode);
+        $this->assertStringContainsString('付款渠道', $detailMode);
+        $this->assertStringContainsString('data-nzo-offline-confirm', $detailMode);
+        $this->assertStringContainsString('data-nzo-offline-deny', $detailMode);
+        $this->assertStringContainsString("route('vendor.order.deny-offline-payment'", $detailMode);
+        $this->assertStringContainsString('if (form.__nzConfirmPending) return;', $blade);
+        $this->assertStringContainsString('form.__nzConfirmPending = false;', $blade);
+        $this->assertStringContainsString('$nzPrimary[\'kind\'] == \'form\' && !$nzOffPending', $detailMode);
+        $this->assertStringNotContainsString('未收到 / 打回', $blade);
+        $this->assertStringNotContainsString('data-target="#nzDenyOffline-', $blade);
+    }
+
     public function testStandardReceiptTemplateProtectsPrivacyAndPrintsAutomaticallyWhenRequested(): void
     {
         $blade = file_get_contents(resource_path('views/new_invoice.blade.php'));

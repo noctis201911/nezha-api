@@ -462,55 +462,8 @@
                                         @endif
                                     @endif
 
-                                    {{-- 哪吒 B方案: 商家自营「确认收款」操作。仅离线支付 + 待核验时显示。 --}}
-                                    @if ($order->payment_method == 'offline_payment' && $order?->offline_payments->status == 'pending')
-                                        <div class="mt-3 p-3" style="background:#FFF7E6;border-radius:12px;">
-                                            <p class="mb-2" style="color:#8a6d3b;font-size:13px;line-height:1.6;">
-                                                {{ translate('messages.For_offline_payments_please_verify_if_the_payments_are_safely_received_to_your_account_Customer_id_not_liable_if_you_confirm_and_deliver_the_orders_without_checking_payments_transactions') }}
-                                            </p>
-                                            <div class="d-flex flex-wrap align-items-center" style="gap:8px;">
-                                                {{-- 哪吒 M-04: 「确认收款」主操作已镜像至页面顶部状态条, 此处去重(避免上下两个确认按钮); 凭证/链上核验信息与「未收到/打回」原位保留。 --}}
-                                                <span style="font-size:12px;color:#8a6d3b;">确认收款按钮已移至页面顶部 ↑</span>
-                                                <button type="button" class="btn btn-outline-danger btn-sm" style="border-radius:8px;"
-                                                    data-toggle="modal" data-target="#nzDenyOffline-{{ $order['id'] }}">
-                                                    未收到 / 打回
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {{-- 拒收备注弹窗 --}}
-                                        <div class="modal fade" id="nzDenyOffline-{{ $order['id'] }}" tabindex="-1" role="dialog" aria-hidden="true">
-                                            <div class="modal-dialog modal-dialog-centered" role="document">
-                                                <div class="modal-content" style="border-radius:12px;">
-                                                    <form action="{{ route('vendor.order.deny-offline-payment', ['id' => $order['id']]) }}" method="post">
-                                                        @csrf
-                                                        @method('PUT')
-                                                        <div class="modal-header">
-                                                            <h5 class="modal-title">打回 / 未收到付款</h5>
-                                                            <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                                                        </div>
-                                                        <div class="modal-body">
-                                                            <p style="font-size:13px;color:#666;margin-bottom:10px;">选择常见原因，或在下方自由填写。打回后顾客会收到通知，可重新上传凭证或联系您。</p>
-                                                            {{-- 哪吒(2026-06-26): 预填驳回理由 chip, 点击填入下方 textarea; "其他" 清空并 focus 让商家自由输入 --}}
-                                                            <div class="nz-deny-reasons mb-2" data-target="nzDenyOfflineNote-{{ $order['id'] }}" style="display:flex;flex-wrap:wrap;gap:6px;">
-                                                                <button type="button" class="btn btn-sm" style="background:#FFF8F8;border:1px solid #FAD4D6;border-radius:16px;color:#C4193E;font-size:13px;padding:4px 12px;" data-reason="截图金额对不上">截图金额对不上</button>
-                                                                <button type="button" class="btn btn-sm" style="background:#F7F8FA;border:1px solid #E5E7EB;border-radius:16px;color:#4B5563;font-size:13px;padding:4px 12px;" data-reason="截图模糊看不清">截图模糊看不清</button>
-                                                                <button type="button" class="btn btn-sm" style="background:#F7F8FA;border:1px solid #E5E7EB;border-radius:16px;color:#4B5563;font-size:13px;padding:4px 12px;" data-reason="付款方式不对">付款方式不对</button>
-                                                                <button type="button" class="btn btn-sm" style="background:#F7F8FA;border:1px solid #E5E7EB;border-radius:16px;color:#4B5563;font-size:13px;padding:4px 12px;" data-reason="不是支付给本店">不是支付给本店</button>
-                                                                <button type="button" class="btn btn-sm" style="background:#F7F8FA;border:1px solid #E5E7EB;border-radius:16px;color:#4B5563;font-size:13px;padding:4px 12px;" data-reason="__other__">其他（自填）</button>
-                                                            </div>
-                                                            <textarea id="nzDenyOfflineNote-{{ $order['id'] }}" name="note" required maxlength="255" rows="3" class="form-control" style="border-radius:8px;"
-                                                                placeholder="也可以自由输入原因或对预填理由做补充说明，最多 255 字"></textarea>
-                                                        </div>
-                                                        <div class="modal-footer">
-                                                            <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">取消</button>
-                                                            <button type="submit" class="btn btn--danger btn-sm">确认打回</button>
-                                                        </div>
-                                                    </form>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    @endif
+                                    {{-- 付款凭证审核动作只存在于上方默认可见的现代详情区 (_detail_modes)，
+                                        旧打印详情仅保留只读凭证信息，避免隐藏动作与双 owner。 --}}
                                 @endif
                                 <!-- offline_payment -->
 
@@ -3407,7 +3360,10 @@
         // UX-1 B: 原生 confirm 改藏青 nzConfirm(异步); 确认后 requestSubmit 重入(此时 __nzOk=true 跳过再确认, 保持既有 AJAX+自动打印链路不变)
         var __cmsg = form.getAttribute('data-nz-confirm-msg');
         if (__cmsg && window.nzConfirm && !form.__nzOk) {
+            if (form.__nzConfirmPending) return;
+            form.__nzConfirmPending = true;
             window.nzConfirm({ body: __cmsg, danger: form.hasAttribute('data-nz-confirm-danger') }).then(function(ok){
+                form.__nzConfirmPending = false;
                 if (ok) { form.__nzOk = true; if (form.requestSubmit) form.requestSubmit(); else form.submit(); }
             });
             return;
