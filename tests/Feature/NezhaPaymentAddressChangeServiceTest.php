@@ -105,6 +105,54 @@ class NezhaPaymentAddressChangeServiceTest extends TestCase
         $this->assertFalse(Schema::hasTable('nezha_payment_address_change_events'));
         $this->assertFalse(Schema::hasTable('nezha_payment_address_changes'));
         $this->assertFalse(Schema::hasTable('nezha_payment_network_states'));
+        $this->assertSame(1, DB::table('business_settings')
+            ->where('key', NezhaPaymentAddressChangeService::SWITCH_KEY)->count());
+        $this->assertSame(1, DB::table('business_settings')
+            ->where('key', NezhaPaymentAddressChangeService::APPROVAL_TTL_KEY)->count());
+    }
+
+    public function test_change_migration_is_idempotent_without_a_unique_setting_key(): void
+    {
+        foreach ([
+            'nezha_payment_address_change_events',
+            'nezha_payment_address_changes',
+            'nezha_payment_network_states',
+        ] as $table) {
+            Schema::dropIfExists($table);
+        }
+        DB::table('business_settings')->whereIn('key', [
+            NezhaPaymentAddressChangeService::SWITCH_KEY,
+            NezhaPaymentAddressChangeService::APPROVAL_TTL_KEY,
+        ])->delete();
+        $migration = require database_path(
+            'migrations/2026_07_14_090000_create_nezha_payment_address_change_tables.php'
+        );
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('business_settings')
+            ->where('key', NezhaPaymentAddressChangeService::SWITCH_KEY)->count());
+        $this->assertSame(1, DB::table('business_settings')
+            ->where('key', NezhaPaymentAddressChangeService::APPROVAL_TTL_KEY)->count());
+    }
+
+    public function test_change_migration_rollback_detects_any_enabled_duplicate(): void
+    {
+        DB::table('business_settings')
+            ->where('key', NezhaPaymentAddressChangeService::SWITCH_KEY)
+            ->delete();
+        DB::table('business_settings')->insert([
+            ['key' => NezhaPaymentAddressChangeService::SWITCH_KEY, 'value' => '0'],
+            ['key' => NezhaPaymentAddressChangeService::SWITCH_KEY, 'value' => '1'],
+        ]);
+        $migration = require database_path(
+            'migrations/2026_07_14_090000_create_nezha_payment_address_change_tables.php'
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('enabled');
+        $migration->down();
     }
 
     public function test_change_migration_refuses_to_drop_initialized_or_audit_data(): void
@@ -624,7 +672,7 @@ class NezhaPaymentAddressChangeServiceTest extends TestCase
 
         Schema::create('business_settings', function (Blueprint $table): void {
             $table->id();
-            $table->string('key')->unique();
+            $table->string('key');
             $table->text('value')->nullable();
             $table->timestamps();
         });
