@@ -79,6 +79,20 @@ class NezhaPaymentAddressIntegrationContractTest extends TestCase
         $this->assertStringContainsString("totp_counter", $migration);
     }
 
+    public function test_sensitive_migrations_fail_closed_on_mysql_encryption_errors(): void
+    {
+        foreach ([
+            'database/migrations/2026_07_13_210000_create_nezha_payment_address_credentials.php',
+            'database/migrations/2026_07_14_090000_create_nezha_payment_address_change_tables.php',
+        ] as $path) {
+            $migration = file_get_contents($this->path($path));
+
+            $this->assertStringContainsString("getDriverName() !== 'mysql'", $migration, $path);
+            $this->assertStringContainsString("ENCRYPTION='Y'", $migration, $path);
+            $this->assertStringNotContainsString('catch (\\Throwable', $migration, $path);
+        }
+    }
+
     public function test_confirmed_a_plus_c_ui_is_wired_to_real_state_machine_routes(): void
     {
         $admin = file_get_contents($this->path(

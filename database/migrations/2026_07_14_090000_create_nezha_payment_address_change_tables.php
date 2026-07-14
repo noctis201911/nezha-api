@@ -139,11 +139,13 @@ return new class extends Migration
 
     private function enableTablespaceEncryption(string $table): void
     {
-        try {
-            DB::statement("ALTER TABLE `{$table}` ENCRYPTION='Y'");
-        } catch (\Throwable $e) {
-            // SQLite and MySQL without keyring support must still remain migratable.
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            return;
         }
+
+        // Never report a successful production migration if sensitive address
+        // workflow tables could not be encrypted by MySQL.
+        DB::statement("ALTER TABLE `{$table}` ENCRYPTION='Y'");
     }
 
     private function ensureSetting(string $key, string $defaultValue): void
