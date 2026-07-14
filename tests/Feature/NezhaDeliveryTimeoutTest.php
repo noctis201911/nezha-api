@@ -11,8 +11,8 @@ use Tests\TestCase;
 /**
  * 哪吒 — 配送阶段(handover/picked_up)超时集中下发测试。
  *
- * 🔴 安全: 本仓 phpunit.xml 未启用独立测试库, APP_ENV=testing 仍连生产 MySQL。
- * 故只用 DatabaseTransactions(事务回滚, 绝不 RefreshDatabase=清库); 且全部用
+ * 🔴 安全墙: tests/bootstrap.php 在 Laravel 启动前强制 sqlite :memory:；生产 config cache 会被直接拒绝。
+ * DatabaseTransactions 只负责用例隔离；且全部用
  * 内存 Order 实例(从不 save), 零订单写入。setUp 设阈值在事务内, 测完回滚。
  *
  * 覆盖需求7: 阈值前不超时 / 刚好达到及超过 / 缺状态时间 / handover·picked_up·delivered·canceled 边界。

@@ -16,7 +16,8 @@ use Tests\TestCase;
 /**
  * 哪吒商家广告「实时竞价」v1 — 死亡测试(全绿才能上线).
  *
- * 🔴 本仓 APP_ENV=testing 仍连生产库: 仅 DatabaseTransactions(每例事务回滚, 零净写入) + 随机唯一键, 测完全回滚。
+ * 🔴 安全墙: tests/bootstrap.php 在 Laravel 启动前强制 sqlite :memory:；生产 config cache 会被直接拒绝。
+ * DatabaseTransactions 只负责用例隔离，不能再作为“连接生产库也安全”的理由。
  * 真并发(零超扣/无死锁)单事务回滚测不了 → 另由 nzqa_ad_concurrency.php 提交+清理脚本验, 见交付报告。
  *
  * 覆盖死亡测试清单(docs/PLAN_ad_auction.md §4):

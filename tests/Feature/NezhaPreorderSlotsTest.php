@@ -7,7 +7,7 @@ use Carbon\Carbon;
 use Tests\TestCase;
 
 /**
- * 顾客选配送时段 READ 逻辑的纯单测(无 DB·安全对生产库·零写入)。
+ * 顾客选配送时段 READ 逻辑的纯单测(无 DB；入口仍受隔离库安全墙保护)。
  * 覆盖 NezhaPreorder::buildSlotDays / periodLabel / weekdayLabel / dayLabel —— 注入固定 $now 保证确定性。
  */
 class NezhaPreorderSlotsTest extends TestCase

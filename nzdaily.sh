@@ -6,6 +6,7 @@
 # 由 HANDOFF_ops_routine_qa §E 规格落库 (2026-07-07)。任何段失败都继续下一段, 绝不中断/写业务表。
 # ⚠️ TZ: 系统=UTC → nginx/backup 按 UTC 计"昨日"; laravel 运行时=Asia/Yerevan → ERROR 按 Yerevan 计"昨日"。
 set -o pipefail
+DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 RED=$'\e[31m'; YEL=$'\e[33m'; GRN=$'\e[32m'; OFF=$'\e[0m'
 
 ISSUES_R=""   # 🔴 项
@@ -74,7 +75,11 @@ LLOG=/www/wwwroot/api-deploy/current/storage/logs/laravel.log
 if [ -r "$LLOG" ]; then
   LE=$(grep -acE "^\[${YDAY_L} [0-9:]+\] [a-zA-Z]+\.ERROR" "$LLOG" 2>/dev/null)
   echo "    ${YDAY_L} 新增 *.ERROR 条数: ${LE}"
-  [ "${LE:-0}" -gt 200 ] && yel "laravel 昨日 ERROR=${LE} (>200, 噪音偏高值得看)"
+  if [ "${LE:-0}" -gt 200 ]; then
+    red "laravel 昨日 ERROR=${LE} (>200, 错误风暴)"
+  elif [ "${LE:-0}" -gt 0 ]; then
+    yel "laravel 昨日新增 ERROR=${LE} — 需分类确认，不能汇总为 all clear"
+  fi
   [ "${LE:-0}" -gt 0 ] && echo "    近1条样例:" && grep -aE "^\[${YDAY_L} [0-9:]+\] [a-zA-Z]+\.ERROR" "$LLOG" 2>/dev/null | tail -1 | cut -c1-140 | sed 's/^/      /'
 else
   yel "laravel.log 不可读 ${LLOG}"
@@ -82,28 +87,16 @@ fi
 
 # ── ⑤ pm2 重启增量 (对比上次落盘) ────────────────────────────────────
 echo "[5] pm2 重启增量 (自上次 nzdaily)"
-STATE=/tmp/nzdaily_state.json
-if command -v pm2 >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
-  CURTOT=$(pm2 jlist 2>/dev/null | python3 -c "import sys,json
-try:
- d=json.load(sys.stdin); print(sum(p.get('pm2_env',{}).get('restart_time',0) for p in d))
-except Exception: print('NA')" 2>/dev/null)
-  PREV=$(python3 -c "import json;print(json.load(open('$STATE')).get('pm2_restart_total','NA'))" 2>/dev/null || echo NA)
-  if [ "$CURTOT" = "NA" ] || [ -z "$CURTOT" ]; then
-    yel "pm2 jlist 解析失败 — 无法计重启增量"
-  else
-    if [ "$PREV" = "NA" ] || [ -z "$PREV" ]; then
-      echo "    首次运行, 基线 pm2 重启累计 = ${CURTOT}"
-    else
-      DELTA=$(( CURTOT - PREV ))
-      echo "    pm2 重启累计: ${PREV} → ${CURTOT}  (增量 ${DELTA})"
-      [ "$DELTA" -gt 0 ] && yel "pm2 昨日至今新增重启 ${DELTA} 次 — 查 pm2 logs / 部署窗口"
-      [ "$DELTA" -lt 0 ] && yel "pm2 重启计数回退 (可能 pm2 daemon 重启) — 基线已重置"
-    fi
-    printf '{"pm2_restart_total": %s, "at": "%s"}\n' "$CURTOT" "$(date -u +%FT%TZ)" > "$STATE" 2>/dev/null
-  fi
+STATE=${NZDAILY_STATE:-/tmp/nzdaily_state.json}
+if [ -x /usr/bin/pm2 ] && command -v python3 >/dev/null 2>&1; then
+  PM2_REPORT=$(sudo -u www -H env PM2_HOME=/home/www/.pm2 /usr/bin/pm2 jlist 2>/dev/null \
+    | python3 "$DIR/nzruntime.py" pm2-daily --state "$STATE" 2>&1)
+  PM2_RC=$?
+  printf '%s\n' "$PM2_REPORT" | sed 's/^/    /'
+  [ "$PM2_RC" -eq 2 ] && red "www PM2 生产拓扑缺失、离线或不可读 — 监控不能继续报绿"
+  [ "$PM2_RC" -eq 1 ] && yel "www PM2 出现非计划重启信号 — 见逐进程增量"
 else
-  yel "pm2 或 python3 不在 PATH — 跳过重启增量"
+  red "www PM2 或 nzruntime.py 不可执行 — 生产进程采集失明"
 fi
 
 # ── ⑥ 磁盘 ───────────────────────────────────────────────────────────

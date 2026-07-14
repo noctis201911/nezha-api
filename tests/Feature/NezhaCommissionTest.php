@@ -12,7 +12,7 @@ use Tests\TestCase;
 /**
  * 哪吒 B方案/组4 — 「平台应收佣金」只读展示计算 OrderLogic::nezha_commissionable_amount() 测试。
  * 锁定该方法与 create_transaction() 佣金公式一致: 佣金 = 净商品额(计佣基数) × 费率。
- * 🔴 本仓 APP_ENV=testing 仍连生产库: 仅 DatabaseTransactions(回滚) + 不入库 Order/Restaurant 实例, 零写入。
+ * 🔴 安全墙强制 sqlite :memory:；本用例另使用不入库的 Order/Restaurant 实例保持纯计算。
  */
 class NezhaCommissionTest extends TestCase
 {

@@ -6,7 +6,7 @@ use App\CentralLogics\NezhaPreorder;
 use Tests\TestCase;
 
 /**
- * screen05 单点版作业台「预约配送」每单卡态的纯逻辑单测(无 DB·安全对生产库·零写入)。
+ * screen05 单点版作业台「预约配送」每单卡态的纯逻辑单测(无 DB；入口仍受隔离库安全墙保护)。
  * 覆盖 NezhaPreorder::pointCardState —— 按 order_status + 是否到建议叫车时间判 due/upcoming/called/delivered。
  */
 class NezhaPreorderWorkbenchTest extends TestCase

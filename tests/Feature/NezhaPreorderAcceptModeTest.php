@@ -6,9 +6,9 @@ use App\CentralLogics\NezhaPreorder;
 use Tests\TestCase;
 
 /**
- * 哪吒 预约下单 M4 —— 接单模式三态映射断言(纯逻辑·无 DB·安全对生产库)。
+ * 哪吒 预约下单 M4 —— 接单模式三态映射断言(纯逻辑·无 DB；入口仍受隔离库安全墙保护)。
  * 只测 NezhaPreorder 的纯映射(modeToFlags/flagsToMode/modeEnablesPreorder);
- * 端点的总闸门 / ≥1时段守卫 / 原子写(触 DB·连生产库不造单)留 staging 真机验。
+ * 端点的总闸门 / ≥1时段守卫 / 原子写须在授权 staging 或隔离 fixture 验证。
  */
 class NezhaPreorderAcceptModeTest extends TestCase
 {

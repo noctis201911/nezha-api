@@ -13,8 +13,8 @@ use Tests\TestCase;
 /**
  * 哪吒 — 商家「长期不确认订单 → 自动暂停接单(auto-offline)」测试。
  *
- * 🔴 安全: 本仓 phpunit.xml 未启用独立测试库, 仍连生产 MySQL。
- * 故只用 DatabaseTransactions(事务回滚, 绝不 RefreshDatabase=清库); 造的店/单/账本随事务回滚, 零残留。
+ * 🔴 安全墙: tests/bootstrap.php 在 Laravel 启动前强制 sqlite :memory:；生产 config cache 会被直接拒绝。
+ * DatabaseTransactions 只负责用例隔离；造店/单/账本所需 schema/fixture 必须来自隔离测试环境。
  * Mail::fake() + 清空 nezha_risk_admin_chat_id 避免真发邮件/TG。
  *
  * 覆盖: 总闸关 no-op / 达阈值+不在场→下线 / 未达阈值不下线 / 达阈值但在场不下线 /

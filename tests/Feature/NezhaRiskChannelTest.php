@@ -14,7 +14,7 @@ use Tests\TestCase;
  * evaluate_server_authoritative 由服务端 order->payment_method 权威判定通道——
  * 线下支付通道未定时对 rmb/usdt 两套阈值取最严, 使伪报通道换不到更松阈值。
  *
- * 🔴 安全: APP_ENV=testing 仍连生产库, 仅 DatabaseTransactions 回滚 + 改阈值(测完回滚),
+ * 🔴 安全墙强制 sqlite :memory:；DatabaseTransactions 隔离阈值 fixture，
  *   不写订单。覆盖局限(诚实): 只验通道选择逻辑(评估层), 未跑端到端真实下单(那条在 QA 报告里用真单验过 amount 维度)。
  */
 class NezhaRiskChannelTest extends TestCase

@@ -120,6 +120,9 @@
         ],
         "test:redlines": [
             "@php vendor/bin/phpunit tests/Feature/NezhaL1RedlineTest.php tests/Feature/NezhaIdorGuardTest.php tests/Feature/NezhaRiskChannelTest.php"
+        ],
+        "test:isolated": [
+            "@php vendor/bin/phpunit --testsuite Unit"
         ]
     },
     "extra": {

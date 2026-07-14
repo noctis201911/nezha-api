@@ -18,9 +18,9 @@ use Tests\TestCase;
  * 本套件红 → pre-push 推不上去(把"人肉记得跑"变墙)。golden 期望值 = place_order 取优逻辑手推：
  *   券基数 = 商品 + 加料(不含满减)  ·  满减基数 = 商品(不含加料)  ·  取优比较: coupon_if_win > tiered ? 券胜 : 满减胜(平局归满减)。
  *
- * 🔴 本仓 APP_ENV=testing 仍连生产库(sql_api_nezha_am): 全程 DatabaseTransactions 回滚 + 只调只读 quote()(不落库) → 零残留。
+ * 🔴 安全墙强制 sqlite :memory:；本用例依赖的餐厅/菜品必须迁为隔离 fixture，禁止回退读取生产数据。
  * 灰度门穿透: get_business_settings 双层缓存(Cache('business_settings_all_data') + Config('nezha_tiered_discount_status_conf')) 都写。
- * tier 精度: 借用餐厅6现有菜品, 事务内把单价钉成 1000(回滚复原), 令 quantity 精确命中 3000/5000/8000 门槛。
+ * tier 精度: 使用隔离 fixture 的菜品，把单价钉成 1000，令 quantity 精确命中 3000/5000/8000 门槛。
  */
 class NezhaTieredCouponParityTest extends TestCase
 {

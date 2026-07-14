@@ -15,8 +15,8 @@ use Tests\TestCase;
 /**
  * 哪吒[本地生活商户轻管理面] — 端到端全链验证（0709 接手窗口，隔离 e2e 证）
  *
- * 🔴 安全: 本仓 phpunit.xml 未启用独立测试库(DB_CONNECTION 注释), APP_ENV=testing 仍连生产 MySQL。
- * 故只用 DatabaseTransactions(事务回滚, 绝不 RefreshDatabase); 且做到零 live 残留 / 零外呼:
+ * 🔴 安全墙: tests/bootstrap.php 在 Laravel 启动前强制 sqlite :memory:；生产 config cache 会被直接拒绝。
+ * DatabaseTransactions 只负责隔离 fixture；同时保持零外呼:
  *   - MAIL_MAILER=array(phpunit.xml) + Notification::fake() → 全程零真实邮件发出
  *   - 只改 intro(不改 address) → 不触发 approve 的 geocode 外部 HTTP
  *   - 商户从顾客列表 API 取(保证可见); 改动全在事务内, 断言后整体 rollback → 顾客端零残留

@@ -11,8 +11,8 @@ use Tests\TestCase;
 /**
  * 哪吒 — 付款凭证识别(凭证审核 phase A)测试。
  *
- * 🔴 安全: 本仓 phpunit.xml 未启用独立测试库, APP_ENV=testing 仍连生产 MySQL。
- * 故只用 DatabaseTransactions(事务回滚, 绝不 RefreshDatabase=清库); 全部用内存 Order/
+ * 🔴 安全墙: tests/bootstrap.php 在 Laravel 启动前强制 sqlite :memory:；生产 config cache 会被直接拒绝。
+ * DatabaseTransactions 只负责用例隔离；全部用内存 Order/
  * OfflinePayments 实例(从不 save), 零订单写入。describe() 仅只读 business_settings。
  *
  * 锁定修复(2026-06-22): USDT 链下付款只交「交易哈希」(method_fields text/required)的已付款单,

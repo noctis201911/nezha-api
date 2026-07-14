@@ -6,8 +6,8 @@ use App\CentralLogics\NezhaPreorder;
 use Tests\TestCase;
 
 /**
- * 哪吒 预约下单 M5 —— 配送时段窗口的纯校验断言(hmToMinutes / rangeWithinAnyBlock·无 DB·安全对生产库)。
- * 端点的总闸门 / IDOR 作用域 / 去重 / 有订单拒删(触 DB·连生产库不造单)留 staging 真机验。
+ * 哪吒 预约下单 M5 —— 配送时段窗口的纯校验断言(hmToMinutes / rangeWithinAnyBlock·无 DB)。
+ * 端点的总闸门 / IDOR 作用域 / 去重 / 有订单拒删须在授权 staging 或隔离 fixture 验证。
  */
 class NezhaPreorderWindowValidationTest extends TestCase
 {

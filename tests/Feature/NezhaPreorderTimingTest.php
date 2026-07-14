@@ -7,7 +7,7 @@ use Carbon\Carbon;
 use Tests\TestCase;
 
 /**
- * 哪吒 预约下单 M6 —— 下单选窗口的时序校验断言(validateWindowTiming·纯函数·无 DB·安全对生产库)。
+ * 哪吒 预约下单 M6 —— 下单选窗口的时序校验断言(validateWindowTiming·纯函数·无 DB)。
  * 端点侧(窗口属本店/启用中·总闸门·写 window_id)触 DB 留 staging。now 用固定 Carbon(非 now()), 断言确定。
  */
 class NezhaPreorderTimingTest extends TestCase

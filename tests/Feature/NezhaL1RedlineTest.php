@@ -16,8 +16,8 @@ use Tests\TestCase;
  * 把 INVARIANTS.md 的 L1 红线写成自动化断言: 红线被违反(开关被翻开/结构守卫被删)
  * 时测试直接红, 而不是等 QA 才发现。
  *
- * 🔴 安全: 本仓 phpunit.xml 未启用独立测试库, APP_ENV=testing 仍连生产 MySQL。
- *   故全部 DatabaseTransactions(事务回滚, 绝不 RefreshDatabase=清库) + 内存实例,
+ * 🔴 安全墙: tests/bootstrap.php 在 Laravel 启动前强制 sqlite :memory:；生产 config cache 会被直接拒绝。
+ *   DatabaseTransactions 只负责用例隔离；配合内存实例与隔离 fixture，
  *   临时插入的制裁地址随事务回滚, 零持久写入。
  *
  * 覆盖: L1-1(平台不碰钱) / L1-2,3(退款只原路) / L1-5(二清腿已拔) / L1-6(制裁命中即拒)。
