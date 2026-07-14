@@ -174,6 +174,18 @@ return [
 
         /* ═══ D. 未就绪/有前置——【暂不开】(expected=0, ≠0 即红) ═══ */
         [
+            'key' => 'nezha_payment_address_credential_status', 'label' => 'USDT 付款地址版本凭据', 'section' => 'D', 'level' => 'L1-1邻',
+            'expected' => 0, 'value_type' => 'bool',
+            'prereq' => '默认关闭。真开前须①生产存量地址严格校验②客户付款页接入凭据且真机验收③地址网络状态初始化完成④迁移/影响/回滚获批。开=登录顾客取得加密地址快照凭据；不创建订单、不冻结金额',
+            'settings_route' => null, 'ops_note' => "无专用后台开关 UI(DB flag)。必须先开凭据闸、观察签发/消费，再另行批准地址变更闸；关闭不删除证据账本",
+        ],
+        [
+            'key' => 'nezha_payment_address_change_status', 'label' => 'USDT 收款地址受控变更状态机', 'section' => 'D', 'level' => 'L1-1邻',
+            'expected' => 0, 'value_type' => 'bool',
+            'prereq' => '默认关闭。真开前须①至少2个独立管理员且均启用TOTP②地址凭据闸已稳定③网络状态初始化及对拍通过④管理员申请/商家owner确认/不同管理员复核/排空/应急暂停真机验收⑤迁移、监控、影响和回滚再次获批',
+            'settings_route' => null, 'ops_note' => "无专用后台开关 UI(DB flag)。开后旧 updatePaymentInfo 不得直写 USDT；紧急权限只暂停单商家单网络，不能自批替换地址",
+        ],
+        [
             'key' => 'nezha_preorder_status', 'label' => '预约下单/集中配送(总闸)', 'section' => 'D', 'level' => 'L2',
             'expected' => 0, 'value_type' => 'bool',
             'prereq' => 'Phase1 分阶段 dormant(M1地基/M2窗口锚定时钟/M3取消并发锁/M4三态接单模式 已上线未部署)。真开=①全链 staging QA(含 M3 真并发下单 harness)②业主批准③前端预约 UI 6屏截图点头。开=商家可选三态接单模式(即时/即时+预约/只接预约)+顾客选配送时段+作业台分组;关=三态抽屉不显·下单选窗口不透出·作业台分组隐·端点 nezha_accept_mode 直接拒。见 fable-brief/PLAN_preorder_scheduled_delivery.md §16',

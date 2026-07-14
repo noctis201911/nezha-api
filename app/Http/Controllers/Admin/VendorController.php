@@ -607,6 +607,24 @@ class VendorController extends Controller
             return back();
         }
 
+        // 地址状态机开启后，旧表单仍可维护支付宝/收款人，但不得绕过
+        // 交易级 TOTP、商家确认和不同管理员复核直接改 USDT 地址。
+        try {
+            $nzUsdtInput = [];
+            foreach (['usdt_address', 'usdt_bep20_address', 'usdt_network'] as $nzUsdtField) {
+                if ($request->exists($nzUsdtField)) {
+                    $nzUsdtInput[$nzUsdtField] = $request->input($nzUsdtField);
+                }
+            }
+            \App\CentralLogics\NezhaPaymentAddressChangeService::assertLegacyUsdtWriteAllowed(
+                $restaurant,
+                $nzUsdtInput
+            );
+        } catch (\DomainException $e) {
+            Toastr::error('USDT 收款地址已启用受控变更流程，请从地址变更申请入口操作');
+            return back()->withInput();
+        }
+
         // 哪吒[收款码变更安全提醒]: 改动前快照收款字段旧值(含收款码图片), 保存后比对真正变了哪些。
         $nz_pay_before = [
             'rmb_qr_image'       => $restaurant->rmb_qr_image,
@@ -628,9 +646,11 @@ class VendorController extends Controller
             $restaurant->rmb_qr_url = \App\CentralLogics\NezhaAlipayQr::decodeUrl($restaurant->rmb_qr_image);
         }
         $restaurant->payee_name   = $request->payee_name;
-        $restaurant->usdt_address = $request->usdt_address;
-        $restaurant->usdt_bep20_address = $request->usdt_bep20_address;
-        if ($request->has('usdt_network')) { $restaurant->usdt_network = $request->usdt_network; }
+        if (! \App\CentralLogics\NezhaPaymentAddressChangeService::enabled()) {
+            $restaurant->usdt_address = $request->usdt_address;
+            $restaurant->usdt_bep20_address = $request->usdt_bep20_address;
+            if ($request->has('usdt_network')) { $restaurant->usdt_network = $request->usdt_network; }
+        }
         $restaurant->save();
 
         // 哪吒[收款码变更安全提醒]: 收款信息=钱往哪走, 任何改动都可能是被冒用/误录。比对实际变了哪些字段,
