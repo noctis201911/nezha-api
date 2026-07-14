@@ -6,7 +6,7 @@ use Tests\TestCase;
 
 class NezhaVendorWorkbenchDashboardContractTest extends TestCase
 {
-    public function testWorkbenchDisplaysCnyAndUsdConversionHints(): void
+    public function test_workbench_displays_cny_and_usd_conversion_hints(): void
     {
         $controller = file_get_contents(app_path('Http/Controllers/Vendor/WorkbenchController.php'));
         $body = file_get_contents(resource_path('views/vendor-views/workbench/_body.blade.php'));
@@ -21,7 +21,7 @@ class NezhaVendorWorkbenchDashboardContractTest extends TestCase
         $this->assertStringContainsString('/ $', $body);
     }
 
-    public function testVendorDashboardPromoCardIsRemovedFromMainDashboard(): void
+    public function test_vendor_dashboard_promo_card_is_removed_from_main_dashboard(): void
     {
         $blade = file_get_contents(resource_path('views/vendor-views/dashboard.blade.php'));
 
@@ -30,7 +30,7 @@ class NezhaVendorWorkbenchDashboardContractTest extends TestCase
         $this->assertStringNotContainsString("route('vendor.advertisement.create')", $blade);
     }
 
-    public function testPreorderTimeIsVisibleBeforeMerchantConfirmsPayment(): void
+    public function test_preorder_time_is_visible_before_merchant_confirms_payment(): void
     {
         $controller = file_get_contents(app_path('Http/Controllers/Vendor/WorkbenchController.php'));
         $workbench = file_get_contents(resource_path('views/vendor-views/workbench/_body.blade.php'));
@@ -48,14 +48,14 @@ class NezhaVendorWorkbenchDashboardContractTest extends TestCase
         $this->assertStringNotContainsString("data-nz-auto-print-action=\"{{ \$nzOffPending ? '1' : '0' }}\" @if (\$nzPrimary['confirm']) onsubmit=", $detailModes);
     }
 
-    public function testCompletedMerchantRefundIsPresentedAsFinalAndCannotBeMarkedAgain(): void
+    public function test_completed_merchant_refund_is_presented_as_final_and_cannot_be_marked_again(): void
     {
         $detailModes = file_get_contents(resource_path('views/vendor-views/order/partials/_detail_modes.blade.php'));
 
-        $this->assertStringContainsString("\$nzoRefundDone = \$nzoRR &&", $detailModes);
-        $this->assertStringContainsString("\$nzoRefundDone ? '已退款'", $detailModes);
+        $this->assertStringContainsString('$nzoRefundDone = $nzoRR &&', $detailModes);
+        $this->assertStringContainsString("\$nzoRefundDone ? '商家已标记退款'", $detailModes);
         $this->assertStringContainsString("@elseif (\$nzoRR && \$nzoRR->status === 'pending_merchant_refund')", $detailModes);
         $this->assertStringContainsString("@if (\$nzoRR && \$nzoRR->status === 'pending_merchant_refund')", $detailModes);
-        $this->assertStringContainsString('已完成原路退款并留痕，无需再次操作。', $detailModes);
+        $this->assertStringContainsString('已标记原路退款并留痕，无需再次操作。', $detailModes);
     }
 }
