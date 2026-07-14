@@ -62,6 +62,8 @@ Route::post('activation-check', [HomeController::class, 'activationCheck']);
 Route::get('login/{tab}', [LoginController::class, 'login'])->name('login');
 
 Route::post('login_submit', [LoginController::class, 'submit'])->name('login_post')->middleware('actch');
+// 管理员密码校验必须走 nginx `^/login/admin` Basic Auth 覆盖范围；公共 login_submit 只收商家角色。
+Route::post('login/admin-submit', [LoginController::class, 'submitAdmin'])->name('admin.login_post')->middleware('actch');
 Route::get('logout', [LoginController::class, 'logout'])->name('logout');
 // 哪吒 Admin 两步验证(登录第二步, 此时尚未完成登录, guest 可访问)
 Route::get('two-factor-challenge', [\App\Http\Controllers\Admin\TwoFactorController::class, 'challenge'])->name('admin.2fa.challenge');

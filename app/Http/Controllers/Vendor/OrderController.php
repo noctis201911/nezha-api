@@ -729,7 +729,7 @@ class OrderController extends Controller
             'processing_time.min' => '预计出餐时间至少 1 分钟',
         ]);
 
-        $order = Order::where(['id' => $request->id, 'restaurant_id' => Helpers::get_restaurant_id()])->with(['subscription_logs', 'details'])->first();
+        $order = Order::where(['id' => $request->id, 'restaurant_id' => Helpers::get_restaurant_id()])->with(['subscription_logs', 'details'])->firstOrFail();
 
         if ($order->delivered != null) {
             Toastr::warning(translate('messages.cannot_change_status_after_delivered'));
@@ -1272,8 +1272,15 @@ class OrderController extends Controller
         if ($delivery_man_id == 0) {
             return response()->json(['message' => translate('messages.deliveryman_not_found')], 404);
         }
-        $order = Order::Notpos()->with(['subscription.schedule_today'])->find($order_id);
-        $deliveryman = DeliveryMan::where('id', $delivery_man_id)->available()->active()->first();
+        $restaurantId = Helpers::get_restaurant_id();
+        $order = Order::Notpos()
+            ->where('restaurant_id', $restaurantId)
+            ->with(['subscription.schedule_today'])
+            ->findOrFail($order_id);
+        $deliveryman = DeliveryMan::where('restaurant_id', $restaurantId)
+            ->available()
+            ->active()
+            ->findOrFail($delivery_man_id);
         if ($order->delivery_man_id == $delivery_man_id) {
             return response()->json(['message' => translate('messages.order_already_assign_to_this_deliveryman')], 400);
         }
@@ -1331,6 +1338,7 @@ class OrderController extends Controller
 
     public function add_dine_in_table_number(Order $order, Request $request)
     {
+        abort_unless((int) $order->restaurant_id === (int) Helpers::get_restaurant_id(), 404);
         $request->validate([
             'table_number' => 'nullable|max:255|required_without_all:token_number',
             'token_number' => 'nullable|max:255|required_without_all:table_number',
@@ -1589,7 +1597,7 @@ class OrderController extends Controller
         Session::forget('order_edit_cart');
 
         $order = Order::where('restaurant_id', Helpers::get_restaurant_id())
-            ->where(['id' => $order->id])->with('details.food', 'restaurant')->first();
+            ->where(['id' => $order->id])->with('details.food', 'restaurant')->firstOrFail();
 
         $carts = [];
         foreach ($order->details ?? [] as $key => $detail) {
@@ -1739,6 +1747,7 @@ class OrderController extends Controller
 
     public function update(Request $request, Order $order)
     {
+        abort_unless((int) $order->restaurant_id === (int) Helpers::get_restaurant_id(), 404);
         $carts = Session::get('order_edit_cart', []);
         $order_edit_logs = Session::get('order_edit_logs', []);
 
@@ -1784,7 +1793,7 @@ class OrderController extends Controller
 
     public function update_shipping(Request $request, Order $order)
     {
-
+        abort_unless((int) $order->restaurant_id === (int) Helpers::get_restaurant_id(), 404);
         $request->validate([
             'contact_person_name' => 'required',
             'address_type' => 'required',

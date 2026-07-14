@@ -27,6 +27,7 @@ use App\Mail\PasswordResetRequestMail;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\Rule;
 use Modules\Gateways\Traits\SmsGateway;
 use Illuminate\Support\Facades\RateLimiter;
 
@@ -157,10 +158,20 @@ class LoginController extends Controller
 
     public function submit(Request $request)
     {
+        return $this->submitForRoles($request, ['vendor', 'vendor_employee']);
+    }
+
+    public function submitAdmin(Request $request)
+    {
+        return $this->submitForRoles($request, ['admin', 'admin_employee']);
+    }
+
+    private function submitForRoles(Request $request, array $allowedRoles)
+    {
         $request->validate([
             'email' => 'required|email',
             'password' => 'required|min:6',
-            'role' => 'required'
+            'role' => ['required', Rule::in($allowedRoles)]
         ]);
 
         $recaptcha = Helpers::get_business_settings('recaptcha');

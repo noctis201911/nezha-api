@@ -22,6 +22,7 @@ use App\Models\SubscriptionTransaction;
 use Illuminate\Support\Facades\Session;
 use App\Exports\SubscriptionTransactionsExport;
 use App\Models\SubscriptionBillingAndRefundHistory;
+use Illuminate\Validation\Rule;
 
 class SubscriptionController extends Controller
 {
@@ -85,7 +86,12 @@ class SubscriptionController extends Controller
 
     public function switchToCommission($id)
     {
-        $restaurant =  Restaurant::where('id', $id)->with('restaurant_sub')->first();
+        $restaurantId = Helpers::get_restaurant_id();
+        abort_unless((int) $id === (int) $restaurantId, 404);
+        $restaurant = Restaurant::query()
+            ->where('id', $restaurantId)
+            ->with('restaurant_sub')
+            ->firstOrFail();
 
         $restaurant_subscription =  $restaurant->restaurant_sub;
         if ($restaurant->restaurant_model == 'subscription'  && $restaurant_subscription?->is_canceled === 0 && $restaurant_subscription?->is_trial === 0) {
@@ -105,10 +111,12 @@ class SubscriptionController extends Controller
 
     public function packageView($id, $restaurant_id)
     {
-        $restaurant_subscription = RestaurantSubscription::where('restaurant_id', $restaurant_id)->with(['package'])->latest()->first();
-        $package = SubscriptionPackage::where('status', 1)->where('id', $id)->first();
-
-        $restaurant = Restaurant::Where('id', $restaurant_id)->first();
+        $restaurantId = Helpers::get_restaurant_id();
+        abort_unless((int) $restaurant_id === (int) $restaurantId, 404);
+        $restaurant_id = $restaurantId;
+        $restaurant = Restaurant::where('id', $restaurantId)->firstOrFail();
+        $restaurant_subscription = RestaurantSubscription::where('restaurant_id', $restaurantId)->with(['package'])->latest()->first();
+        $package = SubscriptionPackage::where('status', 1)->where('id', $id)->firstOrFail();
         $pending_bill = SubscriptionBillingAndRefundHistory::where([
             'restaurant_id' => $restaurant->id,
             'transaction_type' => 'pending_bill',
@@ -139,15 +147,14 @@ class SubscriptionController extends Controller
 
     public function packageBuy(Request $request)
     {
-
-
+        $restaurantId = Helpers::get_restaurant_id();
         $request->validate([
             'package_id' => 'required',
-            'restaurant_id' => 'required',
+            'restaurant_id' => ['required', Rule::in([$restaurantId])],
             'payment_gateway' => 'required'
         ]);
-        $restaurant = Restaurant::Where('id', $request->restaurant_id)->first(['id', 'vendor_id']);
-        $package = SubscriptionPackage::withoutGlobalScope('translate')->find($request->package_id);
+        $restaurant = Restaurant::where('id', $restaurantId)->firstOrFail(['id', 'vendor_id']);
+        $package = SubscriptionPackage::withoutGlobalScope('translate')->findOrFail($request->package_id);
         $pending_bill = SubscriptionBillingAndRefundHistory::where([
             'restaurant_id' => $restaurant->id,
             'transaction_type' => 'pending_bill',
@@ -228,7 +235,9 @@ class SubscriptionController extends Controller
     public function invoice($id)
     {
         $BusinessData = ['admin_commission', 'business_name', 'address', 'phone', 'logo', 'email_address'];
-        $transaction = SubscriptionTransaction::with(['restaurant.vendor', 'package:id,package_name,price'])->find($id);
+        $transaction = SubscriptionTransaction::with(['restaurant.vendor', 'package:id,package_name,price'])
+            ->where('restaurant_id', Helpers::get_restaurant_id())
+            ->findOrFail($id);
         $BusinessData = BusinessSetting::whereIn('key', $BusinessData)->pluck('value', 'key');
         $logo = BusinessSetting::where('key', "logo")->first();
 

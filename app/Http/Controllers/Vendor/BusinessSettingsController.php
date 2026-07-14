@@ -190,6 +190,7 @@ class BusinessSettingsController extends Controller
 
     public function restaurant_setup(Restaurant $restaurant, Request $request)
     {
+        abort_unless((int) $restaurant->id === (int) Helpers::get_restaurant_id(), 404);
         $request->validate([
             'gst' => 'required_if:gst_status,1',
             'free_delivery_distance' => 'required_if:free_delivery_distance_status,1',
@@ -322,6 +323,16 @@ class BusinessSettingsController extends Controller
 
     public function restaurant_status(Restaurant $restaurant, Request $request)
     {
+        $restaurantId = Helpers::get_restaurant_id();
+        abort_unless((int) $restaurant->id === (int) $restaurantId, 404);
+        $allowedMenus = [
+            'schedule_order', 'delivery', 'free_delivery', 'take_away', 'veg', 'non_veg',
+            'order_subscription_active', 'cutlery', 'announcement', 'instant_order',
+            'customer_date_order_sratus', 'halal_tag_status', 'is_extra_packaging_active', 'dine_in',
+        ];
+        abort_unless(in_array((string) $request->menu, $allowedMenus, true), 404);
+        abort_unless(in_array((string) $request->status, ['0', '1'], true), 404);
+
         if($request->menu == "schedule_order" && !Helpers::schedule_order())
         {
             Toastr::warning(translate('messages.schedule_order_disabled_warning'));
@@ -684,7 +695,8 @@ class BusinessSettingsController extends Controller
     public function updateOpeningClosingStatus(Request $request, $id)
     {
         $restaurant = Helpers::get_restaurant_data();
-        $config = RestaurantConfig::firstOrNew(['restaurant_id' => $id]);
+        abort_unless((int) $id === (int) $restaurant->id, 404);
+        $config = RestaurantConfig::firstOrNew(['restaurant_id' => $restaurant->id]);
 
         $config->opening_closing_status = $request->opening_closing_status ? 1 : 0;
         $config->same_time_for_every_day = $request->same_time_for_every_day ? 1 : 0;

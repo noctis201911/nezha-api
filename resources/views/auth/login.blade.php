@@ -237,7 +237,7 @@
                         </div>
                     @endif
 
-                    <form class="login_form" action="{{ route('login_post') }}" method="post" id="form-id" autocomplete="off">
+                    <form class="login_form" action="{{ in_array($role ?? null, ['admin', 'admin_employee'], true) ? route('admin.login_post') : route('login_post') }}" method="post" id="form-id" autocomplete="off">
                         @csrf
                         <input type="hidden" name="role" value="{{ $role ?? null }}">
 

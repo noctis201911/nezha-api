@@ -17,10 +17,13 @@ class CampaignController extends Controller
 {
     function list(Request $request)
     {
+        $restaurantId = Helpers::get_restaurant_id();
         $relationships = [
             'translations' => 'value',
         ];
-        $campaigns=Campaign::with('restaurants')->running()->active()->latest()
+        $campaigns=Campaign::with(['restaurants' => function ($query) use ($restaurantId) {
+            $query->where('restaurants.id', $restaurantId);
+        }])->running()->active()->latest()
         ->search(keywords:request()?->search, mainCol: ['title'], relations: $relationships)
         ->paginate(config('default_pagination'));
         return view('vendor-views.campaign.list',compact('campaigns'));
@@ -39,30 +42,35 @@ class CampaignController extends Controller
 
     public function remove_restaurant(Campaign $campaign, $restaurant)
     {
-        $campaign?->restaurants()?->detach($restaurant);
+        $restaurantId = Helpers::get_restaurant_id();
+        abort_unless((int) $restaurant === (int) $restaurantId, 404);
+        Restaurant::where('id', $restaurantId)->firstOrFail();
+        $campaign?->restaurants()?->detach($restaurantId);
         $campaign->save();
         Toastr::success(translate('messages.restaurant_remove_from_campaign'));
         return back();
     }
     public function addrestaurant(Campaign $campaign, $restaurant)
     {
-        $campaign?->restaurants()?->attach($restaurant, ['campaign_status' => 'pending']);
+        $restaurantId = Helpers::get_restaurant_id();
+        abort_unless((int) $restaurant === (int) $restaurantId, 404);
+        $ownedRestaurant = Restaurant::where('id', $restaurantId)->with('vendor')->firstOrFail();
+        $campaign?->restaurants()?->attach($restaurantId, ['campaign_status' => 'pending']);
         $campaign->save();
         try
         {
             $admin= Admin::where('role_id', 1)->first();
-            $restaurant= Restaurant::where('id', $restaurant )->with('vendor')->first();
             $notification_status= Helpers::getNotificationStatusData('admin','campaign_join_request');
 
             if($notification_status?->mail_status == 'active' &&  config('mail.status') && Helpers::get_mail_status('campaign_request_mail_status_admin') == '1') {
-                Mail::to($admin?->getRawOriginal('email'))->send(new \App\Mail\CampaignRequestMail($restaurant?->name));
+                Mail::to($admin?->getRawOriginal('email'))->send(new \App\Mail\CampaignRequestMail($ownedRestaurant?->name));
                 }
                 $notification_status= null;
                 $restaurant_notification_status= null;
                 $notification_status= Helpers::getNotificationStatusData('restaurant','restaurant_campaign_join_request');
-                $restaurant_notification_status= Helpers::getRestaurantNotificationStatusData($restaurant?->id,'restaurant_campaign_join_request');
+                $restaurant_notification_status= Helpers::getRestaurantNotificationStatusData($ownedRestaurant?->id,'restaurant_campaign_join_request');
             if($notification_status?->mail_status == 'active' && $restaurant_notification_status?->mail_status == 'active' &&  config('mail.status') && Helpers::get_mail_status('campaign_request_mail_status_restaurant') == '1') {
-                Mail::to($restaurant?->vendor?->getRawOriginal('email'))->send(new \App\Mail\VendorCampaignRequestMail($restaurant?->name,'pending'));
+                Mail::to($ownedRestaurant?->vendor?->getRawOriginal('email'))->send(new \App\Mail\VendorCampaignRequestMail($ownedRestaurant?->name,'pending'));
             }
         }
         catch(\Exception $e)
@@ -78,14 +86,16 @@ class CampaignController extends Controller
         $key = explode(' ', $request['search']);
         $taxData = Helpers::getTaxSystemType();
         $productWiseTax = $taxData['productWiseTax'];
-        $campaign = ItemCampaign::with($productWiseTax ? ['taxVats.tax','restaurant'] : ['restaurant'])->findOrFail($campaign);
+        $campaign = ItemCampaign::where('restaurant_id', Helpers::get_restaurant_id())
+            ->with($productWiseTax ? ['taxVats.tax','restaurant'] : ['restaurant'])
+            ->findOrFail($campaign);
         return view('vendor-views.campaign.item.view', compact('campaign','productWiseTax'));
 
     }
 
     public function status($id)
     {
-        $campaign = ItemCampaign::findOrFail($id);
+        $campaign = ItemCampaign::where('restaurant_id', Helpers::get_restaurant_id())->findOrFail($id);
         $campaign->status = !$campaign->status;
         $campaign->save();
         Toastr::success(translate('messages.campaign_status_updated'));

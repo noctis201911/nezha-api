@@ -25,6 +25,8 @@ class OrderSubscriptionController extends Controller
     }
     public function show(Request $request, Subscription $subscription)
     {
+        $restaurantId = Helpers::get_restaurant_id();
+        abort_unless((int) $subscription->restaurant_id === (int) $restaurantId, 404);
         $tab = $request->query('tab', 'info');
         return view('vendor-views.order-subscription.view', compact('subscription', 'tab'));
     }
