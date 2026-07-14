@@ -26,7 +26,7 @@
 | 10 | 三方交叉流程 | staging 完整通过，production 版本待升级 | 顾客↔商家↔平台正向、退款逆向、凭证金额不一致负向、无重复转账提示均跑通；`e42035c` 已将截图/渠道/金额/后果与确认、拒绝统一到可见现代详情 owner，390×844、320×720、1365×900 完成拒绝→重传→确认，单次请求/写入/通知成立。production 尚未包含。 |
 | 11 | 演示数据清除 | 阻断（工具已 fail closed） | marker 精确命中 vendors=7、restaurants=7、local_life_merchants=6、local_life_posts=21，总表行数分别为 9/9/10/21，二者不可混用；`/config` 仍返回 `Demo Banner`。版本化工具的精确 scope 覆盖 31 订单、22 评价、0 add-on 和 6 个商家当前名称；补齐备份已损失的 21 个 emoji 后，production 只读 PLAN `c13203f4…` 与隔离库 PLAN `55bdf110…` 的 20/20 类目标行指纹一致。schema 全列审计的 48 个非零引用入口收敛为 26 类 manifest 外 blocker，新增关键项包括 seed category 关联但 manifest 外 food 58、coupon claim 4、message 2、order timeout event 38、review report 1、offline payment 23；两端 blocker/计数一致，rehearsal 在事务前 exit 4 拒绝。旧 production 本地 untracked 8 子脚本禁止直接执行；先由数据 owner 逐类裁决并补可逆证据。 |
 | 12 | 真实商家就绪 | 阻断 | 店 12 `active=0`、营业时间记录=0，38/38 菜品上架；支付宝码和 TRC20 地址存在，BEP20 地址不存在。当前 `nezha_deposit_mode_status=0`、最低保证金阈值=0、店 12 佣金关闭，因此保证金/余额为 0 **不是当前免佣免押阶段的独立阻断**。硬门是营业时间、实际经营者、收款资料归属、通知接收和最终激活均未签收。 |
-| 13 | 开关上线态 | 阻断 | 56 个开关中 `nezha_preorder_status=1`、`nezha_notif_async_status=1`、`nezha_merchant_video_status=1` 与签收状态不闭环；`schedule_order=true`，故预订单是“依赖已开但 owner 未签”，不是隐藏依赖仍关。视频开关虽为 1，但商户 12 的 2 条记录都缺 public cover，规范化输出 0、前端整卡隐藏，需补素材签收或另批回退 0。`nezha_autooffline_status=1` 符合 A 类目标，仅原台账现值过期。禁止静默把当前值改写成批准值。 |
+| 13 | 开关上线态 | 阻断 | 56 个开关中 `nezha_preorder_status=1`、`nezha_notif_async_status=1`、`nezha_merchant_video_status=1` 与签收状态不闭环；`schedule_order=true`，故预订单是“依赖已开但 owner 未签”，不是隐藏依赖仍关。production 当前 release + 共享 storage 只读核对商户 12 视频 stored=2、normalized=2，技术可见性成立，剩余是内容 owner 对两条封面/标题/外跳的批准。`nezha_autooffline_status=1` 符合 A 类目标，仅原台账现值过期。禁止静默把当前值改写成批准值。 |
 | 14 | 通知送达 | staging 语义/幂等通过，真渠道未测 | 首次创建 `pending_merchant_refund` 才生成顾客“待商家退款”；商家或平台完成通知只由原子状态转换赢家生成，重复操作不重复投递。queue/Redis 正常且 `/config is_mail_active=true`，但配置声明不等于 FCM/邮件/Telegram 真实送达；物理设备回执与 production 真实推送未验。 |
 | 15 | 手册/客服/退款流程 | staging 通过，production 版本阻断 | B 方案“平台不碰钱、商家原路退”与产品语义现已一致；顾客、商家、管理员列表/详情均区分待商家退款、争议核实中和已标记退款。production 尚未包含。 |
 | 16 | 法律/政策 | 阻断 | 隐私政策声称数据库整体静态加密；2026-07-14 复核共 192 个 InnoDB 表，其中 33 个无 `ENCRYPTION='Y'`，系统盘为普通 ext4、未见 LUKS/全盘加密，事实与政策不一致。仍需亚美尼亚律师审校。 |
@@ -58,11 +58,13 @@
 2. 首页性能阻断已由 fixed-SHA 平行 staging 验收关闭；shared staging 仍保留 Web 10 tracked + 6 untracked、API 37 tracked + 2 untracked WIP，现有脚本仍会对移动 ref 执行 `reset --hard`，API 脚本还无条件 `migrate --force`，不得为追平候选而运行。任何后续 shared-staging/production 动作必须先由 WIP owner checkpoint/迁移，再用精确 40-hex SHA、零 migration diff/pending 和新的明确授权。
 3. 让隐私政策的静态加密陈述与真实存储保护一致；这是安全/合规改造，不得边测边批量 ALTER 33 表。
 4. 对三项开关漂移逐项取得 owner 签收，并清理演示数据、确认真实商家营业/保证金/收款资料。
+5. 修复加密数据库备份的 `utf8mb4` 字符保真：旧备份把 21 个已知 emoji 恢复为 `?`，必须用新备份在全新隔离库完成字符样本与目标行指纹一致性复核；结构/计数/mysqlcheck 通过不能替代这一门。
 
 > 2026-07-14 只读收口校准：第 4 项中的“保证金”只在未来启用 `nezha_deposit_mode_status`/佣金时才重新成为硬门；当前阶段必须签收的是店 12 营业时间、经营者、收款资料、通知和 `active`。六类 NO-GO 的唯一 owner、签收、自动/人工边界与动作包见 `docs/PRELAUNCH_CLOSURE_LEDGER_20260714.md`。
 
 ## 清场与回滚
 
+- 本轮只读收口动作包提交 `9c6b4c5bbbaeb7b27dc19a3c968625862debb233` 已进入 API `origin/main`，只包含文档、默认只读/fail-closed demo 工具和契约测试，migration/运行时代码 diff=0。一次性数据库 `nezha_qa_demo_goa_20260714`、用户 `nezha_qa_goa@localhost` 与 `/tmp/nezha-demo-*` 证据副本均已删除并复核为 0；shared staging 与 production 没有部署、配置/数据/开关/资金写入或进程重启。
 - 一次性数据库 `nezha_qa_e2e_20260714093149` 已删除并复核不存在；19090–19095 隔离监听均已停止。
 - `/tmp/nezha-prelaunch-*`、本轮 QA 脚本、生产 release 中三个 `_prelaunch_*` 探针均已精确删除；生产运行文件、PM2 进程、release/cache 未清理或重启。
 - 商家付款凭证 staging QA 已精确删除 1 用户、1 订单、1 order detail、1 offline payment、2 任务日志、2 通知和全部明确用户依赖及 1 个当前 proof 文件；marker 与当前/被替换凭证路径均为 0，商家、设备 token、支付方式、业务/全局/餐厅通知设置与封存原值逐字段一致。

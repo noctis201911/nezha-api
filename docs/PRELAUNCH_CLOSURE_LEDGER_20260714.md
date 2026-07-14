@@ -4,8 +4,9 @@
 
 ## 运行基线
 
-- Web 候选 `a9e5007`，`origin/main=b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed`；production `2f81803` / `20260714-101004-2f81803`。
-- API 候选 `ab346c42`，`origin/main=0c81373f7eb703ebe9bcefdec3cbebf868652ab4`；production `e044d34` / `20260714-070255-e044d34`。
+- Web 应用候选 `a9e5007`，`origin/main=b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed`；production `2f81803` / `20260714-101004-2f81803`。
+- API 应用候选 `ab346c42`；本轮只含文档/离线工具的提交 `9c6b4c5bbbaeb7b27dc19a3c968625862debb233` 已进入 `origin/main`，无 migration/运行时代码；production `e044d34` / `20260714-070255-e044d34`。
+- 最终只读复核时，共享源码工作树已漂移为 Web `fb142145`（dirty 13）、API `5042b39b`（dirty 87），表明存在本动作包之外的在途改动；本轮没有清理、reset、提交或部署这些工作树，不能把它们冒充上述已验候选或 production 运行态。
 - shared staging 保持 Web `ef542785`、BUILD `n4VGKngOQXDelVRDdK9yN`、dirty 16；API `f766dd62`、dirty 39。禁止清理或 reset。
 - production→候选 migration 文件 diff=0。上线前仍须重新查 pending/new migration。
 
@@ -29,13 +30,13 @@
 |---|---|---|---|---|
 | `nezha_preorder_status=1` | `schedule_order=true`，依赖已开；exact-main SQLite 语义测试已过 | 产品 owner + 商家运营 | API 预约聚焦 53 tests + Web 取消动作契约已关闭 | 真实 UI 下单/取消/并发/刷新通过；决定保持 1 或另批回退 0 |
 | `nezha_notif_async_status=1` | queue online、failed=0、Redis PONG；exact-main 异步语义 7 tests 已过；无真实渠道回执 | 运营 owner + 实际收件人 | 隔离入队/跳过/同步回退语义已关闭 | FCM/邮件/TG 真实回执后签字 |
-| `nezha_merchant_video_status=1` | 商户 12 存 2 条抖音记录，但两张封面文件均缺失，规范化输出 0，前端整卡隐藏 | 平台负责人 | 只读模型/文件核对已关闭事实层 | 补齐并批准封面/内容/外跳，或另批回退 0 |
+| `nezha_merchant_video_status=1` | production 当前 release 读取商户 12：stored=2、normalized=2，封面与 `v.douyin.com` 外跳技术约束通过 | 平台负责人 | 只读模型/共享 storage 核对已关闭事实层 | 内容 owner 批准两条封面/标题/外跳，或另批回退 0 |
 
 - **唯一 owner**：平台上线开关 owner（平台负责人）。
 - **风险/回滚**：未验功能/内容已暴露；不接受当前值时另取 Go 精确回退单项为 0。
 - `nezha_autooffline_status=1` 符合 A 类应开启目标，仅旧台账值漂移，不计第四项偏差；仍需通知/阈值签收。
 - **非生产证据**：API exact-main 在强制 SQLite `:memory:` 安全门下共 `63 tests / 162 assertions` 通过，其中预约 53、异步通知 7、DB 安全门 3；Web exact-main `src/utils/nezhaCancelAction.test.js` 通过。PHPUnit 仅有既存 schema/doc-comment deprecation 和 SQLite 无 `business_settings` 的测试日志。上述证据不覆盖真实浏览器预约链、真实渠道送达或 owner 批准。
-- **视频只读证据**：production 直接读取 `LocalLifeMerchant#12` 并调用规范化方法，stored=2、normalized=0；两条均为 `https://v.douyin.com`，但 `nzm-12-vid-1.jpg`、`nzm-12-vid-2.jpg` 在 public disk 不存在。公开详情 API 会写浏览计数，本轮为遵守零生产写入没有调用；根据 API/前端契约，`video_links=[]` 时整卡不渲染。
+- **视频只读证据**：从 production 当前 release（不是独立 worktree）直接读取 `LocalLifeMerchant#12` 并使用共享 storage 调用规范化方法，stored=2、normalized=2；两条均为 `https://v.douyin.com` 且 cover URL 存在。独立 worktree 会因隔离 storage 错报 normalized=0，不能作为线上素材存在性证据。公开详情 API 会写浏览计数，本轮为遵守零 production 写入没有调用；剩余仅为内容 owner 人工签收。
 
 签收：`[ ] preorder` `[ ] notif_async` `[ ] merchant_video` `[ ] autooffline 通知/阈值`
 
@@ -44,6 +45,7 @@
 - **当前事实**：marker 命中 vendors 7、restaurants 7、local-life merchants 6、posts 21；总体行数 9/9/10/21；`Demo Banner` 仍在。
 - **证据入口**：版本化 `nzdemo-rollback.sh`/`nzdemo-cleanup.php` 的 PLAN、固定 evidence SHA、production `/config`。
 - **唯一 owner**：上线数据清理 owner（未实名，执行生产前必须指派）。
+- **备份子门唯一 owner**：基础设施/恢复负责人（未实名前由平台负责人指派，不与数据清理 owner 混同）。
 - **需签收**：平台负责人。
 - **自动验证**：marker、manifest 哈希、订单/评价/add-on 精确 scope、manifest 外关联 blocker、执行后残留、事务回滚同 hash。
 - **人工边界**：任何关联订单、评价、菜品、退款/风控/资金/通知/用户状态或已改变内容是否可删；Banner 替换文案。
@@ -77,7 +79,7 @@
 - `_ll_merchants_manifest.json`: `75a635af0a887aa12e956d75ba3c5578fa669ea6e4e93924b97be77f3fc174bd`
 - `_demo_locallife_service.json.archived.20260617140211`: `19be5491c8bbf40e0e72a1f35e3d2cb29a5568a2c4d65b9029b96764eb114f80`
 
-签收：`[ ] 数据清理 owner` `[ ] 关联订单/内容逐项裁决` `[ ] 平台负责人 production GO`
+签收：`[ ] 数据清理 owner` `[ ] 关联订单/内容逐项裁决` `[ ] 备份字符保真` `[ ] 平台负责人 production GO`
 
 ## 4. 店 12 真实营业就绪
 
@@ -125,9 +127,9 @@
 
 | 状态 | 本轮结果 | 剩余边界 |
 |---|---|---|
-| 已关闭（零 production 写入） | 开关/店 12/静态加密事实漂移已校准；预约与异步通知 exact-main 自动语义通过；旧 demo 脚本风险已替换为版本化 fail-closed 入口；demo manifest 外关联已精确暴露；视频“开关 1 但实际不可见”的原因已定位 | 这些只关闭事实与自动化子项，不改变六类 NO-GO |
+| 已关闭（零 production 写入） | 开关/店 12/静态加密事实漂移已校准；预约与异步通知 exact-main 自动语义通过；旧 demo 脚本风险已替换为版本化 fail-closed 入口；demo manifest 外关联已精确暴露；视频 stored=2/normalized=2 的技术可见性已核对 | 这些只关闭事实与自动化子项，不改变六类 NO-GO |
 | 可继续准备、不能代签 | 生成数据裁决表、律师/会计事实包、设备矩阵、渗透范围、真实通知用例和开关签收表 | 可以继续写文档/做隔离测试；不能发送真实通知、改配置/素材/数据或冒充 owner 签字 |
-| 必须等待外部负责人 | 隐私/亚美尼亚法/税务/USDT 意见；preorder/notification/video 产品运营签收；demo 关联数据裁决；店 12 店主与收款归属；独立渗透、物理设备、真实渠道回执 | 任一未完成，production 仍 NO-GO |
+| 必须等待外部负责人 | 隐私/亚美尼亚法/税务/USDT 意见；preorder/notification/video 产品运营签收；demo 关联数据裁决与备份恢复 owner；店 12 店主与收款归属；独立渗透、物理设备、真实渠道回执 | 任一未完成，production 仍 NO-GO |
 
 ## 推荐动作顺序与权限停点
 
