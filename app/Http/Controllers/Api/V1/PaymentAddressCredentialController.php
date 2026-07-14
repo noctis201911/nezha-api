@@ -6,6 +6,7 @@ use App\CentralLogics\Helpers;
 use App\CentralLogics\NezhaPaymentAddressCredentialService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
 class PaymentAddressCredentialController extends Controller
@@ -14,6 +15,12 @@ class PaymentAddressCredentialController extends Controller
     {
         if (! NezhaPaymentAddressCredentialService::enabled()) {
             return $this->error('payment_address_credential_disabled', '该付款保护功能暂未启用', 403);
+        }
+
+        // 路由需在总闸关闭时允许游客取得兼容码；一旦开启，必须在此处强制 API 登录。
+        $user = $request->user() ?: Auth::guard('api')->user();
+        if (! $user) {
+            return $this->error('address_credential_login_required', '请先登录，再重新获取本次付款地址', 401);
         }
 
         $validator = Validator::make($request->all(), [
@@ -26,7 +33,7 @@ class PaymentAddressCredentialController extends Controller
 
         try {
             $issued = NezhaPaymentAddressCredentialService::issue(
-                (int) $request->user()->id,
+                (int) $user->id,
                 (int) $request->input('restaurant_id'),
                 (int) $request->input('method_id')
             );

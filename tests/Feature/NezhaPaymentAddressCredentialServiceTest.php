@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\PaymentAddressCredentialController;
 use App\Models\NezhaPaymentAddressCredential;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -206,6 +207,37 @@ class NezhaPaymentAddressCredentialServiceTest extends TestCase
         $this->assertSame(0, DB::table('coupon_uses')->count());
     }
 
+    public function test_guest_gets_disabled_compatibility_code_but_cannot_issue_when_enabled(): void
+    {
+        $this->seedBase('0');
+        $request = Request::create('/api/v1/customer/payment/address-credential', 'POST', [
+            'restaurant_id' => 20,
+            'method_id' => 30,
+        ]);
+
+        $disabled = (new PaymentAddressCredentialController)->store($request);
+        $this->assertSame(403, $disabled->getStatusCode());
+        $this->assertSame(
+            'payment_address_credential_disabled',
+            $disabled->getData(true)['errors'][0]['code']
+        );
+        $this->assertSame(0, NezhaPaymentAddressCredential::count());
+
+        DB::table('business_settings')
+            ->where('key', NezhaPaymentAddressCredentialService::SWITCH_KEY)
+            ->update(['value' => '1']);
+        $guard = \Mockery::mock();
+        $guard->shouldReceive('user')->once()->andReturn(null);
+        Auth::shouldReceive('guard')->once()->with('api')->andReturn($guard);
+        $enabled = (new PaymentAddressCredentialController)->store($request);
+        $this->assertSame(401, $enabled->getStatusCode());
+        $this->assertSame(
+            'address_credential_login_required',
+            $enabled->getData(true)['errors'][0]['code']
+        );
+        $this->assertSame(0, NezhaPaymentAddressCredential::count());
+    }
+
     public function test_token_is_bound_to_customer_restaurant_method_and_single_order(): void
     {
         $this->seedBase('1');
@@ -268,7 +300,9 @@ class NezhaPaymentAddressCredentialServiceTest extends TestCase
             $issued['token'], 10, 20, 31, 900
         );
         $this->assertSame(strtolower(self::BEP_ADDRESS_A), $resolved->address_snapshot);
-        $this->assertFalse(NezhaPaymentAddressCredentialService::evidence($resolved)['is_current_address']);
+        $evidence = NezhaPaymentAddressCredentialService::evidence($resolved);
+        $this->assertSame(strtolower(self::BEP_ADDRESS_A), $evidence['address']);
+        $this->assertFalse($evidence['is_current_address']);
 
         NezhaPaymentAddressCredentialService::consume($resolved, 900, str_repeat('b', 64));
         $stored = NezhaPaymentAddressCredential::findOrFail($resolved->id);
@@ -276,6 +310,40 @@ class NezhaPaymentAddressCredentialServiceTest extends TestCase
         $this->assertSame(900, $stored->consumed_order_id);
         $this->assertSame(str_repeat('b', 64), $stored->submitted_tx_hash);
         $this->assertSame('consumed', NezhaPaymentAddressCredentialService::evidence($stored)['state']);
+    }
+
+    public function test_customer_order_projection_exposes_only_the_credential_address_snapshot(): void
+    {
+        $row = new \App\Models\OfflinePayments();
+        $row->status = 'pending';
+        $row->payment_info = json_encode([
+            'method_id' => 30,
+            'method_name' => 'USDT (TRC20)',
+            '交易哈希' => str_repeat('a', 64),
+        ]);
+        $row->method_fields = '[]';
+        $row->nezha_auto_check = [
+            'address_credential' => [
+                'credential_id' => 'credential-public-id',
+                'address_version' => '0123456789abcdef',
+                'network' => 'TRC20',
+                'address' => self::TRON_ADDRESS,
+                'issued_at' => '2026-07-14T10:00:00+00:00',
+                'expires_at' => '2026-07-14T10:10:00+00:00',
+                'state' => 'consumed',
+                'is_current_address' => false,
+                'secret_hash' => 'must-not-leak',
+            ],
+            'chain' => ['expected_to' => 'must-not-leak'],
+        ];
+
+        $formatted = \App\CentralLogics\Helpers::offline_payment_formater($row);
+        $credential = $formatted['data']['address_credential'];
+
+        $this->assertSame(self::TRON_ADDRESS, $credential['address']);
+        $this->assertSame('0123456789abcdef', $credential['address_version']);
+        $this->assertArrayNotHasKey('secret_hash', $credential);
+        $this->assertArrayNotHasKey('chain', $formatted['data']);
     }
 
     public function test_expired_or_revoked_unconsumed_credential_is_rejected_but_evidence_remains(): void

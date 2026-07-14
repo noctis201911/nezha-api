@@ -6,6 +6,7 @@ use App\CentralLogics\NezhaPaymentAddressChangeService;
 use App\Http\Controllers\Controller;
 use App\Models\NezhaPaymentAddressChange;
 use App\Models\Restaurant;
+use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -21,7 +22,7 @@ class NezhaPaymentAddressChangeController extends Controller
             'idempotency_key' => 'required|string|min:8|max:191',
         ]);
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+            return $this->validationError($request, $validator);
         }
 
         try {
@@ -35,19 +36,33 @@ class NezhaPaymentAddressChangeController extends Controller
                 (string) $request->input('idempotency_key')
             );
 
-            return response()->json($this->resource($change), 201);
+            if ($request->expectsJson()) {
+                return response()->json($this->resource($change), 201);
+            }
+
+            return $this->success((int) $restaurant->id, '地址变更申请已创建；当前地址未改变，正在等待商家 owner 核对。');
         } catch (\DomainException $e) {
-            return $this->domainError($e);
+            return $this->domainError($request, $e);
         }
     }
 
-    public function show(NezhaPaymentAddressChange $change)
+    public function show(Request $request, NezhaPaymentAddressChange $change)
     {
         if (! NezhaPaymentAddressChangeService::enabled()) {
-            return response()->json(['error' => 'address_change_feature_disabled'], 404);
+            if ($request->expectsJson()) {
+                return response()->json(['error' => 'address_change_feature_disabled'], 404);
+            }
+            abort(404);
         }
 
-        return response()->json($this->resource($change));
+        if ($request->expectsJson()) {
+            return response()->json($this->resource($change));
+        }
+
+        return redirect()->to(
+            route('admin.restaurant.view', [$change->restaurant_id, 'payment_info'])
+            .'?review='.rawurlencode((string) $change->public_id)
+        );
     }
 
     public function approve(Request $request, NezhaPaymentAddressChange $change)
@@ -57,7 +72,7 @@ class NezhaPaymentAddressChangeController extends Controller
             'totp_code' => ['required', 'string', 'regex:/^\d{6}$/'],
         ]);
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+            return $this->validationError($request, $validator);
         }
 
         try {
@@ -68,9 +83,16 @@ class NezhaPaymentAddressChangeController extends Controller
                 (string) $request->input('totp_code')
             );
 
-            return response()->json($this->resource($approved));
+            if ($request->expectsJson()) {
+                return response()->json($this->resource($approved));
+            }
+
+            return $this->success(
+                (int) $approved->restaurant_id,
+                '独立复核已通过；当前地址仍未改变，正在等待旧地址凭据排空。'
+            );
         } catch (\DomainException $e) {
-            return $this->domainError($e);
+            return $this->domainError($request, $e);
         }
     }
 
@@ -80,7 +102,7 @@ class NezhaPaymentAddressChangeController extends Controller
             'totp_code' => ['required', 'string', 'regex:/^\d{6}$/'],
         ]);
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+            return $this->validationError($request, $validator);
         }
 
         try {
@@ -90,9 +112,13 @@ class NezhaPaymentAddressChangeController extends Controller
                 (string) $request->input('totp_code')
             );
 
-            return response()->json($this->resource($canceled));
+            if ($request->expectsJson()) {
+                return response()->json($this->resource($canceled));
+            }
+
+            return $this->success((int) $canceled->restaurant_id, '地址变更申请已取消；当前地址未改变。');
         } catch (\DomainException $e) {
-            return $this->domainError($e);
+            return $this->domainError($request, $e);
         }
     }
 
@@ -104,7 +130,7 @@ class NezhaPaymentAddressChangeController extends Controller
             'totp_code' => ['required', 'string', 'regex:/^\d{6}$/'],
         ]);
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+            return $this->validationError($request, $validator);
         }
 
         try {
@@ -116,14 +142,21 @@ class NezhaPaymentAddressChangeController extends Controller
                 (string) $request->input('totp_code')
             );
 
-            return response()->json([
-                'restaurant_id' => (int) $state->restaurant_id,
-                'network' => (string) $state->network,
-                'state' => (string) $state->state,
-                'paused_at' => $state->paused_at?->toIso8601String(),
-            ]);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'restaurant_id' => (int) $state->restaurant_id,
+                    'network' => (string) $state->network,
+                    'state' => (string) $state->state,
+                    'paused_at' => $state->paused_at?->toIso8601String(),
+                ]);
+            }
+
+            return $this->success(
+                (int) $state->restaurant_id,
+                $state->network.' 收款已紧急暂停；未消费的地址凭据已撤销。'
+            );
         } catch (\DomainException $e) {
-            return $this->domainError($e);
+            return $this->domainError($request, $e);
         }
     }
 
@@ -149,7 +182,23 @@ class NezhaPaymentAddressChangeController extends Controller
         ];
     }
 
-    private function domainError(\DomainException $e)
+    private function validationError(Request $request, $validator)
+    {
+        if ($request->expectsJson()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        return back()->withErrors($validator)->withInput();
+    }
+
+    private function success(int $restaurantId, string $message)
+    {
+        Toastr::success($message);
+
+        return redirect()->route('admin.restaurant.view', [$restaurantId, 'payment_info']);
+    }
+
+    private function domainError(Request $request, \DomainException $e)
     {
         $code = $e->getMessage();
         $status = match ($code) {
@@ -160,9 +209,29 @@ class NezhaPaymentAddressChangeController extends Controller
             default => 409,
         };
 
-        return response()->json([
-            'error' => $code,
-            'message' => '收款地址变更未执行，请核对当前状态与验证条件',
-        ], $status);
+        if ($request->expectsJson()) {
+            return response()->json([
+                'error' => $code,
+                'message' => '收款地址变更未执行，请核对当前状态与验证条件',
+            ], $status);
+        }
+
+        $message = match ($code) {
+            'address_change_feature_disabled' => '地址变更状态机尚未启用。',
+            'address_change_step_up_required' => '当前管理员尚未启用 TOTP，不能执行资金地址操作。',
+            'address_change_totp_invalid' => 'TOTP 验证码无效，地址未变更。',
+            'address_change_totp_replayed' => '该 TOTP 时间步已用于其它高风险操作，请等待下一组验证码。',
+            'address_change_totp_rate_limited' => 'TOTP 尝试过多，请稍后再试。',
+            'address_change_distinct_admin_required' => '申请人不能自批，必须由另一名管理员复核。',
+            'address_change_network_state_missing' => '该网络尚未完成受控状态初始化，不能从此页面发起变更。',
+            'address_change_current_address_invalid' => '当前地址不符合严格格式，不能进入自动变更流程。',
+            'address_change_already_pending' => '该网络已有未完成的地址变更申请。',
+            'address_change_fingerprint_mismatch' => '候选地址指纹不一致，操作已拒绝。',
+            'address_change_state_invalid' => '申请状态已变化，请刷新页面后重新核对。',
+            default => '收款地址操作未执行；当前地址未改变，请刷新后核对状态。',
+        };
+        Toastr::error($message);
+
+        return back();
     }
 }

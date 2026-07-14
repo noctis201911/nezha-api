@@ -167,6 +167,9 @@ class NezhaPaymentAddressCredentialService
             'credential_id' => (string) $credential->public_id,
             'address_version' => substr((string) $credential->address_fingerprint, 0, 16),
             'network' => (string) $credential->network,
+            // 顾客订单详情必须回放签发时的地址快照，绝不能回退到商家当前地址。
+            // 该数组只会进入订单本人可见的安全投影；凭据密钥始终不写入证据。
+            'address' => (string) $credential->address_snapshot,
             'issued_at' => $credential->issued_at?->toIso8601String(),
             'expires_at' => $credential->expires_at?->toIso8601String(),
             'state' => $state,

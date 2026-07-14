@@ -827,7 +827,12 @@ class VendorController extends Controller
             $rmbRate = (float)(BusinessSetting::where('key', 'nezha_usd_to_rmb_rate')->first()?->value ?? 7.1);
             $cnyToAmd = (float)(BusinessSetting::where('key', 'nezha_rate_cny_to_amd')->first()?->value ?? 55);
             $usdToAmd = (float)(BusinessSetting::where('key', 'nezha_rate_usd_to_amd')->first()?->value ?? 400);
-            return view('admin-views.vendor.view.payment-info', compact('restaurant', 'depositMode', 'depositThreshold', 'depositBalance', 'depositLogs', 'rmbRate', 'cnyToAmd', 'usdToAmd'));
+            $paymentAddressSecurity = \App\CentralLogics\NezhaPaymentAddressChangeView::admin(
+                $restaurant,
+                request()->query('review'),
+                auth('admin')->user()
+            );
+            return view('admin-views.vendor.view.payment-info', compact('restaurant', 'depositMode', 'depositThreshold', 'depositBalance', 'depositLogs', 'rmbRate', 'cnyToAmd', 'usdToAmd', 'paymentAddressSecurity'));
         } elseif ($tab == 'order') {
             $orders = Order::where('restaurant_id', $restaurant->id)->with('customer')
                 ->when(isset($key), function ($q) use ($key) {

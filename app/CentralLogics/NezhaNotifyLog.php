@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * 哪吒 — 通知投递结果日志(P4 outbox 轻量踏脚石)。
- * 每次对外通知(TG/邮件)发送后记一行结果, 供日常运营检查「通知有没有送达」。
+ * 每次通知(站内/TG/邮件/推送)尝试后记一行结果, 供日常运营检查「通知有没有送达」。
  *
  * 🔴 铁律:
  *  - best-effort: 整个 record() 包在 try/catch, 绝不抛异常、绝不阻断真实通知或任何 L1 流程。
@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Log;
 class NezhaNotifyLog
 {
     /**
-     * @param string   $channel  telegram|email
+     * @param string   $channel  site|telegram|email|push
      * @param string   $target   merchant|owner|support
      * @param string   $event    new_order|remind|prep_overtime|cancel_refund|owner_escalate ...
      * @param string   $outcome  ok|failed|skipped|no_recipient
