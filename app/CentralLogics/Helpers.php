@@ -2986,6 +2986,18 @@ class Helpers
         return false;
     }
 
+    /**
+     * The reviewer middleware also scopes legacy combined roles containing this
+     * module, so the shell must use the exact same predicate.
+     */
+    public static function isExclusivePaymentAddressReviewer(): bool
+    {
+        $admin = auth('admin')->user();
+
+        return $admin !== null
+            && \App\Http\Middleware\PaymentAddressReviewerScopeMiddleware::isReviewer($admin);
+    }
+
     public static function employee_module_permission_check($mod_name)
     {
 

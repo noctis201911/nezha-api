@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\CentralLogics\NezhaPaymentAddressChangeService;
+use App\CentralLogics\NezhaPaymentAddressReviewQueue;
 use App\Http\Controllers\Controller;
 use App\Models\NezhaPaymentAddressChange;
 use App\Models\Restaurant;
@@ -18,26 +19,23 @@ class NezhaPaymentAddressChangeController extends Controller
             abort(404);
         }
 
-        // The formal reviewer page is intentionally held until the Fable redesign
-        // is approved. Keep the least-privilege JSON contract available for the
-        // future UI without exposing the withdrawn V2 screen.
-        abort_unless($request->expectsJson(), 404);
-
-        $changes = NezhaPaymentAddressChange::query()
-            ->with(['restaurant:id,name', 'requestedByAdmin:id,f_name,l_name,email'])
-            ->where('state', 'pending_distinct_admin')
-            ->orderBy('expires_at')
-            ->orderBy('id')
-            ->limit(100)
-            ->get();
+        $changes = NezhaPaymentAddressReviewQueue::get();
 
         $resources = $changes
             ->map(fn (NezhaPaymentAddressChange $change): array => $this->resource($change))
             ->values();
 
-        return response()->json([
-            'data' => $resources,
-            'count' => $resources->count(),
+        if ($request->expectsJson()) {
+            return response()->json([
+                'data' => $resources,
+                'count' => $resources->count(),
+            ]);
+        }
+
+        return view('admin-views.nezha-payment-address-review', [
+            'changes' => $changes,
+            'currentAdminId' => (int) auth('admin')->id(),
+            'reviewError' => session('payment_address_review_error'),
         ]);
     }
 
@@ -115,7 +113,7 @@ class NezhaPaymentAddressChangeController extends Controller
                 '独立复核已通过，新地址已用于新付款；已签发的旧地址凭据只保留到各自到期。'
             );
         } catch (\DomainException $e) {
-            return $this->domainError($request, $e);
+            return $this->domainError($request, $e, $change);
         }
     }
 
@@ -145,7 +143,7 @@ class NezhaPaymentAddressChangeController extends Controller
 
             return $this->reviewSuccess('独立复核已驳回；当前地址未改变，商家通知将按实际渠道投递并留痕。');
         } catch (\DomainException $e) {
-            return $this->domainError($request, $e);
+            return $this->domainError($request, $e, $change);
         }
     }
 
@@ -267,7 +265,11 @@ class NezhaPaymentAddressChangeController extends Controller
         return back();
     }
 
-    private function domainError(Request $request, \DomainException $e)
+    private function domainError(
+        Request $request,
+        \DomainException $e,
+        ?NezhaPaymentAddressChange $reviewChange = null
+    )
     {
         $code = $e->getMessage();
         $status = match ($code) {
@@ -296,11 +298,21 @@ class NezhaPaymentAddressChangeController extends Controller
             'address_change_current_address_invalid' => '当前地址不符合严格格式，不能进入自动变更流程。',
             'address_change_already_pending' => '该网络已有未完成的地址变更申请。',
             'address_change_fingerprint_mismatch' => '候选地址指纹不一致，操作已拒绝。',
-            'address_change_state_invalid' => '申请状态已变化，请刷新页面后重新核对。',
+            'address_change_state_invalid', 'address_change_expired' => '申请状态已变化，请刷新页面后重新核对。',
             default => '收款地址操作未执行；当前地址未改变，请刷新后核对状态。',
         };
         Toastr::error($message);
 
-        return back();
+        $response = back();
+        if ($reviewChange !== null) {
+            $response->with('payment_address_review_error', [
+                'change_id' => (string) $reviewChange->public_id,
+                'code' => $code,
+                'message' => $message,
+                'status' => $status,
+            ]);
+        }
+
+        return $response;
     }
 }

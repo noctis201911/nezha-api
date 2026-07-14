@@ -2,14 +2,21 @@
 use App\CentralLogics\Helpers;
 use Illuminate\Support\Facades\Cache;
 
+$__exclusivePaymentAddressReviewer = Helpers::isExclusivePaymentAddressReviewer();
+
 // 哪吒M2-D1: 订单计数改读单一真相源 NezhaAdminCounts(60s缓存·平台全量), 退役 order_stats_summary
 // /order_scheduled_stats 的 rememberForever 永久漂移(修「全部28 vs 列表31」根因)。键不重叠, 一份即可。
-$__nzAdminCounts = \App\CentralLogics\NezhaAdminCounts::all();
+$__nzAdminCounts = $__exclusivePaymentAddressReviewer
+    ? ['grp_pending' => 0, 'offline_payments' => 0, 'refund_requested' => 0, 'ongoing' => 0, 'searching_dm' => 0]
+    : \App\CentralLogics\NezhaAdminCounts::all();
 $order = (object) $__nzAdminCounts;
 $order_sch = $order;
 
 // 哪吒M2-D4: 驾驶舱队列计数(逾期未退款/争议等)单一真相源, 供侧栏徽标与顶栏铃铛/驾驶舱同源(60s缓存·防御式绝不抛)。
-$__nzDash = \App\CentralLogics\NezhaAdminDashboard::counts();
+$__nzDash = $__exclusivePaymentAddressReviewer ? [] : \App\CentralLogics\NezhaAdminDashboard::counts();
+$__paymentAddressReviewCount = Helpers::module_permission_check('payment_address_review')
+    ? \App\CentralLogics\NezhaPaymentAddressReviewQueue::count()
+    : 0;
 
 /**
  * 哪吒超管M1(D1 侧栏配置数组化 + D3 8组重排)。
@@ -30,7 +37,7 @@ $__navGroups = [];
 
 // ==== ①今天(M2-D4 驾驶舱并存: 第一项「今天」=驾驶舱, 第二项「数据看板」=旧dashboard; 默认落点暂不切, 稳定一周后 1 行切换) ====
 $__navGroups[] = [
-    'gate' => true,
+    'gate' => !$__exclusivePaymentAddressReviewer,
     'subtitle' => null,
     'items' => [
         ['label' => '今天', 'label_raw' => true, 'route' => route('admin.nezha-today'), 'icon' => 'tio-today',
@@ -82,12 +89,13 @@ $__navGroups[] = [
 
 // ==== ③钱·风控(风控中心原样迁入 + 原"交易/资金管理"组的deposit系5项合并进来;搜索需求/顾客取消理由已按§B移出至⑦洞察) ====
 $__navGroups[] = [
-    'gate' => Helpers::module_permission_check('risk') || Helpers::module_permission_check('risk_settings') || Helpers::module_permission_check('refund') || Helpers::module_permission_check('kyc') || Helpers::module_permission_check('deposit'),
+    'gate' => Helpers::module_permission_check('risk') || Helpers::module_permission_check('risk_settings') || Helpers::module_permission_check('refund') || Helpers::module_permission_check('kyc') || Helpers::module_permission_check('deposit') || Helpers::module_permission_check('payment_address_review'),
     'subtitle' => '钱·风控', 'subtitle_raw' => true,
     'items' => [
         [
             'label' => '风控中心', 'label_raw' => true, 'icon' => 'tio-shield',
             'active' => Request::is('admin/nezha-risk*') || Request::is('admin/nezha-refund*') || Request::is('admin/nezha-kyc*'),
+            'gate' => !$__exclusivePaymentAddressReviewer,
             'children' => array_merge(
                 Helpers::module_permission_check('risk') ? [
                     ['label' => '审核队列', 'label_raw' => true, 'route' => route('admin.nezha-risk.queue'), 'active' => Request::is('admin/nezha-risk/queue')],
@@ -109,11 +117,21 @@ $__navGroups[] = [
                 ] : [],
             ),
         ],
+        [
+            'label' => '收款地址复核', 'label_raw' => true,
+            'route' => route('admin.payment-address-review.pending'), 'icon' => 'tio-checkmark-square',
+            'active' => Request::is('admin/payment-address-review*'),
+            'gate' => Helpers::module_permission_check('payment_address_review'),
+            'reviewer_only' => true,
+            'badge' => $__paymentAddressReviewCount > 0
+                ? ['value' => $__paymentAddressReviewCount, 'class' => 'badge-soft-info']
+                : null,
+        ],
         ['label' => '佣金充值管理', 'label_raw' => true, 'route' => route('admin.nezha-deposit.index'), 'icon' => 'tio-wallet', 'active' => Request::is('admin/nezha-deposit*'), 'gate' => Helpers::module_permission_check('deposit')],
         ['label' => '商家退出结算', 'label_raw' => true, 'route' => route('admin.nezha-offboard.index'), 'icon' => 'tio-logout', 'active' => Request::is('admin/nezha-offboard*'), 'gate' => Helpers::module_permission_check('deposit')],
         ['label' => '充值申请', 'label_raw' => true, 'route' => route('admin.nezha-topup.index'), 'icon' => 'tio-add-circle', 'active' => Request::is('admin/nezha-topup*'), 'gate' => Helpers::module_permission_check('deposit')],
         ['label' => '押金退款', 'label_raw' => true, 'route' => route('admin.nezha-topup.refunds'), 'icon' => 'tio-undo', 'active' => Request::is('admin/nezha-topup/refunds*'), 'gate' => Helpers::module_permission_check('deposit')],
-        ['label' => '平台集运申报', 'label_raw' => true, 'route' => route('admin.nezha-consolidation.index'), 'icon' => 'tio-cube', 'active' => Request::is('admin/nezha-consolidation*'), 'gate' => true],
+        ['label' => '平台集运申报', 'label_raw' => true, 'route' => route('admin.nezha-consolidation.index'), 'icon' => 'tio-cube', 'active' => Request::is('admin/nezha-consolidation*'), 'gate' => !$__exclusivePaymentAddressReviewer],
     ],
 ];
 
@@ -256,11 +274,11 @@ $__navGroups[] = [
 
 // ==== ⑦洞察(留4张报表 + 搜索需求/顾客取消理由;原两个2子项父级拆分,非留4张的子项挪入⑧报表存档折叠) ====
 $__navGroups[] = [
-    'gate' => true,
+    'gate' => !$__exclusivePaymentAddressReviewer,
     'subtitle' => '洞察', 'subtitle_raw' => true,
     'items' => [
-        ['label' => '搜索需求', 'label_raw' => true, 'route' => route('admin.nezha-search-demand.index'), 'icon' => 'tio-search', 'active' => Request::is('admin/nezha-search-demand*'), 'gate' => true],
-        ['label' => '顾客取消理由', 'label_raw' => true, 'route' => route('admin.nezha-order-cancel-demand.index'), 'icon' => 'tio-clear-circle', 'active' => Request::is('admin/nezha-order-cancel-demand*'), 'gate' => true],
+        ['label' => '搜索需求', 'label_raw' => true, 'route' => route('admin.nezha-search-demand.index'), 'icon' => 'tio-search', 'active' => Request::is('admin/nezha-search-demand*'), 'gate' => !$__exclusivePaymentAddressReviewer],
+        ['label' => '顾客取消理由', 'label_raw' => true, 'route' => route('admin.nezha-order-cancel-demand.index'), 'icon' => 'tio-clear-circle', 'active' => Request::is('admin/nezha-order-cancel-demand*'), 'gate' => !$__exclusivePaymentAddressReviewer],
         ['label' => 'messages.transaction_report', 'route' => route('admin.report.day-wise-report'), 'icon' => 'tio-chart-pie-1', 'active' => Request::is('admin/report/transaction-report'), 'plain_link' => true, 'gate' => Helpers::module_permission_check('report')],
         ['label' => 'messages.Regular_order_report', 'title' => 'messages.order_report', 'route' => route('admin.report.order-report'), 'icon' => 'tio-user', 'extra_class' => 'text-capitalize', 'active' => Request::is('admin/report/order-report'), 'plain_link' => true, 'gate' => Helpers::module_permission_check('report')],
         ['label' => 'messages.restaurant_report', 'route' => route('admin.report.restaurant-report'), 'icon' => 'tio-files', 'active' => Request::is('admin/report/restaurant-report'), 'plain_link' => true, 'gate' => Helpers::module_permission_check('report')],
@@ -387,6 +405,25 @@ $__navGroups[] = [
 ];
 // ---- TaxModule插件块 + 订阅管理块(均嵌套在settings闸内,原样字面blade,插入⑧系统组尾部;真实环境TaxModule addon已发布会渲染) ----
 $__navGroups[] = ['raw_include' => 'layouts.admin.partials._sidebar-raw-taxmodule-subscription'];
+
+// reviewer scope 会接管历史上误配了其它模块的组合角色；壳层也必须只留下复核入口，
+// 避免展示最终必被中间件拒绝的死链接。超管与普通员工不进入此分支。
+if ($__exclusivePaymentAddressReviewer) {
+    foreach ($__navGroups as &$__group) {
+        if (! empty($__group['raw_include'])) {
+            $__group = ['gate' => false, 'subtitle' => null, 'items' => []];
+            continue;
+        }
+
+        $__group['gate'] = false;
+        foreach ($__group['items'] as &$__item) {
+            $__item['gate'] = ! empty($__item['reviewer_only']);
+            $__group['gate'] = $__group['gate'] || $__item['gate'];
+        }
+        unset($__item);
+    }
+    unset($__group);
+}
 
 ?>
 <div id="sidebarMain" class="d-none">
