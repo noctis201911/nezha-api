@@ -208,7 +208,7 @@
 
                     <div class="nz-review-warning mb-3">
                         <i class="tio-shield-outlined mt-1"></i>
-                        <div>批准后不会在本请求中直接写入地址；当前实现先进入凭据排空。驳回始终保持当前地址不变，并释放该商家网络的待处理状态。</div>
+                        <div>批准会原子切换新地址，之后的新付款立即使用新地址；已签发的旧地址凭据只保留到各自到期。驳回始终保持当前地址不变。</div>
                     </div>
 
                     <div class="form-group mb-3">
@@ -352,7 +352,7 @@
             if (reasonInput) reasonInput.value = reason.value.trim();
             Swal.fire({
                 title: '确认' + decision + '这次地址变更？',
-                text: decision === '驳回' ? '当前收款地址不会改变。' : '批准后将按地址状态机继续处理。',
+                text: decision === '驳回' ? '当前收款地址不会改变。' : '批准后新地址将立即用于新付款；已签发的旧凭据仍可使用到各自到期。',
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: color,

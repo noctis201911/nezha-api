@@ -5,6 +5,7 @@ namespace App\CentralLogics;
 use App\Models\NezhaPaymentAddressCredential;
 use App\Models\OfflinePaymentMethod;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
@@ -16,6 +17,8 @@ use Illuminate\Support\Str;
 class NezhaPaymentAddressCredentialService
 {
     public const SWITCH_KEY = 'nezha_payment_address_credential_status';
+
+    public const UNCONSUMED_RETENTION_DAYS = 30;
 
     public static function enabled(): bool
     {
@@ -37,7 +40,12 @@ class NezhaPaymentAddressCredentialService
             : NezhaUsdtAddress::TRC20;
     }
 
-    public static function issue(int $userId, int $restaurantId, int $methodId): array
+    public static function issue(
+        int $userId,
+        int $restaurantId,
+        int $methodId,
+        ?string $existingToken = null
+    ): array
     {
         if (! self::enabled()) {
             throw new \DomainException('credential_feature_disabled');
@@ -67,6 +75,23 @@ class NezhaPaymentAddressCredentialService
             throw new \DomainException('credential_network_unavailable');
         }
 
+        $fingerprint = (string) NezhaUsdtAddress::fingerprint($inspection['normalized'], $network);
+        $reusable = self::reusableCredential(
+            $existingToken,
+            $userId,
+            $restaurantId,
+            $methodId,
+            $network,
+            $fingerprint
+        );
+        if ($reusable) {
+            return [
+                'credential' => $reusable,
+                'token' => trim((string) $existingToken),
+                'reused' => true,
+            ];
+        }
+
         $secret = bin2hex(random_bytes(32));
         $issuedAt = now();
         $credential = NezhaPaymentAddressCredential::create([
@@ -77,10 +102,7 @@ class NezhaPaymentAddressCredentialService
             'method_id' => $methodId,
             'network' => $network,
             'address_snapshot' => $inspection['normalized'],
-            'address_fingerprint' => NezhaUsdtAddress::fingerprint(
-                $inspection['normalized'],
-                $network
-            ),
+            'address_fingerprint' => $fingerprint,
             'issued_at' => $issuedAt,
             'expires_at' => $issuedAt->copy()->addMinutes(self::ttlMinutes()),
         ]);
@@ -88,7 +110,61 @@ class NezhaPaymentAddressCredentialService
         return [
             'credential' => $credential,
             'token' => $credential->public_id.'.'.$secret,
+            'reused' => false,
         ];
+    }
+
+    public static function redactExpiredUnconsumed(int $limit = 1000): array
+    {
+        if (! Schema::hasTable('nezha_payment_address_credentials')
+            || ! Schema::hasColumn('nezha_payment_address_credentials', 'redacted_at')) {
+            return ['status' => 'not_ready', 'redacted' => 0];
+        }
+
+        $cutoff = now()->subDays(self::UNCONSUMED_RETENTION_DAYS);
+        $ids = NezhaPaymentAddressCredential::query()
+            ->whereNull('consumed_at')
+            ->whereNull('consumed_order_id')
+            ->whereNull('redacted_at')
+            ->where(function ($query) use ($cutoff): void {
+                $query->where('expires_at', '<=', $cutoff)
+                    ->orWhere('revoked_at', '<=', $cutoff);
+            })
+            ->orderBy('id')
+            ->limit(max(1, min(5000, $limit)))
+            ->pluck('id');
+
+        $redacted = 0;
+        foreach ($ids as $id) {
+            $didRedact = DB::transaction(function () use ($id, $cutoff): bool {
+                $credential = NezhaPaymentAddressCredential::whereKey($id)->lockForUpdate()->first();
+                if (! $credential
+                    || $credential->consumed_at !== null
+                    || $credential->consumed_order_id !== null
+                    || $credential->redacted_at !== null) {
+                    return false;
+                }
+                $expiredLongEnough = $credential->expires_at && $credential->expires_at->lte($cutoff);
+                $revokedLongEnough = $credential->revoked_at && $credential->revoked_at->lte($cutoff);
+                if (! $expiredLongEnough && ! $revokedLongEnough) {
+                    return false;
+                }
+
+                // Keep non-sensitive binding, fingerprint, state and timestamps for audit.
+                // The encrypted cast stores only an encrypted empty value after redaction.
+                $credential->address_snapshot = '';
+                $credential->secret_hash = str_repeat('0', 64);
+                $credential->redacted_at = now();
+                $credential->save();
+
+                return true;
+            });
+            if ($didRedact) {
+                $redacted++;
+            }
+        }
+
+        return ['status' => 'ok', 'redacted' => $redacted];
     }
 
     public static function resolveForProof(
@@ -201,6 +277,51 @@ class NezhaPaymentAddressCredentialService
         $address = DB::table('restaurants')->where('id', $restaurantId)->value($column);
 
         return $address !== null ? (string) $address : null;
+    }
+
+    private static function reusableCredential(
+        ?string $token,
+        int $userId,
+        int $restaurantId,
+        int $methodId,
+        string $network,
+        string $fingerprint
+    ): ?NezhaPaymentAddressCredential {
+        if ($token === null || trim($token) === '') {
+            return null;
+        }
+
+        try {
+            [$publicId, $secret] = self::splitToken($token);
+        } catch (\DomainException $e) {
+            return null;
+        }
+
+        $credential = NezhaPaymentAddressCredential::where('public_id', $publicId)->first();
+        if (! $credential
+            || ! hash_equals((string) $credential->secret_hash, hash('sha256', $secret))
+            || (int) $credential->user_id !== $userId
+            || (int) $credential->restaurant_id !== $restaurantId
+            || (int) $credential->method_id !== $methodId
+            || (string) $credential->network !== $network
+            || ! hash_equals((string) $credential->address_fingerprint, $fingerprint)
+            || $credential->consumed_at !== null
+            || $credential->consumed_order_id !== null
+            || $credential->redacted_at !== null) {
+            return null;
+        }
+
+        try {
+            self::assertActive($credential);
+        } catch (\DomainException $e) {
+            return null;
+        }
+
+        return NezhaUsdtAddress::equals(
+            $credential->address_snapshot,
+            self::currentAddress($restaurantId, $network),
+            $network
+        ) ? $credential : null;
     }
 
     private static function splitToken(string $token): array

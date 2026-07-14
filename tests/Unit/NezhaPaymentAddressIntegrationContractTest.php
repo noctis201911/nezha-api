@@ -56,6 +56,8 @@ class NezhaPaymentAddressIntegrationContractTest extends TestCase
             $this->assertStringContainsString($key, $docs);
         }
         $this->assertStringContainsString('nezha:payment-address-maintain', $schedule);
+        $this->assertStringContainsString('nezha:payment-address-credential-retain', $schedule);
+        $this->assertStringContainsString("dailyAt('03:35')", $schedule);
     }
 
     public function test_sensitive_models_use_explicit_fillable_and_never_define_a_totp_code_column(): void

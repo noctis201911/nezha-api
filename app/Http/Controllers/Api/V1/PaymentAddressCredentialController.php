@@ -26,6 +26,7 @@ class PaymentAddressCredentialController extends Controller
         $validator = Validator::make($request->all(), [
             'restaurant_id' => 'required|integer|min:1',
             'method_id' => 'required|integer|min:1',
+            'existing_credential_token' => 'nullable|string|max:128',
         ]);
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 422);
@@ -35,7 +36,8 @@ class PaymentAddressCredentialController extends Controller
             $issued = NezhaPaymentAddressCredentialService::issue(
                 (int) $user->id,
                 (int) $request->input('restaurant_id'),
-                (int) $request->input('method_id')
+                (int) $request->input('method_id'),
+                $request->input('existing_credential_token')
             );
             $credential = $issued['credential'];
 
@@ -49,7 +51,8 @@ class PaymentAddressCredentialController extends Controller
                 'address' => (string) $credential->address_snapshot,
                 'issued_at' => $credential->issued_at?->toIso8601String(),
                 'expires_at' => $credential->expires_at?->toIso8601String(),
-            ], 201);
+                'reused' => (bool) $issued['reused'],
+            ], $issued['reused'] ? 200 : 201);
         } catch (\DomainException $e) {
             $code = $e->getMessage();
             $status = match ($code) {
