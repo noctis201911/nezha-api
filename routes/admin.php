@@ -63,6 +63,7 @@ use App\Http\Controllers\Admin\System\AddonController as SystemAddonController;
 use App\Http\Controllers\Admin\SystemController;
 use App\Http\Controllers\Admin\VehicleController;
 use App\Http\Controllers\Admin\VendorController;
+use App\Http\Controllers\Admin\NezhaPaymentAddressChangeController;
 use App\Http\Controllers\Admin\VendorTaxReportController;
 use App\Http\Controllers\Admin\VisitorLogController;
 use App\Http\Controllers\Admin\WalletBonusController;
@@ -376,6 +377,17 @@ Route::middleware('module:provide_dm_earning')->group(function () {
                 Route::post('update/{restaurant}', [VendorController::class, 'update'])->name('update');
                 // 哪吒外卖 B方案: 管理员代录商家收款信息(收款码/USDT地址/收款人)
                 Route::post('update-payment-info/{restaurant}', [VendorController::class, 'updatePaymentInfo'])->name('update-payment-info');
+                // 默认关闭：USDT 地址必须经交易级 TOTP -> 商家 owner -> 不同管理员 -> 凭据排空。
+                Route::post('payment-address-change/{restaurant}', [NezhaPaymentAddressChangeController::class, 'store'])
+                    ->name('payment-address-change.store');
+                Route::post('payment-address-change/{restaurant}/pause', [NezhaPaymentAddressChangeController::class, 'pause'])
+                    ->name('payment-address-change.pause');
+                Route::get('payment-address-change/request/{change}', [NezhaPaymentAddressChangeController::class, 'show'])
+                    ->name('payment-address-change.show');
+                Route::post('payment-address-change/request/{change}/approve', [NezhaPaymentAddressChangeController::class, 'approve'])
+                    ->name('payment-address-change.approve');
+                Route::post('payment-address-change/request/{change}/cancel', [NezhaPaymentAddressChangeController::class, 'cancel'])
+                    ->name('payment-address-change.cancel');
                 // 哪吒外卖 B方案 组4: 管理员充值/调整商家预存佣金
                 Route::post('recharge-deposit/{restaurant}', [VendorController::class, 'rechargeDeposit'])->name('recharge-deposit');
                 // 哪吒外卖: 更新平台美元兑人民币汇率 (platform-wide setting)
@@ -1396,4 +1408,3 @@ Route::middleware('module:provide_dm_earning')->group(function () {
     Route::get('zone/get-zone', [ZoneController::class, 'get_zone'])->name('zone.get-zone');
 
 });
-
