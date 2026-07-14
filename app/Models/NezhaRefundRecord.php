@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 /**
  * 哪吒外卖 退款留痕记录 (合规留存 ≥5年, 免于 PII 自动清除).
@@ -31,6 +32,7 @@ class NezhaRefundRecord extends Model
     const STATUS_UNRESOLVED        = ['pending_merchant_refund', 'disputed'];
     const STATUS_RESOLVED          = ['merchant_refunded', 'closed_no_payment'];
     const STATUS_MERCHANT_LIFECYCLE = ['pending_merchant_refund', 'disputed', 'merchant_refunded', 'closed_no_payment'];
+    const STATUS_CUSTOMER_VISIBLE  = ['pending_merchant_refund', 'disputed', 'merchant_refunded'];
 
     /**
      * 逾期计时口径(单一真相源): 争议维持裁决(R3)后 overdue_anchor_at=裁决时刻, 逾期从此刻重算;
@@ -52,9 +54,73 @@ class NezhaRefundRecord extends Model
         'risk_hit'             => 'array',
         'customer_confirmed'   => 'boolean',
         'customer_confirmed_at'=> 'datetime',
+        'merchant_refunded_at' => 'datetime',
         'reviewed_at'          => 'datetime',
         'overdue_anchor_at'    => 'datetime',
     ];
+
+    /**
+     * 顾客侧退款阶段投影。orders.order_status 继续保留旧终态契约，实际退款阶段以本记录为准。
+     */
+    public function customerProjection(): array
+    {
+        return [
+            'status'               => $this->status,
+            'refund_amount'        => $this->refund_amount,
+            'channel'              => $this->payment_channel,
+            'refunded'             => $this->status === 'merchant_refunded',
+            'customer_confirmed'   => (bool) $this->customer_confirmed,
+            'confirmed_at'         => $this->customer_confirmed_at ? (string) $this->customer_confirmed_at : null,
+            'merchant_refunded_at' => $this->merchant_refunded_at ? (string) $this->merchant_refunded_at : null,
+        ];
+    }
+
+    /**
+     * 一次查询取得每个订单最新的顾客可见退款阶段，避免列表/消息中心 N+1。
+     */
+    public static function latestCustomerVisibleByOrderIds($orderIds)
+    {
+        $ids = collect($orderIds)->filter()->unique()->values();
+        if ($ids->isEmpty()) {
+            return collect();
+        }
+
+        return static::whereIn('order_id', $ids->all())
+            ->whereIn('status', self::STATUS_CUSTOMER_VISIBLE)
+            ->orderByDesc('id')
+            ->get()
+            ->unique('order_id')
+            ->keyBy('order_id');
+    }
+
+    /**
+     * 原子地认领「待商家退款 → 商家已标记退款」转换。只有转换赢家可以产生后续通知。
+     */
+    public static function transitionPendingToMerchantRefunded($id, array $attributes = [], $restaurantId = null): ?self
+    {
+        return DB::transaction(function () use ($id, $attributes, $restaurantId) {
+            $record = static::whereKey($id)
+                ->where('status', 'pending_merchant_refund')
+                ->when($restaurantId, fn ($query) => $query->where('restaurant_id', $restaurantId))
+                ->lockForUpdate()
+                ->first();
+
+            if (!$record) {
+                return null;
+            }
+
+            $record->status = 'merchant_refunded';
+            $record->merchant_refunded_at = now();
+            foreach (['merchant_refund_note', 'refund_tx_hash', 'chain_verify_status'] as $field) {
+                if (array_key_exists($field, $attributes)) {
+                    $record->{$field} = $attributes[$field];
+                }
+            }
+            $record->save();
+
+            return $record;
+        });
+    }
 
     public function scopeNeedsAction($q)
     {

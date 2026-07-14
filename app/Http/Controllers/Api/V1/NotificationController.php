@@ -53,6 +53,7 @@ class NotificationController extends Controller
                     ->get(['id', 'restaurant_id', 'order_type', 'order_status'])
                     ->keyBy('id')
                 : collect();
+            $refundStages = \App\Models\NezhaRefundRecord::latestCustomerVisibleByOrderIds($orders->keys());
 
             $user_notifications = $user_notifications
                 ->filter(function ($n) use ($orders) {
@@ -63,7 +64,7 @@ class NotificationController extends Controller
                     }
                     return $orders->has((int) $oid); // 订单类: 必须命中本人真实订单
                 })
-                ->map(function ($n) use ($orders) {
+                ->map(function ($n) use ($orders, $refundStages) {
                     $data = is_array($n->data) ? $n->data : [];
                     $oid = $data['order_id'] ?? null;
                     if ($oid !== null && $oid !== '' && $orders->has((int) $oid)) {
@@ -71,6 +72,7 @@ class NotificationController extends Controller
                         $data['restaurant_name'] = $order->restaurant?->name ?? ($data['restaurant_name'] ?? '');
                         $data['order_type'] = $order->order_type;       // delivery / take_away / dine_in
                         $data['order_status'] = $order->order_status;   // 用最新真实状态, 防陈旧
+                        $data['nezha_refund'] = $refundStages->get((int) $oid)?->customerProjection();
                     }
                     // data 是 json_decode accessor: 覆盖时必须写回 JSON 字符串, 否则 accessor 再次 decode 数组会抛错
                     $n->setAttribute('data', json_encode($data, JSON_UNESCAPED_UNICODE));

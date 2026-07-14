@@ -143,7 +143,7 @@ class NezhaMerchantOrderUiContractTest extends TestCase
 
         $statusCell = strpos($blade, '<td class="text-capitalize text-center nz-order-status-cell"');
         $proofList = strpos($blade, '<div class="nz-payment-proof-list nz-payment-proof-list--status">');
-        $statusBranch = strpos($blade, "@if(\$order['order_status']=='pending')", $statusCell);
+        $statusBranch = strpos($blade, "@if(\$__refundStage && \$__refundStage->status === 'pending_merchant_refund')", $statusCell);
 
         $this->assertNotFalse($statusCell);
         $this->assertNotFalse($proofList);

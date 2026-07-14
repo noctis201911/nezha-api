@@ -317,6 +317,12 @@ class VendorController extends Controller
         ->when($request->status != 'all', function($query)use($request){
             return $query->where('order_status', $request->status);
         })
+        ->when($request->status == 'refunded', function ($query) {
+            return $query->whereNotIn('id', function ($sub) {
+                $sub->select('order_id')->from('nezha_refund_records')
+                    ->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_UNRESOLVED);
+            });
+        })
         ->when($request->is_subscription == 1, function($query) {
             return $query->whereNotNull('subscription_id');
         })
@@ -327,14 +333,20 @@ class VendorController extends Controller
         ->latest()
         ->paginate($request['limit'], ['*'], 'page', $request['offset']);
 
-        $orders = Helpers::order_data_formatting($paginator->items(), true);
+        $completedItems = $paginator->items();
+        $this->attachRefundStages($completedItems);
+        $orders = Helpers::order_data_formatting($completedItems, true);
 
         $orderData = Order::whereHas('restaurant.vendor', function($query) use($vendor) {
             $query->where('id', $vendor->id);
         })
         ->select(DB::raw("
             SUM(CASE WHEN order_status = 'delivered' THEN 1 ELSE 0 END) as delivered_count,
-            SUM(CASE WHEN order_status = 'refunded'  THEN 1 ELSE 0 END) as refunded_count,
+            SUM(CASE WHEN order_status = 'refunded' AND NOT EXISTS (
+                SELECT 1 FROM nezha_refund_records nrr
+                WHERE nrr.order_id = orders.id
+                  AND nrr.status IN ('pending_merchant_refund', 'disputed')
+            ) THEN 1 ELSE 0 END) as refunded_count,
             SUM(CASE WHEN order_status = 'canceled'  THEN 1 ELSE 0 END) as canceled_count,
             SUM(CASE WHEN payment_status = 'failed'  THEN 1 ELSE 0 END) as failed_count
         "))
@@ -577,6 +589,7 @@ class VendorController extends Controller
         ->first();
 
         $details = $order?->details;
+        $this->attachRefundStages($order ? [$order] : []);
         $order['details'] = Helpers::order_details_data_formatting($details);
         return response()->json(['order' => $order],200);
     }
@@ -600,6 +613,7 @@ class VendorController extends Controller
             ->Notpos()
             ->first();
 
+        $this->attachRefundStages($order ? [$order] : []);
         return response()->json(Helpers::order_data_formatting($order),200);
     }
 
@@ -615,8 +629,18 @@ class VendorController extends Controller
         ->NotDigitalOrder()
         ->get();
 
+        $this->attachRefundStages($orders);
         $orders = Helpers::order_data_formatting(data:$orders,multi_data: true);
         return response()->json($orders, 200);
+    }
+
+    private function attachRefundStages($orders): void
+    {
+        $items = collect($orders)->filter();
+        $stages = \App\Models\NezhaRefundRecord::latestCustomerVisibleByOrderIds($items->pluck('id'));
+        foreach ($items as $order) {
+            $order->setAttribute('nezha_refund', $stages->get($order->id)?->customerProjection());
+        }
     }
 
     public function update_fcm_token(Request $request)

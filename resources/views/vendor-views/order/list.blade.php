@@ -587,6 +587,7 @@
                     <tbody id="set-rows">
                     @php $__nzSeg = null; @endphp
                     @foreach($orders as $key=>$order)
+                        @php $__refundStage = $refundStages->get($order['id']); @endphp
                         @if($nzRawStatus === 'refund_pending')
                             @php $__rowSeg = ($order->payment_status == 'paid') ? 'A' : 'B'; @endphp
                             @if($__rowSeg !== $__nzSeg)
@@ -758,7 +759,13 @@
                                         $order->order_status = $order->subscription_log ? $order->subscription_log->order_status : $order->order_status;
                                     @endphp
                                 @endif
-                                    @if($order['order_status']=='pending')
+                                    @if($__refundStage && $__refundStage->status === 'pending_merchant_refund')
+                                        <span class="badge nz-st-wait mb-1">待商家退款</span>
+                                    @elseif($__refundStage && $__refundStage->status === 'disputed')
+                                        <span class="badge nz-st-alert mb-1">退款争议核实中</span>
+                                    @elseif($__refundStage && $__refundStage->status === 'merchant_refunded')
+                                        <span class="badge nz-st-done mb-1">商家已标记退款</span>
+                                    @elseif($order['order_status']=='pending')
                                         <span class="badge nz-st-wait mb-1">
                                             {{translate('messages.pending')}}
                                         </span>
@@ -845,10 +852,9 @@
                                                   'label' => '已送达', 'cls' => 'btn-success', 'icon' => 'tio-done-all',
                                                   'confirm' => '确认本单已送达顾客？确认后不可撤销。'];
                                     } else {
-                                        $__rr = \App\Models\NezhaRefundRecord::where('order_id', $order['id'])
-                                            ->where('restaurant_id', \App\CentralLogics\Helpers::get_restaurant_id())
-                                            ->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_UNRESOLVED)
-                                            ->latest('id')->first();
+                                        $__rr = $__refundStage && in_array($__refundStage->status, \App\Models\NezhaRefundRecord::STATUS_UNRESOLVED, true)
+                                            ? $__refundStage
+                                            : null;
                                         $__refundPending = (bool) $__rr;
                                         $__refundDisputed = $__rr && $__rr->status === 'disputed';
                                         if ($__refundPending) {

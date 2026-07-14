@@ -108,15 +108,8 @@ class OrderController extends Controller
         // 哪吒B方案: 商家出餐(handover)后向顾客暴露取餐号(复用订单otp; 顾客下单时已经 OrderVerificationMail 收到该码作配送验证码, 非新增泄露)。出餐前为空字符串, 前端显示"等待商家出餐"。供顾客自取或交给 Yandex 骑手到店向商家核对。
         $order['pickup_code'] = in_array($order->order_status, ['handover', 'picked_up', 'delivered'], true) ? (string) $order->otp : '';
         // 哪吒 B方案(QA 2026-06-18): 暴露「待退款留痕」状态给顾客,使订单页能回显退款进度(待商家退款/商家已退款)。平台不碰钱,仅展示状态。
-        $nezha_rr = \App\Models\NezhaRefundRecord::where('order_id', $order->id)->whereIn('status', array_merge(\App\Models\NezhaRefundRecord::STATUS_UNRESOLVED, ['merchant_refunded']))->orderByDesc('id')->first();
-        $order['nezha_refund'] = $nezha_rr ? [
-            'status'        => $nezha_rr->status,
-            'refund_amount' => $nezha_rr->refund_amount,
-            'channel'       => $nezha_rr->payment_channel,
-            'refunded'      => $nezha_rr->status === 'merchant_refunded',
-            'customer_confirmed' => (bool) $nezha_rr->customer_confirmed,
-            'confirmed_at'       => $nezha_rr->customer_confirmed_at ? (string) $nezha_rr->customer_confirmed_at : null,
-        ] : null;
+        $nezha_rr = \App\Models\NezhaRefundRecord::latestCustomerVisibleByOrderIds([$order->id])->get($order->id);
+        $order['nezha_refund'] = $nezha_rr?->customerProjection();
         // 哪吒: 顾客「接单后申请取消」状态(申请→商家裁决)。前端据此显示申请入口/申请中/被拒卡。
         $nz_cancel_stage_ok = in_array($order->order_status, ['confirmed', 'processing'], true);
         $order['nezha_cancel'] = [
@@ -923,7 +916,10 @@ class OrderController extends Controller
             })
 
             ->latest()->paginate($request['limit'], ['*'], 'page', $request['offset']);
-        $orders = array_map(function ($data) {
+        $refundStages = \App\Models\NezhaRefundRecord::latestCustomerVisibleByOrderIds(
+            collect($paginator->items())->pluck('id')
+        );
+        $orders = array_map(function ($data) use ($refundStages) {
             $details_raw = $data->details ? $data->details->toArray() : [];
             $order_id = $data->id;
             $arr = $data->toArray();
@@ -933,6 +929,7 @@ class OrderController extends Controller
             $arr['is_reviewed'] = $arr['details_count'] > Review::whereOrderId($order_id)->count() ? false : true;
             $arr['is_dm_reviewed'] = $data->delivery_man ? DMReview::whereOrderId($order_id)->exists() : true;
             $arr['item_campaign_id'] = !empty($details_raw) ? $details_raw[0]['item_campaign_id'] : true;
+            $arr['nezha_refund'] = $refundStages->get($order_id)?->customerProjection();
             $arr['order_details'] = collect($details_raw)->take(3)->map(function($d) {
                 $food = is_string($d['food_details'] ?? null) ? json_decode($d['food_details'], true) : ($d['food_details'] ?? []);
                 return [

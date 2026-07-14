@@ -886,7 +886,15 @@ $max_processing_time = $order->restaurant?explode('-', $order->restaurant['deliv
                                 @if ($order->order_status == 'refund_requested')
                                     <span class="badge __badge badge-primary __badge-abs">{{ translate('messages.pending') }}</span>
                                     @elseif($order->order_status == 'refunded')
-                                    <span class="badge __badge badge-info __badge-abs">{{ translate('messages.refunded') }}</span>
+                                        @if($refundStage?->status === 'pending_merchant_refund')
+                                            <span class="badge __badge badge-warning __badge-abs">待商家退款</span>
+                                        @elseif($refundStage?->status === 'disputed')
+                                            <span class="badge __badge badge-secondary __badge-abs">退款争议核实中</span>
+                                        @elseif($refundStage?->status === 'merchant_refunded')
+                                            <span class="badge __badge badge-success __badge-abs">商家已标记退款</span>
+                                        @else
+                                            <span class="badge __badge badge-info __badge-abs">{{ translate('messages.refunded') }}</span>
+                                        @endif
                                     @elseif($order->refund->order_status == 'refund_request_canceled')
                                     <span class="badge __badge-pill badge-danger __badge-abs">{{ translate('messages.rejected') }}</span>
                                 @endif

@@ -17,6 +17,7 @@ use App\Mail\RefundRejected;
 use App\Models\ItemCampaign;
 use App\Models\OrderPayment;
 use App\Models\RefundReason;
+use App\Models\NezhaRefundRecord;
 use App\Traits\PlaceNewOrder;
 use Illuminate\Http\Request;
 use App\CentralLogics\Helpers;
@@ -30,6 +31,8 @@ use App\CentralLogics\CustomerLogic;
 use App\Http\Controllers\Controller;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\RestaurantOrderlistExport;
 use Carbon\Carbon;
@@ -166,8 +169,9 @@ class OrderController extends Controller
         $to_date = $request?->to_date ?? null;
         $order_type = $request?->order_type ?? [];
         $total = $orders->total();
+        $refundStages = NezhaRefundRecord::latestCustomerVisibleByOrderIds($orders->pluck('id'));
 
-        return view('admin-views.order.list', compact('orders', 'status', 'orderstatus', 'scheduled', 'vendor_ids', 'zone_ids', 'from_date', 'to_date', 'total', 'order_type'));
+        return view('admin-views.order.list', compact('orders', 'status', 'orderstatus', 'scheduled', 'vendor_ids', 'zone_ids', 'from_date', 'to_date', 'total', 'order_type', 'refundStages'));
     }
 
     public function export_orders($status, $type, Request $request)
@@ -633,7 +637,8 @@ class OrderController extends Controller
                 $selected_delivery_man = Helpers::deliverymen_list_formatting(data: $selected_delivery_man, restaurant_lat: $order?->restaurant?->latitude, restaurant_lng: $order?->restaurant?->longitude, single_data: true);
             }
 
-            return view('admin-views.order.order-view', compact('order', 'deliveryMen', 'selected_delivery_man'));
+            $refundStage = NezhaRefundRecord::latestCustomerVisibleByOrderIds([$order->id])->get($order->id);
+            return view('admin-views.order.order-view', compact('order', 'deliveryMen', 'selected_delivery_man', 'refundStage'));
         } else {
             Toastr::info(translate('messages.no_more_orders'));
             return back();
@@ -642,10 +647,24 @@ class OrderController extends Controller
 
     public function status(Request $request)
     {
+        try {
+            return Cache::lock('nezha:admin-order-status:' . (int) $request->id, 120)
+                ->block(5, fn () => $this->statusLocked($request));
+        } catch (LockTimeoutException $e) {
+            Toastr::warning('该订单正在处理中，请稍后刷新后再试');
+            return back();
+        }
+    }
+
+    private function statusLocked(Request $request)
+    {
         $request->validate([
             'reason' => 'required_if:order_status,canceled'
         ]);
         $order = Order::Notpos()->with(['subscription_logs', 'details'])->find($request->id);
+        $directPayRefundFlow = false;
+        $notifyDirectPayRefundPending = false;
+        $directPayRefundRecord = null;
 
         if (in_array($order->order_status, ['refunded', 'failed'])) {
             Toastr::warning(translate('messages.you_can_not_change_the_status_of_a_completed_order'));
@@ -784,6 +803,7 @@ class OrderController extends Controller
             // 哪吒 L1-1 护栏: 直付订单(offline_payment)平台不持币, 严禁走平台钱包退款
             // (退到平台钱包 = 平台替顾客记账/欠款 = 平台碰钱, 违反"平台全程不碰资金"). 直付一律原路由商家退, 平台仅留痕.
             $isDirectPay = ($order->payment_method == 'offline_payment');
+            $directPayRefundFlow = $isDirectPay;
             if ($order->payment_status == "paid" && $wallet_status == 1 && $refund_to_wallet == 1 && !$isDirectPay) {
                 $refund_amount = round($order->order_amount - $order->delivery_charge - $order->dm_tips, config('round_up_to_digit'));
                 CustomerLogic::create_wallet_transaction(user_id: $order->user_id, amount: $refund_amount, transaction_type: 'order_refund', referance: $order->id);
@@ -830,7 +850,10 @@ class OrderController extends Controller
             }
 
             // 哪吒 F-4: 直付单退款 -> 通知商家原路退款 + 留痕(无视退款护栏开关, 直付单必建记录)。平台不碰钱。
-            OrderLogic::record_direct_pay_refund_pending($order, 'admin', auth('admin')->id(), $request->admin_note ?? null);
+            $directPayRefundRecord = OrderLogic::record_direct_pay_refund_pending($order, 'admin', auth('admin')->id(), $request->admin_note ?? null);
+            $notifyDirectPayRefundPending = $directPayRefundRecord
+                && $directPayRefundRecord->status === 'pending_merchant_refund'
+                && $directPayRefundRecord->wasRecentlyCreated;
 
             Helpers::increment_order_count($order->restaurant);
 
@@ -839,23 +862,25 @@ class OrderController extends Controller
                 $dm->current_orders = $dm->current_orders > 1 ? $dm->current_orders - 1 : 0;
                 $dm->save();
             }
-            try {
-                $notification_status = Helpers::getNotificationStatusData('customer', 'customer_refund_request_approval');
+            if (!$isDirectPay) {
+                try {
+                    $notification_status = Helpers::getNotificationStatusData('customer', 'customer_refund_request_approval');
 
-                $message = Helpers::getOrderPushNotificationMessage($order, 'refunded', 'user' ,$order->customer ? $order?->customer?->current_language_key : 'en');
-                $fcm_token = $order->customer ? $order->customer->cm_firebase_token : null;
-                if ($message && isset($fcm_token)) {
-                    $data= Helpers::makeDataForPushNotification(title:translate('order_refunded'), message:$message,orderId: $order->id, type: 'order_status', orderStatus: $order->order_status);
-                    Helpers::send_push_notif_to_device($fcm_token, $data);
-                    Helpers::insertDataOnNotificationTable($data , 'user', $order->user_id);
-                }
+                    $message = Helpers::getOrderPushNotificationMessage($order, 'refunded', 'user' ,$order->customer ? $order?->customer?->current_language_key : 'en');
+                    $fcm_token = $order->customer ? $order->customer->cm_firebase_token : null;
+                    if ($message && isset($fcm_token)) {
+                        $data= Helpers::makeDataForPushNotification(title:translate('order_refunded'), message:$message,orderId: $order->id, type: 'order_status', orderStatus: $order->order_status);
+                        Helpers::send_push_notif_to_device($fcm_token, $data);
+                        Helpers::insertDataOnNotificationTable($data , 'user', $order->user_id);
+                    }
 
-                if ($notification_status?->mail_status == 'active' && config('mail.status') && $order?->customer?->email && Helpers::get_mail_status('refund_order_mail_status_user') == '1') {
-                    Mail::to($order->customer?->getRawOriginal('email'))->send(new \App\Mail\RefundedOrderMail($order->id));
+                    if ($notification_status?->mail_status == 'active' && config('mail.status') && $order?->customer?->email && Helpers::get_mail_status('refund_order_mail_status_user') == '1') {
+                        Mail::to($order->customer?->getRawOriginal('email'))->send(new \App\Mail\RefundedOrderMail($order->id));
+                    }
+                } catch (\Throwable $th) {
+                    info($th->getMessage());
+                    Toastr::error(translate('messages.Failed_to_send_mail'));
                 }
-            } catch (\Throwable $th) {
-                info($th->getMessage());
-                Toastr::error(translate('messages.Failed_to_send_mail'));
             }
         } else if ($request->order_status == 'canceled') {
             if (in_array($order->order_status, ['delivered', 'canceled', 'refund_requested', 'refunded', 'failed'])) {
@@ -894,6 +919,15 @@ class OrderController extends Controller
         }
         $order[$request->order_status] = now();
         $order->save();
+
+        if ($directPayRefundFlow) {
+            Helpers::markDirectPayRefundPendingNotified($order->id);
+            if ($notifyDirectPayRefundPending) {
+                OrderLogic::notify_customer_direct_pay_refund_pending($order, $directPayRefundRecord);
+            } elseif (!$directPayRefundRecord) {
+                info('direct pay refund pending record missing; completion notification suppressed: order=' . $order->id);
+            }
+        }
 
         OrderLogic::update_subscription_log($order);
         if (!Helpers::send_order_notification($order)) {

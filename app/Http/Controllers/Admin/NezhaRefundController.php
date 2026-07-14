@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\NezhaRefundRecord;
 use App\CentralLogics\NezhaRefundControl;
 use App\CentralLogics\Helpers;
+use App\CentralLogics\OrderLogic;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\Request;
 
@@ -183,16 +184,18 @@ class NezhaRefundController extends Controller
      */
     public function overdueResolve(Request $request, $id)
     {
-        $rec = NezhaRefundRecord::where('id', $id)->where('status', 'pending_merchant_refund')->first();
+        $rec = NezhaRefundRecord::transitionPendingToMerchantRefunded($id, [
+            'merchant_refund_note' => '运营人工核实已退款: ' . ($request->input('note') ? mb_substr($request->input('note'), 0, 200) : '已确认商家原路退款'),
+        ]);
         if (!$rec) {
             Toastr::warning(translate('该记录不存在或已处理'));
             return back();
         }
-        $rec->status               = 'merchant_refunded';
-        $rec->merchant_refunded_at = now();
-        $rec->merchant_refund_note = '运营人工核实已退款: ' . ($request->input('note') ? mb_substr($request->input('note'), 0, 200) : '已确认商家原路退款');
-        $rec->save();
         \App\CentralLogics\NezhaRefundOverdue::lift_suspend_if_clear((int) $rec->restaurant_id);
+        $order = $rec->order()->with(['customer', 'guest', 'restaurant'])->first();
+        if ($order) {
+            OrderLogic::notify_customer_direct_pay_refund_completed($order, $rec, 'admin');
+        }
         Toastr::success(translate('已标记该退款为已完成, 并视情况解除接单暂停。'));
         return back();
     }

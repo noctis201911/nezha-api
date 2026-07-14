@@ -138,7 +138,11 @@ class NezhaOrderCounts
         $out['ready_for_delivery'] = $base()->where('order_status', 'handover')->NotDigitalOrder()->count();
         $out['food_on_the_way'] = $base()->where('order_status', 'picked_up')->NotDigitalOrder()->count();
         $out['delivered'] = $base()->Delivered()->NotDigitalOrder()->count();
-        $out['refunded'] = $base()->Refunded()->NotDigitalOrder()->count();
+        $out['refunded'] = $base()->Refunded()
+            ->whereNotIn('id', function ($sub) {
+                $sub->select('order_id')->from('nezha_refund_records')
+                    ->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_UNRESOLVED);
+            })->NotDigitalOrder()->count();
         $out['refund_requested'] = $base()->Refund_requested()->NotDigitalOrder()->count();
         $out['payment_failed'] = $base()->where('order_status', 'failed')->NotDigitalOrder()->count();
         $out['canceled'] = $base()->where('order_status', 'canceled')->NotDigitalOrder()->count();

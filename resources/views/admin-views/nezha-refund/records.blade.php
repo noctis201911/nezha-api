@@ -16,7 +16,7 @@
         </div>
 
         <ul class="nav nav-tabs mb-3">
-            @foreach (['all' => '全部', 'pending_merchant_refund' => '待商家退款', 'merchant_refunded' => '已退款', 'pending' => '待审核(超限)', 'approved' => '已放行', 'rejected' => '已拒绝'] as $k => $label)
+            @foreach (['all' => '全部', 'pending_merchant_refund' => '待商家退款', 'merchant_refunded' => '商家已标记退款', 'pending' => '待审核(超限)', 'approved' => '已放行', 'rejected' => '已拒绝'] as $k => $label)
                 <li class="nav-item">
                     <a class="nav-link {{ $status == $k ? 'active' : '' }}"
                         href="{{ route('admin.nezha-refund.records', ['status' => $k]) }}">{{ translate($label) }}</a>

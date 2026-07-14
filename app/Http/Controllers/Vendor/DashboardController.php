@@ -347,7 +347,11 @@ class DashboardController extends Controller
             return $query->whereDate('created_at', Carbon::today());
         })->when($this_month, function ($query) {
             return $query->whereMonth('created_at', Carbon::now());
-        })->where(['order_status' => 'refunded', 'restaurant_id' => $restaurant?->id])->Notpos()->count();
+        })->where(['order_status' => 'refunded', 'restaurant_id' => $restaurant?->id])
+            ->whereNotIn('id', function ($sub) {
+                $sub->select('order_id')->from('nezha_refund_records')
+                    ->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_UNRESOLVED);
+            })->Notpos()->count();
 
         $data =0;
         if (($restaurant->restaurant_model == 'subscription'  && $restaurant?->restaurant_sub?->self_delivery == 1)  || ($restaurant->restaurant_model == 'commission' &&  $restaurant->self_delivery_system == 1) ){

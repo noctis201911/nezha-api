@@ -1244,18 +1244,19 @@ class OrderLogic
     {
         try {
             if ($order->payment_method != 'offline_payment') {
-                return; // 仅直付单走本闭环
+                return null; // 仅直付单走本闭环
             }
             $op = \App\Models\OfflinePayments::where('order_id', $order->id)->first();
             $paidish = ($order->payment_status == 'paid') || ($op && $op->status == 'verified') || ($treatProofAsPaid && $op);  // 哪吒 B方案: 已提交凭证(钱已直付商家)即视为已付款
             if (!$paidish) {
-                return; // 从未真正付款/确认收款的单无款可退, 不建记录
+                return null; // 从未真正付款/确认收款的单无款可退, 不建记录
             }
-            $exists = \App\Models\NezhaRefundRecord::where('order_id', $order->id)
+            $existing = \App\Models\NezhaRefundRecord::where('order_id', $order->id)
                 ->whereIn('status', \App\Models\NezhaRefundRecord::STATUS_MERCHANT_LIFECYCLE)
-                ->exists();
-            if ($exists) {
-                return; // 幂等
+                ->latest('id')
+                ->first();
+            if ($existing) {
+                return $existing; // 幂等；调用方仍可读取当前阶段
             }
 
             $refundAmount = round(
@@ -1267,7 +1268,7 @@ class OrderLogic
 
             $route = \App\CentralLogics\NezhaRefundControl::lock_route($order); // 纯通道/原地址检测, 不依赖退款护栏开关
 
-            \App\Models\NezhaRefundRecord::create([
+            $record = \App\Models\NezhaRefundRecord::create([
                 'order_id'            => $order->id,
                 'refund_id'           => optional(\App\Models\Refund::where('order_id', $order->id)->first())->id,
                 'restaurant_id'       => $order->restaurant_id,
@@ -1339,9 +1340,95 @@ class OrderLogic
             }
 
             self::log_offline_payment_action($order, 'direct_pay_refund_pending', $order->order_status, $order->order_status, $confirmer_type, $confirmer_id);
+            return $record;
         } catch (\Throwable $e) {
             info('record_direct_pay_refund_pending failed: order=' . ($order->id ?? '?') . ' ' . $e->getMessage());
+            return null;
         }
+    }
+
+    /**
+     * 直付退款阶段通知：管理员批准只表示「待商家退款」，不表示钱已退回。
+     */
+    public static function notify_customer_direct_pay_refund_pending($order, $record): void
+    {
+        self::notify_customer_direct_pay_refund_stage($order, $record, 'pending', 'admin');
+    }
+
+    /**
+     * 直付退款完成阶段通知：仅在 merchant_refunded 状态转换成功后发送。
+     */
+    public static function notify_customer_direct_pay_refund_completed($order, $record, $source = 'merchant'): void
+    {
+        self::notify_customer_direct_pay_refund_stage($order, $record, 'completed', $source);
+    }
+
+    private static function notify_customer_direct_pay_refund_stage($order, $record, string $stage, string $source): void
+    {
+        try {
+            if (!$record) {
+                return;
+            }
+
+            $lang = $order->customer?->current_language_key ?: 'zh-CN';
+            $isZh = stripos($lang, 'zh') === 0;
+            $channel = self::direct_pay_refund_channel_text($record->payment_channel, $isZh);
+            $amount = Helpers::format_currency($record->refund_amount);
+
+            if ($stage === 'pending') {
+                $title = $isZh ? '待商家退款' : 'Waiting for restaurant refund';
+                $message = $isZh
+                    ? "平台已批准订单 #{$order->id} 的退款申请，商家尚未标记退款。该笔 {$amount} 将由商家按{$channel}退回；请留意支付渠道到账情况。"
+                    : "The refund for order #{$order->id} was approved, but the restaurant has not marked it refunded. The restaurant must return {$amount} via {$channel}.";
+                $refundStatus = 'pending_merchant_refund';
+            } else {
+                $verifiedByAdmin = $source === 'admin';
+                $title = $isZh
+                    ? ($verifiedByAdmin ? '平台已核实退款' : '商家已标记退款')
+                    : ($verifiedByAdmin ? 'Refund verified by support' : 'Restaurant marked refund');
+                $message = $isZh
+                    ? ($verifiedByAdmin
+                        ? "平台已核实订单 #{$order->id} 的 {$amount} 退款已由商家按{$channel}处理。到账时间以支付渠道为准；如未收到请联系客服。"
+                        : "商家已将订单 #{$order->id} 的 {$amount} 标记为按{$channel}退款。到账时间以支付渠道为准；如未收到请联系商家或客服核实。")
+                    : ($verifiedByAdmin
+                        ? "Support verified that the restaurant handled the {$amount} refund for order #{$order->id} via {$channel}. Contact support if it does not arrive."
+                        : "The restaurant marked the {$amount} refund for order #{$order->id} via {$channel}. Contact the restaurant or support if it does not arrive.");
+                $refundStatus = 'merchant_refunded';
+            }
+
+            $data = Helpers::makeDataForPushNotification(
+                title: $title,
+                message: $message,
+                orderId: $order->id,
+                type: 'order_status',
+                orderStatus: 'refunded'
+            );
+            $data['nezha_refund_status'] = $refundStatus;
+
+            if (!$order->is_guest && $order->user_id) {
+                Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id);
+            }
+
+            $token = $order->is_guest
+                ? $order->guest?->fcm_token
+                : $order->customer?->cm_firebase_token;
+            if ($token && Helpers::customerWantsPush($order->customer, 'refund')) {
+                Helpers::send_push_notif_to_device($token, $data);
+            }
+        } catch (\Throwable $e) {
+            info('notify_customer_direct_pay_refund_stage failed: order=' . ($order->id ?? '?') . ' ' . $e->getMessage());
+        }
+    }
+
+    private static function direct_pay_refund_channel_text($channel, bool $isZh): string
+    {
+        if ($channel === 'usdt') {
+            return $isZh ? 'USDT 原地址' : 'the original USDT address';
+        }
+        if ($channel === 'rmb') {
+            return $isZh ? '支付宝原路' : 'the original Alipay method';
+        }
+        return $isZh ? '原支付方式' : 'the original payment method';
     }
 
     /**

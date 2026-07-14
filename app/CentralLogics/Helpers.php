@@ -2556,16 +2556,26 @@ class Helpers
      * 站内信, 防同一次取消双通知(顾客侧)。瞬态数组, 不入库、不跨请求。
      */
     protected static array $nezhaCancelNotified = [];
+    protected static array $nezhaDirectPayRefundPendingNotified = [];
 
     public static function markCancelNotified($orderId): void
     {
         if ($orderId) { self::$nezhaCancelNotified[$orderId] = true; }
     }
 
+    public static function markDirectPayRefundPendingNotified($orderId): void
+    {
+        if ($orderId) { self::$nezhaDirectPayRefundPendingNotified[$orderId] = true; }
+    }
+
     public static function sentUserNotification($order)
     {
         // 哪吒 D1: 已单独发过取消/退款定制通知的单, 跳过通用 canceled 站内信(防双通知)。
         if (($order->order_status ?? null) === 'canceled' && isset(self::$nezhaCancelNotified[$order->id])) {
+            return true;
+        }
+        // 直付退款获批仅进入「待商家退款」。定制通知已发送时，禁止通用 refunded 完成通知重复且误导地投递。
+        if (($order->order_status ?? null) === 'refunded' && isset(self::$nezhaDirectPayRefundPendingNotified[$order->id])) {
             return true;
         }
         $status = ($order->order_status == 'delivered' && $order->delivery_man) ? 'delivery_boy_delivered' : $order->order_status;

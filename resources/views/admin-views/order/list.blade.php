@@ -172,6 +172,7 @@
 
                     <tbody id="set-rows">
                         @foreach ($orders as $key => $order)
+                            @php $refundStage = $refundStages->get($order['id']); @endphp
                             <tr class="status-{{ $order['order_status'] }} class-all">
                                 <td class="">
                                     {{ $key + $orders->firstItem() }}
@@ -275,7 +276,13 @@
                                     @endphp
                                 @endif
                                 <td class="text-capitalize text-center">
-                                    @if ($order['order_status'] == 'pending')
+                                    @if ($refundStage && $refundStage->status === 'pending_merchant_refund')
+                                        <span class="badge badge-soft-warning mb-1">待商家退款</span>
+                                    @elseif ($refundStage && $refundStage->status === 'disputed')
+                                        <span class="badge badge-soft-secondary mb-1">退款争议核实中</span>
+                                    @elseif ($refundStage && $refundStage->status === 'merchant_refunded')
+                                        <span class="badge badge-soft-success mb-1">商家已标记退款</span>
+                                    @elseif ($order['order_status'] == 'pending')
                                         <span class="badge badge-soft-info mb-1">
                                             {{ translate('messages.pending') }}
                                         </span>
