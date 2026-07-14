@@ -77,7 +77,7 @@
 ---
 ## 🔴🔴 后端部署契约已变更(2026-06-22 部署边界改造窗口) — 所有后端窗口必读
 **后端「存盘即上线」已废除。** production 现从 `/www/wwwroot/api-deploy/current`(→ releases/ 下不可变快照)跑,**只认 commit+push 到 origin/main 的代码**。
-- 改后端 = 工作树 `/www/wwwroot/api.nezha.am` 改 → 精确 `git add`+commit+**push** → 跑 `node nz.js run "bash /www/wwwroot/api-deploy/nzdeploy-api.sh"` 上线(干净ref+vendor硬链+原子切current+健康门+自动回滚)。
+- 改后端 = 工作树 `/www/wwwroot/api.nezha.am` 改 → 精确 `git add`+commit+**push** → 记录欲发布的完整 40 位 SHA → 跑 `node nz.js run "bash /www/wwwroot/api-deploy/nzdeploy-api.sh <40位完整commit SHA>"` 上线（目标必须可从 fetch 后的 `origin/main` 到达；干净ref+vendor硬链+排队/current/ref 防漂移+原子切current+健康门+自动回滚）。部署器拒绝无参、短 SHA 与隐式 latest main。
 - **未提交/未push 的改动不会上线**(只停工作树)。这是有意为之的墙,不是 bug。
 - 🔴 storage 与 .env 已抽到 `api-deploy/shared/`(L1凭证持久层),别动;工作树 storage/.env 是软链。备份脚本已指 shared。
 - 回滚: `ln -sfn $(readlink /www/wwwroot/api-deploy/previous) /www/wwwroot/api-deploy/current && kill -USR2 $(cat /www/server/php/82/var/run/php-fpm.pid)`。
