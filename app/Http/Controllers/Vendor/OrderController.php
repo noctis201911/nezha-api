@@ -996,6 +996,7 @@ class OrderController extends Controller
     public function generate_invoice($id)
     {
         $order = Order::where(['id' => $id, 'restaurant_id' => Helpers::get_restaurant_id()])->with(['payments'])->first();
+        abort_unless($order, 404);
         $invoiceSettings = DataSetting::invoiceSettings();
         if (Helpers::employee_module_permission_check('regular_order') && Helpers::employee_module_permission_check('subscription_order')) {
             return view('vendor-views.order.invoice', compact('order','invoiceSettings'));

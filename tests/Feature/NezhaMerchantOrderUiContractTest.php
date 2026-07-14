@@ -85,6 +85,25 @@ class NezhaMerchantOrderUiContractTest extends TestCase
         $this->assertStringContainsString("route('vendor.order.generate-invoice'", $blade);
     }
 
+    public function testSingleMerchantInvoiceReturnsNotFoundForAnotherRestaurantsOrder(): void
+    {
+        $controller = file_get_contents(app_path('Http/Controllers/Vendor/OrderController.php'));
+        $methodStart = strpos($controller, 'public function generate_invoice($id)');
+        $batchMethodStart = strpos($controller, 'public function generate_invoice_batch(', $methodStart);
+
+        $this->assertNotFalse($methodStart);
+        $this->assertNotFalse($batchMethodStart);
+
+        $method = substr($controller, $methodStart, $batchMethodStart - $methodStart);
+        $guard = strpos($method, 'abort_unless($order, 404);');
+        $invoiceSettings = strpos($method, '$invoiceSettings = DataSetting::invoiceSettings();');
+
+        $this->assertStringContainsString("'restaurant_id' => Helpers::get_restaurant_id()", $method);
+        $this->assertNotFalse($guard);
+        $this->assertNotFalse($invoiceSettings);
+        $this->assertTrue($guard < $invoiceSettings);
+    }
+
     public function testMerchantOrderTableSupportsOperatorTableControls(): void
     {
         $blade = file_get_contents(resource_path('views/vendor-views/order/list.blade.php'));
