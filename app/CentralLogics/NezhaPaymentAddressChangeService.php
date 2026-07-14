@@ -108,12 +108,14 @@ class NezhaPaymentAddressChangeService
                 throw new \DomainException('address_change_idempotency_conflict');
             }
 
+            NezhaPaymentAddressChangeNotifier::change($existing, 'requested');
+
             return $existing;
         }
 
         $counter = self::stepUpCounter($admin, $totpCode);
 
-        return self::runStepUpTransaction($admin, $counter, function () use (
+        $change = self::runStepUpTransaction($admin, $counter, function () use (
             $admin,
             $restaurantId,
             $network,
@@ -187,6 +189,9 @@ class NezhaPaymentAddressChangeService
 
             return $change->fresh();
         });
+        NezhaPaymentAddressChangeNotifier::change($change, 'requested');
+
+        return $change;
     }
 
     public static function merchantConfirm(
@@ -196,7 +201,7 @@ class NezhaPaymentAddressChangeService
     ): NezhaPaymentAddressChange {
         self::assertEnabled();
 
-        return DB::transaction(function () use ($vendor, $publicId, $newFingerprint): NezhaPaymentAddressChange {
+        $change = DB::transaction(function () use ($vendor, $publicId, $newFingerprint): NezhaPaymentAddressChange {
             $change = self::changeForUpdate($publicId);
             self::assertChangeState($change, 'pending_merchant');
             self::assertNotExpired($change);
@@ -224,6 +229,9 @@ class NezhaPaymentAddressChangeService
 
             return $change->fresh();
         });
+        NezhaPaymentAddressChangeNotifier::change($change, 'merchant_confirmed');
+
+        return $change;
     }
 
     public static function merchantReject(
@@ -233,7 +241,7 @@ class NezhaPaymentAddressChangeService
     ): NezhaPaymentAddressChange {
         self::assertEnabled();
 
-        return DB::transaction(function () use ($vendor, $publicId, $newFingerprint): NezhaPaymentAddressChange {
+        $change = DB::transaction(function () use ($vendor, $publicId, $newFingerprint): NezhaPaymentAddressChange {
             $change = self::changeForUpdate($publicId);
             if (! in_array($change->state, ['pending_merchant', 'pending_distinct_admin'], true)) {
                 throw new \DomainException('address_change_state_invalid');
@@ -254,6 +262,9 @@ class NezhaPaymentAddressChangeService
 
             return $change->fresh();
         });
+        NezhaPaymentAddressChangeNotifier::change($change, 'merchant_rejected');
+
+        return $change;
     }
 
     public static function approveChange(
@@ -272,7 +283,7 @@ class NezhaPaymentAddressChangeService
         }
         $counter = self::stepUpCounter($admin, $totpCode);
 
-        return self::runStepUpTransaction($admin, $counter, function () use (
+        $change = self::runStepUpTransaction($admin, $counter, function () use (
             $admin,
             $publicId,
             $newFingerprint,
@@ -325,6 +336,9 @@ class NezhaPaymentAddressChangeService
 
             return $change->fresh();
         });
+        NezhaPaymentAddressChangeNotifier::change($change, 'distinct_admin_approved');
+
+        return $change;
     }
 
     public static function cancelChange(
@@ -335,7 +349,7 @@ class NezhaPaymentAddressChangeService
         self::assertEnabled();
         $counter = self::stepUpCounter($admin, $totpCode);
 
-        return self::runStepUpTransaction($admin, $counter, function () use ($admin, $publicId, $counter): NezhaPaymentAddressChange {
+        $change = self::runStepUpTransaction($admin, $counter, function () use ($admin, $publicId, $counter): NezhaPaymentAddressChange {
             $change = self::changeForUpdate($publicId);
             if (! in_array($change->state, ['pending_merchant', 'pending_distinct_admin', 'draining'], true)) {
                 throw new \DomainException('address_change_state_invalid');
@@ -350,13 +364,16 @@ class NezhaPaymentAddressChangeService
 
             return $change->fresh();
         });
+        NezhaPaymentAddressChangeNotifier::change($change, 'admin_canceled');
+
+        return $change;
     }
 
     public static function applyReadyChange(string $publicId): NezhaPaymentAddressChange
     {
         self::assertEnabled();
 
-        return DB::transaction(function () use ($publicId): NezhaPaymentAddressChange {
+        $change = DB::transaction(function () use ($publicId): NezhaPaymentAddressChange {
             $change = self::changeForUpdate($publicId);
             self::assertChangeState($change, 'draining');
             $state = self::lockedStateForChange($change);
@@ -415,6 +432,12 @@ class NezhaPaymentAddressChangeService
 
             return $change->fresh();
         });
+        NezhaPaymentAddressChangeNotifier::change(
+            $change,
+            $change->state === 'applied' ? 'applied' : 'apply_failed'
+        );
+
+        return $change;
     }
 
     public static function emergencyPause(
@@ -432,7 +455,7 @@ class NezhaPaymentAddressChangeService
         }
         $counter = self::stepUpCounter($admin, $totpCode);
 
-        return self::runStepUpTransaction($admin, $counter, function () use (
+        $state = self::runStepUpTransaction($admin, $counter, function () use (
             $admin,
             $restaurantId,
             $network,
@@ -492,6 +515,9 @@ class NezhaPaymentAddressChangeService
 
             return $state->fresh();
         });
+        NezhaPaymentAddressChangeNotifier::emergencyPause($state);
+
+        return $state;
     }
 
     public static function credentialNetworkAvailable(int $restaurantId, string $network): bool
@@ -565,13 +591,13 @@ class NezhaPaymentAddressChangeService
             ->pluck('id');
         $count = 0;
         foreach ($ids as $id) {
-            $expired = DB::transaction(function () use ($id): bool {
+            $expiredChange = DB::transaction(function () use ($id): ?NezhaPaymentAddressChange {
                 $change = NezhaPaymentAddressChange::whereKey($id)->lockForUpdate()->first();
                 if (! $change
                     || ! in_array($change->state, ['pending_merchant', 'pending_distinct_admin'], true)
                     || ! $change->expires_at
                     || $change->expires_at->isFuture()) {
-                    return false;
+                    return null;
                 }
                 $state = self::lockedStateForChange($change);
                 $from = $change->state;
@@ -581,9 +607,12 @@ class NezhaPaymentAddressChangeService
                 self::releasePendingState($state, $change);
                 self::appendEvent($state, $change, 'expired', $from, 'expired', 'system', null);
 
-                return true;
+                return $change->fresh();
             });
-            $count += $expired ? 1 : 0;
+            if ($expiredChange) {
+                NezhaPaymentAddressChangeNotifier::change($expiredChange, 'expired');
+                $count++;
+            }
         }
 
         return $count;
