@@ -716,13 +716,11 @@ class POSController extends Controller
             return response()->json([]);
         }
 
-        // Keep the delivery options visible when free delivery applies, but use the
-        // non-free charge for display calculations.
         $currentDeliveryCharge = (float) (Session::get('delivery_charge') ?? 0);
-        $displayDeliveryCharge = (float) (Session::get('delivery_charge_display') ?? $currentDeliveryCharge);
         $zoneMinDeliveryCharge = (float) ($zone->minimum_delivery_charge ?? 0);
 
-        if ($displayDeliveryCharge <= 0 || ($zoneMinDeliveryCharge > 0 && $displayDeliveryCharge < $zoneMinDeliveryCharge)) {
+        // Mirror the final server-side resolver: do not offer an option that cannot persist.
+        if ($currentDeliveryCharge <= 0 || ($zoneMinDeliveryCharge > 0 && $currentDeliveryCharge < $zoneMinDeliveryCharge)) {
             return response()->json([]);
         }
 

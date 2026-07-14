@@ -52,4 +52,32 @@ class NezhaMerchantMoneyIntegrityContractTest extends TestCase
         $this->assertStringContainsString('PosOrderInput::resolveAddons', $adminPos);
         $this->assertStringContainsString('PosOrderInput::resolveAddons', $placeOrder);
     }
+
+    public function test_pos_delivery_option_lists_hide_options_when_the_final_charge_is_ineligible(): void
+    {
+        $root = dirname(__DIR__, 2);
+
+        foreach ([
+            $root.'/app/Http/Controllers/Vendor/POSController.php',
+            $root.'/app/Http/Controllers/Admin/POSController.php',
+        ] as $controllerPath) {
+            $controller = file_get_contents($controllerPath);
+            $methodStart = strpos($controller, 'public function getDeliveryTypes(Request $request)');
+
+            $this->assertNotFalse($methodStart);
+            $methodEnd = strpos($controller, "\n    public function ", $methodStart + 1);
+            if ($methodEnd === false) {
+                $methodEnd = strlen($controller);
+            }
+
+            $method = substr($controller, $methodStart, $methodEnd - $methodStart);
+            $eligibilityGuard = strpos($method, '$currentDeliveryCharge <= 0');
+            $optionMapping = strpos($method, '$zone->deliveryOptions->map');
+
+            $this->assertNotFalse($eligibilityGuard);
+            $this->assertNotFalse($optionMapping);
+            $this->assertLessThan($optionMapping, $eligibilityGuard);
+            $this->assertStringContainsString('$currentDeliveryCharge < $zoneMinDeliveryCharge', $method);
+        }
+    }
 }

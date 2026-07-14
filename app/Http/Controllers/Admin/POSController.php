@@ -749,7 +749,7 @@ class POSController extends Controller
         $currentDeliveryCharge = (float) (Session::get('delivery_charge') ?? 0);
         $zoneMinDeliveryCharge = (float) ($zone->minimum_delivery_charge ?? 0);
         
-        if ($currentDeliveryCharge > 0 && $zoneMinDeliveryCharge > 0 && $currentDeliveryCharge < $zoneMinDeliveryCharge) {
+        if ($currentDeliveryCharge <= 0 || ($zoneMinDeliveryCharge > 0 && $currentDeliveryCharge < $zoneMinDeliveryCharge)) {
             return response()->json([
                 'options' => [],
                 'current_delivery_charge' => $currentDeliveryCharge
