@@ -11,6 +11,19 @@ use Tests\TestCase;
 
 class NezhaPaymentAddressRbacRouteTest extends TestCase
 {
+    public function test_two_factor_challenge_prevents_duplicate_submission_without_weakening_csrf(): void
+    {
+        $view = file_get_contents(resource_path('views/auth/two-factor-challenge.blade.php'));
+
+        $this->assertStringContainsString('@csrf', $view);
+        $this->assertStringContainsString('id="two-factor-form"', $view);
+        $this->assertStringContainsString('id="two-factor-submit"', $view);
+        $this->assertStringContainsString("form.dataset.submitted === '1'", $view);
+        $this->assertStringContainsString('event.preventDefault()', $view);
+        $this->assertStringContainsString('button.disabled = true', $view);
+        $this->assertStringContainsString("button.textContent = '验证中…'", $view);
+    }
+
     public function test_payment_address_routes_are_split_by_least_privilege_module(): void
     {
         foreach ([
