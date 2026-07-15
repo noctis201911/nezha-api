@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\CentralLogics\Helpers;
+use App\CentralLogics\NezhaBackofficeEmailBoundary;
 use App\CentralLogics\RestaurantLogic;
 use App\Exports\DisbursementHistoryExport;
 use App\Exports\RestauranrWiseFoodReviewExport;
@@ -35,6 +36,7 @@ use App\Models\Vendor;
 use App\Models\WithdrawRequest;
 use App\Models\Zone;
 use App\Scopes\RestaurantScope;
+use App\Rules\UniqueBackofficeEmail;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\Request;
@@ -73,7 +75,7 @@ class VendorController extends Controller
             'address' => 'required|max:1000',
             'latitude' => 'required|numeric|min:-90|max:90',
             'longitude' => 'required|numeric|min:-180|max:180',
-            'email' => 'required|unique:vendors',
+            'email' => ['required', new UniqueBackofficeEmail()],
             'phone' => 'required|regex:/^([0-9\s\-\+\(\)]*)$/|min:9|max:20|unique:vendors',
             'minimum_delivery_time' => 'required',
             'maximum_delivery_time' => 'required|gt:minimum_delivery_time',
@@ -313,7 +315,7 @@ class VendorController extends Controller
             'f_name' => 'required|max:100',
             'l_name' => 'nullable|max:100',
             'name' => 'required|max:191',
-            'email' => 'required|unique:vendors,email,' . $restaurant?->vendor?->id,
+            'email' => ['required', new UniqueBackofficeEmail('vendors', (int) $restaurant?->vendor?->id)],
             'phone' => 'required|regex:/^([0-9\s\-\+\(\)]*)$/|min:9|max:20|unique:vendors,phone,' . $restaurant?->vendor?->id,
             'zone_id' => 'required',
             'latitude' => 'required|min:-90|max:90',
@@ -1853,6 +1855,12 @@ class VendorController extends Controller
 
                         return back();
                     }
+                    $normalizedEmail = NezhaBackofficeEmailBoundary::normalize($collection['email']);
+                    if (NezhaBackofficeEmailBoundary::conflicts($normalizedEmail)) {
+                        Toastr::error((new UniqueBackofficeEmail())->message());
+
+                        return back();
+                    }
                     if (isset($collection['DeliveryTime']) && explode('-', (string) $collection['DeliveryTime'])[0] > explode('-', (string) $collection['DeliveryTime'])[1]) {
                         Toastr::error(translate('messages.max_delivery_time_must_be_greater_than_min_delivery_time_on_id') . ' ' . $collection['id']);
 
@@ -1901,7 +1909,7 @@ class VendorController extends Controller
                         'l_name' => $collection['ownerLastName'],
                         'password' => bcrypt(12345678),
                         'phone' => $collection['phone'],
-                        'email' => $collection['email'],
+                        'email' => $normalizedEmail,
                         'status' => 1,
                         'created_at' => now(),
                         'updated_at' => now(),
@@ -1911,7 +1919,7 @@ class VendorController extends Controller
                         'logo' => $collection['logo'] ?? null,
                         'cover_photo' => $collection['CoverPhoto'] ?? null,
                         'phone' => $collection['phone'],
-                        'email' => $collection['email'],
+                        'email' => $normalizedEmail,
                         'latitude' => $collection['latitude'],
                         'longitude' => $collection['longitude'],
                         'vendor_id' => $vendor_id + $key + 1,
@@ -2009,6 +2017,12 @@ class VendorController extends Controller
 
                         return back();
                     }
+                    $normalizedEmail = NezhaBackofficeEmailBoundary::normalize($collection['email']);
+                    if (NezhaBackofficeEmailBoundary::conflicts($normalizedEmail, 'vendors', isset($collection['ownerID']) ? (int) $collection['ownerID'] : null)) {
+                        Toastr::error((new UniqueBackofficeEmail())->message());
+
+                        return back();
+                    }
                     if (isset($collection['DeliveryTime']) && explode('-', (string) $collection['DeliveryTime'])[0] > explode('-', (string) $collection['DeliveryTime'])[1]) {
                         Toastr::error(translate('messages.max_delivery_time_must_be_greater_than_min_delivery_time_on_id') . ' ' . $collection['id']);
 
@@ -2056,7 +2070,7 @@ class VendorController extends Controller
                         'f_name' => $collection['ownerFirstName'],
                         'l_name' => $collection['ownerLastName'],
                         'phone' => $collection['phone'],
-                        'email' => $collection['email'],
+                        'email' => $normalizedEmail,
                         'status' => 1,
                         'password' => bcrypt(12345678),
                         'updated_at' => now(),
@@ -2067,7 +2081,7 @@ class VendorController extends Controller
                         'logo' => $collection['logo'] ?? null,
                         'cover_photo' => $collection['CoverPhoto'] ?? null,
                         'phone' => $collection['phone'],
-                        'email' => $collection['email'],
+                        'email' => $normalizedEmail,
                         'latitude' => $collection['latitude'],
                         'longitude' => $collection['longitude'],
                         'vendor_id' => $collection['ownerID'],

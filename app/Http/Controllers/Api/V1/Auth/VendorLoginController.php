@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Auth;
 
 use App\Models\Tag;
+use App\Rules\UniqueBackofficeEmail;
 use App\Models\VendorEmployee;
 use App\Models\Zone;
 use App\Models\Admin;
@@ -110,7 +111,7 @@ class VendorLoginController extends Controller
             'fName' => 'required',
             'lat' => 'required|numeric|min:-90|max:90',
             'lng' => 'required|numeric|min:-180|max:180',
-            'email' => 'required|email|unique:vendors',
+            'email' => ['required', 'email', new UniqueBackofficeEmail()],
             'phone' => 'required|regex:/^([0-9\s\-\+\(\)]*)$/|min:9|unique:vendors',
             'min_delivery_time' => 'required',
             'max_delivery_time' => 'required',

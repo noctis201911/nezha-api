@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Models\Admin;
 use App\Models\AdminRole;
+use App\Rules\UniqueBackofficeEmail;
 use Illuminate\Http\Request;
 use App\CentralLogics\Helpers;
 use Illuminate\Support\Facades\DB;
@@ -30,7 +31,7 @@ class EmployeeController extends Controller
             'l_name' => 'nullable|max:100',
             'role_id' => 'required',
             'image' => 'required|max:2048',
-            'email' => 'required|unique:admins',
+            'email' => ['required', new UniqueBackofficeEmail()],
             'phone' => 'required|regex:/^([0-9\s\-\+\(\)]*)$/|min:9|max:20|unique:admins',
             'password' => ['required', Password::min(8)->mixedCase()->letters()->numbers()->symbols()->uncompromised()],
 
@@ -111,7 +112,7 @@ class EmployeeController extends Controller
             'f_name' => 'required|max:100',
             'l_name' => 'nullable|max:100',
             'role_id' => 'required',
-            'email' => 'required|unique:admins,email,'.$id,
+            'email' => ['required', new UniqueBackofficeEmail('admins', (int) $id)],
             'phone' => 'required|regex:/^([0-9\s\-\+\(\)]*)$/|min:9|max:20|unique:admins,phone,'.$id,
             'password' => ['nullable', Password::min(8)->mixedCase()->letters()->numbers()->symbols()->uncompromised()],
             'image' => 'nullable|max:2048',
