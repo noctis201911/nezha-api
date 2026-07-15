@@ -21,17 +21,42 @@
 | 5 | 资金闭环 | 隔离全链通过 | 订单 `2000000114` 从下单、商家确认、制作、配送、送达、管理员退款到商家标记退款完整跑通；优惠后应付 7,200，佣金/平台券/保证金扣回及退款反转后保证金精确回到 1,000,000。没有真实资金对账。 |
 | 6 | 性能/负载/N+1 | fixed-SHA 平行 staging 通过，production 版本阻断 | 生产只读数据旧实现 N=1/2/7 为 49/65/145 SQL，API `6cf7cf9` 为 51/51/51，N=7 完整响应 98,422 B 且 SHA-256 `231e5a7e451405604f0998592636b8ee097efab7f5a019d7500fa54c014a1b78` 与旧实现逐字节一致。staging-config/data 平行环境中，精确旧 baseline `0626875` 为 49/66/66，候选为 48/48/48，N=1/2/7 完整响应逐字节一致；优惠券、订阅餐厅、自配送与车辆距离边界矩阵 6 tests/35 assertions 通过。Web `6be4453` 的 Chromium 390×844/1365×900 首页、首卡跳转、刷新、console/请求/图片/溢出通过；同口径 5 并发/5 秒为 215/215 HTTP 200、42.21 req/s、p50 95.71 ms、p95 210.14 ms、p99 238.77 ms，相比此前 p95 2768.63 ms 红灯下降约 92.4%。候选未部署 shared staging 或 production。 |
 | 7 | 容灾/备份恢复 | 结构通过、字符保真失败 | 17:26 加密数据库备份可恢复 192 表、orders=44，`mysqlcheck` bad=0；但行级指纹发现 21 行 `local_life_posts.cover_emoji` 在备份中均为 `?`（hex `3F`），production 为 4-byte emoji，且备份脚本 `mysqldump` 未显式固定 `utf8mb4`。因此此前“恢复通过”只覆盖结构/计数，不能证明字符保真或作为 demo 清理唯一回滚点。需修备份参数、生成新加密备份并在全新隔离库做 `utf8mb4`/行指纹复核；真人整机/跨机故障切换仍未做。 |
-| 8 | 兼容/多端 | 部分通过 | Chromium 390×844/1440×900 无横向溢出；Firefox/WebKit、物理 iPhone Safari、微信/TG WebView 未测。Chromium 返回为 `navigationType=back_forward`，但 `pageshow.persisted=false`，不能证明 iOS bfcache 命中。 |
+| 8 | 兼容/多端 | 部分通过 | Chromium 390×844/1440×900 无横向溢出；本地容器路由契约已按 D1–D6 固定，但 Firefox/WebKit、物理 iPhone Safari、Android Chrome、微信/TG WebView 和商家 Android App 均未完成真机矩阵。Chromium 返回为 `navigationType=back_forward`，但 `pageshow.persisted=false`，不能证明 iOS bfcache 命中。 |
 | 9 | i18n/币种 | 当前单语言通过 | 顾客端语言列表实际只有简体中文；֏ 主币种及 ¥/$ 参考换算在顾客/商家/后台显示。不能把浏览器 English locale 仍显示中文称为英文 UI 验收。 |
 | 10 | 三方交叉流程 | staging 完整通过，production 版本待升级 | 顾客↔商家↔平台正向、退款逆向、凭证金额不一致负向、无重复转账提示均跑通；`e42035c` 已将截图/渠道/金额/后果与确认、拒绝统一到可见现代详情 owner，390×844、320×720、1365×900 完成拒绝→重传→确认，单次请求/写入/通知成立。production 尚未包含。 |
 | 11 | 演示数据清除 | 阻断（工具已 fail closed） | marker 精确命中 vendors=7、restaurants=7、local_life_merchants=6、local_life_posts=21，总表行数分别为 9/9/10/21，二者不可混用；`/config` 仍返回 `Demo Banner`。版本化工具的精确 scope 覆盖 31 订单、22 评价、0 add-on 和 6 个商家当前名称；补齐备份已损失的 21 个 emoji 后，production 只读 PLAN `c13203f4…` 与隔离库 PLAN `55bdf110…` 的 20/20 类目标行指纹一致。schema 全列审计的 48 个非零引用入口收敛为 26 类 manifest 外 blocker，新增关键项包括 seed category 关联但 manifest 外 food 58、coupon claim 4、message 2、order timeout event 38、review report 1、offline payment 23；两端 blocker/计数一致，rehearsal 在事务前 exit 4 拒绝。旧 production 本地 untracked 8 子脚本禁止直接执行；先由数据 owner 逐类裁决并补可逆证据。 |
 | 12 | 真实商家就绪 | 阻断 | 店 12 `active=0`、营业时间记录=0，38/38 菜品上架；支付宝码和 TRC20 地址存在，BEP20 地址不存在。当前 `nezha_deposit_mode_status=0`、最低保证金阈值=0、店 12 佣金关闭，因此保证金/余额为 0 **不是当前免佣免押阶段的独立阻断**。硬门是营业时间、实际经营者、收款资料归属、通知接收和最终激活均未签收。 |
 | 13 | 开关上线态 | 阻断 | 56 个开关中 `nezha_preorder_status=1`、`nezha_notif_async_status=1`、`nezha_merchant_video_status=1` 与签收状态不闭环；`schedule_order=true`，故预订单是“依赖已开但 owner 未签”，不是隐藏依赖仍关。production 当前 release + 共享 storage 只读核对商户 12 视频 stored=2、normalized=2，技术可见性成立，剩余是内容 owner 对两条封面/标题/外跳的批准。`nezha_autooffline_status=1` 符合 A 类目标，仅原台账现值过期。禁止静默把当前值改写成批准值。 |
-| 14 | 通知送达 | staging 语义/幂等通过，真渠道未测 | 首次创建 `pending_merchant_refund` 才生成顾客“待商家退款”；商家或平台完成通知只由原子状态转换赢家生成，重复操作不重复投递。queue/Redis 正常且 `/config is_mail_active=true`，但配置声明不等于 FCM/邮件/Telegram 真实送达；物理设备回执与 production 真实推送未验。 |
+| 14 | 通知送达 | 本地 R2 语义/编译通过，真实设备/渠道阻断 | 既有退款通知幂等保持；新增顾客多安装实例、token 轮换/重新绑定/当前实例退出、D1 标准 Web Push、D2 Android Chrome FCM、商家 Android App FCM 与 D3–D6 核心 H5 路由契约已自动化验证。2 个 API migration 未应用，Firebase 配置/release signing/Play 审核与物理 D1–D6/商家 App、FCM/邮件/Telegram 真实回执均缺失，不能称真实送达通过。 |
 | 15 | 手册/客服/退款流程 | staging 通过，production 版本阻断 | B 方案“平台不碰钱、商家原路退”与产品语义现已一致；顾客、商家、管理员列表/详情均区分待商家退款、争议核实中和已标记退款。production 尚未包含。 |
 | 16 | 法律/政策 | 阻断 | 隐私政策声称数据库整体静态加密；2026-07-14 复核共 192 个 InnoDB 表，其中 33 个无 `ENCRYPTION='Y'`，系统盘为普通 ext4、未见 LUKS/全盘加密，事实与政策不一致。仍需亚美尼亚律师审校。 |
 | 17 | 专业渗透 | 未完成 | 已有仓库级安全回归不能替代独立专业渗透。 |
 | 18 | 实体/税务/跨境合规 | 未完成 | 需律师/会计/合规负责人确认，AI 无法签收。 |
+
+## 2026-07-15 通知 R2 只读/本地验收增补
+
+### 第一版保证矩阵
+
+| 目标 | 保证 | 边界 |
+|---|---|---|
+| D1 iPhone Safari | 核心 H5；符合平台条件并安装到主屏幕后验标准 Web Push | 不承诺 FCM；需系统支持、用户授权和有效订阅 |
+| D2 Android Chrome | 核心 H5 + FCM | 需 Play 服务/网络、浏览器权限和有效 token |
+| D3/D4 微信 WebView | 核心 H5 | 不承诺 FCM；离场通知依赖已验邮件/Telegram 角色渠道 |
+| D5/D6 Telegram WebView | 核心 H5 | 不承诺 FCM；Telegram 机器人消息是独立服务端渠道 |
+| 商家 Android App | 商家核心 H5 + FCM；提供通知/频道/全屏提醒/勿扰/电池/厂商自启动状态与设置入口 | 不绕过用户控制；最终表现受 Android、Play 服务、ROM、权限和频道设置约束 |
+| 邮件 / Telegram | 按角色×事件保证服务端投递 | 以真实收件箱/机器人回执关门，不按容器重复实现 |
+
+顾客采用多安装实例模型：同一账号可以有多个设备或浏览器订阅；token 轮换/重新绑定保持实例身份，退出只注销当前实例，不能连带关闭其他设备。
+
+### 本地证据与实际关闭范围
+
+- API：本地集成 `763786c`，其中生命周期修复 `d91100d`，锚定当时最新 `origin/main=45a8e8c6b5aeb84bcd7ed93babc7db825b1ac7de`；通知聚焦 `40 tests / 154 assertions`、浏览器桥接脚本 `4/4`、5 个触及 PHP 文件 lint、JS syntax 与 `git diff --check` 均通过。测试在强制 SQLite `:memory:` 下运行，不连接真实 DB 或通知渠道。
+- Web：`17c64e3`（含安装实例提交 `5e7c462`）；安装实例/容器矩阵 `9/9` 通过，Next `15.5.20` production build exit 0。build 期间用 ignored 空 `src/utils/staticCredentials.js` 仅补齐本地编译依赖并在完成后删除；默认 API 域名 `yourdomain.com` 的 TLS 主机名不匹配产生预渲染 warning。`npm audit` 仍报 2 个 moderate，来自 Next 依赖链中的 `postcss@8.4.31`；未采用会把 Next 强制降到 9.3.3 的破坏性建议。
+- 商家 Android App：`cac9975`；JDK 21 / Android SDK 下 `testDebugUnitTest assembleDebug lintDebug` BUILD SUCCESSFUL，但 unit test 多为 `NO-SOURCE`，不冒充实质单测。lint `0 errors / 43 warnings`，XML `14/14` 可解析；debug APK 5,308,815 B，SHA-256 `EAF8F71E9AFC5202B37B90EDF034B834C93F99E802AEB467E8A8C7BC48BD6AA0`。Manifest 不含 `RECEIVE_BOOT_COMPLETED` 或 `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`，`allowBackup=false`，云备份/D2D 规则排除凭据和设备域。
+- 本轮实际关闭：多安装实例、token rebinding/rotation/logout、App 有界重试/refresh、容器路由等本地代码语义，以及编译、lint、静态权限和备份规则子门。
+- 本轮没有关闭：本地通知分支新增 2 个 API migration；production 运行记录；Firebase `google-services` 配置；release signing；Play full-screen intent/`specialUse` 声明与审核；物理 Android/iPhone、D1–D6、商家 App；真实 FCM/邮件/Telegram 回执；外部专业报告。Firebase 配置缺失使当前 APK 只能证明可编译，不能作为可用 FCM 测试包。
+- 店 12 属于朋友且尚未正式真实经营，不能作为真实商家/收款/履约证据。内部 owner 无需向 Codex 提交实名；本轮外部材料 0 件，可验附件 SHA-256、实名/角色/机构、签署日期时间/时区仍全部为 0。
+- B1 的五份 `PRELAUNCH_B1_*` 文档和内容快照 `fc026a78130709ce13af356914ce01c50000d866` 保持不动。固定 B1 API/Web SHA 仍是历史签收对象；R2 是尚未部署的新本地集成，不能把两者混称同一上线候选。production 继续 **NO-GO**。
 
 ## 自动化与浏览器证据
 
@@ -58,8 +83,9 @@
 1. 收敛 production 与已验 staging 候选的版本差：production Web 仍缺 `/checkout` hydration、顾客重传与退款阶段修复，production API 仍缺商家凭证审核及退款阶段修复；只能在其余发布门通过并取得 production Go 后用固定 SHA 部署、再做只读与浏览器验收。
 2. 首页性能阻断已由 fixed-SHA 平行 staging 验收关闭；shared staging 仍保留 Web 10 tracked + 6 untracked、API 37 tracked + 2 untracked WIP，现有脚本仍会对移动 ref 执行 `reset --hard`，API 脚本还无条件 `migrate --force`，不得为追平候选而运行。任何后续 shared-staging/production 动作必须先由 WIP owner checkpoint/迁移，再用精确 40-hex SHA、零 migration diff/pending 和新的明确授权。
 3. 让隐私政策的静态加密陈述与真实存储保护一致；这是安全/合规改造，不得边测边批量 ALTER 33 表。
-4. 对三项开关漂移逐项取得 owner 签收，并清理演示数据、确认真实商家营业/保证金/收款资料。
+4. 对三项开关漂移逐项取得 owner 签收，并清理演示数据、确认真实商家营业/保证金/收款资料。店 12 属于朋友且尚未正式经营，当前不能关闭这一门。
 5. 修复加密数据库备份的 `utf8mb4` 字符保真：旧备份把 21 个已知 emoji 恢复为 `?`，必须用新备份在全新隔离库完成字符样本与目标行指纹一致性复核；结构/计数/mysqlcheck 通过不能替代这一门。
+6. 通知 R2 只有本地语义/编译证据；应用新增的 2 个 API migration 未执行，Firebase 配置/release signing/Play 审核、依赖告警、物理设备矩阵和真实 FCM/邮件/Telegram 回执均未关闭。不得部署或运行 migration 来补证据。
 
 > 2026-07-14 只读收口校准：第 4 项中的“保证金”只在未来启用 `nezha_deposit_mode_status`/佣金时才重新成为硬门；当前阶段必须签收的是店 12 营业时间、经营者、收款资料、通知和 `active`。六类 NO-GO 的唯一 owner、签收、自动/人工边界与动作包见 `docs/PRELAUNCH_CLOSURE_LEDGER_20260714.md`。
 
@@ -69,7 +95,7 @@
 - 五份 B1 表单现统一记录 API `a53cfb5c967daa5917ce2cb4c2489d6799434ff2`、Web `b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed`，8 文件重封内容快照提交为 `fc026a78130709ce13af356914ce01c50000d866`；旧 API `589a5366633f951fc9692810cc2a4c21c553b629` 只保留历史追溯，不能流转为最终签收对象。`b14c9c58..a53cfb5c` 对 8 个邮箱隔离运行时文件 diff=0；API `98efcc2a..a53cfb5c` 和 production hotfix `dea5dd11..a53cfb5c` 均无 migration 文件差异。Web `a9e5007..b4e0ea0f` 只有 `AGENTS.md`，无应用文件变化。production current/previous 为 API `20260715-042928-dea5dd1` / `20260714-070255-e044d34`、Web `20260714-101004-2f81803` / `20260714-074400-b66c0d1`，Web BUILD 为 `Mguty8CEfSrUIu5FXJ52G`；production 不是最终候选。
 - shared staging 只读复核仍为 Web HEAD `ef54278551a3f8818661380f919fa894e47cc50c`、BUILD `n4VGKngOQXDelVRDdK9yN`、10 tracked + 6 untracked；API detached HEAD `f766dd62bd949613898e31031cf5636527488d8f`、37 tracked + 2 untracked。没有清理/reset/部署这些 WIP。
 - production 两个 queue worker 本次均 online、累计重启各 93；`unstable_restarts=0`，命令仍含 `--max-time=3600`；Redis `PONG`、failed jobs=0。该运行态仍不能证明真实通知送达。
-- `dea5dd11..a53cfb5c` migration 文件 diff=0，production `migrate:status` 为 460 Ran / 0 Pending；根盘 84%、剩余约 13G，故继续磁盘冻结。本包使用本地干净独立克隆，没有在服务器新增 worktree、运行 migration、备份脚本/demo 工具、发送真实通知或写 production/shared staging。
+- 固定 B1 候选 `dea5dd11..a53cfb5c` migration 文件 diff=0，且当时 production `migrate:status` 为 460 Ran / 0 Pending；这不覆盖 2026-07-15 本地通知 R2 分支新增的 2 个 migration。本包使用本地干净独立克隆，没有在服务器新增 worktree、运行 migration、备份脚本/demo 工具、发送真实通知或写 production/shared staging。
 - 完整性计数：demo 26/26 `HOLD`、31 个订单未逐项定性；法律/会计 0/4 专业签收；三项开关 0/3 目标值、0/5 汇总签名；外部 QA 封面 0/11、D1–D6 0/6、三渠道回执为空、无渗透报告、总签收 0/6。固定 Git/文档/manifest/既有浏览器包哈希均重算一致，但没有外部附件 SHA-256 可验；详情见 B1 包 §4。
 - 候选冻结门已关闭：API/Web 最终候选已冻结、`b14c9c58` 及其后续运行时范围已隔离回归，五份表单已重封到同一 API 40-hex。当前签名仍为 0；任何后续应用 SHA 前移都必须停下重新定界并使受影响签收重测，旧 `589a5366` 上的最终“通过”不得接受。
 

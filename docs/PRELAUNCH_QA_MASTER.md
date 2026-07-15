@@ -55,6 +55,26 @@ node nz.js run "bash /www/wwwroot/api.nezha.am/nzcheck-cod.sh"
 - 真机矩阵和 FCM/邮件/Telegram 回执按设备、渠道和真实结果关门，不按签字人数关门；店 12 只有在同一 owner 确实是实际经营者、收款控制人和履约负责人时才允许合并内部角色。
 - 本节只重新定义责任与证据归属，不关闭任何未完成门。B1 内容快照 `fc026a78130709ce13af356914ce01c50000d866` 和五份历史表单保持不动；后续执行以本 Master 与收口台账的单人模型解释为准。
 
+## 0.9 通知平台承诺矩阵与本地 R2 证据（2026-07-15）
+
+第一版的“全设备、全通知渠道”不是承诺每个容器都支持同一种推送协议，也不是承诺操作系统、浏览器、ROM 或用户设置无法阻断投递。上线口径固定为：
+
+| 目标 | 第一版保证范围 | 不承诺/前置条件 |
+|---|---|---|
+| D1 iPhone Safari | 核心 H5；符合平台条件并安装到主屏幕后按标准 Web Push 单列验收 | 不承诺 FCM；需系统/浏览器支持、用户授权和有效订阅 |
+| D2 Android Chrome | 核心 H5 + FCM | 需 Google Play 服务/网络、浏览器通知权限与有效 token；真实送达仍逐机验收 |
+| D3/D4 iPhone/Android 微信 WebView | 核心 H5 | 不承诺 FCM；离场提醒由邮件/Telegram 等已签收角色渠道兜底 |
+| D5/D6 iPhone/Android Telegram WebView | 核心 H5 | 不承诺 FCM；Telegram 机器人消息是独立服务端渠道，不等同 WebView 内推送 |
+| 商家 Android App | 商家核心 H5 + FCM；提供通知、告警频道、全屏提醒、勿扰权限、电池和厂商自启动的可观察设置入口 | 不绕过用户控制；是否弹出/响铃受系统、Play 服务、ROM、权限、频道和策略约束 |
+| 邮件 / Telegram | 按角色×事件矩阵保证服务端投递与回执 | 不是每个 H5 容器各实现一套；必须用真实收件箱/机器人回执关门 |
+
+- 顾客按“安装实例”建模：同一顾客可绑定多个设备/浏览器订阅；token 轮换和重新绑定保持实例身份，退出只注销当前安装实例，不误伤其他设备。
+- 本地 R2 代码证据：API `763786c`（功能提交 `d91100d`，锚定当时最新 `origin/main=45a8e8c6b5aeb84bcd7ed93babc7db825b1ac7de`）通过通知聚焦 `40 tests / 154 assertions`、桥接脚本 `4/4`、触及 PHP/JS 语法与 diff 检查；Web `17c64e3`（含 `5e7c462`）通过安装实例/容器路由 `9/9` 与 Next `15.5.20` production build；商家 Android App `cac9975` 通过 `assembleDebug`/`lintDebug`，lint 为 `0 errors / 43 warnings`，XML `14/14` 可解析。debug APK 为 5,308,815 B，SHA-256 `EAF8F71E9AFC5202B37B90EDF034B834C93F99E802AEB467E8A8C7BC48BD6AA0`。
+- 上述证据只关闭本地代码语义、编译、静态权限/备份规则和 token 生命周期子门。测试强制 SQLite `:memory:`，未连接真实渠道；Web build 使用已移除的 ignored 空凭据占位，默认 API 域名产生 TLS 预渲染 warning；`npm audit` 仍有 2 个 moderate（Next 依赖链中的 PostCSS），不以破坏性强制降级冒充修复。
+- 仍开放：本地通知分支新增的 2 个 API migration 未应用；Firebase `google-services` 配置与 release signing 缺失；Play 的 full-screen intent / `specialUse` 声明及审核未完成；D1–D6、商家 App、物理 iPhone/Android 未实测；FCM/邮件/Telegram 无真实回执；外部专业报告/签回材料仍为 0。production/shared staging 未部署或写入，production 继续 **NO-GO**。
+- 店 12 是朋友的店且尚未正式真实经营，不能作为实际商家、收款控制人或履约主体关闭商家就绪门。内部留痕不要求向 Codex 提交实名；门按真实设备、渠道、角色、机构、时间/时区与证据关闭，不按签名人数关闭。
+- 本节是内部正本的后续执行口径，不回写五份 `PRELAUNCH_B1_*` 历史表单或内容快照 `fc026a78130709ce13af356914ce01c50000d866`。
+
 ## 1. 上线前 18 维度总表
 
 > 自动化分级：🟢 无人值守可跑(只读/grep/带token真机浏览) · 🟡 需你批准(money-write仿真/真下单/翻开关/破坏性) · 👤 需真人(AI够不到)
@@ -78,7 +98,7 @@ node nz.js run "bash /www/wwwroot/api.nezha.am/nzcheck-cod.sh"
 | 11 | **演示数据清除**（唯一入口 `bash nzdemo-rollback.sh`）：`PLAN <evidence-dir>` 默认只读并输出计划 SHA；`REHEARSE <dir> <sha>` 只许 `nezha_qa_*` 一次性数据库、执行后事务回滚；`GO <dir> <sha>` 还必须显式 `NZ_DEMO_ALLOW_COMMIT=YES`。manifest/备份校验固定 SHA，订单/评价/add-on 必须进入精确 scope，目标当前行也进入计划指纹；manifest 外业务/资金/通知/用户关联一律 fail closed。2026-07-14 schema 全列审计收敛出 26 类 blocker，隔离演练在事务前被正确拒绝；先走数据 owner 裁决包。旧服务器本地 8 子脚本不得再直接执行。Banner 是独立配置写入，不由数据工具顺手修改。 | `docs/PRELAUNCH_CLOSURE_LEDGER_20260714.md` | 🔴硬门 | 🟢PLAN·🟡REHEARSE/GO | ⬜生产未执行 |
 | 12 | 真实商家就绪（店12 营业时间/实际经营者/收款归属/通知/上架/激活） | `active=0` 且无营业时间；当前免佣免押，余额 0 不是独立阻断 | 🔴硬门 | 🟡/👤（商家或平台运营设置并签收） | ⬜ |
 | 13 | **开关上线态逐个确认**(deposit_mode/guest_checkout/refund_control/sanction/risk/wallet_add_refund 目标值+CHANGELOG留痕) | INVARIANTS L2 | 🔴硬门 | 🟢现值只读核·🟡翻动需拍板 | ⬜逐个核 |
-| 14 | 通知送达真机(FCM/邮件/Telegram·iOS推送坑) | [[nezha-order-notifications]] | gate | 🟢站内信入库/queue 只读验·👤真机收推送 | 语义✅／真实渠道⬜ |
+| 14 | 通知送达真机（D1 标准 Web Push；D2/商家 Android App FCM；邮件/Telegram 按角色事件） | §0.9 / [[nezha-order-notifications]] | gate | 🟢本地语义/编译·👤真机与真实回执 | 本地 R2 语义/编译✅；2 migrations、配置/签名/Play 审核、物理设备与真实渠道⬜ |
 | 15 | 手册就绪(ADMIN/MERCHANT_GUIDE)+客服+退款流程(B方案联系商家原路退) | [[nezha-bfang-refund-contact-merchant]] | gate | 🟢(读文档核对) | 多数✅ |
 | **D 人工门（AI 够不到，只能打底稿）** ||||||
 | 16 | 法律/政策审校(协议/隐私/退款/AML·亚美尼亚+B模式) | `docs/legal` | 🔴硬门 | 👤律师 | ⬜ |
