@@ -224,15 +224,15 @@ class NotificationController extends Controller
             $thresholdTime = $thresholdTime->subMinutes($cart_reminder_after_time);
         }
 
-        $abandoned_users = DB::table('users')
-            ->select(['id', 'f_name', 'l_name', 'cm_firebase_token'])
+        $abandoned_users = User::query()
+            ->select(['id', 'f_name', 'l_name'])
             ->whereIn('id', function ($query) use ($thresholdTime) {
                 $query->select('user_id')
                     ->from('carts')
                     ->where('updated_at', '<=', $thresholdTime)
                     ->whereNotNull('user_id');
             })
-            ->whereNotNull('cm_firebase_token')
+            ->withCustomerPushTarget()
             ->whereNotIn('id', function ($query) {
                 $query->select('user_id')
                     ->from('user_notifications')
@@ -250,7 +250,7 @@ class NotificationController extends Controller
         }
 
         foreach ($abandoned_users as $user) {
-            if ($user && $user->cm_firebase_token && $user->cm_firebase_token != '@') {
+            if ($user) {
                 $data = [
                     'title' => translate('messages.Cart Abandon Reminder'),
                     'description' => str_replace('{userName}', $user->f_name . ' ' . $user->l_name, $notificationMessage->message),
@@ -260,7 +260,7 @@ class NotificationController extends Controller
                 ];
 
                 try {
-                    Helpers::send_push_notif_to_device($user->cm_firebase_token, $data);
+                    Helpers::send_push_notif_to_customer($user, $data);
                     Helpers::insertDataOnNotificationTable($data, 'user', $user->id);
                 } catch (\Exception $e) {
                     info($e->getMessage());

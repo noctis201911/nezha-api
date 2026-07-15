@@ -609,6 +609,8 @@ class ConversationController extends Controller
         $limit = $request['limit']??10;
         $offset = $request['offset']??1;
         $fcm_token_web = null;
+        $fcm_token = null;
+        $customer_push_recipient = null;
         $dm = DeliveryMan::where(['auth_token' => $request['token']])->first();
 
         $sender = UserInfo::where('deliveryman_id', $dm->id)->first();
@@ -638,7 +640,7 @@ class ConversationController extends Controller
                     $fcm_token_web = "restaurant_panel_{$vendor?->restaurants[0]?->id}_message";
                 }elseif($receiver->user_id){
                     $user = User::find($receiver->user_id);
-                    $fcm_token=$user->cm_firebase_token;
+                    $customer_push_recipient = $user;
                 }
             }else{
                 $receiver_id =$conversation->sender_id;
@@ -649,7 +651,7 @@ class ConversationController extends Controller
                     $fcm_token_web="restaurant_panel_{$vendor?->restaurants[0]?->id}_message";
                 }elseif($receiver->user_id){
                     $user = User::find($receiver->user_id);
-                    $fcm_token=$user->cm_firebase_token;
+                    $customer_push_recipient = $user;
                 }
             }
         }else{
@@ -686,7 +688,7 @@ class ConversationController extends Controller
                     $receiver->save();
                 }
                 $receiver_id = $receiver->id;
-                $fcm_token=$user->cm_firebase_token;
+                $customer_push_recipient = $user;
             }
         }
 
@@ -727,7 +729,13 @@ class ConversationController extends Controller
                     'conversation_id'=> $conversation->id,
                     'sender_type'=> 'delivery_man'
                 ];
-                Helpers::send_push_notif_to_device($fcm_token, $data);
+                if ($customer_push_recipient) {
+                    if (Helpers::customerWantsPush($customer_push_recipient, 'chat')) {
+                        Helpers::send_push_notif_to_customer($customer_push_recipient, $data);
+                    }
+                } elseif ($fcm_token) {
+                    Helpers::send_push_notif_to_device($fcm_token, $data);
+                }
                 if($fcm_token_web){
                     Helpers::send_push_notif_to_topic($data, $fcm_token_web, 'message');
                 }

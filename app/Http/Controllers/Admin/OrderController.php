@@ -867,10 +867,9 @@ class OrderController extends Controller
                     $notification_status = Helpers::getNotificationStatusData('customer', 'customer_refund_request_approval');
 
                     $message = Helpers::getOrderPushNotificationMessage($order, 'refunded', 'user' ,$order->customer ? $order?->customer?->current_language_key : 'en');
-                    $fcm_token = $order->customer ? $order->customer->cm_firebase_token : null;
-                    if ($message && isset($fcm_token)) {
+                    if ($message && $order->customer) {
                         $data= Helpers::makeDataForPushNotification(title:translate('order_refunded'), message:$message,orderId: $order->id, type: 'order_status', orderStatus: $order->order_status);
-                        Helpers::send_push_notif_to_device($fcm_token, $data);
+                        Helpers::send_push_notif_to_customer($order->customer, $data);
                         Helpers::insertDataOnNotificationTable($data , 'user', $order->user_id);
                     }
 
@@ -985,13 +984,12 @@ class OrderController extends Controller
 
             try {
 
-                $fcm_token = ($order->is_guest == 0 ? $order?->customer?->cm_firebase_token : $order?->guest?->fcm_token) ?? null;
                  $message = Helpers::getOrderPushNotificationMessage($order, 'accepted', 'user' ,$order->customer ? $order?->customer?->current_language_key : 'en');
 
-                if ($message && isset($fcm_token)) {
+                if ($message) {
                     $data= Helpers::makeDataForPushNotification(title:translate('Order_notification'), message:$message,orderId: $order->id, type: 'order_status', orderStatus: $order->order_status);
-                    Helpers::send_push_notif_to_device($fcm_token, $data);
-                    Helpers::insertDataOnNotificationTable($data , 'user', $order->user_id);
+                    Helpers::send_push_notif_to_order_customer($order, $data);
+                    if (! $order->is_guest && $order->user_id) { Helpers::insertDataOnNotificationTable($data , 'user', $order->user_id); }
                 }
 
                 $message =Helpers::getPushNotificationMessage(status:'deliveryman_order_assign',userType: 'deliveryman' , lang:$deliveryman->current_language_key, deliveryManName:$deliveryman->f_name.' '.$deliveryman->l_name, orderId:$order->id);

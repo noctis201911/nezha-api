@@ -221,6 +221,8 @@ class ConversationController extends Controller
 
         $error_message = null;
         $file_count=0;
+        $fcm_token = null;
+        $customer_push_recipient = null;
 
         $vendor = Helpers::get_vendor_data();
         $sender = UserInfo::where('vendor_id',$vendor->id)->first();
@@ -247,7 +249,7 @@ class ConversationController extends Controller
             $nzHasOrder = \App\Models\Order::where('user_id', $user_id)->where('restaurant_id', Helpers::get_restaurant_id())->exists();
             $nzHasConv = ($sender && $nzRcv) ? Conversation::WhereConversation($sender->id, $nzRcv->id)->exists() : false;
             if (!$nzHasOrder && !$nzHasConv) { abort(403); }
-            $fcm_token=$user->cm_firebase_token;
+            $customer_push_recipient = $user;
             $receiver = UserInfo::where('user_id', $user->id)->first();
             if(!$receiver){
                 $receiver = new UserInfo();
@@ -333,7 +335,11 @@ class ConversationController extends Controller
                         'sender_type'=> 'vendor'
                     ];
                     // 哪吒: 顾客「客服与商家消息」推送偏好闸(仅当收信方是顾客时拦截, 骑手不受影响)
-                    if ($user_type !== 'user' || Helpers::customerWantsPush($user, 'chat')) {
+                    if ($customer_push_recipient) {
+                        if (Helpers::customerWantsPush($customer_push_recipient, 'chat')) {
+                            Helpers::send_push_notif_to_customer($customer_push_recipient, $data);
+                        }
+                    } elseif ($fcm_token) {
                         Helpers::send_push_notif_to_device($fcm_token, $data);
                     }
                 }

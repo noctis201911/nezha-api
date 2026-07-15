@@ -16,6 +16,7 @@ use App\Models\BusinessSetting;
 use App\Models\CashBack;
 use App\Models\Category;
 use App\Models\Coupon;
+use App\Models\CustomerNotificationInstallation;
 use App\Models\Currency;
 use App\Models\DataSetting;
 use App\Models\DeliveryManWallet;
@@ -70,6 +71,47 @@ use MatanYadaev\EloquentSpatial\Objects\Point;
 class Helpers
 {
     use NotificationDataSetUpTrait, PaymentGatewayTrait;
+
+    public static function send_push_notif_to_customer(User $customer, array $data, $web_push_link = null): bool
+    {
+        $installations = CustomerNotificationInstallation::query()
+            ->where('user_id', $customer->id)
+            ->whereNull('revoked_at')
+            ->orderByDesc('last_seen_at')
+            ->limit(CustomerNotificationInstallations::MAX_ACTIVE_INSTALLATIONS)
+            ->get();
+
+        $targets = [];
+        if ($customer->cm_firebase_token && $customer->cm_firebase_token !== '@') {
+            $targets[hash('sha256', $customer->cm_firebase_token)] = $customer->cm_firebase_token;
+        }
+        foreach ($installations as $installation) {
+            if (count($targets) >= CustomerNotificationInstallations::MAX_ACTIVE_INSTALLATIONS) {
+                break;
+            }
+            $targets[$installation->token_hash] = $installation->token;
+        }
+
+        foreach ($targets as $token) {
+            self::send_push_notif_to_device($token, $data, $web_push_link, true);
+        }
+
+        return true;
+    }
+
+    public static function send_push_notif_to_order_customer($order, array $data, $web_push_link = null): bool
+    {
+        if ($order->is_guest) {
+            $guestToken = $order?->guest?->fcm_token;
+            if ($guestToken) {
+                self::send_push_notif_to_device($guestToken, $data, $web_push_link);
+            }
+        } elseif ($order->customer) {
+            self::send_push_notif_to_customer($order->customer, $data, $web_push_link);
+        }
+
+        return true;
+    }
 
     public static function error_processor($validator)
     {
@@ -1817,7 +1859,7 @@ class Helpers
     }
 
 
-    public static function send_push_notif_to_device($fcm_token, $data, $web_push_link = null)
+    public static function send_push_notif_to_device($fcm_token, $data, $web_push_link = null, bool $force_async = false)
     {
         if (isset($data['conversation_id'])) {
             $conversation_id = $data['conversation_id'];
@@ -1887,6 +1929,17 @@ class Helpers
                 ],
             ],
         ];
+
+        if ($force_async) {
+            try {
+                \App\Jobs\SendPushNotificationJob::dispatch($postData)->onConnection('redis');
+            } catch (\Throwable $e) {
+                // Multi-installation fanout must never fall back to serial FCM HTTP calls on a request thread.
+                \Illuminate\Support\Facades\Log::warning('customer push enqueue failed: '.$e->getMessage());
+            }
+
+            return false;
+        }
 
         return self::sendNotificationToHttp($postData);
     }
@@ -2732,7 +2785,6 @@ class Helpers
             return true;
         }
         $status = ($order->order_status == 'delivered' && $order->delivery_man) ? 'delivery_boy_delivered' : $order->order_status;
-        $user_fcm = $order->is_guest ? $order?->guest?->fcm_token : $order?->customer?->cm_firebase_token;
         $lang = $order->customer ? ($order?->customer?->current_language_key ?: 'en') : 'en';
         $value = self::getOrderPushNotificationMessage($order, $status, 'user', $lang);
 
@@ -2771,8 +2823,8 @@ class Helpers
 
             // 实际 FCM 推送只在有 token 时发 (iOS Safari/Chrome 不支持 Web Push, 多数顾客无 token)
             // 哪吒: 顾客「订单进度」推送偏好闸(只拦 FCM, 站内信不受影响)。游客 $order->customer 为 null => 不拦截。
-            if ($user_fcm && self::customerWantsPush($order->customer, 'order_progress')) {
-                self::send_push_notif_to_device($user_fcm, $data);
+            if (self::customerWantsPush($order->customer, 'order_progress')) {
+                self::send_push_notif_to_order_customer($order, $data);
             }
             // 站内信不再依赖 token: 登录顾客一律入库, 保证 iOS/未授权推送的顾客出餐后也能在消息中心看到提醒
             if (!$order->is_guest && $order->user_id) {
@@ -5334,10 +5386,10 @@ class Helpers
     {
         $user = User::where('id', $user_id)->first();
 
-        $message = Helpers::getPushNotificationMessage(status: 'customer_add_fund_to_wallet', userType: 'user', lang: $user?->cm_firebase_token, userName: $user?->f_name.' '.$user?->l_name);
-        if ($message && isset($user?->cm_firebase_token)) {
+        $message = Helpers::getPushNotificationMessage(status: 'customer_add_fund_to_wallet', userType: 'user', lang: $user?->current_language_key, userName: $user?->f_name.' '.$user?->l_name);
+        if ($message && $user) {
             $data = Helpers::makeDataForPushNotification(title: translate('messages.Fund_added'), message: $message, orderId: '', type: 'add_fund', orderStatus: '', amount: $amount);
-            Helpers::send_push_notif_to_device($user?->cm_firebase_token, $data);
+            Helpers::send_push_notif_to_customer($user, $data);
             Helpers::insertDataOnNotificationTable($data, 'user', $user_id);
         }
 
@@ -6001,17 +6053,18 @@ class Helpers
     public static function dineInOrderTokenUpdatePushNotification($order, $tableNumber = null, $tokenNumber = null)
     {
         // $tableNumber &&  $tableNumber ?  translate('Table No -') .' '.$tableNumber  .' '. translate('&_Token No -') .' '.$tokenNumber : ($tableNumber  ? translate('Table No -') .' '.$tableNumber  :  translate('Token No -') .' '.$tokenNumber );
-        $fcm_token = ($order->is_guest == 0 ? $order?->customer?->cm_firebase_token : $order?->guest?->fcm_token) ?? null;
         $message = Helpers::getOrderPushNotificationMessage($order, 'customer_dine_in_table_or_token', 'user', $order->customer ? $order?->customer?->current_language_key : 'en');
 
-        if ($message && isset($fcm_token)) {
+        if ($message) {
             $title = $tableNumber && $tokenNumber ? translate('Here_is_your_Table_and_Token_Number') : ($tableNumber ? translate('Here_is_your_Table_Number') : translate('Here_is_your_Token_Number'));
             $data = Helpers::makeDataForPushNotification(title: $title, message: $message, orderId: $order->id, type: 'order_status', orderStatus: $order->order_status);
             // 哪吒: 顾客「订单进度」推送偏好闸(堂食取餐号)
             if (Helpers::customerWantsPush($order->customer, 'order_progress')) {
-                Helpers::send_push_notif_to_device($fcm_token, $data);
+                Helpers::send_push_notif_to_order_customer($order, $data);
             }
-            Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id);
+            if (! $order->is_guest && $order->user_id) {
+                Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id);
+            }
         }
 
         return true;

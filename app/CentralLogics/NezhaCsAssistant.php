@@ -598,8 +598,7 @@ class NezhaCsAssistant
 
         // 推送顾客（离线靠 FCM 叫回）。
         try {
-            $token = $customerUser->cm_firebase_token ?? null;
-            if ($token) {
+            if ($customerUser) {
                 $data = [
                     'title' => translate('messages.message'),
                     'description' => translate('messages.message_description'),
@@ -610,7 +609,7 @@ class NezhaCsAssistant
                     'conversation_id' => $conversation->id,
                     'sender_type' => 'admin',
                 ];
-                Helpers::send_push_notif_to_device($token, $data);
+                Helpers::send_push_notif_to_customer($customerUser, $data);
             }
         } catch (\Throwable $e) {
             Log::warning('nezha cs push failed: ' . $e->getMessage());
@@ -695,10 +694,9 @@ class NezhaCsAssistant
             try {
                 $cuId = $custInfo->user_id ?? null;
                 $cu = $cuId ? \App\Models\User::find($cuId) : null;
-                $token = $cu->cm_firebase_token ?? null;
                 $wantsPush = ($scope === 'vendor') ? ($cu && Helpers::customerWantsPush($cu, 'chat')) : true;
-                if ($token && $wantsPush) {
-                    Helpers::send_push_notif_to_device($token, [
+                if ($cu && $wantsPush) {
+                    Helpers::send_push_notif_to_customer($cu, [
                         'title' => translate('messages.message'),
                         'description' => translate('messages.message_description'),
                         'order_id' => '',

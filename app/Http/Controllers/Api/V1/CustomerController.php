@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\CentralLogics\CustomerNotificationInstallations;
 use Carbon\Carbon;
 use App\Models\Food;
 use App\Models\User;
@@ -293,18 +294,38 @@ class CustomerController extends Controller
     public function update_cm_firebase_token(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'cm_firebase_token' => 'required',
+            'installation_id' => ['nullable', 'string', 'max:128', 'regex:/\A[A-Za-z0-9._:-]+\z/'],
+            'cm_firebase_token' => ['required', 'string', 'max:4096'],
+            'platform' => ['nullable', 'string', 'max:32'],
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        DB::table('users')->where('id', $request?->user()?->id)->update([
-            'cm_firebase_token' => $request['cm_firebase_token']
-        ]);
+        if ($request->filled('installation_id')) {
+            $installation = CustomerNotificationInstallations::register(
+                $request->user(),
+                $validator->validated(),
+                $request->user()?->token()
+            );
+            $data = [
+                'installation_id' => $installation->installation_id,
+                'platform' => $installation->platform,
+            ];
+        } else {
+            CustomerNotificationInstallations::registerLegacy(
+                $request->user(),
+                (string) $request->input('cm_firebase_token'),
+                $request->user()?->token()
+            );
+            $data = null;
+        }
 
-        return response()->json(['message' => translate('messages.updated_successfully')], 200);
+        return response()->json([
+            'message' => translate('messages.updated_successfully'),
+            'data' => $data,
+        ], 200);
     }
 
     /**
@@ -385,8 +406,19 @@ class CustomerController extends Controller
 
     public function logout(Request $request)
     {
-        // 顾客主动登出: 吊销当前 Passport access token, 防被盗 token 在 1 年寿命内被继续冒用
-        $request?->user()?->token()?->revoke();
+        $validator = Validator::make($request->all(), [
+            'installation_id' => ['nullable', 'string', 'max:128', 'regex:/\A[A-Za-z0-9._:-]+\z/'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
+        }
+
+        CustomerNotificationInstallations::logout(
+            $request->user(),
+            $request->user()?->token(),
+            $request->filled('installation_id') ? (string) $request->input('installation_id') : null
+        );
         return response()->json([], 200);
     }
 

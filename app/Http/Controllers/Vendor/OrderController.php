@@ -969,9 +969,8 @@ class OrderController extends Controller
             $msg = $zh
                 ? '商家未同意取消订单 #' . $order->id . '，原因：' . mb_substr($request->reason, 0, 150) . '。订单将继续履约，如有疑问请联系商家。'
                 : 'The restaurant declined to cancel order #' . $order->id . '. Reason: ' . mb_substr($request->reason, 0, 150) . '. The order will continue.';
-            $fcm = $order->is_guest == 0 ? $order?->customer?->cm_firebase_token : null;
             $data = Helpers::makeDataForPushNotification(title: $title, message: $msg, orderId: $order->id, type: 'order_status', orderStatus: $order->order_status);
-            if ($fcm) { Helpers::send_push_notif_to_device($fcm, $data); }
+            if ($order->customer) { Helpers::send_push_notif_to_customer($order->customer, $data); }
             if ($order->is_guest == 0) { Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id); }
         } catch (\Throwable $e) { info('cancel_request_decision reject notify failed: ' . $e->getMessage()); }
         Toastr::success('已拒绝取消申请，订单继续履约，已通知顾客。');
@@ -1301,13 +1300,12 @@ class OrderController extends Controller
 
             try {
 
-            $fcm_token = ($order->is_guest == 0 ? $order?->customer?->cm_firebase_token : $order?->guest?->fcm_token) ?? null;
             $message = Helpers::getOrderPushNotificationMessage($order, 'accepted', 'user' ,$order->customer ? $order?->customer?->current_language_key : 'en');
 
-            if ($message && isset($fcm_token)) {
+            if ($message) {
                 $data= Helpers::makeDataForPushNotification(title:translate('Order_notification'), message:$message,orderId: $order->id, type: 'order_status', orderStatus: $order->order_status);
-                Helpers::send_push_notif_to_device($fcm_token, $data);
-                Helpers::insertDataOnNotificationTable($data , 'user', $order->user_id);
+                Helpers::send_push_notif_to_order_customer($order, $data);
+                if (! $order->is_guest && $order->user_id) { Helpers::insertDataOnNotificationTable($data , 'user', $order->user_id); }
             }
 
             $message =Helpers::getPushNotificationMessage(status:'deliveryman_order_assign',userType: 'deliveryman' , lang:$deliveryman->current_language_key, deliveryManName:$deliveryman->f_name.' '.$deliveryman->l_name);
