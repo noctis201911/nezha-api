@@ -65,6 +65,8 @@
 
 ## B1 外部签收包（已备妥、未签收）
 
+> 2026-07-15 后续阶段裁决：外部签回材料的追收、重复扫描和表单验收延期到 MVP 阶段结束后，固定快照与空白状态保留。该裁决不回写本次历史 QA 结果，也不把未关闭项改成通过；若 MVP 涉及公开 production、真实用户/订单/资金、USDT 或真实通知，适用的法律、安全、专业和真实渠道门仍须在对应暴露前关闭。
+
 - 包入口：`docs/PRELAUNCH_B1_EXTERNAL_SIGNOFF_PACKAGE_20260714.md`；内含 26 类 demo 关联数据裁决、律师/会计固定事实、三项开关，以及物理设备/真实通知/专业渗透四类签收表。2026-07-15 对本轮可访问位置验收后，返回材料仍为 0 件；所有 owner 决策、批准目标值、回执和签名均保持空白，production 仍 NO-GO。
 - 五份 B1 表单现统一记录 API `a53cfb5c967daa5917ce2cb4c2489d6799434ff2`、Web `b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed`，8 文件重封内容快照提交为 `fc026a78130709ce13af356914ce01c50000d866`；旧 API `589a5366633f951fc9692810cc2a4c21c553b629` 只保留历史追溯，不能流转为最终签收对象。`b14c9c58..a53cfb5c` 对 8 个邮箱隔离运行时文件 diff=0；API `98efcc2a..a53cfb5c` 和 production hotfix `dea5dd11..a53cfb5c` 均无 migration 文件差异。Web `a9e5007..b4e0ea0f` 只有 `AGENTS.md`，无应用文件变化。production current/previous 为 API `20260715-042928-dea5dd1` / `20260714-070255-e044d34`、Web `20260714-101004-2f81803` / `20260714-074400-b66c0d1`，Web BUILD 为 `Mguty8CEfSrUIu5FXJ52G`；production 不是最终候选。
 - shared staging 只读复核仍为 Web HEAD `ef54278551a3f8818661380f919fa894e47cc50c`、BUILD `n4VGKngOQXDelVRDdK9yN`、10 tracked + 6 untracked；API detached HEAD `f766dd62bd949613898e31031cf5636527488d8f`、37 tracked + 2 untracked。没有清理/reset/部署这些 WIP。
