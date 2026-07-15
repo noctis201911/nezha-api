@@ -24,18 +24,20 @@
 ### 0.2 仍未完成，禁止误报为全量启用
 
 - 生产只有 1 个已启用 TOTP 的 superadmin，没有独立 reviewer。尚未取得 reviewer 的真实姓名、登录邮箱、电话、初始密码安全交付对象、TOTP 绑定人在场窗口、恢复码托管人及现有 nginx HTTP Basic 的受控交付方式；不得编造身份、二维码、secret 或恢复码。
-- 商户 7–11 的 TRC20 当前无效。它们现时均非 active，不会立即打断真实订单；但以后重新激活商户并开启 credential 闸时会 fail-closed。业主必须先确认接受该行为，或协调商户把真实地址改为有效值。
+- 商户 7–11 的 TRC20 当前无效，但 owner 已于 2026-07-15 确认它们是 Claude 生成的示范商家；现存 `_demo_seed_manifest.json` 进一步证明 vendor/restaurant 6–11 都在 demo manifest 内。因此 7–11 的 fail-closed 是 demo 数据质量边界，不再作为真实商户开闸事故上报。restaurant 12 不在该 manifest，仍保持未分类。
 - 过去 90 天共有 44 笔订单、32 条仍保留 payment_info 的线下付款记录，但真实 USDT 凭证提交为 0；credential 表为 0 行，新 endpoint 上线后请求为 0。当前只能得到低流量代理，尚没有真实日签发量，不能把行大小估算或支付宝线下单数量冒充容量验收。
-- production 凭据“消费”只能由登录顾客对真实订单提交真实 USDT 付款凭证触发。不得在未实际付款时点击“已付款”，不得擅自创建假订单/假 proof。业主需在真实小额付款、明确授权可识别且可回滚的 production 测试数据、或接受 production 消费链保持未验证三者中作出裁决。
+- production 凭据“消费”只能由登录顾客对订单提交 USDT 付款凭证触发。owner 已于 2026-07-15 明确授权：使用 `demo_seed_1@nezha.am`，创建可识别、可回滚的 production 测试数据；只读核对时该顾客尚不存在，因此必须先创建带精确 rollback manifest 的 demo 顾客/订单，严禁复用或污染真实顾客和真实订单。测试 tx hash 只能使用明确的 demo 标记值，不能伪称真实链上付款。
 - 真实申请管理员、独立 reviewer、商户 owner、已登录顾客、不同于当前值的商户自有有效地址、通知实际接收人和在场事故联系人尚未具备。队列成功只表示任务执行，不等于邮件/Telegram/push 已送达；必须由真实接收人确认。
-- 因上述硬门槛，V3 reviewer production 页面、申请→商户确认→不同管理员批准/驳回、credential 消费/订单回显、通知送达、真实日签发容量和两个闸的顺序开启尚未验收。当前没有地址变更、订单写入、资金动作或 reviewer 账户写入。
+- owner 已批准容量采样例外：change 闸继续保持 `0`，credential 闸可以限时开启，仅用于 manifest 内且地址有效的 restaurant 6 与受控 demo 顾客签发/复用/消费/过期采样；完成即清理测试数据并重新关闸，除非 owner 另行裁决常开。该例外不授权开启 change 闸，也不免除异常时立即关 credential 闸。
+- V3 reviewer production 页面、申请→商户确认→不同管理员批准/驳回和通知真实送达仍未验收。当前仍没有真实 reviewer；demo 顾客不能替代 reviewer。reviewer 是独立后台管理员，必须与申请管理员不同，持有自己的登录和 TOTP，并作为批准/驳回审计 actor。
 
 ### 0.3 下一执行顺序与异常回退
 
-1. 业主补齐真实 reviewer/TOTP/HTTP Basic 安全交付和受控测试对象，并裁决商户 7–11 无效 TRC20 与 production 真实消费验收方式。
-2. 创建独立 reviewer，现场绑定强制 TOTP 并交付恢复码；先完成 dormant 后台 V3 UI 与权限隔离浏览器验收。
-3. 仅在真实对象就绪后开启 credential 闸，观察签发、复用、消费、过期、订单回显、容量和通知；凭据链稳定后再开启 change 闸并执行申请、商户确认、独立 reviewer 批准/驳回。
-4. 任一步异常先关闭 change 闸，再按影响关闭 credential 闸并清理 business settings cache；需要代码回退时把 API/Web `current` 切回 0.1 所列锚点。不得逆向 migration、删表、删除凭据/状态/审计行或写回旧地址。
+1. 先创建 `demo_seed_1@nezha.am`、restaurant 6 的可回滚 demo 订单与 rollback manifest；change 闸保持 `0`。
+2. 限时开启 credential，观察签发、复用、错误绑定拒绝、消费、订单回显、过期与表容量；异常立即关闸，完成后清理 demo 数据并重新关闸，除非 owner 另行裁决常开。
+3. 业主补齐真实 reviewer/TOTP/HTTP Basic 安全交付；创建独立 reviewer，现场绑定强制 TOTP 并完成后台 V3 UI 与权限隔离浏览器验收。
+4. 只有 reviewer 和真实商户 owner 就绪后才开启 change 闸，执行申请、商户确认、独立 reviewer 批准/驳回与通知送达验收。
+5. 任一步异常先关闭 change 闸，再按影响关闭 credential 闸并清理 business settings cache；需要代码回退时把 API/Web `current` 切回 0.1 所列锚点。不得逆向 migration、删表、删除非本次 demo 的凭据/状态/审计行或写回旧地址。
 
 ## A. 方案制定阶段的完成定义与历史边界
 
