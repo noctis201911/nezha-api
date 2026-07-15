@@ -35,7 +35,8 @@
 
 ## 自动化与浏览器证据
 
-- exact-main API 红灯已关闭：`69502957` 将隔离夹具与 SQLite 日期平均值兼容修复合入当前线，`ab346c42` 对齐“商家已标记退款”契约；最终 Feature 186 tests/962 assertions、Unit 15 tests/46 assertions 均 exit 0，push 前 L1/IDOR/在场感知墙 20 tests/100 assertions 通过。输出仍含既有 PHPUnit XML/doc-comment deprecation 与缺测试表的启动日志，但没有失败；不得把 warning 隐去或记成失败。
+- exact-main API 红灯已关闭：`69502957` 将隔离夹具与 SQLite 日期平均值兼容修复合入当前线，`ab346c42` 对齐“商家已标记退款”契约，`b14c9c58` 增加后台账号邮箱隔离。最终候选 `a53cfb5c967daa5917ce2cb4c2489d6799434ff2` 在独立本地克隆中完成 Feature `191 tests / 1013 assertions`、Unit `15 tests / 46 assertions`，均 exit 0；邮箱边界聚焦为 `5 / 51`，8 个运行时 PHP 文件语法通过。输出仍含既有 PHPUnit XML/doc-comment deprecation 与 SQLite 无 `business_settings` 的启动日志；不得把 warning 隐去或记成失败。
+- 本地有效回归前有两类环境失败，均未进入业务断言：Laravel 12 未把 Windows 盘符缓存路径识别为绝对路径，首次聚焦为 5 errors / 0 assertions；Unit 首次因本机 PHP 未加载 OpenSSL 配置而 1 failure。测试专用 Windows 路径前缀覆盖在验证后精确撤回，Git blob 与候选一致；Unit 仅给子进程加载 Laragon 自带 `openssl.cnf`。候选源文件最终无测试覆盖残留，不能把这两次环境失败冒充业务回归，也不能从完整结果中隐去。
 - 开关非生产收口：API exact-main 在 bootstrap 强制 SQLite `:memory:` 安全门下，DB 安全门 + 异步通知 + 全部预约聚焦文件合计 `63 tests / 162 assertions` 通过（预约 53、异步通知 7、安全门 3）；Web exact-main `src/utils/nezhaCancelAction.test.js` 通过。仅有既存 PHPUnit schema/doc-comment deprecation 与 SQLite 无 `business_settings` 的测试日志。自动语义已关闭，但预约真实浏览器完整链、FCM/邮件/TG 真实收达和 owner 签收仍未完成。
 - exact-main Web 格式门已关闭：`a9e5007` 对 13 个候选文件执行仓库固定 Prettier 2.5.1，全部 `src/utils/*.test.js`、首页性能契约、页面数据契约、`git diff --check` 与 Next 15.5.20 production build 通过，BUILD `n-lmCUI6GWVnOkqc1cDMo`。格式化前不稳定的页面数据正则已改为允许 JSX 空白，不改变动作 owner。
 - Web Chromium 390×844/1365×900 复核 `/home`、`/checkout`、`/tracking`：首页/空车/追踪表单无横向溢出、破图或基线 console error。回归额外发现历史提交 `eb3ecd4` 无条件删除追踪手机号输入，而匿名 API 仍要求 `contact_number`；`a9e5007` 恢复为“仅匿名用户显示并校验手机号，数字不足 8 位不发请求，登录用户仍只按订单号”。空号验证显示中文“手机号为必填项”，网络中没有 `/order/track`；填入号码后只读负例带正确 `contact_number` 并得到预期 404/“订单不存在”。证据位于 `output/playwright/exact-main-format-gate-20260714/`。
@@ -65,12 +66,12 @@
 ## B1 外部签收包（已备妥、未签收）
 
 - 包入口：`docs/PRELAUNCH_B1_EXTERNAL_SIGNOFF_PACKAGE_20260714.md`；内含 26 类 demo 关联数据裁决、律师/会计固定事实、三项开关，以及物理设备/真实通知/专业渗透四类签收表。2026-07-15 对本轮可访问位置验收后，返回材料仍为 0 件；所有 owner 决策、批准目标值、回执和签名均保持空白，production 仍 NO-GO。
-- B1 表单记录的应用基线为 API `589a5366633f951fc9692810cc2a4c21c553b629`、Web `b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed`；B1 文档由 API `98efcc2a625e8ba19b068747251d2ed3d66a497d` 固定。第二次 fetch 后两仓 `origin/main` 分别为 `b14c9c58bee66b59a45bb338f2d742609a3466f3` / `b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed`；`b14c9c58` 是未改 B1 文档、无 migration 的后台账号邮箱隔离运行时代码提交，尚未进入本报告 QA 证据。production current/previous 仍为 API `20260714-070255-e044d34` / `20260714-063310-75c6e4c`、Web `20260714-101004-2f81803` / `20260714-074400-b66c0d1`，Web BUILD 仍为 `Mguty8CEfSrUIu5FXJ52G`。
+- 五份 B1 表单现统一记录 API `a53cfb5c967daa5917ce2cb4c2489d6799434ff2`、Web `b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed`；旧 API `589a5366633f951fc9692810cc2a4c21c553b629` 只保留历史追溯，不能流转为最终签收对象。`b14c9c58..a53cfb5c` 对 8 个邮箱隔离运行时文件 diff=0；API `98efcc2a..a53cfb5c` 和 production hotfix `dea5dd11..a53cfb5c` 均无 migration 文件差异。Web `a9e5007..b4e0ea0f` 只有 `AGENTS.md`，无应用文件变化。production current/previous 为 API `20260715-042928-dea5dd1` / `20260714-070255-e044d34`、Web `20260714-101004-2f81803` / `20260714-074400-b66c0d1`，Web BUILD 为 `Mguty8CEfSrUIu5FXJ52G`；production 不是最终候选。
 - shared staging 只读复核仍为 Web HEAD `ef54278551a3f8818661380f919fa894e47cc50c`、BUILD `n4VGKngOQXDelVRDdK9yN`、10 tracked + 6 untracked；API detached HEAD `f766dd62bd949613898e31031cf5636527488d8f`、37 tracked + 2 untracked。没有清理/reset/部署这些 WIP。
-- production 两个 queue worker 本次均 online、累计重启各 90；`exit_code=0`、`unstable_restarts=0`，新增累计符合 `--max-time=3600` 周期；Redis `PONG`、failed jobs=0。该运行态仍不能证明真实通知送达。
-- `e044d34..b14c9c58` migration 文件 diff=0，production `migrate:status` 为 460 Ran / 0 Pending；根盘 83%、剩余约 13G，故继续磁盘冻结。本包使用本地干净独立 worktree，没有在服务器新增 worktree、运行 migration、备份脚本/demo 工具、发送真实通知或写 production/shared staging。
+- production 两个 queue worker 本次均 online、累计重启各 93；`unstable_restarts=0`，命令仍含 `--max-time=3600`；Redis `PONG`、failed jobs=0。该运行态仍不能证明真实通知送达。
+- `dea5dd11..a53cfb5c` migration 文件 diff=0，production `migrate:status` 为 460 Ran / 0 Pending；根盘 84%、剩余约 13G，故继续磁盘冻结。本包使用本地干净独立克隆，没有在服务器新增 worktree、运行 migration、备份脚本/demo 工具、发送真实通知或写 production/shared staging。
 - 完整性计数：demo 26/26 `HOLD`、31 个订单未逐项定性；法律/会计 0/4 专业签收；三项开关 0/3 目标值、0/5 汇总签名；外部 QA 封面 0/11、D1–D6 0/6、三渠道回执为空、无渗透报告、总签收 0/6。固定 Git/文档/manifest/既有浏览器包哈希均重算一致，但没有外部附件 SHA-256 可验；详情见 B1 包 §4。
-- 候选冻结门新增打开：API 表单 SHA `589a5366` 已落后 `origin/main=b14c9c58`。当前签名为 0，因此没有已签意见需要作废；但最终流转前必须冻结/回归新候选并重封五份 B1 表单，不能接受旧 SHA 上的最终通过。
+- 候选冻结门已关闭：API/Web 最终候选已冻结、`b14c9c58` 及其后续运行时范围已隔离回归，五份表单已重封到同一 API 40-hex。当前签名仍为 0；任何后续应用 SHA 前移都必须停下重新定界并使受影响签收重测，旧 `589a5366` 上的最终“通过”不得接受。
 
 ## 清场与回滚
 

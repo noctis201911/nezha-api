@@ -8,9 +8,9 @@
 
 | 对象 | 固定值 |
 |---|---|
-| API 候选基线 | `589a5366633f951fc9692810cc2a4c21c553b629` |
+| API 候选基线 | `a53cfb5c967daa5917ce2cb4c2489d6799434ff2`；已覆盖并回归 `b14c9c58bee66b59a45bb338f2d742609a3466f3` 运行时代码 |
 | Web 候选基线 | `b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed` |
-| production API/Web | `20260714-070255-e044d34` / `20260714-101004-2f81803` |
+| production API/Web | `20260715-042928-dea5dd1` / `20260714-101004-2f81803`；不是上述最终候选 |
 | 业务事实正本 | `INVARIANTS.md`、`docs/compliance/business-flow.md` |
 | AML/隐私正本 | `docs/compliance/AML-policy.md`、`docs/compliance/AML-manual-review-SOP.md`、`docs/compliance/data-protection.md` |
 | 用户法律文案正本 | `docs/legal/terms-and-conditions.md`、`privacy-policy.md`、`about-us.md`、`refund-policy.md` |

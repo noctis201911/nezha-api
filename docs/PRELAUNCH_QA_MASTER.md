@@ -36,7 +36,7 @@ node nz.js run "bash /www/wwwroot/api.nezha.am/nzcheck-cod.sh"
 
 ## 0.7 B1 外部签收包
 
-2026-07-14 已从 API 应用基线 `589a5366633f951fc9692810cc2a4c21c553b629`、Web `b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed` 备妥 [B1 外部签收包](PRELAUNCH_B1_EXTERNAL_SIGNOFF_PACKAGE_20260714.md)，并由 API 文档提交 `98efcc2a625e8ba19b068747251d2ed3d66a497d` 固定，包含：
+2026-07-14 的 B1 原始包由 API 文档提交 `98efcc2a625e8ba19b068747251d2ed3d66a497d` 固定；2026-07-15 已把 [B1 外部签收包](PRELAUNCH_B1_EXTERNAL_SIGNOFF_PACKAGE_20260714.md) 重封到 API 应用候选 `a53cfb5c967daa5917ce2cb4c2489d6799434ff2`、Web `b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed`。旧 API `589a5366633f951fc9692810cc2a4c21c553b629` 只保留历史追溯，不得作为最终签收对象。包包含：
 
 - [26 类 demo 关联数据裁决表](PRELAUNCH_B1_DEMO_ASSOCIATION_DECISIONS_20260714.md)
 - [律师／会计固定事实包](PRELAUNCH_B1_LEGAL_ACCOUNTING_FACTS_20260714.md)
@@ -45,7 +45,7 @@ node nz.js run "bash /www/wwwroot/api.nezha.am/nzcheck-cod.sh"
 
 状态仅为**已备妥、全部未签收**；不改变任何 18 维度结果，不授予测试、写入、通知、开关、demo rollback、部署或 production Go。外部签字必须附固定 SHA 与可回溯证据，不能用当前配置值或自动化结果代签。
 
-2026-07-15 签回验收：第二次 fetch 后 API/Web `origin/main` 为 `b14c9c58` / `b4e0ea0f`；本轮可访问的本地签回入口及 API 远端 refs 中未发现填写后的表单、外部意见、回执、报告或签名附件，收到材料 0 件。固定 Git/文档/manifest/既有浏览器包哈希均可重算且一致，但外部附件 SHA-256、实名/机构和签署时间可验数量为 0。API 新增 `b14c9c58` 为运行时代码且未进入原 B1 证据；最终签收前必须冻结/回归新候选并把五份表单从旧 API SHA 重封到同一最终 40-hex。详细范围、计数和 runtime 快照见 B1 包 §4；production 继续 NO-GO。
+2026-07-15 候选重封：API `b14c9c58` 的 8 个运行时文件到最终应用候选 `a53cfb5c` 无差异；独立本地克隆中聚焦 `5 tests / 51 assertions`、完整 Feature `191 / 1013`、Unit `15 / 46` 与 8/8 PHP lint 全部通过，migration diff 为 0。Web `a9e5007..b4e0ea0f` 只有 `AGENTS.md`，无应用文件变化。五份表单统一记录上述最终 40-hex；本轮可访问签回材料仍为 0 件，外部附件 SHA-256、实名/机构和签署时间可验数量仍为 0。详细范围、计数、重封内容提交/哈希和 runtime 快照见 B1 包 §4；production 继续 NO-GO。
 
 ## 1. 上线前 18 维度总表
 

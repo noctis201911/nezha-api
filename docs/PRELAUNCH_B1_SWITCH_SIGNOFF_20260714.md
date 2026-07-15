@@ -6,8 +6,8 @@
 
 ## 1. 固定对象与填写规则
 
-- API 候选基线：`589a5366633f951fc9692810cc2a4c21c553b629`；Web 候选基线：`b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed`。
-- production 当前仍为 API `e044d34` / Web `2f81803`，候选与 production 有版本差；签收必须写清测试对象，不能把候选测试当作 production 已部署证据。
+- API 候选基线：`a53cfb5c967daa5917ce2cb4c2489d6799434ff2`；Web 候选基线：`b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed`。API 候选已覆盖并回归 `b14c9c58bee66b59a45bb338f2d742609a3466f3` 运行时代码。
+- production 当前为 API `dea5dd11a2a57b57660608e9c37a4fd528aa4efe` / Web `2f81803`，候选与 production 有版本差；签收必须写清测试对象，不能把候选测试当作 production 已部署证据。
 - `批准目标值` 只允许 owner 填 `0` 或 `1`；留空即未签。勾“通过”还必须给出证据引用、签名、日期时间/时区。
 - 若证据所对应的 SHA、素材、通知端点、账号、开关依赖或运行环境改变，该项签收失效并重测。
 
