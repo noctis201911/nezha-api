@@ -1,6 +1,6 @@
 # 哪吒 USDT 收款地址与仿冒风险治理方案
 
-状态：**production backport 代码、migration、CSP Report-Only 与有效网络状态初始化已于 2026-07-15 发布；两个业务功能闸仍为 `0`，尚未创建真实 reviewer 或绑定其 TOTP，也未进行真实资金/订单消费链验收，因此治理能力仍处于 dormant、未全量启用状态。**
+状态：**production backport、migration、CSP Report-Only、有效网络状态初始化及可回滚 credential production canary 已于 2026-07-15 完成；两个业务功能闸当前均为 `0`。真实 reviewer/TOTP 与 change 审批链仍未完成，因此治理能力尚未全量启用。**
 
 核对日期：2026-07-15（Europe/Berlin）
 
@@ -16,25 +16,26 @@
 - Web 发布目标为 `2c614b960f128dcfb0dcdbcf9cb63cf9302bc628`；当前 release 为 `/www/wwwroot/web-deploy/releases/20260715-061421-2c614b9`，运行时 BUILD_ID `GIVFyeKyIoHEeGBFVRhFc`，回滚锚点为 `/www/wwwroot/web-deploy/releases/20260714-101004-2f81803`。
 - API 集成目标回归为 80 tests / 529 assertions；V3 reviewer 页 8/64、CSP 端点 8/161、生产 hotfix 隔离回归 5/51 均通过。原候选 `926173fe` 在同一依赖环境也是 80/529，因此旧交接中的 80/626 是已核实的统计漂移，不把它误报成回归下降。Web 的 payment CSP TAP 4/4、social-login SDK 1/1、付款地址脚本和 production build 均通过。
 - 2026-07-15 06:12 UTC 已生成并完成本机解密测试及 R2 同名对象核验的生产备份：数据库密文 SHA-256 `05dcc657aadd3360c2c63fda0bc8f24bdc73efa5e83f32e3bf619a992941cd50`，文件密文 SHA-256 `5133d92f14731db4bf07c37538fac9a59381da0b0ecb3ef38bbc25a8f587b281`。本文不记录备份密钥。
+- canary 前又于 2026-07-15 06:54 UTC 生成包含 migration/初始化现状的加密备份并完成解密及 R2 核验：数据库密文 SHA-256 `b34cfeea32f81f8c8080ddc8da41c6bb63e54869ba74ba2cd5021401ba502474`，文件密文 SHA-256 `b1e14138bc4da0d0b2bca416d168c2f0f3107d5dee6c11d49e93a1c9ff840b89`。
 - migration batch 196 已完成；凭据、网络状态、变更和事件表均存在且启用 MySQL `ENCRYPTION="Y"`。两个业务设置键唯一存在且均为 `0`：`nezha_payment_address_credential_status=0`、`nezha_payment_address_change_status=0`。
 - 18 个“商户 × 网络”组合完成 dry-run、apply、复核 dry-run 与独立对账：3 个有效组合已初始化为 `active`、version 1，15 个无效或空地址组合未伪造状态。有效组合是商户 6 的 TRC20/BEP20、商户 12 的 TRC20；商户 7–11 的 TRC20 无效，商户 7–14 的 BEP20 均为空，商户 13–14 的 TRC20 为空。
 - production 公开面已用真实 Chromium 验收：`/home` 与 `/checkout` 在 1440×1024、390×844 均无横向溢出，结算空态可返回首页，控制台 0 error；首页只有既有 Firebase 通知权限未授予 warning。`/checkout` 200，Report-Only CSP 已生效且移除 `'unsafe-eval'`，报告地址为 API 的脱敏 CSP endpoint；现行 enforce CSP 未在本轮收紧。
+- 2026-07-15 07:00:21–07:00:23 UTC 完成可回滚 production credential canary，credential 闸只开放 1.714 秒，change 全程为 `0`。真实 HTTP 链验证游客 401、签发 201、复用 200、无效 demo 地址 422、错网络绑定 403、消费 200、跨订单重放 403、过期 403、顾客订单回显 200；地址密文落库，回显不含 `secret_hash`/`chain`。未提交真实或伪造 tx hash、未发生资金动作，测试订单 `checked=1` 未触发新订单外部推送。
+- canary 期间精确产生 2 条凭据（1 consumed、1 expired）、1 条 offline payment、3 个订单和 1 个 demo 顾客；随后按 manifest 全部清理为 0，OAuth token、marker notification 与订单残留也为 0。证据 `/root/nezha-backup/evidence/usdt-credential-canary-20260715-070021.json` 为 root:root 0600，SHA-256 `94d2bf17faebfb4a84888d0db335b24238ec4ab54eb6c1ad9ddb7de576e18ba8`。
 - 发布后 API/Web health、PM2、队列、MySQL/Redis/PHP-FPM/nginx 与 COD=off 均复核正常；后台无 HTTP Basic 时仍返回 401。
 
 ### 0.2 仍未完成，禁止误报为全量启用
 
 - 生产只有 1 个已启用 TOTP 的 superadmin，没有独立 reviewer。尚未取得 reviewer 的真实姓名、登录邮箱、电话、初始密码安全交付对象、TOTP 绑定人在场窗口、恢复码托管人及现有 nginx HTTP Basic 的受控交付方式；不得编造身份、二维码、secret 或恢复码。
 - 商户 7–11 的 TRC20 当前无效，但 owner 已于 2026-07-15 确认它们是 Claude 生成的示范商家；现存 `_demo_seed_manifest.json` 进一步证明 vendor/restaurant 6–11 都在 demo manifest 内。因此 7–11 的 fail-closed 是 demo 数据质量边界，不再作为真实商户开闸事故上报。restaurant 12 不在该 manifest，仍保持未分类。
-- 过去 90 天共有 44 笔订单、32 条仍保留 payment_info 的线下付款记录，但真实 USDT 凭证提交为 0；credential 表为 0 行，新 endpoint 上线后请求为 0。当前只能得到低流量代理，尚没有真实日签发量，不能把行大小估算或支付宝线下单数量冒充容量验收。
-- production 凭据“消费”只能由登录顾客对订单提交 USDT 付款凭证触发。owner 已于 2026-07-15 明确授权：使用 `demo_seed_1@nezha.am`，创建可识别、可回滚的 production 测试数据；只读核对时该顾客尚不存在，因此必须先创建带精确 rollback manifest 的 demo 顾客/订单，严禁复用或污染真实顾客和真实订单。测试 tx hash 只能使用明确的 demo 标记值，不能伪称真实链上付款。
-- 真实申请管理员、独立 reviewer、商户 owner、已登录顾客、不同于当前值的商户自有有效地址、通知实际接收人和在场事故联系人尚未具备。队列成功只表示任务执行，不等于邮件/Telegram/push 已送达；必须由真实接收人确认。
-- owner 已批准容量采样例外：change 闸继续保持 `0`，credential 闸可以限时开启，仅用于 manifest 内且地址有效的 restaurant 6 与受控 demo 顾客签发/复用/消费/过期采样；完成即清理测试数据并重新关闸，除非 owner 另行裁决常开。该例外不授权开启 change 闸，也不免除异常时立即关 credential 闸。
+- 过去 90 天真实 USDT 凭证提交仍为 0；本次 canary 提供的是 2 行受控 production 样本，不是真实自然日流量。凭据表从 0→2→0 时 `data_length=16384`、`index_length=147456` 未跨 InnoDB 分配页，因此证明小样本不会新增分配页，但不能冒充真实日容量或压力测试。
+- credential 顾客签发/消费路径已用受控 demo 对象完成；change 阶段仍缺真实申请管理员之外的独立 reviewer、商户 owner、不同于当前值的商户自有有效地址、通知实际接收人和在场事故联系人。队列成功只表示任务执行，不等于邮件/Telegram/push 已送达；必须由真实接收人确认。
 - V3 reviewer production 页面、申请→商户确认→不同管理员批准/驳回和通知真实送达仍未验收。当前仍没有真实 reviewer；demo 顾客不能替代 reviewer。reviewer 是独立后台管理员，必须与申请管理员不同，持有自己的登录和 TOTP，并作为批准/驳回审计 actor。
 
 ### 0.3 下一执行顺序与异常回退
 
-1. 先创建 `demo_seed_1@nezha.am`、restaurant 6 的可回滚 demo 订单与 rollback manifest；change 闸保持 `0`。
-2. 限时开启 credential，观察签发、复用、错误绑定拒绝、消费、订单回显、过期与表容量；异常立即关闸，完成后清理 demo 数据并重新关闸，除非 owner 另行裁决常开。
+1. **已完成**：创建 `demo_seed_1@nezha.am`、restaurant 6 的可回滚 demo 订单与 rollback manifest；change 闸全程保持 `0`。
+2. **已完成**：限时开启 credential，完成签发、复用、错误绑定拒绝、消费、订单回显、过期与表容量采样；测试数据清理为 0，credential 已重新关闭。
 3. 业主补齐真实 reviewer/TOTP/HTTP Basic 安全交付；创建独立 reviewer，现场绑定强制 TOTP 并完成后台 V3 UI 与权限隔离浏览器验收。
 4. 只有 reviewer 和真实商户 owner 就绪后才开启 change 闸，执行申请、商户确认、独立 reviewer 批准/驳回与通知送达验收。
 5. 任一步异常先关闭 change 闸，再按影响关闭 credential 闸并清理 business settings cache；需要代码回退时把 API/Web `current` 切回 0.1 所列锚点。不得逆向 migration、删表、删除非本次 demo 的凭据/状态/审计行或写回旧地址。
