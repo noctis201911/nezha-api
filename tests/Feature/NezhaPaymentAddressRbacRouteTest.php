@@ -94,6 +94,8 @@ class NezhaPaymentAddressRbacRouteTest extends TestCase
         $this->assertFalse(PaymentAddressReviewerScopeMiddleware::isReviewer($super));
 
         foreach ([
+            'admin.lang',
+            'admin.settings',
             'admin.two-factor.setup',
             'admin.two-factor.enable',
             'admin.settings-password',
@@ -110,7 +112,6 @@ class NezhaPaymentAddressRbacRouteTest extends TestCase
             'admin.restaurant.payment-address-change.store',
             'admin.restaurant.payment-address-change.pause',
             'admin.dashboard',
-            'admin.settings',
             'admin.two-factor.disable',
         ] as $routeName) {
             $this->assertFalse(
@@ -120,11 +121,14 @@ class NezhaPaymentAddressRbacRouteTest extends TestCase
         }
 
         foreach ([
+            'admin.lang',
+            'admin.settings',
             'admin.payment-address-review.pending',
             'admin.restaurant.payment-address-change.show',
             'admin.restaurant.payment-address-change.approve',
             'admin.restaurant.payment-address-change.reject',
             'admin.settings-password',
+            'admin.two-factor.setup',
         ] as $routeName) {
             $this->assertTrue(
                 PaymentAddressReviewerScopeMiddleware::routeAllowedAfterEnrollment($routeName),
@@ -137,7 +141,6 @@ class NezhaPaymentAddressRbacRouteTest extends TestCase
             'admin.restaurant.payment-address-change.cancel',
             'admin.restaurant.update-payment-info',
             'admin.dashboard',
-            'admin.settings',
             'admin.two-factor.disable',
         ] as $routeName) {
             $this->assertFalse(
@@ -161,6 +164,7 @@ class NezhaPaymentAddressRbacRouteTest extends TestCase
         $create = file_get_contents(resource_path('views/admin-views/custom-role/create.blade.php'));
         $edit = file_get_contents(resource_path('views/admin-views/custom-role/edit.blade.php'));
         $bootstrap = file_get_contents(base_path('bootstrap/app.php'));
+        $twoFactor = file_get_contents(app_path('Http/Controllers/Admin/TwoFactorController.php'));
         $this->assertStringContainsString("where('state', 'pending_distinct_admin')", $queue);
         $this->assertStringContainsString("orderBy('expires_at')", $queue);
         $this->assertStringContainsString("orderBy('id')", $queue);
@@ -174,6 +178,8 @@ class NezhaPaymentAddressRbacRouteTest extends TestCase
         $this->assertStringContainsString('value="payment_address_review"', $edit);
         $this->assertStringContainsString('value="payment_address_manage"', $edit);
         $this->assertStringContainsString("'reviewer.scope' => PaymentAddressReviewerScopeMiddleware::class", $bootstrap);
+        $this->assertStringContainsString('PaymentAddressReviewerScopeMiddleware::isReviewer($admin)', $twoFactor);
+        $this->assertStringContainsString("'admin.payment-address-review.pending'", $twoFactor);
         $this->assertFileExists(resource_path(
             'views/admin-views/nezha-payment-address-review.blade.php'
         ));

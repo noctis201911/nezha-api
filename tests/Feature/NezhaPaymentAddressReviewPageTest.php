@@ -155,7 +155,61 @@ class NezhaPaymentAddressReviewPageTest extends TestCase
         $this->assertStringNotContainsString('佣金充值管理</span>', $html);
         $this->assertStringNotContainsString('商家管理</span>', $html);
         $this->assertStringNotContainsString('id="modalOpener"', $html);
+        $this->assertGreaterThanOrEqual(3, substr_count(
+            $html,
+            'href="'.route('admin.payment-address-review.pending').'"'
+        ));
+        $this->assertStringNotContainsString('href="'.route('admin.dashboard').'"', $html);
+        $this->assertStringNotContainsString('href="'.route('admin.business-settings.business-setup').'"', $html);
+        $this->assertStringNotContainsString('href="'.route('admin.two-factor.setup').'"', $html);
+        $this->assertStringContainsString('href="'.route('admin.settings').'"', $html);
+        $this->assertStringContainsString('修改密码', $html);
         $this->assertTrue(Helpers::isExclusivePaymentAddressReviewer());
+    }
+
+    public function test_reviewer_password_page_hides_profile_and_dead_shell_links(): void
+    {
+        $this->actingAs($this->reviewer(77), 'admin');
+
+        $html = view('admin-views.settings')->render();
+
+        $this->assertStringContainsString('id="changePasswordForm"', $html);
+        $this->assertStringContainsString('action="'.route('admin.settings-password').'"', $html);
+        $this->assertStringContainsString('返回复核队列', $html);
+        $this->assertStringNotContainsString('id="admin-settings-form"', $html);
+        $this->assertStringNotContainsString('id="generalSection"', $html);
+        $this->assertStringNotContainsString('href="'.route('admin.dashboard').'"', $html);
+        $this->assertStringNotContainsString('href="'.route('admin.business-settings.business-setup').'"', $html);
+    }
+
+    public function test_reviewer_two_factor_pages_preserve_enrollment_and_hide_disable(): void
+    {
+        $reviewer = $this->reviewer(77);
+        $this->actingAs($reviewer, 'admin');
+
+        $enabled = view('admin-views.two-factor.setup', [
+            'enabled' => true,
+            'recovery_codes' => ['AAAA-BBBB'],
+        ])->render();
+
+        $this->assertStringContainsString('AAAA-BBBB', $enabled);
+        $this->assertStringContainsString('已保存恢复码，进入收款地址复核', $enabled);
+        $this->assertStringNotContainsString(route('admin.two-factor.disable'), $enabled);
+        $this->assertStringNotContainsString('关闭两步验证</h5>', $enabled);
+
+        $reviewer->two_factor_enabled = false;
+        $enrollment = view('admin-views.two-factor.setup', [
+            'enabled' => false,
+            'secret' => 'SYNTHETICSECRET',
+            'qr_svg' => '',
+        ])->render();
+
+        $this->assertStringContainsString(route('admin.two-factor.enable'), $enrollment);
+        $this->assertStringContainsString('确认并启用', $enrollment);
+        $this->assertGreaterThanOrEqual(2, substr_count(
+            $enrollment,
+            'href="'.route('admin.two-factor.setup').'"'
+        ));
     }
 
     public function test_full_formal_view_renders_timeout_self_and_inline_error_states(): void
@@ -250,6 +304,18 @@ class NezhaPaymentAddressReviewPageTest extends TestCase
         DB::table('nezha_payment_address_changes')->delete();
         $this->actingAs($reviewer, 'admin');
         $empty = $this->renderReview(collect());
+        $settings = view('admin-views.settings')->render();
+        $twoFactorEnabled = view('admin-views.two-factor.setup', [
+            'enabled' => true,
+            'recovery_codes' => ['AAAA-BBBB', 'CCCC-DDDD'],
+        ])->render();
+        $reviewer->two_factor_enabled = false;
+        $twoFactorEnrollment = view('admin-views.two-factor.setup', [
+            'enabled' => false,
+            'secret' => 'SYNTHETICSECRET',
+            'qr_svg' => '',
+        ])->render();
+        $reviewer->two_factor_enabled = true;
 
         $remainingChanges = $changes->reject(fn ($change) => $change->id === 1)->values();
         foreach ($remainingChanges as $change) {
@@ -271,6 +337,9 @@ class NezhaPaymentAddressReviewPageTest extends TestCase
         $this->assertStringContainsString('当前没有待复核的地址变更', $empty);
         $this->assertStringContainsString('独立复核已通过，新地址已用于新付款', $success);
         $this->assertStringContainsString('id="modalOpener"', $admin);
+        $this->assertStringContainsString('href="'.route('admin.dashboard').'"', $admin);
+        $this->assertStringContainsString('href="'.route('admin.business-settings.business-setup').'"', $admin);
+        $this->assertStringContainsString('href="'.route('admin.two-factor.setup').'"', $admin);
 
         $directory = getenv('NEZHA_REVIEW_UI_PREVIEW_DIR');
         if (is_string($directory) && $directory !== '') {
@@ -283,6 +352,9 @@ class NezhaPaymentAddressReviewPageTest extends TestCase
                 'reviewer-empty.html' => $empty,
                 'reviewer-success.html' => $success,
                 'admin-queue.html' => $admin,
+                'reviewer-settings.html' => $settings,
+                'reviewer-two-factor-enabled.html' => $twoFactorEnabled,
+                'reviewer-two-factor-enrollment.html' => $twoFactorEnrollment,
             ] as $name => $html) {
                 $previewHtml = str_replace('http://localhost', '', $html);
                 $previewHtml = str_replace(

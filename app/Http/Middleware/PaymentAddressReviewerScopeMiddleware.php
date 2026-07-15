@@ -11,17 +11,22 @@ class PaymentAddressReviewerScopeMiddleware
     private const REVIEW_MODULE = 'payment_address_review';
 
     private const BEFORE_ENROLLMENT_ROUTES = [
+        'admin.lang',
+        'admin.settings',
         'admin.two-factor.setup',
         'admin.two-factor.enable',
         'admin.settings-password',
     ];
 
     private const AFTER_ENROLLMENT_ROUTES = [
+        'admin.lang',
+        'admin.settings',
         'admin.payment-address-review.pending',
         'admin.restaurant.payment-address-change.show',
         'admin.restaurant.payment-address-change.approve',
         'admin.restaurant.payment-address-change.reject',
         'admin.settings-password',
+        'admin.two-factor.setup',
     ];
 
     public function handle(Request $request, Closure $next)

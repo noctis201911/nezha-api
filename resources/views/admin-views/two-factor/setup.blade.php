@@ -1,5 +1,7 @@
 @extends('layouts.admin.app')
 
+@php($__exclusivePaymentAddressReviewer = \App\CentralLogics\Helpers::isExclusivePaymentAddressReviewer())
+
 @section('title', '两步验证 (2FA)')
 
 @section('content')
@@ -38,16 +40,23 @@
                         </div>
                     @endif
 
-                    <hr>
-                    <h5>关闭两步验证</h5>
-                    <form action="{{ route('admin.two-factor.disable') }}" method="POST" class="mt-2">
-                        @csrf
-                        <div class="form-group" style="max-width:320px;">
-                            <label>输入当前登录密码以确认</label>
-                            <input type="password" name="password" class="form-control" autocomplete="off" required>
-                        </div>
-                        <button type="submit" class="btn btn-outline-danger">关闭两步验证</button>
-                    </form>
+                    @if($__exclusivePaymentAddressReviewer)
+                        <div class="alert alert-success mb-3">复核员必须保持两步验证开启，不能从后台关闭。</div>
+                        <a class="btn btn--primary" href="{{ route('admin.payment-address-review.pending') }}">
+                            <i class="tio-checkmark-square mr-1"></i>已保存恢复码，进入收款地址复核
+                        </a>
+                    @else
+                        <hr>
+                        <h5>关闭两步验证</h5>
+                        <form action="{{ route('admin.two-factor.disable') }}" method="POST" class="mt-2">
+                            @csrf
+                            <div class="form-group" style="max-width:320px;">
+                                <label>输入当前登录密码以确认</label>
+                                <input type="password" name="password" class="form-control" autocomplete="off" required>
+                            </div>
+                            <button type="submit" class="btn btn-outline-danger">关闭两步验证</button>
+                        </form>
+                    @endif
                 @else
                     <h5>第一步: 用认证器扫码</h5>
                     <p class="text-muted">推荐 Google Authenticator / 微软 Authenticator / 1Password 等。</p>

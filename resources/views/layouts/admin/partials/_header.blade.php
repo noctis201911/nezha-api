@@ -1,4 +1,9 @@
 @php($__exclusivePaymentAddressReviewer = \App\CentralLogics\Helpers::isExclusivePaymentAddressReviewer())
+@php($__adminHomeUrl = $__exclusivePaymentAddressReviewer
+    ? (auth('admin')->user()?->two_factor_enabled
+        ? route('admin.payment-address-review.pending')
+        : route('admin.two-factor.setup'))
+    : route('admin.dashboard'))
 <div id="headerMain" class="d-none">
     <header id="header"
             class="navbar navbar-expand-lg navbar-fixed navbar-height navbar-flush navbar-container navbar-bordered">
@@ -8,7 +13,7 @@
                 {{-- @php($restaurant_logo=\App\Models\BusinessSetting::where(['key'=>'logo'])->first()) --}}
                 @php($restaurant_logo=\App\CentralLogics\Helpers::getSettingsDataFromConfig(settings:'logo',relations:['storage']))
 
-                <a class="navbar-brand d-none d-md-block" href="{{route('admin.dashboard')}}" aria-label="">
+                <a class="navbar-brand d-none d-md-block" href="{{ $__adminHomeUrl }}" aria-label="">
                          <img class="navbar-brand-logo brand--logo-design-2"
                          src="{{ \App\CentralLogics\Helpers::get_full_url('business',$restaurant_logo?->value,$restaurant_logo?->storage[0]?->value ?? 'public', 'favicon') }}"
                          alt="image">
@@ -206,14 +211,20 @@
 
                                 <div class="dropdown-divider"></div>
 
-                                <a class="dropdown-item" href="{{route('admin.settings')}}">
-                                    <span class="text-truncate pr-2" title="Settings">{{translate('messages.settings')}}</span>
-                                </a>
+                                @if($__exclusivePaymentAddressReviewer)
+                                    <a class="dropdown-item" href="{{ route('admin.settings') }}">
+                                        <span class="text-truncate pr-2" title="修改密码">修改密码</span>
+                                    </a>
+                                @else
+                                    <a class="dropdown-item" href="{{route('admin.settings')}}">
+                                        <span class="text-truncate pr-2" title="Settings">{{translate('messages.settings')}}</span>
+                                    </a>
 
-                                {{-- 哪吒: 后台两步验证入口 (原脚手架无 UI 入口, 只能手打 URL) --}}
-                                <a class="dropdown-item" href="{{ route('admin.two-factor.setup') }}">
-                                    <span class="text-truncate pr-2" title="两步验证 (2FA)">🔐 两步验证 (2FA)</span>
-                                </a>
+                                    {{-- 哪吒: 后台两步验证入口 (原脚手架无 UI 入口, 只能手打 URL) --}}
+                                    <a class="dropdown-item" href="{{ route('admin.two-factor.setup') }}">
+                                        <span class="text-truncate pr-2" title="两步验证 (2FA)">🔐 两步验证 (2FA)</span>
+                                    </a>
+                                @endif
 
                                 <div class="dropdown-divider"></div>
 

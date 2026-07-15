@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\CentralLogics\NezhaTotp;
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\PaymentAddressReviewerScopeMiddleware;
 use App\Models\Admin;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -153,7 +154,11 @@ class TwoFactorController extends Controller
         $request->session()->put('2fa_passed', true);
         $request->session()->forget(['2fa:pending_admin_id', '2fa:remember']);
 
-        return redirect()->route('admin.dashboard');
+        return redirect()->route(
+            PaymentAddressReviewerScopeMiddleware::isReviewer($admin)
+                ? 'admin.payment-address-review.pending'
+                : 'admin.dashboard'
+        );
     }
 
     /** 比对并消耗一个一次性恢复码 */

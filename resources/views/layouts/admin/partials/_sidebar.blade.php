@@ -3,6 +3,11 @@ use App\CentralLogics\Helpers;
 use Illuminate\Support\Facades\Cache;
 
 $__exclusivePaymentAddressReviewer = Helpers::isExclusivePaymentAddressReviewer();
+$__adminHomeUrl = $__exclusivePaymentAddressReviewer
+    ? (auth('admin')->user()?->two_factor_enabled
+        ? route('admin.payment-address-review.pending')
+        : route('admin.two-factor.setup'))
+    : route('admin.dashboard');
 
 // 哪吒M2-D1: 订单计数改读单一真相源 NezhaAdminCounts(60s缓存·平台全量), 退役 order_stats_summary
 // /order_scheduled_stats 的 rememberForever 永久漂移(修「全部28 vs 列表31」根因)。键不重叠, 一份即可。
@@ -433,7 +438,7 @@ if ($__exclusivePaymentAddressReviewer) {
             <div class="navbar__brand-wrapper navbar-brand-wrapper justify-content-between">
                 <!-- Logo -->
                 @php($restaurant_logo = \App\CentralLogics\Helpers::getSettingsDataFromConfig(settings: 'logo', relations: ['storage']))
-                <a class="navbar-brand d-block p-0" href="{{ route('admin.dashboard') }}" aria-label="Front">
+                <a class="navbar-brand d-block p-0" href="{{ $__adminHomeUrl }}" aria-label="Front">
                     <img class="navbar-brand-logo sidebar--logo-design"
                         src="{{ Helpers::get_full_url('business', $restaurant_logo?->value, $restaurant_logo?->storage[0]?->value ?? 'public', 'favicon') }}"
                         alt="image">
