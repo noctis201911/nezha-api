@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Models\Admin;
 use App\Models\DataSetting;
+use App\Rules\UniqueBackofficeEmail;
 use Illuminate\Http\Request;
 use App\CentralLogics\Helpers;
 use Illuminate\Support\Carbon;
@@ -62,7 +63,7 @@ class SystemController extends Controller
         $request->validate([
             'f_name' => 'required',
             'l_name' => 'required',
-            'email' => 'required|email|unique:admins,email,'.$admin->id,
+            'email' => ['required', 'email', new UniqueBackofficeEmail('admins', (int) $admin->id)],
             'phone' => 'required|regex:/^([0-9\s\-\+\(\)]*)$/|min:9|unique:admins,phone,'.$admin->id,
         ], [
             'f_name.required' => translate('messages.first_name_is_required'),

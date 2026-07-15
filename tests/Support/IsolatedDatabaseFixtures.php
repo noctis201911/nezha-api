@@ -69,6 +69,23 @@ final class IsolatedDatabaseFixtures
             });
         }
 
+        if (! $schema->hasTable('vendor_employees')) {
+            $schema->create('vendor_employees', function (Blueprint $table): void {
+                $table->id();
+                $table->string('f_name')->nullable();
+                $table->string('l_name')->nullable();
+                $table->string('phone')->nullable();
+                $table->string('email')->unique();
+                $table->unsignedBigInteger('employee_role_id');
+                $table->unsignedBigInteger('vendor_id');
+                $table->unsignedBigInteger('restaurant_id');
+                $table->string('password');
+                $table->boolean('status')->default(true);
+                $table->rememberToken();
+                $table->timestamps();
+            });
+        }
+
         if (! $schema->hasTable('local_life_merchants')) {
             $schema->create('local_life_merchants', function (Blueprint $table): void {
                 $table->id();

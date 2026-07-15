@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Vendor;
 
 use App\Models\EmployeeRole;
+use App\Rules\UniqueBackofficeEmail;
 use Illuminate\Http\Request;
 use App\CentralLogics\Helpers;
 use App\Models\VendorEmployee;
@@ -35,7 +36,7 @@ class EmployeeController extends Controller
                 }),
             ],
             'image' => 'required|max:2048',
-            'email' => 'required|unique:vendor_employees',
+            'email' => ['required', new UniqueBackofficeEmail()],
             'phone' => 'required|regex:/^([0-9\s\-\+\(\)]*)$/|max:20|unique:vendor_employees',
             'password' => ['required', Password::min(8)->mixedCase()->letters()->numbers()->symbols()->uncompromised()],
         ],[
@@ -110,7 +111,7 @@ class EmployeeController extends Controller
                     $query->where('restaurant_id', Helpers::get_restaurant_id());
                 }),
             ],
-            'email' => 'required|unique:vendor_employees,email,'.$id,
+            'email' => ['required', new UniqueBackofficeEmail('vendor_employees', (int) $id)],
             'phone' => 'required|regex:/^([0-9\s\-\+\(\)]*)$/|max:20|unique:vendor_employees,phone,'.$id,
             'image' => 'nullable|max:2048',
             'password' => ['nullable', Password::min(8)->mixedCase()->letters()->numbers()->symbols()->uncompromised()],

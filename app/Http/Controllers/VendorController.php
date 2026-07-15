@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\CentralLogics\Helpers;
+use App\Rules\UniqueBackofficeEmail;
 use App\Models\Admin;
 use App\Models\BusinessSetting;
 use App\Models\DataSetting;
@@ -58,7 +59,7 @@ class VendorController extends Controller
             'address.0' => 'required',
             'latitude' => 'required|numeric|min:-90|max:90',
             'longitude' => 'required|numeric|min:-180|max:180',
-            'email' => 'required|email|unique:vendors',
+            'email' => ['required', 'email', new UniqueBackofficeEmail()],
             'phone' => 'required|regex:/^([0-9\s\-\+\(\)]*)$/|min:9|unique:vendors',
             'minimum_delivery_time' => 'required',
             'maximum_delivery_time' => 'required',
