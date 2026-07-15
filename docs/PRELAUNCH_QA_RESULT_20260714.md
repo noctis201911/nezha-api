@@ -64,15 +64,17 @@
 
 ## B1 外部签收包（已备妥、未签收）
 
-- 包入口：`docs/PRELAUNCH_B1_EXTERNAL_SIGNOFF_PACKAGE_20260714.md`；内含 26 类 demo 关联数据裁决、律师/会计固定事实、三项开关，以及物理设备/真实通知/专业渗透四类签收表。所有 owner 决策、批准目标值、回执和签名均保持空白，production 仍 NO-GO。
-- B1 开工前重新 fetch：API 基线 `589a5366633f951fc9692810cc2a4c21c553b629`，Web 基线 `b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed`；production current/previous 仍为 API `20260714-070255-e044d34` / `20260714-063310-75c6e4c`、Web `20260714-101004-2f81803` / `20260714-074400-b66c0d1`，Web BUILD 仍为 `Mguty8CEfSrUIu5FXJ52G`。
+- 包入口：`docs/PRELAUNCH_B1_EXTERNAL_SIGNOFF_PACKAGE_20260714.md`；内含 26 类 demo 关联数据裁决、律师/会计固定事实、三项开关，以及物理设备/真实通知/专业渗透四类签收表。2026-07-15 对本轮可访问位置验收后，返回材料仍为 0 件；所有 owner 决策、批准目标值、回执和签名均保持空白，production 仍 NO-GO。
+- B1 表单记录的应用基线为 API `589a5366633f951fc9692810cc2a4c21c553b629`、Web `b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed`；B1 文档由 API `98efcc2a625e8ba19b068747251d2ed3d66a497d` 固定。第二次 fetch 后两仓 `origin/main` 分别为 `b14c9c58bee66b59a45bb338f2d742609a3466f3` / `b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed`；`b14c9c58` 是未改 B1 文档、无 migration 的后台账号邮箱隔离运行时代码提交，尚未进入本报告 QA 证据。production current/previous 仍为 API `20260714-070255-e044d34` / `20260714-063310-75c6e4c`、Web `20260714-101004-2f81803` / `20260714-074400-b66c0d1`，Web BUILD 仍为 `Mguty8CEfSrUIu5FXJ52G`。
 - shared staging 只读复核仍为 Web HEAD `ef54278551a3f8818661380f919fa894e47cc50c`、BUILD `n4VGKngOQXDelVRDdK9yN`、10 tracked + 6 untracked；API detached HEAD `f766dd62bd949613898e31031cf5636527488d8f`、37 tracked + 2 untracked。没有清理/reset/部署这些 WIP。
-- production 两个 queue worker 本次均 online、累计重启各 83；Redis `PONG`、failed jobs=0。相较本报告较早快照的 80，新增累计符合 `--max-time=3600` 周期，但仍不能证明真实通知送达。
-- `e044d34..API 基线` migration 文件 diff=0，production Pending=0；根盘 83%、剩余约 13G，故继续磁盘冻结。本包使用本地干净独立 worktree，没有在服务器新增 worktree、运行 migration、备份脚本/demo 工具、发送真实通知或写 production/shared staging。
+- production 两个 queue worker 本次均 online、累计重启各 90；`exit_code=0`、`unstable_restarts=0`，新增累计符合 `--max-time=3600` 周期；Redis `PONG`、failed jobs=0。该运行态仍不能证明真实通知送达。
+- `e044d34..b14c9c58` migration 文件 diff=0，production `migrate:status` 为 460 Ran / 0 Pending；根盘 83%、剩余约 13G，故继续磁盘冻结。本包使用本地干净独立 worktree，没有在服务器新增 worktree、运行 migration、备份脚本/demo 工具、发送真实通知或写 production/shared staging。
+- 完整性计数：demo 26/26 `HOLD`、31 个订单未逐项定性；法律/会计 0/4 专业签收；三项开关 0/3 目标值、0/5 汇总签名；外部 QA 封面 0/11、D1–D6 0/6、三渠道回执为空、无渗透报告、总签收 0/6。固定 Git/文档/manifest/既有浏览器包哈希均重算一致，但没有外部附件 SHA-256 可验；详情见 B1 包 §4。
+- 候选冻结门新增打开：API 表单 SHA `589a5366` 已落后 `origin/main=b14c9c58`。当前签名为 0，因此没有已签意见需要作废；但最终流转前必须冻结/回归新候选并重封五份 B1 表单，不能接受旧 SHA 上的最终通过。
 
 ## 清场与回滚
 
-- 本轮只读收口动作包提交 `9c6b4c5bbbaeb7b27dc19a3c968625862debb233` 已进入 API `origin/main`，只包含文档、默认只读/fail-closed demo 工具和契约测试，migration/运行时代码 diff=0。一次性数据库 `nezha_qa_demo_goa_20260714`、用户 `nezha_qa_goa@localhost` 与 `/tmp/nezha-demo-*` 证据副本均已删除并复核为 0；shared staging 与 production 没有部署、配置/数据/开关/资金写入或进程重启。
+- 本轮只读收口工具动作包提交 `9c6b4c5bbbaeb7b27dc19a3c968625862debb233` 与 B1 文档提交 `98efcc2a625e8ba19b068747251d2ed3d66a497d` 已进入 API `origin/main`；后者只含文档，两者相对 production 均无 migration。一次性数据库 `nezha_qa_demo_goa_20260714`、用户 `nezha_qa_goa@localhost` 与 `/tmp/nezha-demo-*` 证据副本均已删除并复核为 0；shared staging 与 production 没有部署、配置/数据/开关/资金写入或进程重启。
 - 一次性数据库 `nezha_qa_e2e_20260714093149` 已删除并复核不存在；19090–19095 隔离监听均已停止。
 - `/tmp/nezha-prelaunch-*`、本轮 QA 脚本、生产 release 中三个 `_prelaunch_*` 探针均已精确删除；生产运行文件、PM2 进程、release/cache 未清理或重启。
 - 商家付款凭证 staging QA 已精确删除 1 用户、1 订单、1 order detail、1 offline payment、2 任务日志、2 通知和全部明确用户依赖及 1 个当前 proof 文件；marker 与当前/被替换凭证路径均为 0，商家、设备 token、支付方式、业务/全局/餐厅通知设置与封存原值逐字段一致。
