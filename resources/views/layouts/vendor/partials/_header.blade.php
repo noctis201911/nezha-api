@@ -215,6 +215,10 @@
                                         title="Settings">{{ translate('messages.settings') }}</span>
                                 </a>
 
+                                <a class="dropdown-item d-none" id="nezhaNotificationSetup" href="javascript:void(0)">
+                                    <span class="text-truncate pr-2" title="通知设置自检">通知设置自检</span>
+                                </a>
+
                                 <div class="dropdown-divider"></div>
 
                                 <a class="dropdown-item" href="javascript:"

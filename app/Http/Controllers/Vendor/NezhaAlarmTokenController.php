@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Vendor;
 
 use App\CentralLogics\Helpers;
+use App\CentralLogics\VendorDeviceTokenSessions;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
@@ -77,6 +78,8 @@ class NezhaAlarmTokenController extends Controller
                     ->update(['is_active' => 0, 'updated_at' => $now]);
             }, 3);
 
+            VendorDeviceTokenSessions::remember($tokenHash);
+
             return response()->json(['message' => 'ok']);
         } catch (\Throwable $e) {
             Log::warning('nezha alarm token register failed: '.$e->getMessage());
@@ -101,10 +104,12 @@ class NezhaAlarmTokenController extends Controller
             if (! $vendorId) {
                 return response()->json(['message' => 'no restaurant'], 403);
             }
+            $tokenHash = hash('sha256', $token);
             DB::table('vendor_device_tokens')
                 ->where('vendor_id', $vendorId)
-                ->where('token_hash', hash('sha256', $token))
+                ->where('token_hash', $tokenHash)
                 ->update(['is_active' => 0, 'updated_at' => now()]);
+            VendorDeviceTokenSessions::forgetIfMatches($tokenHash);
 
             return response()->json(['message' => 'ok']);
         } catch (\Throwable $e) {

@@ -1457,6 +1457,6 @@
     </script>
 
     {{-- 哪吒商家版App: 在场感知心跳 + FCM token 上报 + 停报警(仅在 App 内激活, 普通浏览器零副作用) --}}
-    <script src="{{ dynamicAsset('assets/admin/nezha-app-bridge.js') }}?v=1"></script>
+    <script src="{{ dynamicAsset('assets/admin/nezha-app-bridge.js') }}?v=2"></script>
 </body>
 </html>

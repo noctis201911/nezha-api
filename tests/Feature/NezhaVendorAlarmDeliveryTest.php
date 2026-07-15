@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\CentralLogics\Helpers;
+use App\CentralLogics\VendorDeviceTokenSessions;
 use App\Jobs\DeliverVendorOrderAlarmJob;
 use App\Jobs\SendTelegramMessageJob;
 use App\Mail\NezhaMerchantNewOrderMail;
 use App\Models\Vendor;
+use App\Models\VendorEmployee;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
@@ -40,6 +42,133 @@ class NezhaVendorAlarmDeliveryTest extends TestCase
         $this->assertSame('merchant-android-fcm-token-00000001', Crypt::decryptString($row->fcm_token));
         $this->assertSame('android', $row->platform);
         $this->assertSame(1, (int) $row->is_active);
+        $this->assertSame(
+            hash('sha256', 'merchant-android-fcm-token-00000001'),
+            session()->get(VendorDeviceTokenSessions::SESSION_KEY)
+        );
+    }
+
+    public function test_explicit_vendor_logout_deactivates_only_the_current_app_device(): void
+    {
+        $vendor = Vendor::query()->findOrFail(1);
+        $this->withoutMiddleware();
+        $this->actingAs($vendor, 'vendor');
+
+        $currentToken = 'merchant-android-fcm-token-logout-current';
+        $otherToken = 'merchant-android-fcm-token-logout-other';
+        $this->postJson('/restaurant-panel/nezha-alarm-token/register', [
+            'token' => $currentToken,
+            'platform' => 'android',
+        ])->assertOk();
+        DB::table('vendor_device_tokens')->insert([
+            'vendor_id' => 1,
+            'vendor_employee_id' => null,
+            'fcm_token' => Crypt::encryptString($otherToken),
+            'token_hash' => hash('sha256', $otherToken),
+            'platform' => 'android',
+            'is_active' => 1,
+            'last_seen_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->get('/logout')->assertRedirect();
+
+        $this->assertDatabaseHas('vendor_device_tokens', [
+            'vendor_id' => 1,
+            'token_hash' => hash('sha256', $currentToken),
+            'is_active' => 0,
+        ]);
+        $this->assertDatabaseHas('vendor_device_tokens', [
+            'vendor_id' => 1,
+            'token_hash' => hash('sha256', $otherToken),
+            'is_active' => 1,
+        ]);
+        $this->assertFalse(session()->has(VendorDeviceTokenSessions::SESSION_KEY));
+    }
+
+    public function test_explicit_vendor_employee_logout_deactivates_the_current_app_device(): void
+    {
+        DB::table('vendor_employees')->insert([
+            'id' => 31,
+            'f_name' => 'Fixture',
+            'l_name' => 'Employee',
+            'email' => 'fixture-vendor-employee@example.test',
+            'employee_role_id' => 1,
+            'vendor_id' => 1,
+            'restaurant_id' => 6,
+            'password' => 'not-used',
+            'status' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $employee = VendorEmployee::query()->findOrFail(31);
+        $this->withoutMiddleware();
+        $this->actingAs($employee, 'vendor_employee');
+
+        $token = 'merchant-android-fcm-token-employee-logout';
+        $this->postJson('/restaurant-panel/nezha-alarm-token/register', [
+            'token' => $token,
+            'platform' => 'android',
+        ])->assertOk();
+
+        $this->get('/logout')->assertRedirect();
+
+        $this->assertDatabaseHas('vendor_device_tokens', [
+            'vendor_id' => 1,
+            'vendor_employee_id' => 31,
+            'token_hash' => hash('sha256', $token),
+            'is_active' => 0,
+        ]);
+        $this->assertFalse(session()->has(VendorDeviceTokenSessions::SESSION_KEY));
+    }
+
+    public function test_deregister_deactivates_and_forgets_the_current_app_device(): void
+    {
+        $vendor = Vendor::query()->findOrFail(1);
+        $this->withoutMiddleware();
+        $this->actingAs($vendor, 'vendor');
+
+        $token = 'merchant-android-fcm-token-deregister';
+        $this->postJson('/restaurant-panel/nezha-alarm-token/register', [
+            'token' => $token,
+            'platform' => 'android',
+        ])->assertOk();
+
+        $this->postJson('/restaurant-panel/nezha-alarm-token/deregister', [
+            'token' => $token,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('vendor_device_tokens', [
+            'vendor_id' => 1,
+            'token_hash' => hash('sha256', $token),
+            'is_active' => 0,
+        ]);
+        $this->assertFalse(session()->has(VendorDeviceTokenSessions::SESSION_KEY));
+    }
+
+    public function test_old_session_logout_cannot_deactivate_a_token_rebound_to_another_vendor(): void
+    {
+        $vendor = Vendor::query()->findOrFail(1);
+        $this->withoutMiddleware();
+        $this->actingAs($vendor, 'vendor');
+
+        $token = 'merchant-android-fcm-token-rebound';
+        $this->postJson('/restaurant-panel/nezha-alarm-token/register', [
+            'token' => $token,
+            'platform' => 'android',
+        ])->assertOk();
+        DB::table('vendor_device_tokens')
+            ->where('token_hash', hash('sha256', $token))
+            ->update(['vendor_id' => 2]);
+
+        $this->get('/logout')->assertRedirect();
+
+        $this->assertDatabaseHas('vendor_device_tokens', [
+            'vendor_id' => 2,
+            'token_hash' => hash('sha256', $token),
+            'is_active' => 1,
+        ]);
     }
 
     public function test_new_order_alarm_is_queued_off_the_order_request_path(): void

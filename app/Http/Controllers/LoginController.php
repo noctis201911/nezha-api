@@ -7,6 +7,7 @@ use App\Models\Vendor;
 use App\Models\DataSetting;
 use Illuminate\Http\Request;
 use App\CentralLogics\Helpers;
+use App\CentralLogics\VendorDeviceTokenSessions;
 use App\Models\VendorEmployee;
 use Illuminate\Support\Carbon;
 use App\Models\BusinessSetting;
@@ -547,6 +548,13 @@ class LoginController extends Controller
     {
 
         try {
+            if (auth('vendor')?->check() || auth('vendor_employee')?->check()) {
+                try {
+                    VendorDeviceTokenSessions::deactivateCurrent();
+                } catch (\Throwable $tokenCleanupError) {
+                    logger()->warning('merchant app device token cleanup failed during logout');
+                }
+            }
             if(auth('vendor')?->check()){
                 $user_link = Helpers::get_login_url('restaurant_login_url');
                 session()->forget('stock_out_reminder_close_btn');
