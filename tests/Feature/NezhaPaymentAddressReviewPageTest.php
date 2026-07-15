@@ -48,6 +48,15 @@ class NezhaPaymentAddressReviewPageTest extends TestCase
             $table->string('value')->nullable();
             $table->timestamps();
         });
+        Schema::create('translations', function (Blueprint $table): void {
+            $table->id();
+            $table->string('translationable_type');
+            $table->unsignedBigInteger('translationable_id')->index();
+            $table->string('locale')->index();
+            $table->string('key')->nullable();
+            $table->text('value')->nullable();
+            $table->timestamps();
+        });
         Schema::create('nezha_payment_address_changes', function (Blueprint $table): void {
             $table->id();
             $table->string('public_id')->nullable();
@@ -212,6 +221,30 @@ class NezhaPaymentAddressReviewPageTest extends TestCase
         ));
     }
 
+    public function test_two_factor_status_and_action_gate_use_the_actual_admin_value(): void
+    {
+        $this->seedAdminOrderCounts();
+        $admin = $this->superAdmin(1);
+        $admin->two_factor_enabled = false;
+        $this->actingAs($admin, 'admin');
+        $change = $this->change(20, 41, Carbon::now()->addMinutes(90));
+
+        $disabled = $this->renderReview(collect([$change]));
+
+        $this->assertStringContainsString('nzpar-pill-warn', $disabled);
+        $this->assertStringContainsString('本账号 2FA 未启用', $disabled);
+        $this->assertStringContainsString('当前管理员尚未启用 TOTP，不能执行资金地址操作。', $disabled);
+        $this->assertStringContainsString('data-can-act="0"', $disabled);
+        $this->assertStringNotContainsString('本账号 2FA 已启用', $disabled);
+
+        $admin->two_factor_enabled = true;
+        $enabled = $this->renderReview(collect([$change]));
+
+        $this->assertStringContainsString('本账号 2FA 已启用', $enabled);
+        $this->assertStringContainsString('data-can-act="1"', $enabled);
+        $this->assertStringNotContainsString('当前管理员尚未启用 TOTP，不能执行资金地址操作。', $enabled);
+    }
+
     public function test_full_formal_view_renders_timeout_self_and_inline_error_states(): void
     {
         $reviewer = $this->reviewer(77);
@@ -291,15 +324,13 @@ class NezhaPaymentAddressReviewPageTest extends TestCase
             'status' => 401,
         ]);
 
-        Cache::put('nezha_admin_order_counts', [
-            'total' => 0, 'dine_in' => 0, 'delivered' => 0, 'canceled' => 0, 'failed' => 0,
-            'refunded' => 0, 'refund_requested' => 0, 'processing' => 0, 'scheduled' => 0,
-            'pending' => 0, 'picked_up' => 0, 'ongoing' => 0, 'searching_dm' => 0, 'accepted' => 0,
-            'offline_payments' => 0, 'grp_pending' => 0, 'grp_ongoing' => 0, 'grp_done' => 0,
-            'grp_aftersale' => 0, 'grp_closed' => 0,
-        ], 60);
-        $this->actingAs($this->superAdmin(1), 'admin');
+        $this->seedAdminOrderCounts();
+        $superAdmin = $this->superAdmin(1);
+        $this->actingAs($superAdmin, 'admin');
         $admin = $this->renderReview($changes);
+        $superAdmin->two_factor_enabled = false;
+        $adminTwoFactorDisabled = $this->renderReview($changes);
+        $superAdmin->two_factor_enabled = true;
 
         DB::table('nezha_payment_address_changes')->delete();
         $this->actingAs($reviewer, 'admin');
@@ -352,6 +383,7 @@ class NezhaPaymentAddressReviewPageTest extends TestCase
                 'reviewer-empty.html' => $empty,
                 'reviewer-success.html' => $success,
                 'admin-queue.html' => $admin,
+                'admin-two-factor-disabled.html' => $adminTwoFactorDisabled,
                 'reviewer-settings.html' => $settings,
                 'reviewer-two-factor-enabled.html' => $twoFactorEnabled,
                 'reviewer-two-factor-enrollment.html' => $twoFactorEnrollment,
@@ -410,6 +442,17 @@ class NezhaPaymentAddressReviewPageTest extends TestCase
             'currentAdminId' => (int) auth('admin')->id(),
             'reviewError' => $reviewError,
         ])->render();
+    }
+
+    private function seedAdminOrderCounts(): void
+    {
+        Cache::put('nezha_admin_order_counts', [
+            'total' => 0, 'dine_in' => 0, 'delivered' => 0, 'canceled' => 0, 'failed' => 0,
+            'refunded' => 0, 'refund_requested' => 0, 'processing' => 0, 'scheduled' => 0,
+            'pending' => 0, 'picked_up' => 0, 'ongoing' => 0, 'searching_dm' => 0, 'accepted' => 0,
+            'offline_payments' => 0, 'grp_pending' => 0, 'grp_ongoing' => 0, 'grp_done' => 0,
+            'grp_aftersale' => 0, 'grp_closed' => 0,
+        ], 60);
     }
 
     private function change(int $id, int $requesterId, Carbon $expiresAt): NezhaPaymentAddressChange

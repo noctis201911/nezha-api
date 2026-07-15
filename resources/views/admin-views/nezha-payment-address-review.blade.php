@@ -32,6 +32,7 @@
 .nz-par .nzpar-rules{margin-left:auto;text-align:right;font-size:11.5px;color:var(--nzpar-ink3);line-height:1.7}
 .nz-par .nzpar-rules b{color:var(--nzpar-ink2);font-weight:600}
 .nz-par .nzpar-pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;border-radius:99px;padding:3px 10px;white-space:nowrap;background:var(--nzpar-green-tint);color:var(--nzpar-green)}
+.nz-par .nzpar-pill.nzpar-pill-warn{background:var(--nzpar-amber-tint);color:var(--nzpar-amber)}
 .nz-par .nzpar-pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
 .nz-par .nzpar-note{margin:11px 2px 0;font-size:11.5px;color:var(--nzpar-ink3);line-height:1.8}
 .nz-par .nzpar-note b{color:var(--nzpar-red);font-weight:600}
@@ -170,7 +171,7 @@ body.nzpar-modal-open{overflow:hidden}
     <div class="nzpar-stat"><span class="nzpar-stat-n {{ $urgentCount > 0 ? 'nzpar-warn' : 'nzpar-zero' }}">{{ $urgentCount }}</span><span class="nzpar-stat-k">2 小时内到期</span></div>
     <div class="nzpar-stat"><span class="nzpar-stat-n {{ $expiredCount > 0 ? 'nzpar-bad' : 'nzpar-zero' }}">{{ $expiredCount }}</span><span class="nzpar-stat-k">已到期·待系统处理</span></div>
     <div class="nzpar-rules">
-      <span class="nzpar-pill">本账号 2FA 已启用</span><br>
+      <span class="nzpar-pill {{ $twoFactorEnabled ? '' : 'nzpar-pill-warn' }}">本账号 2FA {{ $twoFactorEnabled ? '已启用' : '未启用' }}</span><br>
       <b>复核动作只有批准与驳回</b>；发起、取消与紧急暂停归地址管理权限，另行处理。
     </div>
   </div>
@@ -303,6 +304,9 @@ body.nzpar-modal-open{overflow:hidden}
             <li>任何一点对不上：选择驳回。驳回不改变当前地址，商家可重新发起。</li>
           </ul>
 
+          @unless($twoFactorEnabled)
+            <div class="nzpar-error"><span>✕</span><span><b>当前管理员尚未启用 TOTP，不能执行资金地址操作。</b></span></div>
+          @endunless
           @if($showStateError)
             <div class="nzpar-error"><span>✕</span><span><b>申请状态已变化，请刷新页面后重新核对。</b>该申请已到期，系统将按「已驳回（超时）」处理；当前地址未改变，此处所有提交均已禁用。</span></div>
           @elseif($errorForChange)
