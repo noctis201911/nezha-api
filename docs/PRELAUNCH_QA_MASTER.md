@@ -36,7 +36,7 @@ node nz.js run "bash /www/wwwroot/api.nezha.am/nzcheck-cod.sh"
 
 ## 0.7 B1 外部签收包
 
-2026-07-14 的 B1 原始包由 API 文档提交 `98efcc2a625e8ba19b068747251d2ed3d66a497d` 固定；2026-07-15 已把 [B1 外部签收包](PRELAUNCH_B1_EXTERNAL_SIGNOFF_PACKAGE_20260714.md) 重封到 API 应用候选 `a53cfb5c967daa5917ce2cb4c2489d6799434ff2`、Web `b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed`。旧 API `589a5366633f951fc9692810cc2a4c21c553b629` 只保留历史追溯，不得作为最终签收对象。包包含：
+2026-07-14 的 B1 原始包由 API 文档提交 `98efcc2a625e8ba19b068747251d2ed3d66a497d` 固定；2026-07-15 已把 [B1 外部签收包](PRELAUNCH_B1_EXTERNAL_SIGNOFF_PACKAGE_20260714.md) 重封到 API 应用候选 `a53cfb5c967daa5917ce2cb4c2489d6799434ff2`、Web `b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed`，8 文件内容快照提交为 `fc026a78130709ce13af356914ce01c50000d866`。旧 API `589a5366633f951fc9692810cc2a4c21c553b629` 只保留历史追溯，不得作为最终签收对象。包包含：
 
 - [26 类 demo 关联数据裁决表](PRELAUNCH_B1_DEMO_ASSOCIATION_DECISIONS_20260714.md)
 - [律师／会计固定事实包](PRELAUNCH_B1_LEGAL_ACCOUNTING_FACTS_20260714.md)

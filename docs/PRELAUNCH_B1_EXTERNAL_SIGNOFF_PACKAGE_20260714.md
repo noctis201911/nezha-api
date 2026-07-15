@@ -10,7 +10,7 @@
 |---|---|---|
 | API 应用候选（五份表单统一记录值） | `a53cfb5c967daa5917ce2cb4c2489d6799434ff2` | 最终已验应用候选；覆盖 `b14c9c58bee66b59a45bb338f2d742609a3466f3` 运行时代码，后续仅有本轮认领/重封文档提交，不代表已部署 |
 | API B1 原始包提交（历史） | `98efcc2a625e8ba19b068747251d2ed3d66a497d`；parent `589a5366633f951fc9692810cc2a4c21c553b629`；tree `d4c9c871011a76f6ca28021b53579a20d92b9a49` | 只用于追溯旧包；旧 `589a5366` 不再是最终签收对象 |
-| API B1 重封内容提交 | `RESEAL_CONTENT_COMMIT_PENDING` | 本次五份表单与三份正本的精确内容提交；提交后由后续哈希审计提交回填，不改变应用候选 |
+| API B1 重封内容快照提交 | `fc026a78130709ce13af356914ce01c50000d866`；parent `79e61a0d14806e8a70fcc5a7eea839818cacddbb`；tree `de6f0d0a7b902f03fafd5db57e61829bcccb4c59` | 本次五份表单与三份正本的 8 文件快照；后续审计提交只回填本行、下表哈希及三份正本的快照引用，不改变应用候选或外部签收空白 |
 | Web `origin/main` | `b4e0ea0f17e3bfc65b3eebe9e645f5334de0faed` | 当前候选锚点，不代表已部署 |
 | production API | current `20260715-042928-dea5dd1`；previous `20260714-070255-e044d34` | 只含从旧 production 基线制作的邮箱隔离热修；不是最终 main 候选，B1 本轮未切换 release |
 | production Web | current `20260714-101004-2f81803`，BUILD `Mguty8CEfSrUIu5FXJ52G`；previous `20260714-074400-b66c0d1` | B1 未切换 release |
@@ -52,19 +52,19 @@
 
 ### 4.2 固定 Git 对象与文档哈希
 
-- B1 重封内容提交：`RESEAL_CONTENT_COMMIT_PENDING`；提交后回填完整 parent/tree，并以该 Git 对象重算下表八份文件 SHA-256；`git diff --check` 必须通过。
+- B1 重封内容快照提交：`fc026a78130709ce13af356914ce01c50000d866`；parent `79e61a0d14806e8a70fcc5a7eea839818cacddbb`；tree `de6f0d0a7b902f03fafd5db57e61829bcccb4c59`；精确 8 文件，`git diff --check` 通过。下表 SHA-256 对该提交中的 Git blob 原始字节计算；当前审计提交只回填这些锚点，因此当前包文件本身会与快照 blob 不同，须按指定 commit 重算，不能对工作树文件误比。
 - Git 提交签名状态为 `%G?=N`（无 GPG/SSH commit signature）。这不能代替外部实名签收，也不改变下表内容可由 commit/tree/SHA-256 重算的事实。
 
-| `RESEAL_CONTENT_COMMIT_PENDING` 中的文件 | SHA-256 |
+| `fc026a78130709ce13af356914ce01c50000d866` 中的文件 | SHA-256 |
 |---|---|
-| `PRELAUNCH_QA_MASTER.md` | `RESEAL_SHA256_PENDING` |
-| `PRELAUNCH_QA_RESULT_20260714.md` | `RESEAL_SHA256_PENDING` |
-| `PRELAUNCH_CLOSURE_LEDGER_20260714.md` | `RESEAL_SHA256_PENDING` |
-| `PRELAUNCH_B1_EXTERNAL_SIGNOFF_PACKAGE_20260714.md` | `RESEAL_SHA256_PENDING` |
-| `PRELAUNCH_B1_DEMO_ASSOCIATION_DECISIONS_20260714.md` | `RESEAL_SHA256_PENDING` |
-| `PRELAUNCH_B1_LEGAL_ACCOUNTING_FACTS_20260714.md` | `RESEAL_SHA256_PENDING` |
-| `PRELAUNCH_B1_SWITCH_SIGNOFF_20260714.md` | `RESEAL_SHA256_PENDING` |
-| `PRELAUNCH_B1_EXTERNAL_QA_SIGNOFF_20260714.md` | `RESEAL_SHA256_PENDING` |
+| `PRELAUNCH_QA_MASTER.md` | `8dd6d392f09dd8cb9eca3193ed6f35d897993fb7822461545865727cf45de4fa` |
+| `PRELAUNCH_QA_RESULT_20260714.md` | `df3e02fa0f06e9cc41f2d12f277d65daf0e1065c8692aa75dc42dd13d7d00b21` |
+| `PRELAUNCH_CLOSURE_LEDGER_20260714.md` | `a128afea87200e79126025a257a8d4da7e9ff545b25db02ec8a8882468f142ac` |
+| `PRELAUNCH_B1_EXTERNAL_SIGNOFF_PACKAGE_20260714.md` | `c1cf2e3b9c0f35151aee91a58494fec60753fc03d14cca3d8b820a18ad7d9cfd` |
+| `PRELAUNCH_B1_DEMO_ASSOCIATION_DECISIONS_20260714.md` | `e570227fc9cbe975bd7b700430cd1696900d2dc9450afccf40ba26310c4e788d` |
+| `PRELAUNCH_B1_LEGAL_ACCOUNTING_FACTS_20260714.md` | `f12dab399949827552fb7d283db5ecb6e4b0881cbb5adf57547cf1c303c4beaa` |
+| `PRELAUNCH_B1_SWITCH_SIGNOFF_20260714.md` | `7ff25dc8613ffc888b50ea76f3ab6964f5f79c240175dcdf7e86a13664541f9b` |
+| `PRELAUNCH_B1_EXTERNAL_QA_SIGNOFF_20260714.md` | `6c051bccbbe8f6174e8aeded51c4dc6a84bca5277d1effe3e7facf43e42aca7a` |
 
 固定 manifest 5/5 均与裁决表登记值一致；浏览器证据包也重算一致：`nezha-prelaunch-browser-evidence-20260714.tgz`=`532a1725d659a8d02a6c23a744777bd2f63b040ef1ffbc852e884fd2882735a3`，`nezha-prelaunch-browser-evidence-current-20260714.tgz`=`c6cf5cb5abddc056543f431c58345996c08c1e0dd5ee84fbfa1b86109eb29dc4`。这些是内部既有证据锚点，不是外部签名附件。
 
