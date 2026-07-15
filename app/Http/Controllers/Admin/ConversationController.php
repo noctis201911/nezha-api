@@ -131,6 +131,7 @@ class ConversationController extends Controller
 
         $fcm_token_web= null;
         $fcm_token= null;
+        $customer_push_recipient = null;
         $error_message = null;
         $file_count=0;
 
@@ -163,7 +164,7 @@ class ConversationController extends Controller
                 $receiver->save();
             }
             $receiver_id = $receiver->id;
-            $fcm_token=$user->cm_firebase_token;
+            $customer_push_recipient = $user;
 
         }else if($request->receiver_type == 'vendor'){
             $receiver = UserInfo::where('vendor_id',$request->receiver_id)->first();
@@ -226,7 +227,11 @@ class ConversationController extends Controller
                         'sender_type' => 'admin'
                     ];
                         // 哪吒: 顾客「客服与商家消息」推送偏好闸(仅当收信方是顾客时拦截, 商家不受影响)
-                        if ($request->receiver_type !== 'customer' || Helpers::customerWantsPush($user, 'chat')) {
+                        if ($customer_push_recipient) {
+                            if (Helpers::customerWantsPush($customer_push_recipient, 'chat')) {
+                                Helpers::send_push_notif_to_customer($customer_push_recipient, $data);
+                            }
+                        } elseif ($fcm_token) {
                             Helpers::send_push_notif_to_device($fcm_token, $data);
                             if ($fcm_token_web) {
                                 Helpers::send_push_notif_to_device($fcm_token_web, $data);

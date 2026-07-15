@@ -464,10 +464,9 @@ class OrderTimeoutSweep extends Command
                 : 'Order #' . $order->id . ' was canceled because payment was not completed in time.';
         }
         $data = Helpers::makeDataForPushNotification(title: $title, message: $msg, orderId: $order->id, type: 'order_status', orderStatus: 'canceled');
-        $token = $order->customer?->cm_firebase_token;
         // 哪吒: 顾客「订单进度」推送偏好闸(接单超时自动取消)
-        if ($token && Helpers::customerWantsPush($order->customer, $paid ? 'refund' : 'order_progress')) {
-            Helpers::send_push_notif_to_device($token, $data);
+        if ($order->customer && Helpers::customerWantsPush($order->customer, $paid ? 'refund' : 'order_progress')) {
+            Helpers::send_push_notif_to_customer($order->customer, $data);
         }
         Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id);
         Helpers::markCancelNotified($order->id);

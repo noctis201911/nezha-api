@@ -52,7 +52,36 @@ final class IsolatedDatabaseFixtures
                 $table->string('phone')->nullable();
                 $table->string('ref_code')->nullable();
                 $table->string('image')->nullable();
+                $table->string('cm_firebase_token')->nullable();
                 $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('customer_notification_installations')) {
+            $schema->create('customer_notification_installations', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('user_id')->index();
+                $table->string('installation_id', 128)->unique();
+                $table->string('transport', 24)->default('fcm_web');
+                $table->text('token');
+                $table->char('token_hash', 64)->unique();
+                $table->string('platform', 32)->nullable();
+                $table->timestamp('last_seen_at')->nullable();
+                $table->timestamp('revoked_at')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('oauth_access_tokens')) {
+            $schema->create('oauth_access_tokens', function (Blueprint $table): void {
+                $table->string('id', 100)->primary();
+                $table->unsignedBigInteger('user_id')->nullable()->index();
+                $table->unsignedBigInteger('client_id');
+                $table->string('name')->nullable();
+                $table->text('scopes')->nullable();
+                $table->boolean('revoked');
+                $table->timestamps();
+                $table->dateTime('expires_at')->nullable();
             });
         }
 
@@ -83,6 +112,48 @@ final class IsolatedDatabaseFixtures
                 $table->boolean('status')->default(true);
                 $table->rememberToken();
                 $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('vendor_device_tokens')) {
+            $schema->create('vendor_device_tokens', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('vendor_id')->index();
+                $table->unsignedBigInteger('vendor_employee_id')->nullable()->index();
+                $table->text('fcm_token');
+                $table->char('token_hash', 64)->unique();
+                $table->string('platform', 16)->default('android');
+                $table->boolean('is_active')->default(true)->index();
+                $table->timestamp('last_seen_at')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('vendor_alert_outbox')) {
+            $schema->create('vendor_alert_outbox', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('order_id')->unique();
+                $table->unsignedBigInteger('restaurant_id')->nullable()->index();
+                $table->string('status', 16)->default('pending')->index();
+                $table->unsignedInteger('attempts')->default(0);
+                $table->string('last_error', 255)->nullable();
+                $table->timestamp('sent_at')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('restaurant_notification_settings')) {
+            $schema->create('restaurant_notification_settings', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('restaurant_id')->index();
+                $table->string('key')->index();
+                $table->string('title')->nullable();
+                $table->string('mail_status')->default('inactive');
+                $table->string('sms_status')->default('inactive');
+                $table->string('push_notification_status')->default('inactive');
+                $table->string('sub_title')->nullable();
+                $table->timestamps();
+                $table->unique(['restaurant_id', 'key']);
             });
         }
 

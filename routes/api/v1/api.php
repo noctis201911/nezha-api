@@ -428,6 +428,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         Route::post('update-profile', [CustomerController::class, 'update_profile']);
         Route::post('update-interest', [CustomerController::class, 'update_interest']);
         Route::put('cm-firebase-token', [CustomerController::class, 'update_cm_firebase_token']);
+        Route::put('web-push-subscription', [CustomerController::class, 'update_web_push_subscription']);
         Route::get('notification-preferences', [CustomerController::class, 'get_notification_preferences']);
         Route::put('notification-preferences', [CustomerController::class, 'update_notification_preferences']);
         Route::get('suggested-foods', [CustomerController::class, 'get_suggested_food']);

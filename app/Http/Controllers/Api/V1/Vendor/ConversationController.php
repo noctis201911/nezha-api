@@ -43,6 +43,8 @@ class ConversationController extends Controller
 
         $limit = $request['limit']??10;
         $offset = $request['offset']??1;
+        $fcm_token = null;
+        $customer_push_recipient = null;
 
 
         $vendor = Vendor::find($request->vendor->id);
@@ -69,7 +71,7 @@ class ConversationController extends Controller
                     $fcm_token=$delivery_man->fcm_token;
                 }elseif($receiver->user_id){
                     $user = User::find($receiver->user_id);
-                    $fcm_token=$user->cm_firebase_token;
+                    $customer_push_recipient = $user;
                 }elseif($receiver->admin_id){
                     $receiver_id = 0;
                 }
@@ -81,7 +83,7 @@ class ConversationController extends Controller
                     $fcm_token=$delivery_man->fcm_token;
                 }elseif($receiver->user_id){
                     $user = User::find($receiver->user_id);
-                    $fcm_token=$user->cm_firebase_token;
+                    $customer_push_recipient = $user;
                 }elseif($receiver->admin_id){
                     $receiver_id = 0;
                 }
@@ -105,7 +107,7 @@ class ConversationController extends Controller
                     $receiver->save();
                 }
                 $receiver_id = $receiver->id;
-                $fcm_token=$user->cm_firebase_token;
+                $customer_push_recipient = $user;
 
             }else if($request->receiver_type == 'delivery_man'){
                 $receiver = UserInfo::where('deliveryman_id',$request->receiver_id)->first();
@@ -177,7 +179,11 @@ class ConversationController extends Controller
                         'sender_type'=> 'vendor'
                     ];
                     // 哪吒: 顾客「客服与商家消息」推送偏好闸(仅当收信方是顾客时拦截, 骑手不受影响)
-                    if ($request->receiver_type !== 'customer' || Helpers::customerWantsPush($user, 'chat')) {
+                    if ($customer_push_recipient) {
+                        if (Helpers::customerWantsPush($customer_push_recipient, 'chat')) {
+                            Helpers::send_push_notif_to_customer($customer_push_recipient, $data);
+                        }
+                    } elseif ($fcm_token) {
                         Helpers::send_push_notif_to_device($fcm_token, $data);
                     }
                 }

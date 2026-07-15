@@ -91,6 +91,23 @@ class User extends Authenticatable
         return $this->hasMany(Order::class)->where('is_guest', 0);
     }
 
+    public function notificationInstallations()
+    {
+        return $this->hasMany(CustomerNotificationInstallation::class);
+    }
+
+    public function scopeWithCustomerPushTarget($query)
+    {
+        return $query->where(function ($query) {
+            $query->where(function ($query) {
+                $query->whereNotNull('cm_firebase_token')
+                    ->where('cm_firebase_token', '!=', '@');
+            })->orWhereHas('notificationInstallations', function ($query) {
+                $query->whereNull('revoked_at');
+            });
+        });
+    }
+
     public function lastOrder()
     {
         return $this->hasOne(Order::class)->where('is_guest', 0)->latestOfMany();

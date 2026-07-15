@@ -23,7 +23,7 @@ return new class extends Migration
             $table->id();
             $table->unsignedBigInteger('order_id')->unique();          // 幂等键: 一单一行
             $table->unsignedBigInteger('restaurant_id')->nullable()->index();
-            $table->string('status', 16)->default('pending')->index(); // pending | sent | failed
+            $table->string('status', 16)->default('pending')->index(); // pending | queued | sent | failed
             $table->unsignedInteger('attempts')->default(0);
             $table->string('last_error', 255)->nullable();
             $table->timestamp('sent_at')->nullable();

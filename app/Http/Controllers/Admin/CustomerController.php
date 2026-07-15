@@ -232,10 +232,10 @@ class CustomerController extends Controller
 
                 $notification_status = Helpers::getNotificationStatusData('customer', 'customer_account_block');
 
-                $message = Helpers::getPushNotificationMessage(status: 'customer_account_block', userType: 'user', lang: $customer?->cm_firebase_token, userName: $customer?->f_name . ' ' . $customer?->l_name);
-                if ($message && isset($customer?->cm_firebase_token)) {
+                $message = Helpers::getPushNotificationMessage(status: 'customer_account_block', userType: 'user', lang: $customer?->current_language_key, userName: $customer?->f_name . ' ' . $customer?->l_name);
+                if ($message && $customer) {
                     $data = Helpers::makeDataForPushNotification(title: translate('suspended'), message: $message, orderId: '', type: 'block', orderStatus: '');
-                    Helpers::send_push_notif_to_device($customer?->cm_firebase_token, $data);
+                    Helpers::send_push_notif_to_customer($customer, $data);
                     Helpers::insertDataOnNotificationTable($data, 'user', $customer->id);
                 }
 
@@ -245,10 +245,10 @@ class CustomerController extends Controller
                 }
             } else {
 
-                $message = Helpers::getPushNotificationMessage(status: 'customer_account_unblock', userType: 'user', lang: $customer?->cm_firebase_token, userName: $customer?->f_name . ' ' . $customer?->l_name);
-                if ($message && isset($customer?->cm_firebase_token)) {
+                $message = Helpers::getPushNotificationMessage(status: 'customer_account_unblock', userType: 'user', lang: $customer?->current_language_key, userName: $customer?->f_name . ' ' . $customer?->l_name);
+                if ($message && $customer) {
                     $data = Helpers::makeDataForPushNotification(title: translate('account_activation'), message: $message, orderId: '', type: 'unblock', orderStatus: '');
-                    Helpers::send_push_notif_to_device($customer?->cm_firebase_token, $data);
+                    Helpers::send_push_notif_to_customer($customer, $data);
                     Helpers::insertDataOnNotificationTable($data, 'user', $customer->id);
                 }
 

@@ -1343,10 +1343,10 @@ class CustomerAuthController extends Controller
     }
 
     private function sentPushNotificationToReferrer($referar_user){
-        $message =Helpers::getPushNotificationMessage(status:'customer_new_referral_join',userType: 'user' , lang:$referar_user?->cm_firebase_token, userName: $referar_user?->f_name.' '.$referar_user?->l_name);
-            if ($message && isset($referar_user?->cm_firebase_token)) {
+        $message =Helpers::getPushNotificationMessage(status:'customer_new_referral_join',userType: 'user' , lang:$referar_user?->current_language_key, userName: $referar_user?->f_name.' '.$referar_user?->l_name);
+            if ($message && $referar_user) {
                 $data= Helpers::makeDataForPushNotification(title:translate('Your_Referral_Code_Has_Been_Used'), message:$message,orderId: '', type: 'referral_code', orderStatus: '');
-                Helpers::send_push_notif_to_device($referar_user?->cm_firebase_token, $data);
+                Helpers::send_push_notif_to_customer($referar_user, $data);
                 Helpers::insertDataOnNotificationTable($data , 'user', $referar_user->id);
             }
         return true;

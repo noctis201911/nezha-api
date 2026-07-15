@@ -367,10 +367,10 @@ class OrderLogic
 
 
 
-                    $message =Helpers::getPushNotificationMessage(status:'customer_referral_bonus_earning',userType: 'user' , lang:$referar_user?->cm_firebase_token, userName: $referar_user?->f_name.' '.$referar_user?->l_name);
-                    if ($message && isset($referar_user?->cm_firebase_token)) {
+                    $message =Helpers::getPushNotificationMessage(status:'customer_referral_bonus_earning',userType: 'user' , lang:$referar_user?->current_language_key, userName: $referar_user?->f_name.' '.$referar_user?->l_name);
+                    if ($message && $referar_user) {
                         $data= Helpers::makeDataForPushNotification(title:translate('messages.Congratulation'), message:$message,orderId: '', type: 'referral_earn', orderStatus: '',amount:$ref_code_exchange_amt);
-                        Helpers::send_push_notif_to_device($referar_user?->cm_firebase_token, $data);
+                        Helpers::send_push_notif_to_customer($referar_user, $data);
                         Helpers::insertDataOnNotificationTable($data , 'user', $referar_user?->id);
                     }
 
@@ -1007,10 +1007,10 @@ class OrderLogic
             $order?->cashback_history?->cashBack?->increment('total_used');
 
             $user = $order->customer;
-            $message =Helpers::getPushNotificationMessage(status:'customer_cashback',userType: 'user' , lang:$user?->cm_firebase_token, userName: $user?->f_name.' '.$user?->l_name);
-            if ($message && isset($user?->cm_firebase_token)) {
+            $message =Helpers::getPushNotificationMessage(status:'customer_cashback',userType: 'user' , lang:$user?->current_language_key, userName: $user?->f_name.' '.$user?->l_name);
+            if ($message && $user) {
                 $data= Helpers::makeDataForPushNotification(title:translate('You’ve_Earned_Cahback!'), message:$message,orderId: $order->id, type: 'CashBack', orderStatus: '');
-                Helpers::send_push_notif_to_device($user?->cm_firebase_token, $data);
+                Helpers::send_push_notif_to_customer($user, $data);
                 Helpers::insertDataOnNotificationTable($data , 'user', $user->id);
             }
 
@@ -1175,13 +1175,12 @@ class OrderLogic
         }
 
         try {
-            $fcm_token = ($order->is_guest == 0 ? $order?->customer?->cm_firebase_token : $order?->guest?->fcm_token) ?? null;
             $message = Helpers::getOrderPushNotificationMessage($order, $notification_text, 'user', $order->customer ? $order?->customer?->current_language_key : 'en');
             if ($message) {
                 $data = Helpers::makeDataForPushNotification(title: $notification_title, message: $message, orderId: $order->id, type: 'order_status', orderStatus: $order->order_status);
                 // 哪吒: 顾客「订单进度」推送偏好闸(离线支付审核结果)
-                if ($fcm_token && Helpers::customerWantsPush($order->customer, 'order_progress')) {
-                    Helpers::send_push_notif_to_device($fcm_token, $data);
+                if (Helpers::customerWantsPush($order->customer, 'order_progress')) {
+                    Helpers::send_push_notif_to_order_customer($order, $data);
                 }
                 // 站内信是所有登录顾客的兜底，不应依赖设备是否已授权 FCM。
                 if (!$order->is_guest && $order->user_id) {
@@ -1409,11 +1408,8 @@ class OrderLogic
                 Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id);
             }
 
-            $token = $order->is_guest
-                ? $order->guest?->fcm_token
-                : $order->customer?->cm_firebase_token;
-            if ($token && Helpers::customerWantsPush($order->customer, 'refund')) {
-                Helpers::send_push_notif_to_device($token, $data);
+            if (Helpers::customerWantsPush($order->customer, 'refund')) {
+                Helpers::send_push_notif_to_order_customer($order, $data);
             }
         } catch (\Throwable $e) {
             info('notify_customer_direct_pay_refund_stage failed: order=' . ($order->id ?? '?') . ' ' . $e->getMessage());
@@ -1484,10 +1480,9 @@ class OrderLogic
             $msg = $nezha_zh
                 ? '你的订单 #' . $order->id . ' 已取消。此前直接付给商家的款项，请在订单页点『联系商家』按原路退回。'
                 : 'Your order #' . $order->id . ' is canceled. For the amount paid directly to the restaurant, please contact the restaurant for an original-route refund.';
-            $fcm = $order->is_guest == 0 ? $order?->customer?->cm_firebase_token : null;
             $data = Helpers::makeDataForPushNotification(title: $title, message: $msg, orderId: $order->id, type: 'order_status', orderStatus: 'canceled');
             // 哪吒: 顾客「订单进度」推送偏好闸(B方案取消退款提醒)
-            if ($fcm && Helpers::customerWantsPush($order->customer, 'refund')) { Helpers::send_push_notif_to_device($fcm, $data); }
+            if ($order->customer && Helpers::customerWantsPush($order->customer, 'refund')) { Helpers::send_push_notif_to_customer($order->customer, $data); }
             if ($order->is_guest == 0) { Helpers::insertDataOnNotificationTable($data, 'user', $order->user_id); Helpers::markCancelNotified($order->id); }
         } catch (\Throwable $e) {
             info('notify_customer_cancel_refund failed: ' . $e->getMessage());
