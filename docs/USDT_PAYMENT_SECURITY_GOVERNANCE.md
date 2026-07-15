@@ -12,7 +12,7 @@
 
 ### 0.1 已完成
 
-- API production backport 已先整合线上 `dea5dd11` 邮件租户边界 hotfix；2FA 重复提交 419 热修目标为 `95313be574383139c497b68fd43c8e1fc0f99370`，当前 release 为 `/www/wwwroot/api-deploy/releases/20260715-122703-95313be`，回滚锚点为 `/www/wwwroot/api-deploy/releases/20260715-061306-363dedf`。
+- API production backport 已先整合线上 `dea5dd11` 邮件租户边界 hotfix；2FA 重复提交 419 热修目标为 `95313be574383139c497b68fd43c8e1fc0f99370`。两个闸正式启用后的运行台账目标 `7ef91c5fbcc31f4e0342afaaefd2bceef2c200cf` 已于 12:50 UTC 切换至 release `/www/wwwroot/api-deploy/releases/20260715-125017-7ef91c5`，回滚锚点为 `/www/wwwroot/api-deploy/releases/20260715-122703-95313be`。
 - Web 发布目标为 `2c614b960f128dcfb0dcdbcf9cb63cf9302bc628`；当前 release 为 `/www/wwwroot/web-deploy/releases/20260715-061421-2c614b9`，运行时 BUILD_ID `GIVFyeKyIoHEeGBFVRhFc`，回滚锚点为 `/www/wwwroot/web-deploy/releases/20260714-101004-2f81803`。
 - API 初始集成目标回归为 80 tests / 529 assertions；2FA 热修后 USDT 治理回归为 81 tests / 536 assertions，本次开关台账契约补强后为 81/542；2FA/RBAC 定向回归为 5/95，IDOR/客服死指引守卫为 3/6；V3 reviewer 页 8/64、CSP 端点 8/161、生产邮件 hotfix 隔离回归 5/51 均通过。原候选 `926173fe` 在同一依赖环境也是 80/529，因此旧交接中的 80/626 是已核实的统计漂移，不把它误报成回归下降。Web 的 payment CSP TAP 4/4、social-login SDK 1/1、付款地址脚本和 production build 均通过。
 - 2026-07-15 06:12 UTC 已生成并完成本机解密测试及 R2 同名对象核验的生产备份：数据库密文 SHA-256 `05dcc657aadd3360c2c63fda0bc8f24bdc73efa5e83f32e3bf619a992941cd50`，文件密文 SHA-256 `5133d92f14731db4bf07c37538fac9a59381da0b0ecb3ef38bbc25a8f587b281`。本文不记录备份密钥。
