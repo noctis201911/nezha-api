@@ -26,6 +26,8 @@
 
 | 阶段 | 阈值 | severity | 标题/下一步 |
 |---|---|---|---|
+| A 无有效凭证 | 未到自动取消阈值 | info | 说明订单内已无法补交；未付款无需操作并显示动态自动取消分钟数；已付款联系商家核实 |
+| A 无有效凭证 | 已到自动取消阈值 | warning | 如实说明系统正在处理；未自动取消时稍候或联系客服；已付款联系商家核实 |
 | A / B | 0–5min | info | 正常等待商家确认 |
 | A / B | ≥5min | warning | "商家暂未确认，已等待 X" + 引导联系商家/客服 |
 | C | ETA 内 | info | "备餐中，预计 X 分钟出餐" |
@@ -37,7 +39,7 @@
 | E 配送中 | <90min | —（返回 null，前端用正常默认文案"配送中"） | 正常，不下发超时对象 |
 | E 配送中 | ≥90min | warning | "配送时间偏长，仍未送达" + 联系商家/客服，**不造 Yandex/ETA** |
 
-> 阶段 D/E 下发字段：`severity/title/next_step/contact_hint(联系入口建议)/refund_method(退款责任=联系商家原路退)/refund_eta/elapsed_minutes`。
+> `describe()` 的每个非空对象统一增量下发只读阈值：`remind_min/email_merchant_min/cancel_min/unpaid_cancel_min`；前端时间轴使用这些值，旧接口缺字段时才回落 10/20。阶段 D/E 的业务字段仍为 `severity/title/next_step/contact_hint(联系入口建议)/refund_method(退款责任=联系商家原路退)/refund_eta/elapsed_minutes`。
 > **不得声称第三方配送正在重试 / 已有骑手 / 提供虚假 ETA**（需求5）。
 
 ### 动作层（后端任务执行，**每个动作每单恰好一次**，幂等账本 `nezha_order_timeout_events`）

@@ -228,9 +228,30 @@ class NezhaOrderTimeout
 
     /**
      * 展示层：返回 nezha_timeout 对象供订单详情 API 下发。不在超时范围返回 null。不在超时范围返回 null。
-     * 字段（需求5）：phase / severity / title / next_step / contact_hint / deadline_at / refund_method / refund_eta。
+     * 字段（需求5）：phase / severity / title / next_step / contact_hint / deadline_at / refund_method / refund_eta，
+     * 以及只读阈值 remind_min / email_merchant_min / cancel_min / unpaid_cancel_min。
      */
     public static function describe(Order $order): ?array
+    {
+        $description = self::describeRaw($order);
+        if ($description === null) {
+            return null;
+        }
+
+        $cfg = self::settings();
+
+        return $description + [
+            'remind_min'         => $cfg['remind'],
+            'email_merchant_min' => $cfg['email_merchant'],
+            'cancel_min'         => $cfg['cancel'],
+            'unpaid_cancel_min'  => $cfg['unpaid_cancel'],
+        ];
+    }
+
+    /**
+     * 生成超时展示对象本体；阈值字段统一由 describe() 追加，避免各阶段返回漂移。
+     */
+    private static function describeRaw(Order $order): ?array
     {
         $phase = self::phase($order);
         if (!$phase) {
@@ -321,8 +342,8 @@ class NezhaOrderTimeout
             $refundEta    = null;
             // 时间自适应(2026-07-03): 过阈值老单不谎称"将自动取消"未来事件。
             $autoNote = $elapsed >= $cfg['unpaid_cancel']
-                ? "本单已超过 {$cfg['unpaid_cancel']} 分钟未完成付款的时限，系统正在处理；如未自动取消，请稍候或联系客服。"
-                : "若 {$cfg['unpaid_cancel']} 分钟内仍未完成付款，系统将自动取消本单。";
+                ? "本单未完成付款凭证提交且已超过 {$cfg['unpaid_cancel']} 分钟时限，系统正在处理；如未自动取消，请稍候或联系客服。如您已付款，请联系商家核实。"
+                : "本单未完成付款凭证提交，已无法在订单内补交凭证；未付款无需操作，系统将在约 {$cfg['unpaid_cancel']} 分钟后自动取消。如您已付款，请联系商家核实。";
         } else {
             // 已付款/钱已确认：超时自动取消 + 通知商家原路退款
             $deadline = $start ? $start->copy()->addMinutes($cfg['cancel'])->toDateTimeString() : null;
@@ -332,9 +353,9 @@ class NezhaOrderTimeout
             if ($elapsed >= $cfg['cancel']) {
                 $autoNote = "本单已超过第 {$cfg['cancel']} 分钟的自动处理时限，系统正在跟进处理；如订单状态未及时更新，请联系商家或客服。";
             } elseif ($elapsed >= $cfg['email_merchant']) {
-                $autoNote = "系统已提醒商家尽快处理；第 {$cfg['cancel']} 分钟仍未推进将自动取消并通知商家联系你原路退款。";
+                $autoNote = "系统已提醒商家尽快处理；第 {$cfg['cancel']} 分钟仍未推进将自动取消并通知商家原路退款。";
             } else {
-                $autoNote = "系统将在第 {$cfg['email_merchant']} 分钟提醒商家、第 {$cfg['cancel']} 分钟自动取消并通知商家联系你原路退款。";
+                $autoNote = "系统将在第 {$cfg['email_merchant']} 分钟提醒商家、第 {$cfg['cancel']} 分钟自动取消并通知商家原路退款。";
             }
         }
 
@@ -371,7 +392,9 @@ class NezhaOrderTimeout
                 'phase'         => $phase,
                 'severity'      => 'info',
                 'title'         => '等待商家确认收款',
-                'next_step'     => '通常 3–5 分钟内商家会确认收款并接单。' . $autoNote,
+                'next_step'     => $hasProof
+                    ? '通常 3–5 分钟内商家会确认收款并接单。' . $autoNote
+                    : $autoNote,
                 'deadline_at'   => $deadline,
                 'refund_method' => $refundMethod,
                 'refund_eta'    => $refundEta,
@@ -383,7 +406,9 @@ class NezhaOrderTimeout
             'phase'         => $phase,
             'severity'      => 'warning',
             'title'         => '商家暂未确认收款，已等待 ' . self::humanDuration($elapsed),
-            'next_step'     => '已超过通常的 3–5 分钟确认时间。' . $autoNote . ' 你也可现在联系商家或客服确认。',
+            'next_step'     => $hasProof
+                ? '已超过通常的 3–5 分钟确认时间。' . $autoNote . ' 你也可现在联系商家或客服确认。'
+                : $autoNote,
             'deadline_at'   => $deadline,
             'refund_method' => $refundMethod,
             'refund_eta'    => $refundEta,
