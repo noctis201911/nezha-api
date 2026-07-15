@@ -10,7 +10,7 @@
 
 - marker 精确命中：vendors=7、restaurants=7、local-life merchants=6、local-life posts=21；总表行数分别为 9/9/10/21，不能把总行数当 demo 行数。
 - 2026-07-15 owner 补充事实：现存 `_demo_seed_manifest.json` 明确列出 vendor/restaurant `6–11`；owner 再次确认其中 `7–11` 是 Claude 生成的示范商家。因此这些 ID 的无效或空收款地址不能误报为真实商户地址事故。restaurant `12` 不在该 manifest，仍不得未经证据归类为 demo。
-- 2026-07-15 owner 指定 `demo_seed_1@nezha.am` 作为 USDT credential production canary 的受控顾客，并授权创建可识别、可回滚的 production 测试数据。只读核对时该邮箱尚不存在；后续新建记录必须明确标为 demo、生成精确 rollback manifest，并在 canary 验收后清理或按 owner 新裁决保留。该授权不把测试顾客提升为后台 reviewer，也不改变本表的 demo rollback NO-GO。
+- 2026-07-15 owner 指定 `demo_seed_1@nezha.am` 作为 USDT credential production canary 的受控顾客，并授权创建可识别、可回滚的 production 测试数据。只读核对时该邮箱不存在；07:00:21–07:00:23 UTC 的 credential canary 按精确 manifest 临时创建后已清理，顾客、3 个订单、2 条凭据和 1 条 offline payment 残留均为 0。证据 manifest SHA-256 为 `94d2bf17faebfb4a84888d0db335b24238ec4ab54eb6c1ad9ddb7de576e18ba8`。该授权不把测试顾客提升为后台 reviewer，也不改变本表的 demo rollback NO-GO。
 - 精确 rollback scope 当前覆盖 31 个非 `_demo_socialproof_seed` 订单、22 个 reviews、0 个 add-ons 与 6 个本地生活商家当前名称；`/config` 仍含 `Demo Banner`，Banner 是独立配置动作，不属于数据工具。
 - 31 个订单 ID：`9–13`、`1999002074–1999002075`、`2000000001–2000000024`。这些订单“与 demo 店关联”不证明可删，必须单独签收。
 - 恢复库在只为本轮对账补齐旧备份损失的 21 个公开 `cover_emoji` 后，与 production 的 20/20 类目标行指纹一致；恢复库 PLAN SHA `55bdf110eaee3c17e1b03ab2d038c9ce41cb1b029538417efd325ff9783a680c`，production 只读 PLAN SHA `c13203f4a3595669272aa26e18f9a8f1d7d06708e916744d3a0a1a0060a0cba5`。
