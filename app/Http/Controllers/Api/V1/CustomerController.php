@@ -328,9 +328,41 @@ class CustomerController extends Controller
         ], 200);
     }
 
+    public function update_web_push_subscription(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'installation_id' => ['required', 'string', 'max:128', 'regex:/\A[A-Za-z0-9._:-]+\z/'],
+            'platform' => ['required', 'in:ios_web'],
+            'subscription' => ['required', 'array'],
+            'subscription.endpoint' => ['required', 'string', 'max:2048', 'url', 'starts_with:https://'],
+            'subscription.keys' => ['required', 'array'],
+            'subscription.keys.p256dh' => ['required', 'string', 'max:1024'],
+            'subscription.keys.auth' => ['required', 'string', 'max:512'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
+        }
+
+        $installation = CustomerNotificationInstallations::registerWebPush(
+            $request->user(),
+            $validator->validated(),
+            $request->user()?->token()
+        );
+
+        return response()->json([
+            'message' => translate('messages.updated_successfully'),
+            'data' => [
+                'installation_id' => $installation->installation_id,
+                'platform' => $installation->platform,
+                'transport' => $installation->transport,
+            ],
+        ], 200);
+    }
+
     /**
      * 哪吒: 读取顾客推送偏好。默认全开(notification_preferences 为 null/缺键 => true)。
-     * 只控制 FCM 推送, 不影响站内信(站内信永远保留历史)。
+     * 只控制顾客外部推送（FCM / 标准 Web Push）, 不影响站内信(站内信永远保留历史)。
      */
     public function get_notification_preferences(Request $request)
     {

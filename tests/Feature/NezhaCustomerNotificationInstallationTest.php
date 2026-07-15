@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\CentralLogics\CustomerNotificationInstallations;
 use App\CentralLogics\Helpers;
 use App\Jobs\SendPushNotificationJob;
+use App\Jobs\SendWebPushNotificationJob;
 use App\Models\CustomerNotificationInstallation;
 use App\Models\User;
 use Illuminate\Auth\AuthenticationException;
@@ -55,6 +56,83 @@ class NezhaCustomerNotificationInstallationTest extends TestCase
         });
     }
 
+    public function test_ios_home_screen_web_push_subscription_is_registered_without_overwriting_fcm_legacy_token(): void
+    {
+        $customer = User::query()->findOrFail(1);
+        $customer->forceFill(['cm_firebase_token' => 'existing-android-fcm-token'])->save();
+        $this->withoutMiddleware();
+        $this->actingAs($customer);
+
+        $response = $this->putJson('/api/v1/customer/web-push-subscription', [
+            'installation_id' => 'ios-home-screen-installation-0001',
+            'platform' => 'ios_web',
+            'subscription' => [
+                'endpoint' => 'https://web.push.apple.com/QHh5V3-valid-endpoint',
+                'keys' => [
+                    'p256dh' => 'valid-p256dh-key-material',
+                    'auth' => 'valid-auth-secret',
+                ],
+            ],
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.installation_id', 'ios-home-screen-installation-0001')
+            ->assertJsonPath('data.transport', 'web_push');
+
+        $installation = CustomerNotificationInstallation::query()
+            ->where('installation_id', 'ios-home-screen-installation-0001')
+            ->firstOrFail();
+        $this->assertSame('web_push', $installation->transport);
+        $this->assertSame('ios_web', $installation->platform);
+        $this->assertSame(
+            'https://web.push.apple.com/QHh5V3-valid-endpoint',
+            json_decode($installation->token, true, flags: JSON_THROW_ON_ERROR)['endpoint']
+        );
+        $this->assertStringNotContainsString('web.push.apple.com', $installation->getRawOriginal('token'));
+        $this->assertSame('existing-android-fcm-token', $customer->fresh()->cm_firebase_token);
+    }
+
+    public function test_customer_push_fans_out_to_android_fcm_and_ios_standard_web_push(): void
+    {
+        Queue::fake();
+        Config::set('nezha_notif_async_status_conf', ['value' => '1']);
+        $customer = User::query()->findOrFail(1);
+        $this->withoutMiddleware();
+        $this->actingAs($customer);
+
+        $this->putJson('/api/v1/customer/cm-firebase-token', [
+            'installation_id' => 'android-chrome-installation-0001',
+            'cm_firebase_token' => 'android-chrome-fcm-token',
+            'platform' => 'android_chrome',
+        ])->assertOk();
+        $this->putJson('/api/v1/customer/web-push-subscription', [
+            'installation_id' => 'ios-home-screen-installation-0001',
+            'platform' => 'ios_web',
+            'subscription' => [
+                'endpoint' => 'https://web.push.apple.com/QHh5V3-valid-endpoint',
+                'keys' => [
+                    'p256dh' => 'valid-p256dh-key-material',
+                    'auth' => 'valid-auth-secret',
+                ],
+            ],
+        ])->assertOk();
+
+        Helpers::send_push_notif_to_customer($customer->fresh(), [
+            'title' => 'Order update',
+            'description' => 'The order status changed.',
+            'image' => '',
+            'order_id' => '1001',
+            'type' => 'order_status',
+        ]);
+
+        Queue::assertPushed(SendPushNotificationJob::class, 1);
+        Queue::assertPushed(SendWebPushNotificationJob::class, function (SendWebPushNotificationJob $job): bool {
+            return $job->installationId === 'ios-home-screen-installation-0001'
+                && data_get($job->subscription, 'endpoint') === 'https://web.push.apple.com/QHh5V3-valid-endpoint'
+                && $job->connection === 'redis';
+        });
+    }
+
     public function test_customer_push_fans_out_to_each_active_installation(): void
     {
         Queue::fake();
@@ -84,6 +162,34 @@ class NezhaCustomerNotificationInstallationTest extends TestCase
                 return data_get($job->payload, 'message.token') === $token;
             });
         }
+    }
+
+    public function test_android_chrome_notification_payload_has_a_secure_click_target(): void
+    {
+        Queue::fake();
+        Config::set('nezha_notif_async_status_conf', ['value' => '1']);
+        Config::set('app.url', 'https://nezha.am');
+        $customer = User::query()->findOrFail(1);
+        $this->withoutMiddleware();
+        $this->actingAs($customer);
+        $this->putJson('/api/v1/customer/cm-firebase-token', [
+            'installation_id' => 'android-click-target-installation',
+            'cm_firebase_token' => 'android-click-target-token',
+            'platform' => 'android_chrome',
+        ])->assertOk();
+
+        Helpers::send_push_notif_to_customer($customer->fresh(), [
+            'title' => 'Order update',
+            'description' => 'The order status changed.',
+            'image' => '',
+            'order_id' => '1001',
+            'type' => 'order_status',
+        ]);
+
+        Queue::assertPushed(SendPushNotificationJob::class, function (SendPushNotificationJob $job): bool {
+            return data_get($job->payload, 'message.webpush.fcm_options.link')
+                === 'https://nezha.am/info?page=order&orderId=1001';
+        });
     }
 
     public function test_customer_fanout_is_forced_off_the_request_path_when_the_global_async_switch_is_off(): void
@@ -590,6 +696,34 @@ class NezhaCustomerNotificationInstallationTest extends TestCase
             SendPushNotificationJob::class,
             CustomerNotificationInstallations::MAX_ACTIVE_INSTALLATIONS
         );
+    }
+
+    public function test_web_push_pruning_clears_a_legacy_fcm_fallback_that_is_no_longer_active(): void
+    {
+        $customer = User::query()->findOrFail(1);
+        CustomerNotificationInstallations::register($customer, [
+            'installation_id' => 'android-installation-pruned-by-limit',
+            'cm_firebase_token' => 'android-token-pruned-by-limit',
+            'platform' => 'android_chrome',
+        ]);
+
+        foreach (range(1, CustomerNotificationInstallations::MAX_ACTIVE_INSTALLATIONS) as $number) {
+            CustomerNotificationInstallations::registerWebPush($customer, [
+                'installation_id' => sprintf('ios-installation-%02d', $number),
+                'subscription' => [
+                    'endpoint' => sprintf('https://web.push.apple.com/subscription-%02d', $number),
+                    'keys' => [
+                        'p256dh' => 'valid-p256dh-key-material',
+                        'auth' => 'valid-auth-secret',
+                    ],
+                ],
+            ]);
+        }
+
+        $this->assertNull($customer->fresh()->cm_firebase_token);
+        $this->assertDatabaseMissing('customer_notification_installations', [
+            'installation_id' => 'android-installation-pruned-by-limit',
+        ]);
     }
 
     public function test_revoked_late_access_token_cannot_reclaim_an_installation_from_the_new_customer(): void

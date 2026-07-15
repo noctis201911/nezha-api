@@ -16,9 +16,47 @@ class CustomerNotificationInstallations
     public static function register(User $customer, array $attributes, $accessToken = null): CustomerNotificationInstallation
     {
         $token = $attributes['cm_firebase_token'];
-        $tokenHash = hash('sha256', $token);
 
-        return DB::transaction(function () use ($accessToken, $attributes, $customer, $token, $tokenHash): CustomerNotificationInstallation {
+        return self::registerInstallation($customer, [
+            'installation_id' => $attributes['installation_id'],
+            'transport' => 'fcm_web',
+            'token' => $token,
+            'token_hash' => hash('sha256', $token),
+            'platform' => $attributes['platform'] ?? null,
+        ], $accessToken, true);
+    }
+
+    public static function registerWebPush(User $customer, array $attributes, $accessToken = null): CustomerNotificationInstallation
+    {
+        $subscription = [
+            'endpoint' => $attributes['subscription']['endpoint'],
+            'keys' => [
+                'p256dh' => $attributes['subscription']['keys']['p256dh'],
+                'auth' => $attributes['subscription']['keys']['auth'],
+            ],
+            'contentEncoding' => 'aes128gcm',
+        ];
+        $token = json_encode($subscription, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+
+        return self::registerInstallation($customer, [
+            'installation_id' => $attributes['installation_id'],
+            'transport' => 'web_push',
+            'token' => $token,
+            'token_hash' => hash('sha256', $subscription['endpoint']),
+            'platform' => 'ios_web',
+        ], $accessToken, false);
+    }
+
+    private static function registerInstallation(
+        User $customer,
+        array $attributes,
+        $accessToken,
+        bool $assignLegacyToken
+    ): CustomerNotificationInstallation {
+        $token = $attributes['token'];
+        $tokenHash = $attributes['token_hash'];
+
+        return DB::transaction(function () use ($accessToken, $assignLegacyToken, $attributes, $customer, $token, $tokenHash): CustomerNotificationInstallation {
             self::lockAndAssertAccessTokenIsStillActive($accessToken);
 
             $installationMatch = CustomerNotificationInstallation::query()
@@ -34,6 +72,7 @@ class CustomerNotificationInstallations
                 ? $installationMatch->user_id
                 : null;
             $displacedToken = $displacedOwnerId ? $installationMatch->token : null;
+            $displacedTransport = $displacedOwnerId ? $installationMatch->transport : null;
 
             if ($tokenMatch && $tokenMatch->isNot($installationMatch)) {
                 $installationMatch?->delete();
@@ -45,7 +84,7 @@ class CustomerNotificationInstallations
             $installation->fill([
                 'user_id' => $customer->id,
                 'installation_id' => $attributes['installation_id'],
-                'transport' => 'fcm_web',
+                'transport' => $attributes['transport'],
                 'token' => $token,
                 'token_hash' => $tokenHash,
                 'platform' => $attributes['platform'] ?? null,
@@ -53,10 +92,12 @@ class CustomerNotificationInstallations
                 'revoked_at' => null,
             ])->save();
 
-            if ($displacedOwnerId && $displacedToken) {
+            if ($displacedOwnerId && $displacedToken && str_starts_with((string) $displacedTransport, 'fcm_')) {
                 self::repointLegacyToken($displacedOwnerId, $displacedToken);
             }
-            self::assignLegacyTokenToCurrentCustomer($customer, $token);
+            if ($assignLegacyToken) {
+                self::assignLegacyTokenToCurrentCustomer($customer, $token);
+            }
             self::pruneCustomerInstallations($customer);
 
             return $installation;
@@ -157,7 +198,9 @@ class CustomerNotificationInstallations
             }
 
             $installation->update(['revoked_at' => now()]);
-            self::repointLegacyToken($customer->id, $installation->token);
+            if (str_starts_with((string) $installation->transport, 'fcm_')) {
+                self::repointLegacyToken($customer->id, $installation->token);
+            }
 
             return true;
         }, self::DEADLOCK_ATTEMPTS);
@@ -219,6 +262,7 @@ class CustomerNotificationInstallations
         return CustomerNotificationInstallation::query()
             ->where('user_id', $customerId)
             ->whereNull('revoked_at')
+            ->whereIn('transport', ['fcm_web', 'fcm_web_legacy'])
             ->orderByDesc('last_seen_at')
             ->orderByDesc('id')
             ->first()?->token;
@@ -239,12 +283,26 @@ class CustomerNotificationInstallations
             ->limit(self::MAX_ACTIVE_INSTALLATIONS)
             ->pluck('id');
 
+        $prunedFcmTokenHashes = collect();
         if ($keptInstallationIds->isNotEmpty()) {
+            $prunedFcmTokenHashes = CustomerNotificationInstallation::query()
+                ->where('user_id', $customer->id)
+                ->whereNull('revoked_at')
+                ->whereNotIn('id', $keptInstallationIds)
+                ->whereIn('transport', ['fcm_web', 'fcm_web_legacy'])
+                ->pluck('token_hash');
             CustomerNotificationInstallation::query()
                 ->where('user_id', $customer->id)
                 ->whereNull('revoked_at')
                 ->whereNotIn('id', $keptInstallationIds)
                 ->delete();
+        }
+
+        $legacyToken = DB::table('users')->where('id', $customer->id)->value('cm_firebase_token');
+        if (is_string($legacyToken) && $prunedFcmTokenHashes->contains(hash('sha256', $legacyToken))) {
+            DB::table('users')->where('id', $customer->id)->update([
+                'cm_firebase_token' => self::latestActiveToken($customer->id),
+            ]);
         }
     }
 }

@@ -115,6 +115,48 @@ final class IsolatedDatabaseFixtures
             });
         }
 
+        if (! $schema->hasTable('vendor_device_tokens')) {
+            $schema->create('vendor_device_tokens', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('vendor_id')->index();
+                $table->unsignedBigInteger('vendor_employee_id')->nullable()->index();
+                $table->text('fcm_token');
+                $table->char('token_hash', 64)->unique();
+                $table->string('platform', 16)->default('android');
+                $table->boolean('is_active')->default(true)->index();
+                $table->timestamp('last_seen_at')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('vendor_alert_outbox')) {
+            $schema->create('vendor_alert_outbox', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('order_id')->unique();
+                $table->unsignedBigInteger('restaurant_id')->nullable()->index();
+                $table->string('status', 16)->default('pending')->index();
+                $table->unsignedInteger('attempts')->default(0);
+                $table->string('last_error', 255)->nullable();
+                $table->timestamp('sent_at')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('restaurant_notification_settings')) {
+            $schema->create('restaurant_notification_settings', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('restaurant_id')->index();
+                $table->string('key')->index();
+                $table->string('title')->nullable();
+                $table->string('mail_status')->default('inactive');
+                $table->string('sms_status')->default('inactive');
+                $table->string('push_notification_status')->default('inactive');
+                $table->string('sub_title')->nullable();
+                $table->timestamps();
+                $table->unique(['restaurant_id', 'key']);
+            });
+        }
+
         if (! $schema->hasTable('local_life_merchants')) {
             $schema->create('local_life_merchants', function (Blueprint $table): void {
                 $table->id();

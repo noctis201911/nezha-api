@@ -10,6 +10,9 @@ use App\Mail\OrderVerificationMail;
 use App\Mail\PlaceOrder;
 use App\Mail\SubscriptionRenewOrShift;
 use App\Mail\SubscriptionSuccessful;
+use App\Mail\NezhaMerchantNewOrderMail;
+use App\Jobs\SendWebPushNotificationJob;
+use App\Jobs\DeliverVendorOrderAlarmJob;
 use App\Models\AddOn;
 use App\Models\Allergy;
 use App\Models\BusinessSetting;
@@ -74,6 +77,7 @@ class Helpers
 
     public static function send_push_notif_to_customer(User $customer, array $data, $web_push_link = null): bool
     {
+        $web_push_link = self::customerPushLink($data, $web_push_link);
         $installations = CustomerNotificationInstallation::query()
             ->where('user_id', $customer->id)
             ->whereNull('revoked_at')
@@ -81,26 +85,88 @@ class Helpers
             ->limit(CustomerNotificationInstallations::MAX_ACTIVE_INSTALLATIONS)
             ->get();
 
-        $targets = [];
+        $fcmTargets = [];
         if ($customer->cm_firebase_token && $customer->cm_firebase_token !== '@') {
-            $targets[hash('sha256', $customer->cm_firebase_token)] = $customer->cm_firebase_token;
+            $fcmTargets[hash('sha256', $customer->cm_firebase_token)] = $customer->cm_firebase_token;
         }
         foreach ($installations as $installation) {
-            if (count($targets) >= CustomerNotificationInstallations::MAX_ACTIVE_INSTALLATIONS) {
+            if ($installation->transport === 'web_push') {
+                $subscription = json_decode($installation->token, true);
+                if (is_array($subscription) && isset($subscription['endpoint'], $subscription['keys']['p256dh'], $subscription['keys']['auth'])) {
+                    SendWebPushNotificationJob::dispatch(
+                        $installation->installation_id,
+                        $subscription,
+                        self::webPushPayload($data, $web_push_link)
+                    )->onConnection('redis');
+                }
+                continue;
+            }
+
+            if (! str_starts_with((string) $installation->transport, 'fcm_')) {
+                continue;
+            }
+            if (count($fcmTargets) >= CustomerNotificationInstallations::MAX_ACTIVE_INSTALLATIONS) {
                 break;
             }
-            $targets[$installation->token_hash] = $installation->token;
+            $fcmTargets[$installation->token_hash] = $installation->token;
         }
 
-        foreach ($targets as $token) {
+        foreach ($fcmTargets as $token) {
             self::send_push_notif_to_device($token, $data, $web_push_link, true);
         }
 
         return true;
     }
 
+    private static function webPushPayload(array $data, ?string $webPushLink): array
+    {
+        $url = is_string($webPushLink) && (str_starts_with($webPushLink, '/') || str_starts_with($webPushLink, 'https://'))
+            ? $webPushLink
+            : '/info';
+        if ($url === '/info' && ($data['type'] ?? null) === 'order_status' && ! empty($data['order_id'])) {
+            $url .= '?page=order&orderId='.rawurlencode((string) $data['order_id']);
+        } elseif ($url === '/info' && ($data['type'] ?? null) === 'message' && ! empty($data['conversation_id'])) {
+            $url .= '?page=inbox&conversationId='.rawurlencode((string) $data['conversation_id']);
+        }
+
+        return [
+            'title' => (string) ($data['title'] ?? '哪吒外卖'),
+            'body' => (string) ($data['description'] ?? ''),
+            'icon' => '/static/icon-192.png',
+            'url' => $url,
+            'data' => [
+                'order_id' => (string) ($data['order_id'] ?? ''),
+                'type' => (string) ($data['type'] ?? ''),
+                'conversation_id' => (string) ($data['conversation_id'] ?? ''),
+            ],
+        ];
+    }
+
+    private static function customerPushLink(array $data, $suppliedLink): string
+    {
+        $baseUrl = rtrim((string) config('app.url'), '/');
+        $secureBaseUrl = str_starts_with($baseUrl, 'https://') ? $baseUrl : '';
+        if (is_string($suppliedLink) && $suppliedLink !== '') {
+            if (str_starts_with($suppliedLink, '/') && $secureBaseUrl !== '') {
+                return $secureBaseUrl.$suppliedLink;
+            }
+
+            return $suppliedLink;
+        }
+
+        $path = '/info';
+        if (($data['type'] ?? null) === 'order_status' && ! empty($data['order_id'])) {
+            $path .= '?page=order&orderId='.rawurlencode((string) $data['order_id']);
+        } elseif (($data['type'] ?? null) === 'message' && ! empty($data['conversation_id'])) {
+            $path .= '?page=inbox&conversationId='.rawurlencode((string) $data['conversation_id']);
+        }
+
+        return $secureBaseUrl.$path;
+    }
+
     public static function send_push_notif_to_order_customer($order, array $data, $web_push_link = null): bool
     {
+        $web_push_link = self::customerPushLink($data, $web_push_link);
         if ($order->is_guest) {
             $guestToken = $order?->guest?->fcm_token;
             if ($guestToken) {
@@ -1689,15 +1755,37 @@ class Helpers
                 ]);
             }
 
-            // 内联快速通道 (best-effort, 秒级)。失败由 outbox + sweep 兜底。
+            // 只排队，不在下单请求里等待 Google。失败由 outbox + sweep 兜底。
             self::deliverVendorAlarmForOrder($order, $vendorId);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::info('nezha dispatchVendorOrderAlarm failed: ' . $e->getMessage());
         }
     }
 
-    /** 实际扇出: 给该 vendor(店主+店员)全部活跃设备发报警, 更新 outbox, 清死 token。也供 sweep 重试调用。 */
+    /** 原子领取 outbox 后排到 Redis；重复钩子不会并发发送同一单。也供 sweep 重试调用。 */
     public static function deliverVendorAlarmForOrder($order, $vendorId = null)
+    {
+        $vendorId = $vendorId ?: ($order->restaurant?->vendor_id);
+        if (! $vendorId || ! isset($order->id)) {
+            return false;
+        }
+
+        $claimed = \Illuminate\Support\Facades\DB::table('vendor_alert_outbox')
+            ->where('order_id', $order->id)
+            ->whereIn('status', ['pending', 'failed'])
+            ->update(['status' => 'queued', 'updated_at' => now()]);
+        if ($claimed !== 1) {
+            return false;
+        }
+
+        DeliverVendorOrderAlarmJob::dispatch((int) $order->id, (int) $vendorId)
+            ->onConnection('redis');
+
+        return true;
+    }
+
+    /** Worker 内实际扇出: 给该 vendor(店主+店员)全部活跃设备发报警, 更新 outbox, 清死 token。 */
+    public static function deliverVendorAlarmForOrderNow($order, $vendorId = null)
     {
         try {
             $vendorId = $vendorId ?: ($order->restaurant?->vendor_id);
@@ -1705,12 +1793,12 @@ class Helpers
                 return false;
             }
 
-            $tokens = \Illuminate\Support\Facades\DB::table('vendor_device_tokens')
+            $devices = \Illuminate\Support\Facades\DB::table('vendor_device_tokens')
                 ->where('is_active', 1)
                 ->where('vendor_id', $vendorId)
-                ->pluck('fcm_token')
-                ->unique()
-                ->values();
+                ->orderByDesc('last_seen_at')
+                ->limit(20)
+                ->get(['id', 'fcm_token']);
 
             $data = [
                 'title' => '新订单',
@@ -1720,14 +1808,24 @@ class Helpers
             ];
 
             $anySuccess = false;
-            foreach ($tokens as $tok) {
+            $usableDevices = 0;
+            foreach ($devices as $device) {
+                try {
+                    $tok = \Illuminate\Support\Facades\Crypt::decryptString((string) $device->fcm_token);
+                } catch (\Throwable) {
+                    \Illuminate\Support\Facades\DB::table('vendor_device_tokens')
+                        ->where('id', $device->id)
+                        ->update(['is_active' => 0, 'updated_at' => now()]);
+                    continue;
+                }
+                $usableDevices++;
                 $r = self::sendVendorAlarmPush($tok, $data);
                 if ($r === true) {
                     $anySuccess = true;
                 } elseif ($r === 404 || $r === 410) {
                     // 死 token(UNREGISTERED): 停用, 防旧机串店报警 + 减少无效扇出
                     \Illuminate\Support\Facades\DB::table('vendor_device_tokens')
-                        ->where('fcm_token', $tok)
+                        ->where('id', $device->id)
                         ->update(['is_active' => 0, 'updated_at' => now()]);
                 }
             }
@@ -1736,7 +1834,7 @@ class Helpers
                 'updated_at' => now(),
                 'attempts' => \Illuminate\Support\Facades\DB::raw('attempts + 1'),
             ];
-            if ($tokens->isEmpty()) {
+            if ($usableDevices === 0) {
                 // 商家尚未装/登录 App: 标 failed, 让 sweep 在重试窗口内继续尝试(设备上线即送达)
                 $update['status'] = 'failed';
                 $update['last_error'] = 'no_active_device';
@@ -1752,6 +1850,16 @@ class Helpers
             return $anySuccess;
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::info('nezha deliverVendorAlarmForOrder failed: ' . $e->getMessage());
+            if (isset($order->id)) {
+                \Illuminate\Support\Facades\DB::table('vendor_alert_outbox')
+                    ->where('order_id', $order->id)
+                    ->update([
+                        'status' => 'failed',
+                        'attempts' => \Illuminate\Support\Facades\DB::raw('attempts + 1'),
+                        'last_error' => 'delivery_exception',
+                        'updated_at' => now(),
+                    ]);
+            }
             return false;
         }
     }
@@ -1929,6 +2037,12 @@ class Helpers
                 ],
             ],
         ];
+        if (is_string($web_push_link) && str_starts_with($web_push_link, 'https://')) {
+            $postData['message']['webpush'] = [
+                'headers' => ['Urgency' => 'high'],
+                'fcm_options' => ['link' => $web_push_link],
+            ];
+        }
 
         if ($force_async) {
             try {
@@ -2294,6 +2408,7 @@ class Helpers
 
         try {
             self::dispatchVendorOrderAlarm($order); // 哪吒商家版App: 新单报警(无条件,独立于gated的sentRestaurantNotification,覆盖H1漏单)
+            self::sendMerchantNewOrderEmail($order);
             self::sentUserNotification($order);
             self::sentAdminPanelNotification($order);
             self::sentDeliveryManNotification($order);
@@ -2407,6 +2522,57 @@ class Helpers
     {
         // 哪吒: Telegram 异步化 —— 甩到 worker, 不吊住请求(原 3s+4s curl 超时)。发送逻辑见 telegramSyncSend()。
         return self::enqueueTelegram($restaurant?->telegram_chat_id, $text);
+    }
+
+    public static function sendMerchantNewOrderEmail($order): bool
+    {
+        $mailKey = null;
+        try {
+            if (! $order || ! in_array($order->order_status ?? null, ['pending', 'confirmed'], true) || ! config('mail.status')) {
+                return false;
+            }
+            $restaurant = $order->restaurant;
+            $recipient = $restaurant?->nezha_notify_email
+                ?: ($restaurant?->email ?: $restaurant?->vendor?->email);
+            if (! $recipient) {
+                return false;
+            }
+            $settings = self::getRestaurantNotificationStatusData(
+                $order->restaurant_id,
+                'restaurant_order_notification'
+            );
+            if ($settings?->mail_status !== 'active') {
+                return false;
+            }
+
+            $mailKey = 'merchant_new_order_mail_'.$order->id;
+            if (! Cache::add($mailKey, 1, now()->addDay())) {
+                return true;
+            }
+            $type = match ($order->order_type ?? null) {
+                'delivery' => '配送',
+                'take_away' => '自取',
+                'dine_in' => '堂食',
+                default => '订单',
+            };
+            $mail = (new NezhaMerchantNewOrderMail(
+                (int) $order->id,
+                (string) ($restaurant?->name ?? '商家'),
+                $type,
+                number_format((float) ($order->order_amount ?? 0), 0).' ֏'
+            ))->onConnection('redis');
+            Mail::to($recipient)->queue($mail);
+            NezhaNotifyLog::record('email', 'merchant', 'new_order', 'queued', $order->id, $order->restaurant_id);
+
+            return true;
+        } catch (\Throwable $e) {
+            if ($mailKey) {
+                Cache::forget($mailKey);
+            }
+            Log::warning('merchant new order mail queue failed: '.$e->getMessage());
+
+            return false;
+        }
     }
 
     /**
@@ -2732,7 +2898,7 @@ class Helpers
     }
 
     /**
-     * 哪吒: 顾客推送偏好闸。只拦截 FCM 推送, 不影响站内信入库(站内信永远保留历史)。
+     * 哪吒: 顾客推送偏好闸。只拦截外部推送（FCM / 标准 Web Push）, 不影响站内信入库(站内信永远保留历史)。
      * 默认全开: notification_preferences 为 null/缺键 => 允许(不改变老用户行为)。
      * 游客 / 拿不到顾客模型 => 一律允许(游客无设置页)。
      * @param  \App\Models\User|null  $customer
@@ -2821,8 +2987,8 @@ class Helpers
             }
             $data = self::makeDataForPushNotification(title: $title, message: $value, orderId: $order->id, type: 'order_status', orderStatus: $order->order_status);
 
-            // 实际 FCM 推送只在有 token 时发 (iOS Safari/Chrome 不支持 Web Push, 多数顾客无 token)
-            // 哪吒: 顾客「订单进度」推送偏好闸(只拦 FCM, 站内信不受影响)。游客 $order->customer 为 null => 不拦截。
+            // 外部推送只在已有活跃 FCM token 或标准 Web Push subscription 时发送；未授权顾客仍保留站内信。
+            // 哪吒: 顾客「订单进度」推送偏好闸(只拦外部推送, 站内信不受影响)。游客 $order->customer 为 null => 不拦截。
             if (self::customerWantsPush($order->customer, 'order_progress')) {
                 self::send_push_notif_to_order_customer($order, $data);
             }

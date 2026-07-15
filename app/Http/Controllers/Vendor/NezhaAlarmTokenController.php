@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Vendor;
 use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 
 /**
  * 哪吒商家版 App —— FCM 报警 token 注册/注销。
@@ -16,13 +18,21 @@ use Illuminate\Support\Facades\Log;
  */
 class NezhaAlarmTokenController extends Controller
 {
+    private const MAX_ACTIVE_DEVICES = 20;
+
     public function register(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'token' => ['required', 'string', 'min:20', 'max:512'],
+            'platform' => ['required', 'in:android'],
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['message' => 'invalid token'], 422);
+        }
+
         try {
             $token = trim((string) $request->input('token'));
-            if ($token === '' || strlen($token) < 20) {
-                return response()->json(['message' => 'invalid token'], 422);
-            }
+            $tokenHash = hash('sha256', $token);
             // 两种守卫都返回当前餐厅; vendor_id = owner 的 vendor id = 扇出聚合键
             $restaurant = Helpers::get_restaurant_data();
             $vendorId = $restaurant?->vendor_id;
@@ -32,53 +42,75 @@ class NezhaAlarmTokenController extends Controller
             $employeeId = auth('vendor_employee')->check() ? auth('vendor_employee')->id() : null;
 
             $now = now();
-            $exists = DB::table('vendor_device_tokens')->where('fcm_token', $token)->first();
-            if ($exists) {
-                // 换账号同机登录: token 归到新店主名下并激活(防串店/前员工继续收单)
-                DB::table('vendor_device_tokens')->where('fcm_token', $token)->update([
+            DB::transaction(function () use ($employeeId, $now, $request, $token, $tokenHash, $vendorId): void {
+                DB::table('vendor_device_tokens')->upsert([[
                     'vendor_id' => $vendorId,
                     'vendor_employee_id' => $employeeId,
-                    'platform' => $request->input('platform', 'android'),
-                    'is_active' => 1,
-                    'last_seen_at' => $now,
-                    'updated_at' => $now,
-                ]);
-            } else {
-                DB::table('vendor_device_tokens')->insert([
-                    'vendor_id' => $vendorId,
-                    'vendor_employee_id' => $employeeId,
-                    'fcm_token' => $token,
-                    'platform' => $request->input('platform', 'android'),
+                    'fcm_token' => Crypt::encryptString($token),
+                    'token_hash' => $tokenHash,
+                    'platform' => $request->input('platform'),
                     'is_active' => 1,
                     'last_seen_at' => $now,
                     'created_at' => $now,
                     'updated_at' => $now,
+                ]], ['token_hash'], [
+                    'vendor_id',
+                    'vendor_employee_id',
+                    'fcm_token',
+                    'platform',
+                    'is_active',
+                    'last_seen_at',
+                    'updated_at',
                 ]);
-            }
+
+                $keptIds = DB::table('vendor_device_tokens')
+                    ->where('vendor_id', $vendorId)
+                    ->where('is_active', 1)
+                    ->orderByDesc('last_seen_at')
+                    ->orderByDesc('id')
+                    ->limit(self::MAX_ACTIVE_DEVICES)
+                    ->pluck('id');
+                DB::table('vendor_device_tokens')
+                    ->where('vendor_id', $vendorId)
+                    ->where('is_active', 1)
+                    ->when($keptIds->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $keptIds))
+                    ->update(['is_active' => 0, 'updated_at' => $now]);
+            }, 3);
 
             return response()->json(['message' => 'ok']);
         } catch (\Throwable $e) {
-            Log::info('nezha alarm token register failed: ' . $e->getMessage());
+            Log::warning('nezha alarm token register failed: '.$e->getMessage());
 
-            return response()->json(['message' => 'error'], 200); // 静默, 不让 App 因此弹错
+            return response()->json(['message' => 'registration unavailable'], 503);
         }
     }
 
     public function deregister(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'token' => ['required', 'string', 'min:20', 'max:512'],
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['message' => 'invalid token'], 422);
+        }
+
         try {
             $token = trim((string) $request->input('token'));
-            if ($token !== '') {
-                // 登出/退出账号: 停用本机 token, 该设备不再收报警(防退出后仍被吵)
-                DB::table('vendor_device_tokens')->where('fcm_token', $token)->update([
-                    'is_active' => 0,
-                    'updated_at' => now(),
-                ]);
+            $restaurant = Helpers::get_restaurant_data();
+            $vendorId = $restaurant?->vendor_id;
+            if (! $vendorId) {
+                return response()->json(['message' => 'no restaurant'], 403);
             }
+            DB::table('vendor_device_tokens')
+                ->where('vendor_id', $vendorId)
+                ->where('token_hash', hash('sha256', $token))
+                ->update(['is_active' => 0, 'updated_at' => now()]);
 
             return response()->json(['message' => 'ok']);
         } catch (\Throwable $e) {
-            return response()->json(['message' => 'ok']);
+            Log::warning('nezha alarm token deregister failed: '.$e->getMessage());
+
+            return response()->json(['message' => 'deregistration unavailable'], 503);
         }
     }
 }
