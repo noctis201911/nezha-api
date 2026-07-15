@@ -42,18 +42,22 @@ class NezhaPaymentAddressIntegrationContractTest extends TestCase
         $this->assertLessThan($commit, $consume);
     }
 
-    public function test_dormant_switches_and_maintenance_schedule_are_registered(): void
+    public function test_active_governance_switches_and_maintenance_schedule_are_registered(): void
     {
-        $switches = file_get_contents($this->path('config/nezha_switches.php'));
+        $switches = require $this->path('config/nezha_switches.php');
         $schedule = file_get_contents($this->path('bootstrap/app.php'));
         $docs = file_get_contents($this->path('docs/PRELAUNCH_SWITCHES.md'));
 
+        $registry = collect($switches['switches'])->keyBy('key');
         foreach ([
             'nezha_payment_address_credential_status',
             'nezha_payment_address_change_status',
         ] as $key) {
-            $this->assertStringContainsString($key, $switches);
+            $this->assertTrue($registry->has($key));
+            $this->assertSame('B', $registry[$key]['section']);
+            $this->assertSame(1, $registry[$key]['expected']);
             $this->assertStringContainsString($key, $docs);
+            $this->assertStringContainsString("| `{$key}` | 1 |", $docs);
         }
         $this->assertStringContainsString('nezha:payment-address-maintain', $schedule);
         $this->assertStringContainsString('nezha:payment-address-credential-retain', $schedule);

@@ -130,6 +130,18 @@ return [
             'settings_route' => null, 'ops_note' => "无专用后台开关 UI(DB flag)。{$OPS_FORGET}",
         ],
         [
+            'key' => 'nezha_payment_address_credential_status', 'label' => 'USDT 付款地址版本凭据', 'section' => 'B', 'level' => 'L1-1邻',
+            'l1_clause' => $L1['L1-1'] . '(地址快照凭据)', 'expected' => 1, 'value_type' => 'bool',
+            'prereq' => 'production 存量地址校验、客户付款页接入、网络状态初始化、migration、回滚和受控签发/复用/消费/过期 canary 已于 2026-07-15 完成；上线后保持 1',
+            'settings_route' => null, 'ops_note' => "无专用后台开关 UI(DB flag)。{$OPS_ACTIVATE}。关闭会停止新签发/强制校验，但不删除证据账本",
+        ],
+        [
+            'key' => 'nezha_payment_address_change_status', 'label' => 'USDT 收款地址受控变更状态机', 'section' => 'B', 'level' => 'L1-1邻',
+            'l1_clause' => $L1['L1-1'] . '(地址治理)', 'expected' => 1, 'value_type' => 'bool',
+            'prereq' => '双独立 TOTP 管理员、凭据闸、网络状态、申请/商户确认/独立复核的驳回/批准/恢复原地址、通知审计与回滚已于 2026-07-15 完成；上线后保持 1',
+            'settings_route' => null, 'ops_note' => "无专用后台开关 UI(DB flag)。{$OPS_ACTIVATE}。开后旧 updatePaymentInfo 不得直写 USDT；紧急权限只暂停单商家单网络，不能自批替换地址",
+        ],
+        [
             'key' => 'home_delivery', 'label' => '配送(唯一在运营的履约类型)', 'section' => 'B', 'level' => 'core',
             'expected' => 1, 'value_type' => 'bool', 'prereq' => '核心履约·上线务必开',
             'settings_route' => null, 'ops_note' => "履约类型全局开关。改后须清 business_settings_keys + all_data 两缓存键(见 [[project_fulfillment-types-live]])",
@@ -173,18 +185,6 @@ return [
         ],
 
         /* ═══ D. 未就绪/有前置——【暂不开】(expected=0, ≠0 即红) ═══ */
-        [
-            'key' => 'nezha_payment_address_credential_status', 'label' => 'USDT 付款地址版本凭据', 'section' => 'D', 'level' => 'L1-1邻',
-            'expected' => 0, 'value_type' => 'bool',
-            'prereq' => '默认关闭。真开前须①生产存量地址严格校验②客户付款页接入凭据且真机验收③地址网络状态初始化完成④迁移/影响/回滚获批。开=登录顾客取得加密地址快照凭据；不创建订单、不冻结金额',
-            'settings_route' => null, 'ops_note' => "无专用后台开关 UI(DB flag)。必须先开凭据闸、观察签发/消费，再另行批准地址变更闸；关闭不删除证据账本",
-        ],
-        [
-            'key' => 'nezha_payment_address_change_status', 'label' => 'USDT 收款地址受控变更状态机', 'section' => 'D', 'level' => 'L1-1邻',
-            'expected' => 0, 'value_type' => 'bool',
-            'prereq' => '默认关闭。真开前须①至少2个独立管理员且均启用TOTP②地址凭据闸已稳定③网络状态初始化及对拍通过④管理员申请/商家owner确认/不同管理员复核/批准后新地址立即生效/旧凭据按原到期时间继续/应急暂停真机验收⑤迁移、监控、影响和回滚再次获批',
-            'settings_route' => null, 'ops_note' => "无专用后台开关 UI(DB flag)。开后旧 updatePaymentInfo 不得直写 USDT；紧急权限只暂停单商家单网络，不能自批替换地址",
-        ],
         [
             'key' => 'nezha_preorder_status', 'label' => '预约下单/集中配送(总闸)', 'section' => 'D', 'level' => 'L2',
             'expected' => 0, 'value_type' => 'bool',

@@ -33,6 +33,8 @@
 | `nezha_kyc_sanction_screen_status` | 1 | 商家入驻 KYC 人名制裁筛查 | 🔴L1-6 |
 | `nezha_timeout_status` | 1 | 订单超时自动处理（催/取消未付单/升级） | L1-1 邻 |
 | `nezha_yandex_link_purge_status` | 1 | Yandex 链接 PII 到期清除 | L1-7 |
+| `nezha_payment_address_credential_status` | 1 | USDT 付款地址版本凭据：绑定顾客/商家/网络/方式的加密地址快照；2026-07-15 完成 migration、网络初始化及签发/复用/消费/过期 production canary 后按顺序启用。关闭不删除证据。 | L1-1 邻 |
+| `nezha_payment_address_change_status` | 1 | USDT 收款地址受控变更：旧入口禁直写，交易级 TOTP → 商户 owner 确认 → 不同管理员 TOTP 复核；2026-07-15 完成驳回、批准、恢复原地址和通知审计 production canary 后启用。 | L1-1 邻 |
 | `offline_payment`（直付） | 应开 | B方案顾客直付商家的核心付款方式（**关了没人能下单**，上线务必确认开） | 核心 |
 | `home_delivery`（配送） | 1 | 唯一在运营的履约类型 | 核心 |
 | reCAPTCHA（`recaptcha.status`）+ 邮件（`config mail.status`） | 应开 | 注册防刷 / 邮箱找回等邮件（不在 business_settings，见 config，上线确认） | — |
@@ -53,8 +55,6 @@
 
 | 开关 key | 现值 | 卡在哪 / 何时才能开 | 等级 |
 |---|---|---|---|
-| `nezha_payment_address_credential_status` | 0 | USDT 付款地址版本凭据总闸。开=登录顾客取得绑定顾客/商家/网络/方式的加密地址快照，提交凭证时只按快照核验；不创建订单、不冻结金额。真开前须严格校验存量地址、前后端同批接入、网络状态初始化、迁移演练和付款页真机验收。关闭停止新签发/强制校验，但不删除证据。 | L1-1 邻 |
-| `nezha_payment_address_change_status` | 0 | USDT 地址受控变更总闸。开后旧后台表单不能直写 USDT；正常变更必须交易级 TOTP → 商家 owner 确认完整地址 → 不同管理员交易级 TOTP → 在同一事务内让新地址立即用于后续新付款。批准前已签发的旧地址凭据只到各自原 `expires_at`，不会延长；普通换址不暂停新付款。紧急权限只暂停一个商家的一个网络并撤销未消费凭据，不能自批新地址。🔴 真开前须至少 2 个独立 TOTP 管理员、凭据闸稳定、网络状态初始化/对拍、维护命令监控、全链真机验收及逐闸授权。 | L1-1 邻 |
 | `nezha_payment_address_change_approval_ttl_min` | 1440 | 地址变更申请等待商家/复核的有效期，默认 24 小时，可调 30–10080 分钟；它只使未完成申请超时并对用户显示“已驳回（超时）”，底层保留 system/expired 审计。它不是资金地址冷静期，也不延长任何已签发凭据。 | L1-1 邻参数 |
 | `schedule_order`（全局·StackFood 平台级 business_settings） | 0 | 🔴🔴 **预约功能的隐藏前置**（0712 staging QA 抓出·prod & staging 原 `'0'` 关·**原不在本清单=被漏的坑**）。整个预约建立在它上：`Restaurant::getScheduleOrderAttribute` = `Helpers::schedule_order() ? 列值 : 0`（全局关→**所有店** schedule_order 访问器读成 false）→ `place_order` 拒所有预约单（`schedule_order_not_available`）+ 前端 `CheckoutPage` 也 gate 在 `restaurant.schedule_order`（读全局）→ **不先翻它、翻 `nezha_preorder_status` 也白搭·预约静默全死**（纯函数单测没跑真 place_order 才漏掉）。**翻 `nezha_preorder_status` 前必须先翻本项='1'**（或同批翻）。影响面仅 opt-in 预约店（每店列=1）·即时店（列=0）零影响·完全可逆。业主 2026-07-12 定 **Option A=照设计走**（保留耦合·记进本前置·不解耦）。改后须 `Cache::forget('business_settings_all_data')` + php-fpm restart。 | L2 |
 | `nezha_preorder_status` | 0 | 预约下单/集中配送**总闸**(Phase1 分阶段 dormant:M1 地基 / M2 窗口锚定时钟 / M3 取消并发锁 / M4 三态接单模式 均已上线未部署)。开=商家可选三态接单模式(即时/即时+预约/只接预约)+ 顾客选配送时段 + 作业台分组;关=三态抽屉不显、下单选窗口不透出、作业台分组隐、`nezha_accept_mode` 端点直接拒。🔴 真开前须⓪🔴**先翻全局 `schedule_order`='1'**(见上一行·不翻则预约静默全死·0712 抓出的漏掉前置)①全链 staging QA(含 M3 真并发下单 harness·**M3「复活已取消单」并发家族 bug 已修+prod live** 0712·commit `24b350a`+`a5eaacd`·harness 修后 145 轮并发 0 违规)②业主批准③前端预约 UI 6 屏截图点头④翻闸后 `php artisan cache:clear` + php-fpm **restart**(非 reload·进程内 static)。见 `fable-brief/PLAN_preorder_scheduled_delivery.md §16`。 | L2 |
