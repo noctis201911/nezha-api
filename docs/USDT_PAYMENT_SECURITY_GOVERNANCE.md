@@ -1,12 +1,45 @@
 # 哪吒 USDT 收款地址与仿冒风险治理方案
 
-状态：**资金地址规则、A＋C 正式 UI 与 reviewer V3 复核入口均已获业主批准；默认关闭的后端状态机、内部通知、管理员/商家正式 UI 及顾客地址版本凭据已在隔离分支实现，V3 reviewer UI 已接入 production backport 候选，并于 2026-07-15 完成 Fable 对版补证与业主终验 GO、正式定稿；仍未部署、未迁移、未翻闸，未修改 DNS/nginx/生产配置**
+状态：**production backport 代码、migration、CSP Report-Only 与有效网络状态初始化已于 2026-07-15 发布；两个业务功能闸仍为 `0`，尚未创建真实 reviewer 或绑定其 TOTP，也未进行真实资金/订单消费链验收，因此治理能力仍处于 dormant、未全量启用状态。**
 
-核对日期：2026-07-14（Europe/Berlin）
+核对日期：2026-07-15（Europe/Berlin）
 
 适用仓库：后端 `/www/wwwroot/api.nezha.am`、前端 `/www/wwwroot/nezha.am`
 
-## 0. 完成定义与边界
+## 0. 2026-07-15 production rollout 当前事实
+
+本节是当前状态唯一入口；下文保留的 2026-07-14 基线、候选和“未部署”表述是制定方案时的历史快照，若与本节冲突，以本节和生产只读核对为准。
+
+### 0.1 已完成
+
+- API production backport 已先整合线上 `dea5dd11` 邮件租户边界 hotfix，发布目标为 `363dedf674c29aa020d2bb472bebc09bc576b4ba`；当前 release 为 `/www/wwwroot/api-deploy/releases/20260715-061306-363dedf`，回滚锚点为 `/www/wwwroot/api-deploy/releases/20260715-042928-dea5dd1`。
+- Web 发布目标为 `2c614b960f128dcfb0dcdbcf9cb63cf9302bc628`；当前 release 为 `/www/wwwroot/web-deploy/releases/20260715-061421-2c614b9`，运行时 BUILD_ID `GIVFyeKyIoHEeGBFVRhFc`，回滚锚点为 `/www/wwwroot/web-deploy/releases/20260714-101004-2f81803`。
+- API 集成目标回归为 80 tests / 529 assertions；V3 reviewer 页 8/64、CSP 端点 8/161、生产 hotfix 隔离回归 5/51 均通过。原候选 `926173fe` 在同一依赖环境也是 80/529，因此旧交接中的 80/626 是已核实的统计漂移，不把它误报成回归下降。Web 的 payment CSP TAP 4/4、social-login SDK 1/1、付款地址脚本和 production build 均通过。
+- 2026-07-15 06:12 UTC 已生成并完成本机解密测试及 R2 同名对象核验的生产备份：数据库密文 SHA-256 `05dcc657aadd3360c2c63fda0bc8f24bdc73efa5e83f32e3bf619a992941cd50`，文件密文 SHA-256 `5133d92f14731db4bf07c37538fac9a59381da0b0ecb3ef38bbc25a8f587b281`。本文不记录备份密钥。
+- migration batch 196 已完成；凭据、网络状态、变更和事件表均存在且启用 MySQL `ENCRYPTION="Y"`。两个业务设置键唯一存在且均为 `0`：`nezha_payment_address_credential_status=0`、`nezha_payment_address_change_status=0`。
+- 18 个“商户 × 网络”组合完成 dry-run、apply、复核 dry-run 与独立对账：3 个有效组合已初始化为 `active`、version 1，15 个无效或空地址组合未伪造状态。有效组合是商户 6 的 TRC20/BEP20、商户 12 的 TRC20；商户 7–11 的 TRC20 无效，商户 7–14 的 BEP20 均为空，商户 13–14 的 TRC20 为空。
+- production 公开面已用真实 Chromium 验收：`/home` 与 `/checkout` 在 1440×1024、390×844 均无横向溢出，结算空态可返回首页，控制台 0 error；首页只有既有 Firebase 通知权限未授予 warning。`/checkout` 200，Report-Only CSP 已生效且移除 `'unsafe-eval'`，报告地址为 API 的脱敏 CSP endpoint；现行 enforce CSP 未在本轮收紧。
+- 发布后 API/Web health、PM2、队列、MySQL/Redis/PHP-FPM/nginx 与 COD=off 均复核正常；后台无 HTTP Basic 时仍返回 401。
+
+### 0.2 仍未完成，禁止误报为全量启用
+
+- 生产只有 1 个已启用 TOTP 的 superadmin，没有独立 reviewer。尚未取得 reviewer 的真实姓名、登录邮箱、电话、初始密码安全交付对象、TOTP 绑定人在场窗口、恢复码托管人及现有 nginx HTTP Basic 的受控交付方式；不得编造身份、二维码、secret 或恢复码。
+- 商户 7–11 的 TRC20 当前无效。它们现时均非 active，不会立即打断真实订单；但以后重新激活商户并开启 credential 闸时会 fail-closed。业主必须先确认接受该行为，或协调商户把真实地址改为有效值。
+- 过去 90 天共有 44 笔订单、32 条仍保留 payment_info 的线下付款记录，但真实 USDT 凭证提交为 0；credential 表为 0 行，新 endpoint 上线后请求为 0。当前只能得到低流量代理，尚没有真实日签发量，不能把行大小估算或支付宝线下单数量冒充容量验收。
+- production 凭据“消费”只能由登录顾客对真实订单提交真实 USDT 付款凭证触发。不得在未实际付款时点击“已付款”，不得擅自创建假订单/假 proof。业主需在真实小额付款、明确授权可识别且可回滚的 production 测试数据、或接受 production 消费链保持未验证三者中作出裁决。
+- 真实申请管理员、独立 reviewer、商户 owner、已登录顾客、不同于当前值的商户自有有效地址、通知实际接收人和在场事故联系人尚未具备。队列成功只表示任务执行，不等于邮件/Telegram/push 已送达；必须由真实接收人确认。
+- 因上述硬门槛，V3 reviewer production 页面、申请→商户确认→不同管理员批准/驳回、credential 消费/订单回显、通知送达、真实日签发容量和两个闸的顺序开启尚未验收。当前没有地址变更、订单写入、资金动作或 reviewer 账户写入。
+
+### 0.3 下一执行顺序与异常回退
+
+1. 业主补齐真实 reviewer/TOTP/HTTP Basic 安全交付和受控测试对象，并裁决商户 7–11 无效 TRC20 与 production 真实消费验收方式。
+2. 创建独立 reviewer，现场绑定强制 TOTP 并交付恢复码；先完成 dormant 后台 V3 UI 与权限隔离浏览器验收。
+3. 仅在真实对象就绪后开启 credential 闸，观察签发、复用、消费、过期、订单回显、容量和通知；凭据链稳定后再开启 change 闸并执行申请、商户确认、独立 reviewer 批准/驳回。
+4. 任一步异常先关闭 change 闸，再按影响关闭 credential 闸并清理 business settings cache；需要代码回退时把 API/Web `current` 切回 0.1 所列锚点。不得逆向 migration、删表、删除凭据/状态/审计行或写回旧地址。
+
+## A. 方案制定阶段的完成定义与历史边界
+
+以下内容记录 2026-07-14 制定方案时的边界，不是 2026-07-15 production 当前状态。
 
 本文完成时应同时满足：
 
@@ -81,7 +114,7 @@
 - 位置/证据：生产 `Content-Security-Policy`；nginx 的 `extension/nezha.am/security_headers.conf` 与宝塔 proxy 生成配置。
 - 影响：若页面另有注入点，`unsafe-inline`、`unsafe-eval` 和过宽第三方来源会扩大脚本执行与数据外传空间；付款地址属于高价值 DOM 内容。
 - 修复：先 Report-Only，再按付款路由移除未使用第三方、消除 `unsafe-eval`、以 nonce/hash 替代内联放行、加入 `frame-ancestors 'none'`，最终强制执行。
-- 隔离候选（2026-07-14，未部署）：Web 独立分支已为 `/checkout`、`/info`、`/tracking` 构造 `Content-Security-Policy-Report-Only`；初始策略保留现行 host 与 `'unsafe-inline'`，移除 `'unsafe-eval'`，补 `frame-ancestors 'none'`、`worker-src 'self'`、`manifest-src 'self'`。API 独立分支新增仅 POST 的报告端，限制 16 KiB、60/分钟与 600/小时、10 分钟去重，只记录脱敏后的路由/来源 origin/指令/行列/状态；不记录 query、fragment、cookie、referrer、script sample、订单号或完整地址。现行 enforce、nginx、Cloudflare 与生产响应均未改变。
+- production 状态（2026-07-15）：Web 已为 `/checkout`、`/info`、`/tracking` 启用 `Content-Security-Policy-Report-Only`；策略保留现行 host 与 `'unsafe-inline'`，移除 `'unsafe-eval'`，补 `frame-ancestors 'none'`、`worker-src 'self'`、`manifest-src 'self'`。API 的仅 POST 报告端已发布，仍按 16 KiB、60/分钟与 600/小时、10 分钟去重，并只记录脱敏字段。现行 enforce、nginx 与 Cloudflare 未在本轮更改。
 - 暂时缓解：保留 `object-src 'none'`、`base-uri 'self'`、`form-action 'self'`，监控前端依赖和第三方配置变化。
 - 误报边界：宽 CSP 不是“已经发生 XSS”的证据；它是关键页面防御纵深不足。
 
@@ -91,7 +124,7 @@
 - 位置/证据：前端 `pages/_document.js` 中 Google GSI、Apple 登录及多家分析脚本分支。
 - 影响：付款页面承担不必要的第三方供应链、隐私和 CSP 放行成本；未来启用分析配置时，付款路由会随之扩权。
 - 修复：社交登录脚本只在实际登录动作或登录页懒加载；分析脚本明确排除结算、付款、订单凭据展示路由。
-- 隔离候选（2026-07-14，未部署）：Google GSI 与 Apple ID SDK 已从全站 `_document` 移到登录组件按需单次加载；即使 analytics API 返回非空配置，付款路由也不请求或渲染广告/分析脚本。是否在真实登录动作、地图、Firebase/PWA 与 Cloudflare JS Detection 下兼容，仍须部署前后按 Playbook 分阶段验证。
+- production 状态（2026-07-15）：Google GSI 与 Apple ID SDK 已从全站 `_document` 移到登录组件按需单次加载；即使 analytics API 返回非空配置，付款路由也不请求或渲染广告/分析脚本。公开 `/home`、`/checkout` 与 social-login SDK 回归已通过；真实登录动作、地图、Firebase/PWA 与 Cloudflare JS Detection 的完整生产兼容仍应继续观察。
 - 暂时缓解：当前分析配置为空时维持关闭，并增加配置变更验收。
 - 误报边界：已列出的脚本是官方来源，不等同于恶意脚本；风险来自不必要的高权限加载范围。
 
@@ -142,7 +175,7 @@
 - 状态至少为 `issued|consumed|expired|revoked`；
 - 保留已消费记录作为订单证据，不因地址切换删除。
 
-用户 2026-07-14 已批准凭据复用与分层留存；隔离实现按以下固定规则处理。生产尚未运行该迁移，因此目前没有这张表造成的生产容量压力：
+用户 2026-07-14 已批准凭据复用与分层留存；production 已于 2026-07-15 运行该 migration，但两个闸仍关闭、凭据表仍为 0 行。真实日签发量尚未产生，因此容量门槛仍未完成：
 
 - 未消费且已过期/已撤销的凭据：从过期/撤销时刻起保存 30 天，之后清除加密地址快照和 secret 哈希，只留绑定、地址指纹、状态与时间等不含地址的审计；
 - 已消费凭据：随其绑定订单/财务证据的正式留存周期保留，不能先于订单证据删除；
@@ -233,7 +266,7 @@ active(A)
 - `payment_address_review` 是独占角色模块，不能与 `restaurant`、`payment_address_manage` 或其它模块组合；其数据面只返回 `pending_distinct_admin` 队列、单条待复核详情、批准和驳回动作。
 - reviewer 即使因历史脏数据被误配其它模块，仍由全局 scope 限制：未完成 2FA 注册时只允许 setup、enable、语言切换、仅修改本人密码的设置页和退出；完成注册且当前会话通过第二因子后，只允许 pending/show/approve/reject、语言切换、仅修改本人密码的设置页、2FA 状态/恢复码页和退出，不能关闭 2FA。
 - 餐厅 CRUD、旧 `updatePaymentInfo` 地址直改、押金充值、汇率、折扣、申请、取消和暂停均不属于 reviewer；超管仍由既有 `role_id=1` 旁路处理，但地址批准继续受“请求人不得自批”和交易级 TOTP 约束。
-- reviewer 正式 UI 以 2026-07-14 业主确认的 V3 规格与 18 张基准图为准：复用生产后台真实顶栏、侧栏和工作台 token，独占 reviewer 侧栏只保留“钱·风控 / 收款地址复核”，隐藏已拍板的首页/洞察与页头四入口；队列只手动刷新或动作后刷新，不轮询，不回显驳回通知渠道结果。页面的 2FA 状态 pill 读取当前管理员真值；未启用时显示琥珀告警、沿用控制器原句说明原因，并禁用交易级动态码与批准/驳回。业主随后批准壳层闭环：reviewer logo 与登录 2FA challenge 成功落到复核队列，账户菜单只保留修改密码/退出，设置页只显示修改密码，页脚 Business setup/Profile/Dashboard 与已启用后的关闭 2FA 入口隐藏；首次绑定、恢复码保存、语言切换、修改密码和退出仍保留。V3 已接入 production backport 候选；Fable 唯一阻断证据（移动 401 错误态取景）补拍后按其“补上即转 GO”结论通过，业主于 2026-07-15 终验回复 GO，V3 UI 正式定稿。该 GO 不含生产动作授权；未创建或修改生产角色/管理员，未部署、未迁移、未初始化、未翻闸。
+- reviewer 正式 UI 以 2026-07-14 业主确认的 V3 规格与 18 张基准图为准：复用生产后台真实顶栏、侧栏和工作台 token，独占 reviewer 侧栏只保留“钱·风控 / 收款地址复核”，隐藏已拍板的首页/洞察与页头四入口；队列只手动刷新或动作后刷新，不轮询，不回显驳回通知渠道结果。页面的 2FA 状态 pill 读取当前管理员真值；未启用时显示琥珀告警、沿用控制器原句说明原因，并禁用交易级动态码与批准/驳回。业主随后批准壳层闭环：reviewer logo 与登录 2FA challenge 成功落到复核队列，账户菜单只保留修改密码/退出，设置页只显示修改密码，页脚 Business setup/Profile/Dashboard 与已启用后的关闭 2FA 入口隐藏；首次绑定、恢复码保存、语言切换、修改密码和退出仍保留。V3 已接入 production release；Fable 唯一阻断证据（移动 401 错误态取景）补拍后按其“补上即转 GO”结论通过，业主于 2026-07-15 终验回复 GO，V3 UI 正式定稿。代码、migration 和有效网络初始化已发布，但真实 reviewer 尚未创建、TOTP 尚未绑定、后台 V3 页尚未做 production 登录终验，两个闸仍关闭。
 
 ### 3.4 应急流程
 
