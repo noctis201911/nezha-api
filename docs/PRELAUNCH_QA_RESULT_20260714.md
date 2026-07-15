@@ -54,7 +54,7 @@
 - Web：`17c64e3`（含安装实例提交 `5e7c462`）；安装实例/容器矩阵 `9/9` 通过，Next `15.5.20` production build exit 0。build 期间用 ignored 空 `src/utils/staticCredentials.js` 仅补齐本地编译依赖并在完成后删除；默认 API 域名 `yourdomain.com` 的 TLS 主机名不匹配产生预渲染 warning。`npm audit` 仍报 2 个 moderate，来自 Next 依赖链中的 `postcss@8.4.31`；未采用会把 Next 强制降到 9.3.3 的破坏性建议。
 - 商家 Android App：`cac9975`；JDK 21 / Android SDK 下 `testDebugUnitTest assembleDebug lintDebug` BUILD SUCCESSFUL，但 unit test 多为 `NO-SOURCE`，不冒充实质单测。lint `0 errors / 43 warnings`，XML `14/14` 可解析；debug APK 5,308,815 B，SHA-256 `EAF8F71E9AFC5202B37B90EDF034B834C93F99E802AEB467E8A8C7BC48BD6AA0`。Manifest 不含 `RECEIVE_BOOT_COMPLETED` 或 `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`，`allowBackup=false`，云备份/D2D 规则排除凭据和设备域。
 - 本轮实际关闭：多安装实例、token rebinding/rotation/logout、App 有界重试/refresh、容器路由等本地代码语义，以及编译、lint、静态权限和备份规则子门。
-- 本轮没有关闭：本地通知分支新增 2 个 API migration；production 运行记录；Firebase `google-services` 配置；release signing；Play full-screen intent/`specialUse` 声明与审核；物理 Android/iPhone、D1–D6、商家 App；真实 FCM/邮件/Telegram 回执；外部专业报告。Firebase 配置缺失使当前 APK 只能证明可编译，不能作为可用 FCM 测试包。
+- 本轮没有关闭：本地通知分支新增 2 个 API migration；production 运行记录；Firebase `google-services` 配置；release signing；Play full-screen intent/`specialUse` 声明与审核；物理 Android/iPhone、D1–D6、商家 App；真实 FCM/邮件/Telegram 回执；外部专业报告。相对 `origin/main` 共出现 3 个 migration 文件 diff，其中 2 个为新增 schema migration，既有 `create_vendor_alert_outbox` 文件的第三处差异只改状态注释、无可执行/schema 变化。Firebase 配置缺失使当前 APK 只能证明可编译，不能作为可用 FCM 测试包。
 - 店 12 属于朋友且尚未正式真实经营，不能作为真实商家/收款/履约证据。内部 owner 无需向 Codex 提交实名；本轮外部材料 0 件，可验附件 SHA-256、实名/角色/机构、签署日期时间/时区仍全部为 0。
 - B1 的五份 `PRELAUNCH_B1_*` 文档和内容快照 `fc026a78130709ce13af356914ce01c50000d866` 保持不动。固定 B1 API/Web SHA 仍是历史签收对象；R2 是尚未部署的新本地集成，不能把两者混称同一上线候选。production 继续 **NO-GO**。
 
