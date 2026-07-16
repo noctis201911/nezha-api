@@ -28,6 +28,7 @@ class NezhaDirectPayRefundStageTest extends TestCase
                 $table->timestamp('merchant_refunded_at')->nullable();
                 $table->string('merchant_refund_note')->nullable();
                 $table->string('refund_tx_hash', 120)->nullable();
+                $table->string('locked_to_address', 120)->nullable();
                 $table->string('chain_verify_status', 20)->default('na');
                 $table->timestamps();
             });
@@ -53,11 +54,14 @@ class NezhaDirectPayRefundStageTest extends TestCase
             'refund_amount' => 88.50,
         ]);
 
-        $projection = $record->customerProjection();
+        $projection = $record->fresh()->customerProjection();
 
         $this->assertSame('pending_merchant_refund', $projection['status']);
         $this->assertFalse($projection['refunded']);
         $this->assertNull($projection['merchant_refunded_at']);
+        $this->assertNull($projection['refund_tx_hash']);
+        $this->assertNull($projection['locked_to_address']);
+        $this->assertSame('na', $projection['chain_verify_status']);
     }
 
     public function test_only_first_pending_to_refunded_transition_wins(): void
@@ -68,19 +72,24 @@ class NezhaDirectPayRefundStageTest extends TestCase
             'status' => 'pending_merchant_refund',
             'payment_channel' => 'usdt',
             'refund_amount' => 25,
+            'locked_to_address' => 'TAddressForCustomerRefundEvidence123456',
         ]);
 
         $first = NezhaRefundRecord::transitionPendingToMerchantRefunded($pending->id, [
             'merchant_refund_note' => 'merchant confirmed',
             'refund_tx_hash' => 'safe-test-hash',
-            'chain_verify_status' => 'unverified',
+            'chain_verify_status' => 'verified',
         ], 10);
         $repeat = NezhaRefundRecord::transitionPendingToMerchantRefunded($pending->id, [], 10);
 
         $this->assertNotNull($first);
         $this->assertSame('merchant_refunded', $first->status);
         $this->assertNotNull($first->merchant_refunded_at);
-        $this->assertTrue($first->customerProjection()['refunded']);
+        $projection = $first->customerProjection();
+        $this->assertTrue($projection['refunded']);
+        $this->assertSame('safe-test-hash', $projection['refund_tx_hash']);
+        $this->assertSame('TAddressForCustomerRefundEvidence123456', $projection['locked_to_address']);
+        $this->assertSame('verified', $projection['chain_verify_status']);
         $this->assertNull($repeat, 'A repeated action must not win the transition or become eligible to notify again.');
     }
 

@@ -72,6 +72,9 @@ class NezhaRefundRecord extends Model
             'customer_confirmed'   => (bool) $this->customer_confirmed,
             'confirmed_at'         => $this->customer_confirmed_at ? (string) $this->customer_confirmed_at : null,
             'merchant_refunded_at' => $this->merchant_refunded_at ? (string) $this->merchant_refunded_at : null,
+            'refund_tx_hash'       => $this->refund_tx_hash,
+            'locked_to_address'    => $this->locked_to_address,
+            'chain_verify_status'  => $this->chain_verify_status,
         ];
     }
 
