@@ -7,10 +7,13 @@ use App\Models\DataSetting;
 use App\Models\Translation;
 use Illuminate\Http\Request;
 use App\CentralLogics\Helpers;
+use App\CentralLogics\NezhaPromotionalBanner;
 use App\Http\Controllers\Controller;
 use Brian2694\Toastr\Facades\Toastr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
 class BannerController extends Controller
 {
@@ -197,74 +200,182 @@ class BannerController extends Controller
     public function promotional_banner(){
         $banner_title =  DataSetting::where('type','promotional_banner')->where('key' ,'promotional_banner_title')->withoutGlobalScope('translate')->with('translations')->first();
         $banner_image =  DataSetting::where('type','promotional_banner')->where('key', 'promotional_banner_image')->withoutGlobalScope('translate')->with('translations')->first();
-        return view('admin-views.banner.promotional_banner', compact('banner_title','banner_image'));
+        $banner_status = DataSetting::where('type', 'promotional_banner')
+            ->where('key', 'promotional_banner_status')
+            ->withoutGlobalScope('translate')
+            ->first();
+
+        return view('admin-views.banner.promotional_banner', compact('banner_title', 'banner_image', 'banner_status'));
     }
 
     public function promotional_banner_update(Request $request){
 
-        $request->validate([
-            'promotional_banner_title.*' => 'max:191',
-            'promotional_banner_title.0'=>'required',
-            'promotional_banner_image' => 'nullable|mimes:'.IMAGE_FORMAT_FOR_VALIDATION.'|max:2048',
-        ], [
-            'promotional_banner_title.required' => translate('messages.Title is required!'),
-            'promotional_banner_title.0.required'=>translate('default_Title_is_required'),
+        $validated = $request->validate([
+            'promotional_banner_status' => 'required|in:0,1',
+        ]);
+        $request->merge([
+            'promotional_banner_status' => (string) $validated['promotional_banner_status'],
         ]);
 
-        if( $request->has('promotional_banner_image')){
-            $banner = DataSetting::firstOrNew(
-                ['key' =>  'promotional_banner_image',
-                'type' =>  'promotional_banner'],
-            );
-            $banner->value=   Helpers::update(dir:'banner/',old_image: $banner->value, format:'png', image: $request->file('promotional_banner_image'));
-            $banner->save();
+        $defaultTitle = null;
+        if ($request->promotional_banner_status === '1') {
+            $request->validate([
+                'promotional_banner_title' => 'required|array',
+                'promotional_banner_title.*' => 'nullable|string|max:191',
+                'promotional_banner_title.0' => 'required',
+                'lang' => 'required|array',
+                'lang.*' => 'string',
+                'promotional_banner_image' => 'nullable|mimes:'.IMAGE_FORMAT_FOR_VALIDATION.'|max:2048',
+            ], [
+                'promotional_banner_title.required' => translate('messages.Title is required!'),
+                'promotional_banner_title.0.required' => translate('default_Title_is_required'),
+            ]);
+            $defaultIndex = array_search('default', $request->lang, true);
+            if ($defaultIndex === false) {
+                throw ValidationException::withMessages([
+                    'promotional_banner_title.0' => translate('default_Title_is_required'),
+                ]);
+            }
+            $defaultTitle = $request->promotional_banner_title[$defaultIndex];
         }
 
-        // dd($request->all());
-        $this->update_data($request , 'promotional_banner_title','promotional_banner_title' );
+        if ($request->promotional_banner_status === '1'
+            && ! NezhaPromotionalBanner::hasPublishableTitle($defaultTitle)) {
+            throw ValidationException::withMessages([
+                'promotional_banner_title.0' => translate('messages.invalid_data'),
+            ]);
+        }
+
+        if ($request->promotional_banner_status === '1' && ! $request->hasFile('promotional_banner_image')) {
+            $imageSetting = DataSetting::where('type', 'promotional_banner')
+                ->where('key', 'promotional_banner_image')
+                ->withoutGlobalScope('translate')
+                ->first();
+            $storage = $imageSetting?->storage[0]?->value ?? 'public';
+
+            if (! NezhaPromotionalBanner::imageExists($imageSetting?->getRawOriginal('value'), $storage)) {
+                throw ValidationException::withMessages([
+                    'promotional_banner_image' => translate('messages.invalid_data'),
+                ]);
+            }
+        }
+
+        $newImage = null;
+        $newImageStorage = null;
+        if ($request->promotional_banner_status === '1'
+            && $request->hasFile('promotional_banner_image')) {
+            $oldImage = DataSetting::where('type', 'promotional_banner')
+                ->where('key', 'promotional_banner_image')
+                ->withoutGlobalScope('translate')
+                ->first()?->getRawOriginal('value');
+            $newImage = Helpers::update(
+                dir: 'banner/',
+                old_image: $oldImage,
+                format: 'png',
+                image: $request->file('promotional_banner_image')
+            );
+            $newImageStorage = Helpers::getDisk();
+        }
+
+        DB::transaction(function () use ($request, $defaultTitle, $newImage, $newImageStorage): void {
+            if ($request->promotional_banner_status === '1') {
+                $titleIds = $this->updateMatchingDataSettingRows(
+                    'promotional_banner_title',
+                    $defaultTitle
+                );
+                $this->updateDataSettingTranslations(
+                    $request,
+                    $titleIds,
+                    'promotional_banner_title'
+                );
+
+                if ($newImage !== null) {
+                    $imageIds = $this->updateMatchingDataSettingRows(
+                        'promotional_banner_image',
+                        $newImage
+                    );
+                    foreach ($imageIds as $imageId) {
+                        DB::table('storages')->updateOrInsert([
+                            'data_type' => DataSetting::class,
+                            'data_id' => $imageId,
+                        ], [
+                            'value' => $newImageStorage,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                    }
+                }
+            }
+
+            $this->updateMatchingDataSettingRows(
+                'promotional_banner_status',
+                $request->promotional_banner_status
+            );
+        });
+        NezhaPromotionalBanner::forgetLegacyCache();
         Toastr::success(translate('messages.banner_updated_successfully'));
         return back();
 
     }
 
+    private function updateMatchingDataSettingRows(string $key, ?string $value): array
+    {
+        $query = DB::table('data_settings')
+            ->where('type', 'promotional_banner')
+            ->where('key', $key);
+        $ids = $query->lockForUpdate()->pluck('id')->all();
+        $timestamp = now();
 
-    private function update_data($request, $key_data, $name_field , $type = 'promotional_banner' ){
-        $data = DataSetting::firstOrNew(
-            ['key' =>  $key_data,
-            'type' =>  $type],
-        );
-// dd($request->{$name_field}[array_search('default', $request->lang)]);
-        $data->value = $request->{$name_field}[array_search('default', $request->lang)];
-        $data->save();
+        if ($ids === []) {
+            $ids[] = DB::table('data_settings')->insertGetId([
+                'type' => 'promotional_banner',
+                'key' => $key,
+                'value' => $value,
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
+            ]);
+        } else {
+            DB::table('data_settings')
+                ->whereIn('id', $ids)
+                ->update([
+                    'value' => $value,
+                    'updated_at' => $timestamp,
+                ]);
+        }
+
+        return $ids;
+    }
+
+
+    private function updateDataSettingTranslations(Request $request, array $dataSettingIds, string $translationKey): void
+    {
         $default_lang = str_replace('_', '-', app()->getLocale());
-        foreach ($request->lang as $index => $key) {
-            if ($default_lang == $key && !($request->{$name_field}[$index])) {
-                if ($key != 'default') {
-                    Translation::updateOrInsert(
+        foreach ($request->lang as $index => $lang) {
+            foreach ($dataSettingIds as $dataSettingId) {
+                if ($default_lang == $lang && ! $request->promotional_banner_title[$index]) {
+                    if ($lang != 'default') {
+                        DB::table('translations')->updateOrInsert(
+                            [
+                                'translationable_type' => DataSetting::class,
+                                'translationable_id' => $dataSettingId,
+                                'locale' => $lang,
+                                'key' => $translationKey,
+                            ],
+                            ['value' => $request->promotional_banner_title[array_search('default', $request->lang)]]
+                        );
+                    }
+                } elseif ($request->promotional_banner_title[$index] && $lang != 'default') {
+                    DB::table('translations')->updateOrInsert(
                         [
-                            'translationable_type' => 'App\Models\DataSetting',
-                            'translationable_id' => $data->id,
-                            'locale' => $key,
-                            'key' => $key_data
+                            'translationable_type' => DataSetting::class,
+                            'translationable_id' => $dataSettingId,
+                            'locale' => $lang,
+                            'key' => $translationKey,
                         ],
-                        ['value' => $data->value]
-                    );
-                }
-            } else {
-                if ($request->{$name_field}[$index] && $key != 'default') {
-                    Translation::updateOrInsert(
-                        [
-                            'translationable_type' => 'App\Models\DataSetting',
-                            'translationable_id' => $data->id,
-                            'locale' => $key,
-                            'key' => $key_data
-                        ],
-                        ['value' => $request->{$name_field}[$index]]
+                        ['value' => $request->promotional_banner_title[$index]]
                     );
                 }
             }
         }
-
-        return true;
     }
 }
