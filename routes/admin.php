@@ -168,6 +168,8 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
         Route::group(['prefix' => 'nezha-consolidation', 'as' => 'nezha-consolidation.'], function () {
             Route::get('/', [NezhaConsolidationController::class, 'index'])->name('index');
             Route::get('export', [NezhaConsolidationController::class, 'export'])->name('export');
+            // 集运资格切换(运营手动逐家开通)。放在裸 {id} 之前; POST 与 GET {id} 不冲突, 顺序仍按纪律排。
+            Route::post('eligible/{id}', [NezhaConsolidationController::class, 'toggleEligible'])->name('toggle-eligible');
             Route::get('{id}', [NezhaConsolidationController::class, 'show'])->name('show');
         });
 

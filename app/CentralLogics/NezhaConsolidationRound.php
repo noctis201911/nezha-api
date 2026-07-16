@@ -34,10 +34,36 @@ class NezhaConsolidationRound
     /** 费用声明逐字文案(对外红线: 不做置身事外标榜, 也不下未来收费的反向承诺)。 */
     public const FEE_NOTE = '本期集运费用请与货代直接结算，联系方式见上。';
 
+    /** 每店「集运资格」列(运营在后台逐家手动开·业主 2026-07-16 定)。默认 0=未开通。 */
+    public const ELIGIBLE_COL = 'nezha_consolidation_eligible';
+
+    /** hasColumn 结果按请求缓存(fpm 下 static 每请求重置), 避免侧栏/门禁每次调用都打 information_schema。 */
+    private static ?bool $hasEligibleCol = null;
+
     /** 总闸。关=vendor 端期次/报名整体零透出; admin 端始终可用(运营先建期次备货)。 */
     public static function enabled(): bool
     {
         return (bool) (BusinessSetting::where('key', self::SWITCH_KEY)->first()?->value ?? 0);
+    }
+
+    /**
+     * 该 vendor 名下门店是否有「集运资格」(运营手动标记)。
+     * 🔴 集运仅面向经营达标的深度合作商家(v1 问卷页现行文案即声明「定向开放」), 故 **报名入口/报名动作/开期通知** 按本判定收口。
+     * 提示卡与 v1 问卷**不受此限**(需求摸底面向全体, 收死会让货量样本变少反谈不动货代 —— 业主 2026-07-16 裁决)。
+     * fail-closed: 列未建(部署窗口)或取不到一律 false —— 宁可不放, 不可误放。
+     */
+    public static function eligibleByVendor($vendorId): bool
+    {
+        if (!$vendorId) {
+            return false;
+        }
+        if (self::$hasEligibleCol === null) {
+            self::$hasEligibleCol = Schema::hasColumn('restaurants', self::ELIGIBLE_COL);
+        }
+        if (!self::$hasEligibleCol) {
+            return false;
+        }
+        return (bool) DB::table('restaurants')->where('vendor_id', $vendorId)->value(self::ELIGIBLE_COL);
     }
 
     /** 生成期次号 YYYYMM-N(当月递增序号)。 */

@@ -119,8 +119,9 @@
                         </a>
                     </li>
 
-                    {{-- 哪吒 集运期次报名(包2·B·dormant): 总闸开才显(闸关零透出) --}}
-                    @if(\App\CentralLogics\NezhaConsolidationRound::enabled())
+                    {{-- 哪吒 集运期次报名(包2·B·dormant): 总闸开 **且** 本店有集运资格(运营手动开通)才显; 否则零透出。
+                         集运仅面向经营达标的深度合作商家(业主 2026-07-16)。控制器另有 404 硬门, 侧栏这层只是不给入口。 --}}
+                    @if(\App\CentralLogics\NezhaConsolidationRound::enabled() && \App\CentralLogics\NezhaConsolidationRound::eligibleByVendor(\App\CentralLogics\Helpers::get_vendor_id()))
                     <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/nezha-consolidation-rounds*')?'active':''}}">
                         <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{route('vendor.nezha-consolidation-rounds.index')}}" title="{{translate('集运期次报名')}}">
                             <i class="tio-shopping-cart nav-icon"></i>

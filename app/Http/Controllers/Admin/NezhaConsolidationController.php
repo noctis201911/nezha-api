@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\CentralLogics\NezhaConsolidationRound;
 use App\Http\Controllers\Controller;
 use App\Models\Restaurant;
+use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * 哪吒 平台集运申报 — 管理端需求汇总。
@@ -87,8 +90,13 @@ class NezhaConsolidationController extends Controller
             }
         }
         $nameMap = Restaurant::whereIn('id', $rids ?: [0])->pluck('name', 'id')->all();
+        // 集运资格(运营手动标记): 收口报名入口/报名动作/开期通知。列未建时全按未开通显示。
+        $hasElig = Schema::hasColumn('restaurants', NezhaConsolidationRound::ELIGIBLE_COL);
+        $eligMap = $hasElig
+            ? Restaurant::whereIn('id', $rids ?: [0])->pluck(NezhaConsolidationRound::ELIGIBLE_COL, 'id')->all()
+            : [];
 
-        $list = $surveys->map(function ($s) use ($gmvMap, $nameMap, $rowMetrics) {
+        $list = $surveys->map(function ($s) use ($gmvMap, $nameMap, $rowMetrics, $eligMap) {
             $g = $gmvMap[$s->restaurant_id] ?? ['gmv' => 0.0, 'cnt' => 0];
             $s->rname = $nameMap[$s->restaurant_id] ?? ('Vendor #' . $s->vendor_id);
             $s->gmv90 = $g['gmv'];
@@ -97,6 +105,7 @@ class NezhaConsolidationController extends Controller
             $s->est_vol = $rowMetrics[$s->id]['vol'] ?? 0.0;
             $s->est_wt = $rowMetrics[$s->id]['wt'] ?? 0.0;
             $s->stale = \App\CentralLogics\NezhaConsolidation::isStale($s->updated_at); // A-3: >90天数据陈旧标记
+            $s->eligible = (bool) ($eligMap[$s->restaurant_id] ?? false);              // 集运资格(运营手动标记)
             return $s;
         });
         if ($intentFilter) {
@@ -107,10 +116,14 @@ class NezhaConsolidationController extends Controller
 
         // A-2 未填名单: 全体 restaurants 减去已提交 vendor, 供运营定向联系(店名/电话/近90天成交/状态)。仅管理端可见, 不进任何对外物料。
         $submittedVendorIds = $surveys->pluck('vendor_id')->filter()->unique()->values()->all();
+        $unfilledCols = ['id', 'name', 'phone', 'vendor_id', 'status'];
+        if ($hasElig) {
+            $unfilledCols[] = NezhaConsolidationRound::ELIGIBLE_COL;
+        }
         $unfilled = Restaurant::when(!empty($submittedVendorIds), function ($q) use ($submittedVendorIds) {
                 $q->whereNotIn('vendor_id', $submittedVendorIds);
             })
-            ->select('id', 'name', 'phone', 'vendor_id', 'status')
+            ->select($unfilledCols)
             ->orderBy('name')->get();
         $ufRids = $unfilled->pluck('id')->filter()->values()->all();
         $ufGmv = [];
@@ -126,10 +139,33 @@ class NezhaConsolidationController extends Controller
         }
         $unfilledList = $unfilled->map(function ($r) use ($ufGmv) {
             $r->gmv90 = $ufGmv[$r->id] ?? 0.0;
+            $r->eligible = (bool) ($r->{NezhaConsolidationRound::ELIGIBLE_COL} ?? false);
             return $r;
         })->values();
 
         return view('admin-views.nezha-consolidation.index', compact('kpi', 'catAgg', 'freqAgg', 'list', 'intentFilter', 'sort', 'unfilledList'));
+    }
+
+    /**
+     * 切换某门店的「集运资格」(运营手动逐家标记·业主 2026-07-16 定)。
+     * 🔴 集运仅面向经营达标的深度合作商家: 开=该店可见期次卡/可报名/收开期通知; 关=报名入口直接 404 且不收通知。
+     * 提示卡与 v1 问卷**不受本列限制**(需求摸底面向全体, 收死会让货量样本变少反谈不动货代)。
+     */
+    public function toggleEligible($id)
+    {
+        $col = NezhaConsolidationRound::ELIGIBLE_COL;
+        if (!Schema::hasColumn('restaurants', $col)) {
+            Toastr::warning(translate('集运资格列尚未建，请先部署迁移'));
+            return back();
+        }
+        $r = Restaurant::select('id', 'name', $col)->find($id);
+        if (!$r) {
+            abort(404);
+        }
+        $next = $r->{$col} ? 0 : 1;
+        Restaurant::where('id', $id)->update([$col => $next]);
+        Toastr::success(($next ? translate('已开通集运资格') : translate('已关闭集运资格')) . '：' . $r->name);
+        return back();
     }
 
     public function show($id)

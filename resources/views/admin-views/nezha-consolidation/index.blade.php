@@ -101,6 +101,15 @@
                 </select>
             </form>
         </div>
+        {{-- 集运资格说明(运营须知): 集运仅面向经营达标的深度合作商家, 逐家手动开通 --}}
+        <div class="px-3 pt-3">
+            <p class="text-muted mb-0" style="font-size:12px;line-height:1.7;">
+                <i class="tio-info-outined"></i>
+                {{ translate('「集运资格」= 运营逐家手动开通（默认全关）。只有已开通的商家：能看到期次卡、能报名、会收到开期通知；未开通的商家即使直连报名页也会 404。参考左侧「近90天平台成交」判断是否为经营达标的深度合作商家。') }}
+                <br>
+                {{ translate('注：商家后台首页的登记提示卡与本需求问卷面向全体商家开放（用于摸底货量，样本越多越谈得动货代），不受本开关限制。') }}
+            </p>
+        </div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover table-borderless table-thead-bordered table-align-middle card-table">
@@ -110,6 +119,7 @@
                             <th>{{ translate('品类 / 频率 / 货量') }}</th>
                             <th class="text-right">{{ translate('近90天平台成交') }}</th>
                             <th>{{ translate('意向') }}</th>
+                            <th class="text-center">{{ translate('集运资格') }}</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -129,10 +139,20 @@
                                 <td><small class="text-muted">{{ implode(' · ', $s->cat_list) }} · {{ translate($freqLabel[$s->frequency] ?? ($s->frequency ?: '—')) }} · {{ $est }}</small></td>
                                 <td class="text-right">{{ $fmt($s->gmv90) }}<div class="small text-muted">{{ $s->cnt90 }} {{ translate('单') }}</div></td>
                                 <td><span class="badge {{ $intentCls[$s->intent] ?? 'badge-soft-secondary' }}">{{ translate($intentLabel[$s->intent] ?? $s->intent) }}</span></td>
+                                <td class="text-center">
+                                    @if($s->restaurant_id)
+                                        <form action="{{ route('admin.nezha-consolidation.toggle-eligible', $s->restaurant_id) }}" method="POST" class="d-inline">
+                                            @csrf
+                                            <button type="submit" class="btn btn-xs {{ ($s->eligible ?? false) ? 'btn-success' : 'btn-outline-secondary' }}">{{ ($s->eligible ?? false) ? translate('已开通') : translate('未开通') }}</button>
+                                        </form>
+                                    @else
+                                        <span class="text-muted">—</span>
+                                    @endif
+                                </td>
                                 <td class="text-right"><a href="{{ route('admin.nezha-consolidation.show', $s->id) }}" class="btn btn-xs btn-outline-primary">{{ translate('查看') }}</a></td>
                             </tr>
                         @empty
-                            <tr><td colspan="5" class="text-center py-4 text-muted">{{ translate('暂无提交') }}</td></tr>
+                            <tr><td colspan="6" class="text-center py-4 text-muted">{{ translate('暂无提交') }}</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -154,6 +174,7 @@
                             <th>{{ translate('电话') }}</th>
                             <th class="text-right">{{ translate('近90天平台成交') }}</th>
                             <th>{{ translate('状态') }}</th>
+                            <th class="text-center">{{ translate('集运资格') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -169,9 +190,15 @@
                                         <span class="badge badge-soft-secondary">{{ translate('休息中') }}</span>
                                     @endif
                                 </td>
+                                <td class="text-center">
+                                    <form action="{{ route('admin.nezha-consolidation.toggle-eligible', $r->id) }}" method="POST" class="d-inline">
+                                        @csrf
+                                        <button type="submit" class="btn btn-xs {{ ($r->eligible ?? false) ? 'btn-success' : 'btn-outline-secondary' }}">{{ ($r->eligible ?? false) ? translate('已开通') : translate('未开通') }}</button>
+                                    </form>
+                                </td>
                             </tr>
                         @empty
-                            <tr><td colspan="4" class="text-center py-4 text-muted">{{ translate('全部商家已提交') }}</td></tr>
+                            <tr><td colspan="5" class="text-center py-4 text-muted">{{ translate('全部商家已提交') }}</td></tr>
                         @endforelse
                     </tbody>
                 </table>

@@ -36,10 +36,8 @@ class NezhaConsolidationRoundController extends Controller
      */
     public function index()
     {
-        // 总闸门: 闸关时整体不透出(与侧栏 gate 双保险)。
-        if (!NezhaConsolidationRound::enabled()) {
-            abort(404);
-        }
+        // 门禁: 总闸 + 每店集运资格(与侧栏 gate 双保险)。
+        $this->gate();
 
         $vendorId = Helpers::get_vendor_id();
 
@@ -75,9 +73,7 @@ class NezhaConsolidationRoundController extends Controller
      */
     public function store(Request $request)
     {
-        if (!NezhaConsolidationRound::enabled()) {
-            abort(404);
-        }
+        $this->gate();
 
         $request->validate([
             'round_id'         => 'required|integer',
@@ -135,9 +131,7 @@ class NezhaConsolidationRoundController extends Controller
      */
     public function update(Request $request, $id)
     {
-        if (!NezhaConsolidationRound::enabled()) {
-            abort(404);
-        }
+        $this->gate();
 
         $request->validate([
             'est_volume_value' => 'nullable|numeric|min:0|max:99999999.99',
@@ -185,9 +179,7 @@ class NezhaConsolidationRoundController extends Controller
      */
     public function cancel(Request $request, $id)
     {
-        if (!NezhaConsolidationRound::enabled()) {
-            abort(404);
-        }
+        $this->gate();
 
         $vendorId = Helpers::get_vendor_id();
 
@@ -219,6 +211,22 @@ class NezhaConsolidationRoundController extends Controller
     // ------------------------------------------------------------------
     // 内部工具
     // ------------------------------------------------------------------
+
+    /**
+     * 统一门禁: 总闸 + 每店「集运资格」(运营手动标记)。
+     * 🔴 集运仅面向经营达标的深度合作商家(业主 2026-07-16 定), 故报名入口/报名动作一律按资格收口。
+     * 任一不过 → 404(与闸关同为零透出, 不泄露"有这功能但你没资格"; 直连 URL 也进不来)。
+     * 注: 首页提示卡与 v1 问卷**不受此门限制**(需求摸底面向全体·业主裁决)。
+     */
+    private function gate(): void
+    {
+        if (!NezhaConsolidationRound::enabled()) {
+            abort(404);
+        }
+        if (!NezhaConsolidationRound::eligibleByVendor(Helpers::get_vendor_id())) {
+            abort(404);
+        }
+    }
 
     /**
      * 读期次并判定是否可增删改。

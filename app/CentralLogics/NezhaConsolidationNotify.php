@@ -6,6 +6,7 @@ use App\Models\Restaurant;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * 哪吒 平台集运 · 期次通知(包3 · B通知)。
@@ -16,7 +17,7 @@ use Illuminate\Support\Facades\Log;
 class NezhaConsolidationNotify
 {
     /**
-     * 开期通知: draft→open 时向全体活跃商家发一次。
+     * 开期通知: draft→open 时向【有集运资格的】活跃商家发一次(🔴 不广播全体·业主 2026-07-16 定)。
      * 幂等: rounds.notified_at 已设则跳过(重复开放/重放不重发)。返回尝试发送的商家数(未绑 TG 者管道内 no-op)。
      */
     public static function roundOpened($roundId): int
@@ -27,7 +28,7 @@ class NezhaConsolidationNotify
                 return 0;
             }
             $text = self::openedText($round);
-            $sent = self::broadcastActive($text);
+            $sent = self::broadcastEligible($text);
             DB::table('nezha_consolidation_rounds')->where('id', $roundId)->update(['notified_at' => Carbon::now()]);
             return $sent;
         } catch (\Throwable $e) {
@@ -65,16 +66,26 @@ class NezhaConsolidationNotify
         }
     }
 
-    /** 向全体活跃商家(status=1)广播(分块避免大集合内存)。 */
-    private static function broadcastActive(string $text): int
+    /**
+     * 向【有集运资格的】活跃商家广播(分块避免大集合内存)。
+     * 🔴 不广播全体 —— 集运仅面向经营达标的深度合作商家(业主 2026-07-16 定), 把"拼柜开放报名"推给用不了的商家=打扰+过度承诺。
+     * fail-closed: 资格列未建(部署窗口)时一条不发 —— 宁可不发, 不可误发。
+     */
+    private static function broadcastEligible(string $text): int
     {
         $sent = 0;
-        Restaurant::where('status', 1)->select('id', 'telegram_chat_id')->chunk(200, function ($chunk) use ($text, &$sent) {
-            foreach ($chunk as $r) {
-                Helpers::sendTelegramToRestaurant($r, $text);
-                $sent++;
-            }
-        });
+        if (!Schema::hasColumn('restaurants', NezhaConsolidationRound::ELIGIBLE_COL)) {
+            return 0;
+        }
+        Restaurant::where('status', 1)
+            ->where(NezhaConsolidationRound::ELIGIBLE_COL, 1)
+            ->select('id', 'telegram_chat_id')
+            ->chunk(200, function ($chunk) use ($text, &$sent) {
+                foreach ($chunk as $r) {
+                    Helpers::sendTelegramToRestaurant($r, $text);
+                    $sent++;
+                }
+            });
         return $sent;
     }
 
