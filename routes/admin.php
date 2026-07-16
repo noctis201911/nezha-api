@@ -171,6 +171,21 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('{id}', [NezhaConsolidationController::class, 'show'])->name('show');
         });
 
+        // 哪吒 平台集运 · 期次管理(包2·B): 创建/编辑期次 + 报名明细 + 脱敏导出。全 dormant, 平台不碰钱, 只展示 pricing。
+        // 🔴 路由顺序: create/{id}/edit/{id}/export 必须排在裸 {id}(show) 之前, 否则 /create 被 {id} 捕获。
+        Route::group(['prefix' => 'nezha-consolidation-rounds', 'as' => 'nezha-consolidation-rounds.'], function () {
+            Route::get('/', [\App\Http\Controllers\Admin\NezhaConsolidationRoundController::class, 'index'])->name('index');
+            Route::get('create', [\App\Http\Controllers\Admin\NezhaConsolidationRoundController::class, 'create'])->name('create');
+            Route::post('/', [\App\Http\Controllers\Admin\NezhaConsolidationRoundController::class, 'store'])->name('store');
+            Route::get('{id}/edit', [\App\Http\Controllers\Admin\NezhaConsolidationRoundController::class, 'edit'])->name('edit');
+            Route::put('{id}', [\App\Http\Controllers\Admin\NezhaConsolidationRoundController::class, 'update'])->name('update');
+            Route::post('{id}/open', [\App\Http\Controllers\Admin\NezhaConsolidationRoundController::class, 'open'])->name('open');
+            Route::post('{id}/close', [\App\Http\Controllers\Admin\NezhaConsolidationRoundController::class, 'close'])->name('close');
+            Route::post('{id}/cancel', [\App\Http\Controllers\Admin\NezhaConsolidationRoundController::class, 'cancel'])->name('cancel');
+            Route::get('{id}/export', [\App\Http\Controllers\Admin\NezhaConsolidationRoundController::class, 'export'])->name('export');
+            Route::get('{id}', [\App\Http\Controllers\Admin\NezhaConsolidationRoundController::class, 'show'])->name('show');
+        });
+
         // 哪吒 方案C: 搜索需求(全量热门搜索 + 搜了没结果)
         Route::group(['prefix' => 'nezha-search-demand', 'as' => 'nezha-search-demand.'], function () {
             Route::get('/', [\App\Http\Controllers\Admin\NezhaSearchDemandController::class, 'index'])->name('index');

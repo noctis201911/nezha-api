@@ -174,6 +174,12 @@ return [
 
         /* ═══ D. 未就绪/有前置——【暂不开】(expected=0, ≠0 即红) ═══ */
         [
+            'key' => 'nezha_consolidation_rounds_status', 'label' => '集运期次撮合(总闸)', 'section' => 'D', 'level' => 'L3',
+            'expected' => 0, 'value_type' => 'bool',
+            'prereq' => '阶段 B 骨架 dormant(期次+报名+公示+成团进度+脱敏导出 已建·未部署)。真开=①staging 整链 QA(建期次→报名→状态机 draft→open→closed/canceled→导出脱敏)②业主批准③开城后有实际拼柜需求。开=vendor 端显当前 open 期次卡+报名流+成团进度;关=vendor 端期次/报名整体零透出(admin 端始终可用·运营先建期次)。平台只组织撮合、公示货代报价·付款商家直付货代·不碰钱。见 fable-brief/PLAN_consolidation_roadmap.md §3-B',
+            'settings_route' => null, 'ops_note' => 'no 专用后台 UI(DB flag·flip 走 tinker/DB)。enabled() 直读 BusinessSetting 无进程 static 缓存·翻转即时生效(无需 USR2)',
+        ],
+        [
             'key' => 'nezha_preorder_status', 'label' => '预约下单/集中配送(总闸)', 'section' => 'D', 'level' => 'L2',
             'expected' => 0, 'value_type' => 'bool',
             'prereq' => 'Phase1 分阶段 dormant(M1地基/M2窗口锚定时钟/M3取消并发锁/M4三态接单模式 已上线未部署)。真开=①全链 staging QA(含 M3 真并发下单 harness)②业主批准③前端预约 UI 6屏截图点头。开=商家可选三态接单模式(即时/即时+预约/只接预约)+顾客选配送时段+作业台分组;关=三态抽屉不显·下单选窗口不透出·作业台分组隐·端点 nezha_accept_mode 直接拒。见 fable-brief/PLAN_preorder_scheduled_delivery.md §16',

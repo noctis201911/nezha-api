@@ -112,12 +112,22 @@
                     </li>
                     @endif
 
-                    <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/nezha-consolidation*')?'active':''}}">
+                    <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/nezha-consolidation')?'active':''}}">
                         <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{route('vendor.nezha-consolidation.index')}}" title="{{translate('平台集运申报')}}">
                             <i class="tio-cube nav-icon"></i>
                             <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{translate('平台集运申报')}}</span>
                         </a>
                     </li>
+
+                    {{-- 哪吒 集运期次报名(包2·B·dormant): 总闸开才显(闸关零透出) --}}
+                    @if(\App\CentralLogics\NezhaConsolidationRound::enabled())
+                    <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/nezha-consolidation-rounds*')?'active':''}}">
+                        <a class="js-navbar-vertical-aside-menu-link nav-link" href="{{route('vendor.nezha-consolidation-rounds.index')}}" title="{{translate('集运期次报名')}}">
+                            <i class="tio-shopping-cart nav-icon"></i>
+                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">{{translate('集运期次报名')}}</span>
+                        </a>
+                    </li>
+                    @endif
 
 <!-- 哪吒 商家助手 -->
                     <li class="navbar-vertical-aside-has-menu {{Request::is('restaurant-panel/nezha-assistant*')?'active':''}}">

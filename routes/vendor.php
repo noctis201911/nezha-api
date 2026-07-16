@@ -32,6 +32,7 @@ use App\Http\Controllers\Vendor\WalletController;
 use App\Http\Controllers\Vendor\NezhaDepositController;
 use App\Http\Controllers\Vendor\NezhaTopupController;
 use App\Http\Controllers\Vendor\NezhaConsolidationController;
+use App\Http\Controllers\Vendor\NezhaConsolidationRoundController;
 use App\Http\Controllers\Vendor\WalletMethodController;
 
 Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
@@ -261,6 +262,15 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
             Route::get('/', [NezhaConsolidationController::class, 'index'])->name('index');
             Route::post('store', [NezhaConsolidationController::class, 'store'])->name('store');
             Route::post('dismiss-promo', [NezhaConsolidationController::class, 'dismissPromo'])->name('dismiss-promo'); // A-1 dashboard 提示卡关闭
+        });
+
+        // 哪吒 平台集运 · 期次报名(包2·B骨架): 平台按期次发布货代/价格/截止, 商家登记本店预估货量意向。
+        // 总闸 NezhaConsolidationRound::enabled() 在控制器内统一门禁(闸关 abort 404, 零透出)。
+        Route::group(['prefix' => 'nezha-consolidation-rounds', 'as' => 'nezha-consolidation-rounds.'], function () {
+            Route::get('/', [NezhaConsolidationRoundController::class, 'index'])->name('index');
+            Route::post('store', [NezhaConsolidationRoundController::class, 'store'])->name('store');
+            Route::post('update/{id}', [NezhaConsolidationRoundController::class, 'update'])->name('update')->whereNumber('id');
+            Route::post('cancel/{id}', [NezhaConsolidationRoundController::class, 'cancel'])->name('cancel')->whereNumber('id');
         });
 
 Route::group(['prefix' => 'withdraw-method', 'as' => 'wallet-method.', 'middleware' => ['module:wallet_method','subscription:wallet']], function () {
