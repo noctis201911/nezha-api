@@ -459,6 +459,7 @@ class NezhaPromotionalBannerConfigTest extends TestCase
                 ['key' => $key],
                 ['value' => $value, 'created_at' => now(), 'updated_at' => now()]
             );
+            config([$key.'_conf' => ['key' => $key, 'value' => $value]]);
         }
 
         DB::table('currencies')->updateOrInsert(
