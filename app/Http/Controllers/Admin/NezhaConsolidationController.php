@@ -96,6 +96,7 @@ class NezhaConsolidationController extends Controller
             $s->cat_list = json_decode($s->categories ?: '[]', true) ?: [];
             $s->est_vol = $rowMetrics[$s->id]['vol'] ?? 0.0;
             $s->est_wt = $rowMetrics[$s->id]['wt'] ?? 0.0;
+            $s->stale = \App\CentralLogics\NezhaConsolidation::isStale($s->updated_at); // A-3: >90天数据陈旧标记
             return $s;
         });
         if ($intentFilter) {
@@ -104,7 +105,31 @@ class NezhaConsolidationController extends Controller
         $list = ($sort === 'gmv') ? $list->sortByDesc('gmv90') : $list->sortByDesc('updated_at');
         $list = $list->values();
 
-        return view('admin-views.nezha-consolidation.index', compact('kpi', 'catAgg', 'freqAgg', 'list', 'intentFilter', 'sort'));
+        // A-2 未填名单: 全体 restaurants 减去已提交 vendor, 供运营定向联系(店名/电话/近90天成交/状态)。仅管理端可见, 不进任何对外物料。
+        $submittedVendorIds = $surveys->pluck('vendor_id')->filter()->unique()->values()->all();
+        $unfilled = Restaurant::when(!empty($submittedVendorIds), function ($q) use ($submittedVendorIds) {
+                $q->whereNotIn('vendor_id', $submittedVendorIds);
+            })
+            ->select('id', 'name', 'phone', 'vendor_id', 'status')
+            ->orderBy('name')->get();
+        $ufRids = $unfilled->pluck('id')->filter()->values()->all();
+        $ufGmv = [];
+        if ($ufRids) {
+            foreach (DB::table('orders')
+                ->whereIn('restaurant_id', $ufRids)
+                ->where('created_at', '>=', now()->subDays(90))
+                ->whereIn('order_status', self::CONFIRMED)
+                ->groupBy('restaurant_id')
+                ->select('restaurant_id', DB::raw('SUM(order_amount) as gmv'))->get() as $r) {
+                $ufGmv[$r->restaurant_id] = (float) $r->gmv;
+            }
+        }
+        $unfilledList = $unfilled->map(function ($r) use ($ufGmv) {
+            $r->gmv90 = $ufGmv[$r->id] ?? 0.0;
+            return $r;
+        })->values();
+
+        return view('admin-views.nezha-consolidation.index', compact('kpi', 'catAgg', 'freqAgg', 'list', 'intentFilter', 'sort', 'unfilledList'));
     }
 
     public function show($id)

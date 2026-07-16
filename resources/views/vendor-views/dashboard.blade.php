@@ -80,6 +80,11 @@
         @include('vendor-views.partials._todo-actionbar', ['nz_todo' => $nz_todo ?? [], 'nz_today' => $nz_today ?? []])
         @include('vendor-views.partials._today-summary', ['nz_today' => $nz_today ?? []])
 
+        {{-- 哪吒 集运申报(阶段 A · A-1): 集运登记提示卡(显隐由控制器 $nz_consol_promo 判定 · 可关闭 per-vendor 落库) --}}
+        @if(!empty($nz_consol_promo))
+            @include('vendor-views.partials._nz-consolidation-promo')
+        @endif
+
         @if(false){{-- 哪吒P1a[2026-07-03]: 「订单统计」彩瓦与待办行动条/侧栏/列表chips四处重复读、且为StackFood遗留样式, 整卡封存(业主批复); 相关JS(order_stats_update)成死代码但空集合绑定无害, 留待P1b清理 --}}
         <div class="restaurant-dashboard-wrapper d-flex flex-wrap gap-3 mb-3">
             <div class="card restaurant-dashboard-wrapper-card">

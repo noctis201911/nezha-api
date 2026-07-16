@@ -77,6 +77,12 @@
             </small>
         </div>
         <div class="card-body">
+            {{-- 哪吒 集运申报(阶段 A · A-3 数据保鲜): 上次登记超 90 天 → 提示确认或更新(重新提交即刷新 updated_at) --}}
+            @if($sv && \App\CentralLogics\NezhaConsolidation::isStale($sv->updated_at))
+                <div class="alert alert-warning py-2 px-3 mb-3" style="font-size:13px;">
+                    {{ translate('您上次登记已超过 90 天，进货需求可能有变化——请确认或更新后重新提交。') }}
+                </div>
+            @endif
             <form action="{{ route('vendor.nezha-consolidation.store') }}" method="POST">
                 @csrf
 

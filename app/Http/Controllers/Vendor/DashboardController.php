@@ -84,7 +84,10 @@ class DashboardController extends Controller
         $nz_todo  = self::nezha_todo_counts();
         $nz_today = self::nezha_today_summary();
 
-        return view('vendor-views.dashboard', compact('data', 'earning', 'commission', 'params','delivery_earning','out_out_count','food','nz_todo','nz_today'));
+        // 哪吒 集运申报(阶段 A · A-1): 首页登记提示卡显隐(无记录或 >90 天陈旧, 且未在本轮关闭)。纯读, 平台不碰钱。
+        $nz_consol_promo = \App\CentralLogics\NezhaConsolidation::shouldShowDashboardPromo(Helpers::get_vendor_id());
+
+        return view('vendor-views.dashboard', compact('data', 'earning', 'commission', 'params','delivery_earning','out_out_count','food','nz_todo','nz_today','nz_consol_promo'));
     }
 
     public function restaurant_data()

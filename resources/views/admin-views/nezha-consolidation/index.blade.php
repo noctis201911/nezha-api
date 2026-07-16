@@ -121,7 +121,11 @@
                                     : ($s->box_count ? ($s->box_count . ' 箱/次') : '—'));
                             @endphp
                             <tr>
-                                <td><span class="font-weight-bold">{{ $s->rname }}</span></td>
+                                <td>
+                                    <span class="font-weight-bold">{{ $s->rname }}</span>
+                                    @if($s->stale ?? false)<span class="badge badge-soft-warning ml-1" style="font-size:11px;">{{ translate('数据陈旧') }}</span>@endif
+                                    <div class="small text-muted">{{ \Carbon\Carbon::parse($s->updated_at)->format('Y-m-d') }}</div>
+                                </td>
                                 <td><small class="text-muted">{{ implode(' · ', $s->cat_list) }} · {{ translate($freqLabel[$s->frequency] ?? ($s->frequency ?: '—')) }} · {{ $est }}</small></td>
                                 <td class="text-right">{{ $fmt($s->gmv90) }}<div class="small text-muted">{{ $s->cnt90 }} {{ translate('单') }}</div></td>
                                 <td><span class="badge {{ $intentCls[$s->intent] ?? 'badge-soft-secondary' }}">{{ translate($intentLabel[$s->intent] ?? $s->intent) }}</span></td>
@@ -129,6 +133,45 @@
                             </tr>
                         @empty
                             <tr><td colspan="5" class="text-center py-4 text-muted">{{ translate('暂无提交') }}</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {{-- A-2 未填名单: 全体商家减去已提交, 供运营定向联系。管理端内部视图, 不进任何对外物料。 --}}
+    <div class="card mt-3">
+        <div class="card-header">
+            <h5 class="card-title mb-0">{{ translate('未提交问卷的商家') }}（{{ $unfilledList->count() }}）</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-borderless table-thead-bordered table-align-middle card-table">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>{{ translate('商家') }}</th>
+                            <th>{{ translate('电话') }}</th>
+                            <th class="text-right">{{ translate('近90天平台成交') }}</th>
+                            <th>{{ translate('状态') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($unfilledList as $r)
+                            <tr>
+                                <td><span class="font-weight-bold">{{ $r->name }}</span></td>
+                                <td><small class="text-muted">{{ $r->phone ?: '—' }}</small></td>
+                                <td class="text-right">{{ $fmt($r->gmv90) }}</td>
+                                <td>
+                                    @if(($r->status ?? 0) == 1)
+                                        <span class="badge badge-soft-success">{{ translate('营业中') }}</span>
+                                    @else
+                                        <span class="badge badge-soft-secondary">{{ translate('休息中') }}</span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="4" class="text-center py-4 text-muted">{{ translate('全部商家已提交') }}</td></tr>
                         @endforelse
                     </tbody>
                 </table>

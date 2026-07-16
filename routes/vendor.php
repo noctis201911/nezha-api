@@ -260,6 +260,7 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
         Route::group(['prefix' => 'nezha-consolidation', 'as' => 'nezha-consolidation.'], function () {
             Route::get('/', [NezhaConsolidationController::class, 'index'])->name('index');
             Route::post('store', [NezhaConsolidationController::class, 'store'])->name('store');
+            Route::post('dismiss-promo', [NezhaConsolidationController::class, 'dismissPromo'])->name('dismiss-promo'); // A-1 dashboard 提示卡关闭
         });
 
 Route::group(['prefix' => 'withdraw-method', 'as' => 'wallet-method.', 'middleware' => ['module:wallet_method','subscription:wallet']], function () {

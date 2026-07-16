@@ -94,4 +94,13 @@ class NezhaConsolidationController extends Controller
         Toastr::success(translate('已提交，感谢您的支持！符合条件后平台会有工作人员与您联系。'));
         return back();
     }
+
+    /**
+     * A-1 提示卡关闭: per-vendor 落库(nezha_consolidation_promos), 关闭后不再弹(逻辑见 NezhaConsolidation::shouldShowDashboardPromo)。
+     */
+    public function dismissPromo()
+    {
+        \App\CentralLogics\NezhaConsolidation::dismissPromo(Helpers::get_vendor_id());
+        return response()->json(['success' => 1]);
+    }
 }
