@@ -176,7 +176,7 @@ return [
         [
             'key' => 'nezha_consolidation_rounds_status', 'label' => '集运期次撮合(总闸)', 'section' => 'D', 'level' => 'L3',
             'expected' => 0, 'value_type' => 'bool',
-            'prereq' => '阶段 B 骨架 dormant(期次+报名+公示+成团进度+脱敏导出 已建·未部署)。真开=①staging 整链 QA(建期次→报名→状态机 draft→open→closed/canceled→导出脱敏)②业主批准③开城后有实际拼柜需求。开=vendor 端显当前 open 期次卡+报名流+成团进度;关=vendor 端期次/报名整体零透出(admin 端始终可用·运营先建期次)。平台只组织撮合、公示货代报价·付款商家直付货代·不碰钱。见 fable-brief/PLAN_consolidation_roadmap.md §3-B',
+            'prereq' => '阶段 B 骨架 dormant(期次+报名+公示+成团进度+脱敏导出 已建·未部署)。真开=①staging 整链 QA(建期次→报名→状态机 draft→open→closed/canceled→导出脱敏)②业主批准③开城后有实际拼柜需求。开=vendor 端显当前 open 期次卡+报名流+成团进度;关=vendor 端期次/报名整体零透出(admin 端始终可用·运营先建期次)。🔴 翻本闸【只是必要条件】: 集运仅面向经营达标的深度合作商家, 每店资格另由 `restaurants.nezha_consolidation_eligible` 控(默认全关), 须在 admin「平台集运申报·需求汇总」逐家开通; 只翻闸不开资格 = 商家端仍全 404(不是 bug)。平台只组织撮合、公示货代报价·付款商家直付货代·不碰钱。见 fable-brief/PLAN_consolidation_roadmap.md §3-B',
             'settings_route' => null, 'ops_note' => 'no 专用后台 UI(DB flag·flip 走 tinker/DB)。enabled() 直读 BusinessSetting 无进程 static 缓存·翻转即时生效(无需 USR2)',
         ],
         [
