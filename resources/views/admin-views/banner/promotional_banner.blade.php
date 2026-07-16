@@ -19,6 +19,20 @@
                 <div class="card-body">
                     <form action="{{route('admin.banner.promotional_banner_update')}}" enctype="multipart/form-data" method="post">
                         @csrf
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <label class="input-label mb-0" for="promotional_banner_status">
+                                {{translate('messages.status')}}
+                            </label>
+                            <input type="hidden" name="promotional_banner_status" value="0">
+                            <label class="toggle-switch toggle-switch-sm mb-0" for="promotional_banner_status">
+                                <input type="checkbox" name="promotional_banner_status" value="1"
+                                    class="toggle-switch-input" id="promotional_banner_status"
+                                    {{(string) old('promotional_banner_status', $banner_status?->getRawOriginal('value') ?? '0') === '1' ? 'checked' : ''}}>
+                                <span class="toggle-switch-label">
+                                    <span class="toggle-switch-indicator"></span>
+                                </span>
+                            </label>
+                        </div>
                         <div class="row">
                             <div class="col-md-12">
                                 <div class="form-group">

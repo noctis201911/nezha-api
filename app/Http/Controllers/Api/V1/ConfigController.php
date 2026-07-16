@@ -13,6 +13,7 @@ use App\Traits\AddonHelper;
 use App\Models\ReactService;
 use Illuminate\Http\Request;
 use App\CentralLogics\Helpers;
+use App\CentralLogics\NezhaPromotionalBanner;
 use App\Models\BusinessSetting;
 use App\Models\ReactOpportunity;
 use Illuminate\Support\Facades\DB;
@@ -194,13 +195,7 @@ class ConfigController extends Controller
         });
         $restaurant_additional_join_us_page_data =  $restaurant_additional_join_us_page_data && count(json_decode($restaurant_additional_join_us_page_data, true))  > 0 ? json_decode($restaurant_additional_join_us_page_data, true)  : null;
 
-        $banner_data = Cache::rememberForever("data_settings_promotional_banner", function () {
-            return DataSetting::where('type', 'promotional_banner')->whereIn('key', ['promotional_banner_title', 'promotional_banner_image'])->pluck('value', 'key')->toArray();
-        });
-        $banner_data_storage = Cache::rememberForever("data_settings_promotional_banner_storage", function () {
-            return DataSetting::where('type', 'promotional_banner')->where('key', 'promotional_banner_image')->first()?->storage[0]?->value ?? 'public';
-        });
-        $banner_data['promotional_banner_image_full_url'] = Helpers::get_full_url('banner', data_get($banner_data, 'promotional_banner_image'), $banner_data_storage);
+        $banner_data = NezhaPromotionalBanner::configuration();
         $social_login = [];
         $social_login_data = Helpers::get_business_settings('social_login') ?? [];
         foreach ($social_login_data as $social) {
@@ -422,7 +417,7 @@ class ConfigController extends Controller
             'additional_charge' => (float)(isset($settings['additional_charge']) ? $settings['additional_charge'] : 0),
             'dm_picture_upload_status' => (int)(isset($settings['dm_picture_upload_status']) ? $settings['dm_picture_upload_status'] : 0),
             'digital_payment_info' => $digital_payment_infos,
-            'banner_data' => count($banner_data) > 0 ? $banner_data : null,
+            'banner_data' => $banner_data,
             'offline_payment_status' => (int)(isset($settings['offline_payment_status']) ? $settings['offline_payment_status'] : 0),
             'guest_checkout_status' => (int)(isset($settings['guest_checkout_status']) ? $settings['guest_checkout_status'] : 0),
             'country_picker_status' => (int)(isset($settings['country_picker_status']) ? $settings['country_picker_status'] : 0),
