@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\CentralLogics\NezhaConsolidationNotify;
 use App\CentralLogics\NezhaConsolidationRound;
 use App\Models\Restaurant;
 use Illuminate\Http\Request;
@@ -141,7 +142,8 @@ class NezhaConsolidationRoundController extends Controller
             'status'     => 'open',
             'updated_at' => now(),
         ]);
-        // 包3 开期通知在此接入
+        // 包3 开期通知: 经既有商家 TG 管道向全体活跃商家发一次(幂等靠 notified_at, 重复开放不重发)。
+        NezhaConsolidationNotify::roundOpened($id);
         Toastr::success(translate('期次已开放报名'));
         return back();
     }
@@ -174,10 +176,15 @@ class NezhaConsolidationRoundController extends Controller
             Toastr::warning(translate('该期次已是取消状态'));
             return back();
         }
+        $wasOpen = $round->status === 'open'; // 仅已开放过的期次才需通知已报名商家
         DB::table('nezha_consolidation_rounds')->where('id', $id)->update([
             'status'     => 'canceled',
             'updated_at' => now(),
         ]);
+        // 包3 取消通知: 只发【已报名(enrolled)】商家, 不广播全体; draft 期次取消无人可扰故不发。
+        if ($wasOpen) {
+            NezhaConsolidationNotify::roundCanceled($id);
+        }
         Toastr::success(translate('期次已取消'));
         return back();
     }
