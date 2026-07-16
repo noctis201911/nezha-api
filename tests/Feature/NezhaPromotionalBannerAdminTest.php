@@ -274,37 +274,48 @@ class NezhaPromotionalBannerAdminTest extends TestCase
 
     public function test_database_cache_save_only_forgets_the_two_exact_legacy_banner_keys(): void
     {
+        $cache = app('cache');
+        $originalDriver = $cache->getDefaultDriver();
+        $originalPrefix = config('cache.prefix');
+
         Storage::disk('public')->put('banner/real-banner.png', 'not-a-real-image');
         $this->seedBanner('Approved summer offer', 'real-banner.png', '1');
-        config([
-            'cache.prefix' => strtolower(str_replace('=', '', (string) env('APP_NAME').'_cache')),
-        ]);
-        app('cache')->setDefaultDriver('database');
-        app('cache')->forgetDriver('database');
-        Cache::forever('data_settings_promotional_banner', ['poisoned' => true]);
-        Cache::forever('data_settings_promotional_banner_storage', 'public');
-        Cache::forever('data_settings_invoice_settings', 'must-survive');
-        Cache::forever('react_promotional_banner_status', 'must-also-survive');
 
-        $response = $this->post(route('admin.banner.promotional_banner_update'), [
-            'promotional_banner_status' => '1',
-            'promotional_banner_title' => ['Updated approved offer'],
-            'lang' => ['default'],
-        ]);
+        try {
+            config([
+                'cache.prefix' => strtolower(str_replace('=', '', (string) env('APP_NAME').'_cache')),
+            ]);
+            $cache->setDefaultDriver('database');
+            $cache->forgetDriver('database');
+            Cache::forever('data_settings_promotional_banner', ['poisoned' => true]);
+            Cache::forever('data_settings_promotional_banner_storage', 'public');
+            Cache::forever('data_settings_invoice_settings', 'must-survive');
+            Cache::forever('react_promotional_banner_status', 'must-also-survive');
 
-        $response->assertRedirect();
-        $response->assertSessionHasNoErrors();
-        $this->assertFalse(Cache::has('data_settings_promotional_banner'));
-        $this->assertFalse(Cache::has('data_settings_promotional_banner_storage'));
-        $this->assertSame('must-survive', Cache::get('data_settings_invoice_settings'));
-        $this->assertSame('must-also-survive', Cache::get('react_promotional_banner_status'));
-        $this->assertSame(
-            'Updated approved offer',
-            DB::table('data_settings')
-                ->where('type', 'promotional_banner')
-                ->where('key', 'promotional_banner_title')
-                ->value('value')
-        );
+            $response = $this->post(route('admin.banner.promotional_banner_update'), [
+                'promotional_banner_status' => '1',
+                'promotional_banner_title' => ['Updated approved offer'],
+                'lang' => ['default'],
+            ]);
+
+            $response->assertRedirect();
+            $response->assertSessionHasNoErrors();
+            $this->assertFalse(Cache::has('data_settings_promotional_banner'));
+            $this->assertFalse(Cache::has('data_settings_promotional_banner_storage'));
+            $this->assertSame('must-survive', Cache::get('data_settings_invoice_settings'));
+            $this->assertSame('must-also-survive', Cache::get('react_promotional_banner_status'));
+            $this->assertSame(
+                'Updated approved offer',
+                DB::table('data_settings')
+                    ->where('type', 'promotional_banner')
+                    ->where('key', 'promotional_banner_title')
+                    ->value('value')
+            );
+        } finally {
+            $cache->forgetDriver('database');
+            $cache->setDefaultDriver($originalDriver);
+            config(['cache.prefix' => $originalPrefix]);
+        }
     }
 
     public function test_admin_page_shows_the_persisted_publish_status(): void
