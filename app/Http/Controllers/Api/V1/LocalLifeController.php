@@ -519,6 +519,13 @@ class LocalLifeController extends Controller
         return $names ?: self::CATEGORIES;
     }
 
+    /** UGC 发帖白名单：仅 kind='ugc' 的启用类目（收窄发帖到三类，堵 API 直发商户类目）；表空时回退三类常量 */
+    private function ugcCategoryNames(): array
+    {
+        $names = LocalLifeCategory::where('status', true)->where('kind', 'ugc')->pluck('name')->toArray();
+        return $names ?: ['租房民宿', '二手闲置', '生活服务'];
+    }
+
     // 发帖图片上限按类目分档：租房民宿房源需多图(房型/客厅/厨卫/楼体)放宽到 15，其余 6。
     // 与前端 PostFormDrawer.jsx maxImagesFor 一致；改一处务必同步另一处。
     private const MAX_IMAGES_DEFAULT = 6;
@@ -560,7 +567,7 @@ class LocalLifeController extends Controller
 
         $validator = Validator::make($request->all(), [
             'title'          => 'required|string|max:200',
-            'category'       => ['required', 'string', 'in:' . implode(',', $this->categoryNames())],
+            'category'       => ['required', 'string', 'in:' . implode(',', $this->ugcCategoryNames())],
             'tab'            => ['required', 'string', 'in:' . implode(',', self::TABS)],
             'description'    => 'nullable|string|max:2000',
             // 结构化联系方式(批1)：method+value 为主；contact_info 保留兼容旧客户端。二者至少一组，见下方 composeContact。
