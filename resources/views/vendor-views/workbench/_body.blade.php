@@ -300,7 +300,8 @@
                     <a href="{{ $listUrl('all') }}">全部订单</a>
                     <a href="{{ route('vendor.food.list') }}">商品列表</a>
                     <a href="{{ route('vendor.food.list') }}">一键售罄</a>
-                    <a href="{{ route('vendor.nezha-deposit.index') }}">对账中心</a>
+                    {{-- 对账中心入口: 业主0718定·「对账中心/预存佣金台账」页含佣金账目,已对商家下线; 恢复删本注释 --}}
+                    {{-- <a href="{{ route('vendor.nezha-deposit.index') }}">对账中心</a> --}}
                 </div>
             </div>
         </aside>

@@ -519,13 +519,11 @@
                                             <label class="plan-check-item">
                                                 <input type="radio" name="business_plan" value="commission-base"
                                                        class="d-none" checked>
+                                                {{-- 业主0718定·商家端全隐藏佣金展示: 原"佣金制/每单付X%佣金"文案替换为中性方案卡; 上方 radio(value=commission-base checked)是注册必需表单值, 保留不动; 恢复原文案见 .bak.hidecomm20260718 --}}
                                                 <div class="plan-check-item-inner">
-                                                    <h5>{{ translate('Commision_Base') }}</h5>
+                                                    <h5>平台合作方案</h5>
                                                     <p>
-                                                        {{ translate('restaurant will pay') }}
-                                                        {{ $admin_commission }}% {{ translate('commission to') }}
-                                                        {{ $business_name }}
-                                                        {{ translate('from each order. You will get access of all the features and options  in restaurant panel , app and interaction with user.') }}
+                                                        提交后平台将尽快审核开通您的商家账户。开通后即可使用商家后台的全部功能。
                                                     </p>
                                                 </div>
                                             </label>

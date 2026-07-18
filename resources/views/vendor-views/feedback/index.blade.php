@@ -6,7 +6,7 @@
     <div class="content container-fluid">
         <div class="page-header">
             <h1 class="page-header-title">向平台反馈 / 求助</h1>
-            <p class="text-muted mb-0">佣金、结算、功能用不了、或任何需要平台帮忙的，都可以在这里提交。平台收到后会处理并在下方回复你。</p>
+            <p class="text-muted mb-0">结算、功能用不了、或任何需要平台帮忙的，都可以在这里提交。平台收到后会处理并在下方回复你。</p>
         </div>
 
         <div class="row g-3">
@@ -25,7 +25,8 @@
                             <div class="form-group mb-3">
                                 <label class="input-label">类型</label>
                                 <select name="type" class="form-control" required>
-                                    <option value="commission" {{ old('type') == 'commission' ? 'selected' : '' }}>佣金问题</option>
+                                    {{-- 佣金问题选项: 业主0718定·商家端全隐藏佣金展示; 恢复删本注释 --}}
+                                    {{-- <option value="commission" {{ old('type') == 'commission' ? 'selected' : '' }}>佣金问题</option> --}}
                                     <option value="settlement" {{ old('type') == 'settlement' ? 'selected' : '' }}>结算问题</option>
                                     <option value="feature" {{ old('type') == 'feature' ? 'selected' : '' }}>功能用不了 / 报错</option>
                                     <option value="other" {{ old('type') == 'other' ? 'selected' : '' }}>其他</option>
@@ -34,7 +35,7 @@
                             <div class="form-group mb-3">
                                 <label class="input-label">一句话主题</label>
                                 <input type="text" name="subject" class="form-control" maxlength="150" required
-                                       value="{{ old('subject') }}" placeholder="例如：本月佣金扣款对不上">
+                                       value="{{ old('subject') }}" placeholder="例如：某笔订单金额对不上">
                             </div>
                             <div class="form-group mb-3">
                                 <label class="input-label">详细说明</label>

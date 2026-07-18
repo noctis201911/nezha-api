@@ -50,14 +50,17 @@ active
                     <div class="row g-3 align-items-center">
                         <div class="col-lg-8">
                             <div>
+                                {{-- 业主0718定·商家端全隐藏佣金展示: 原"Commission Base Plan / 每单付X%佣金给平台"换中性方案卡; 恢复见 .bak.hidecomm20260718 --}}
                                 <h3 class="mb-1">
-                                    {{ translate('messages.Commission Base Plan') }}
+                                    平台合作方案
                                 </h3>
                                 <p class="mb-0">
-                                    {{ translate('messages.Restaurant will pay') .' '. ($restaurant->comission > 0 ?  $restaurant->comission :  $admin_commission) .'% '. translate('Commission to ' . \App\CentralLogics\Helpers::get_business_settings('business_name') . ' From each order. You will get access of all the features and options in restaurant panel , app and interaction with user.') }}
+                                    您的商家账户已开通，可使用商家后台的全部功能。如需帮助可在“反馈 / 求助”提交。
                                 </p>
                             </div>
                         </div>
+                        {{-- 业主0718定·商家端全隐藏佣金展示: 原"X% / Commission Per Order"费率框已隐藏; 恢复删本 Blade 注释 --}}
+                        {{--
                         <div class="col-lg-4">
                             <div class="card card-body">
                                 <div class="d-flex gap-3 justify-content-between align-items-center">
@@ -69,6 +72,7 @@ active
                                 </div>
                             </div>
                         </div>
+                        --}}
                     </div>
                 </div>
                 @if (\App\CentralLogics\Helpers::subscription_check() )
@@ -307,8 +311,9 @@ active
                             <div class="__plan-item hover {{ $restaurant->restaurant_model == 'commission'  ? 'active' : ''}} ">
                                 <div class="inner-div">
                                     <div class="text-center">
-                                        <h3 class="title fs-16 mb-2">{{ translate('Commission Base') }}</h3>
-                                        <h2 class="price font-bold mb-2 h-100">{{  $restaurant->comission > 0 ?  $restaurant->comission :  $admin_commission }}%</h2>
+                                        {{-- 业主0718定·商家端全隐藏佣金展示: 标题去"Commission",隐藏 X% 费率; 恢复见 .bak.hidecomm20260718 --}}
+                                        <h3 class="title fs-16 mb-2">平台合作方案</h3>
+                                        {{-- <h2 class="price font-bold mb-2 h-100">{{  $restaurant->comission > 0 ?  $restaurant->comission :  $admin_commission }}%</h2> --}}
                                         <div class="day-count min-h-80 pb-0">
                                             @if ( $restaurant->restaurant_model == 'commission')
                                             <div class="bg-warning text-dark hover-text-white rounded-10 fs-10 font-semibold px-2 py-1 w-max-content mx-auto" style="--bs-bg-opacity: 0.6;">
@@ -319,7 +324,8 @@ active
                                     </div>
                                     <div class="info">
                                         <div class="info-text text-center fs-13">
-                                            {{ translate('Restaurant will pay') }} {{  $restaurant->comission > 0 ?  $restaurant->comission :  $admin_commission }}% {{ translate('commission to') }} {{ $business_name }} {{ translate('from each order. You will get access of all the features and options  in restaurant panel , app and interaction with user.') }}
+                                            {{-- 业主0718定·隐藏"每单付X%佣金给平台"文案; 恢复见 .bak.hidecomm20260718 --}}
+                                            账户开通后可使用商家后台的全部功能。
                                         </div>
                                     </div>
                                     <div class="text-center">

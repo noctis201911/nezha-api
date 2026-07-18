@@ -377,11 +377,7 @@
                                         class="toggle-switch toggle-switch-sm d-flex justify-content-between input-label mb-1"
                                         for="free_delivery_distance_status">
                                         <span class="form-check-label">{{ translate('messages.free_delivery_distance') }}
-                                            (KM) <span class="input-label-secondary" data-toggle="tooltip"
-                                                data-placement="right"
-                                                data-original-title="{{ translate('messages.If_the_order_distance_exceeds_the_delivery_fee_will_be_free_and_the_delivery_fee_will_be_deducted_from_the_restaurant’s_commission') }}"><img
-                                                    src="{{ dynamicAsset('assets/admin/img/info-circle.svg') }}"
-                                                    alt="{{ translate('messages.If_enabled,_the_free_delivery_distance_number_will_be_shown_in_the_invoice') }}"></span></span>
+                                            (KM) {{-- 佣金提示图标已隐藏: 业主0718定·原 tooltip 含"配送费从商家佣金里扣"字样; 恢复见 .bak.hidecomm20260718 --}}</span>
                                         <input type="checkbox" class="toggle-switch-input"
                                             name="free_delivery_distance_status" id="free_delivery_distance_status"
                                             value="1"

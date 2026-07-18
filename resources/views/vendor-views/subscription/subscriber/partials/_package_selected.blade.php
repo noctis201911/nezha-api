@@ -8,7 +8,8 @@
             @endif
         </div>
         <div class="change-plan-wrapper align-items-center">
-            @if ($restaurant_model == 'commission'  )
+            {{-- 业主0718定·商家端全隐藏佣金展示: 抑制原"佣金 X%"来源瓦片(加 false&&); @elseif/@endif 链不变; 恢复删 false&& --}}
+            @if (false && $restaurant_model == 'commission'  )
                 <div class="__plan-item shift-renew">
                     <div class="inner-div">
                         <div class="text-center">

@@ -96,6 +96,8 @@ class NezhaDepositController extends Controller
 
     public function index(Request $request)
     {
+        // 业主0718定·商家端全隐藏佣金展示:「对账中心/预存佣金台账」整页对商家下线(整页含佣金账目·扣佣等). 恢复=删下面 return 一行.
+        return redirect()->route('vendor.dashboard');
         $vendorId   = Helpers::get_vendor_id();
         $restaurant = Restaurant::where('vendor_id', $vendorId)->first();
         $wallet     = RestaurantWallet::where('vendor_id', $vendorId)->first();
@@ -159,6 +161,8 @@ class NezhaDepositController extends Controller
     /** 导出当前账户+区间的对账单(Excel/CSV) */
     public function export(Request $request)
     {
+        // 业主0718定·商家端全隐藏佣金展示: 台账导出随「对账中心」一并对商家下线(防直连导出佣金数据). 恢复=删下面 return 一行.
+        return redirect()->route('vendor.dashboard');
         $vendorId   = Helpers::get_vendor_id();
         $restaurant = Restaurant::where('vendor_id', $vendorId)->first();
 

@@ -21,7 +21,7 @@
         'sufficient'   => ['label' => '充足',   'cls' => 'success',   'note' => ''],
         'low'          => ['label' => '偏低',   'cls' => 'warning',   'note' => '建议尽快充值'],
         'insufficient' => ['label' => '不足',   'cls' => 'danger',    'note' => '余额不足，可能无法接新单'],
-        'sample'       => ['label' => '样本不足', 'cls' => 'secondary', 'note' => '未启用佣金预存'],
+        'sample'       => ['label' => '样本不足', 'cls' => 'secondary', 'note' => '暂无足够数据'],
     ];
     $dep = $dep_map[$dep_tier] ?? $dep_map['sample'];
 @endphp

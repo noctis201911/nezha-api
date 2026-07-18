@@ -154,11 +154,14 @@
                             <th class="border-0">{{ translate('messages.order_amount') }}</th>
                             <th class="border-0">{{ translate('messages.admin_discount') }}</th>
                             <th class="border-0">{{ translate('messages.restaurant_discount') }}</th>
-                            <th class="border-0">{{ translate('messages.admin_commission') }}</th>
+                            {{-- 平台佣金列表头: 业主0718定·商家端全隐藏佣金展示; 与数据列 td 成对隐藏以保列对齐; 恢复删本注释 --}}
+                            {{-- <th class="border-0">{{ translate('messages.admin_commission') }}</th> --}}
                             <th class="border-0">{{ \App\CentralLogics\Helpers::get_business_data('additional_charge_name')??translate('messages.additional_charge') }}</th>
                             <th class="border-0">{{ translate('messages.extra_packaging_amount') }}</th>
-                            <th class="min-w-140 text-capitalize">{{ translate('commision_on_delivery_charge') }}</th>
-                            <th class="min-w-140 text-capitalize">{{ translate('admin_net_income') }}</th>
+                            {{-- 配送佣金列表头: 业主0718定·商家端全隐藏佣金展示; 与数据列成对隐藏; 恢复删本注释 --}}
+                            {{-- <th class="min-w-140 text-capitalize">{{ translate('commision_on_delivery_charge') }}</th> --}}
+                            {{-- 平台净收入列表头: 业主0718定·含佣金构成,商家端全隐藏; 与数据列成对隐藏; 恢复删本注释 --}}
+                            {{-- <th class="min-w-140 text-capitalize">{{ translate('admin_net_income') }}</th> --}}
                             <th class="min-w-140 text-capitalize">{{ translate('restaurant_net_income') }}</th>
                             <th class="border-0 min-w-120">{{ translate('messages.amount_received_by') }}</th>
                             <th class="border-top border-bottom text-capitalize">{{ translate('messages.payment_method') }}</th>
@@ -207,11 +210,14 @@
                                 <td class="white-space-nowrap">{{ \App\CentralLogics\Helpers::format_currency($ot->order_amount) }}</td>
                                 <td class="white-space-nowrap">{{ \App\CentralLogics\Helpers::format_currency($ot->admin_expense) }}</td>
                                 <td class="white-space-nowrap">{{ \App\CentralLogics\Helpers::format_currency($ot->discount_amount_by_restaurant) }}</td>
-                                <td class="white-space-nowrap">{{ \App\CentralLogics\Helpers::format_currency($ot->admin_commission   - $ot->additional_charge  + $ot->admin_expens  ) }}</td>
+                                {{-- 平台佣金数据列: 业主0718定·商家端全隐藏佣金展示; 与表头 th 成对隐藏; 恢复删本注释 --}}
+                                {{-- <td class="white-space-nowrap">{{ \App\CentralLogics\Helpers::format_currency($ot->admin_commission   - $ot->additional_charge  + $ot->admin_expens  ) }}</td> --}}
                                 <td class="white-space-nowrap">{{ \App\CentralLogics\Helpers::format_currency(($ot->additional_charge)) }}</td>
                                 <td class="white-space-nowrap">{{ \App\CentralLogics\Helpers::format_currency(($ot->extra_packaging_amount)) }}</td>
-                                <td class="white-space-nowrap">{{ \App\CentralLogics\Helpers::format_currency($ot->delivery_fee_comission) }}</td>
-                                <td class="white-space-nowrap">{{ \App\CentralLogics\Helpers::format_currency($ot->admin_commission + $ot->delivery_fee_comission ) }}</td>
+                                {{-- 配送佣金数据列: 业主0718定·商家端全隐藏佣金展示; 与表头成对隐藏; 恢复删本注释 --}}
+                                {{-- <td class="white-space-nowrap">{{ \App\CentralLogics\Helpers::format_currency($ot->delivery_fee_comission) }}</td> --}}
+                                {{-- 平台净收入数据列: 业主0718定·含佣金构成,商家端全隐藏; 与表头成对隐藏; 恢复删本注释 --}}
+                                {{-- <td class="white-space-nowrap">{{ \App\CentralLogics\Helpers::format_currency($ot->admin_commission + $ot->delivery_fee_comission ) }}</td> --}}
                                 <td class="white-space-nowrap">{{ \App\CentralLogics\Helpers::format_currency($ot->restaurant_amount - $ot->tax) }}</td>
                                 @if ($ot->received_by == 'admin')
                                     <td class="text-capitalize white-space-nowrap">{{ translate('messages.admin') }}</td>
@@ -255,9 +261,10 @@
 
                                 <td>
                                     <div class="btn--container justify-content-center">
-                                        <a class="btn btn-outline-success square-btn btn-sm mr-1 action-btn"  href="{{route('vendor.report.generate-statement',[$ot['id']])}}">
+                                        {{-- 生成对账单按钮: 业主0718定·商家端全隐藏佣金展示(对账单PDF印平台佣金/净收入); 路由亦已守卫重定向; 恢复删本注释 --}}
+                                        {{-- <a class="btn btn-outline-success square-btn btn-sm mr-1 action-btn"  href="{{route('vendor.report.generate-statement',[$ot['id']])}}">
                                             <i class="tio-download-to"></i>
-                                        </a>
+                                        </a> --}}
                                     </div>
                                 </td>
                             </tr>

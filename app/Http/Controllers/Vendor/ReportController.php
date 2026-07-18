@@ -287,6 +287,8 @@ class ReportController extends Controller
     }
     public function generate_statement($id)
     {
+        // 业主0718定·商家端全隐藏佣金展示: 对账单PDF印平台佣金/净收入, 随商家端佣金隐藏一并对商家下线(防直连URL). 恢复=删下面 return 一行.
+        return redirect()->route('vendor.dashboard');
         $key =['phone','email_address','footer_text','business_name','logo'];
         $settings =  array_column(BusinessSetting::whereIn('key', $key)->get()->toArray(), 'value', 'key');
 

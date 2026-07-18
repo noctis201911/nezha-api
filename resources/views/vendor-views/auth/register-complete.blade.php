@@ -53,7 +53,8 @@
                     <div class="card-body p-4 pb-5">
                         <div class="register-congrats-txt">
                             @if (isset($type) && $type == 'commission')
-                                {{ translate('You’ve opted for our commission-based plan. Admin will review the details and activate your account shortly. To explore the site.') }}
+                                {{-- 业主0718定·商家端全隐藏佣金展示: 原完成语含"commission-based plan"字样,换中性; 保留@if分支结构;恢复见 .bak.hidecomm20260718 --}}
+                                资料已提交，平台将尽快审核并开通您的商家账户。开通后即可开始使用。
                                 <a href="{{ route('home', ['new_user' => true]) }}"
                                     class="text-base font-bold">{{ translate('visit_here') }}</a>
                             @elseif(isset($payment_status) && $payment_status == 'fail')

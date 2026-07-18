@@ -311,7 +311,8 @@
                                 @if ($nzoRestDisc > 0)<div class="nzo-fee"><span>店铺优惠</span><span class="v">- {{ Helpers::format_currency($nzoRestDisc) }}</span></div>@endif
                                 @if ($nzoCoupon > 0)<div class="nzo-fee"><span>优惠券</span><span class="v">- {{ Helpers::format_currency($nzoCoupon) }}</span></div>@endif
                                 @if ($nzoDelivery > 0)<div class="nzo-fee"><span>配送费</span><span class="v">{{ Helpers::format_currency($nzoDelivery) }}</span></div>@endif
-                                <div class="nzo-fee"><span>平台佣金 <span class="nzo-badge b-green" style="font-size:11px;padding:1px 7px;">活动期暂免</span></span><span class="v">{{ Helpers::format_currency(0) }}</span></div>
+                                {{-- 平台佣金行: 业主0718定·商家端全隐藏佣金展示; 恢复删本 Blade 注释 --}}
+                                {{-- <div class="nzo-fee"><span>平台佣金 <span class="nzo-badge b-green" style="font-size:11px;padding:1px 7px;">活动期暂免</span></span><span class="v">{{ Helpers::format_currency(0) }}</span></div> --}}
                                 <div class="nzo-fee tot"><span>应退金额</span><span class="v" style="color:var(--amt-red)">{{ Helpers::format_currency($nzoRefundAmt) }}</span></div>
                             </div>
                             <div class="nzo-sub">
@@ -369,7 +370,8 @@
                                     <tr><td>订单取消</td><td style="color:var(--meta);">顾客取消订单</td><td style="text-align:right;color:var(--amt-red);font-weight:700;">- {{ Helpers::format_currency($nzoAmt) }}</td><td><span class="nzo-badge b-gray">已取消</span></td><td style="color:var(--meta);">{{ $nzoFmt($order->canceled) }}</td></tr>
                                 @endif
                                 <tr><td>应退顾客</td><td style="color:var(--meta);">原路退还（{{ $nzoChannel }}）</td><td style="text-align:right;font-weight:700;">{{ Helpers::format_currency($nzoRefundAmt) }}</td><td><span class="nzo-badge {{ $nzoRefundDone ? 'b-green' : 'b-amber' }}">{{ $nzoRefundDone ? '商家已标记退款' : '待商家退款' }}</span></td><td style="color:var(--meta);">{{ $nzoRR ? $nzoFmt($nzoRR->created_at) : '—' }}</td></tr>
-                                <tr><td>平台佣金</td><td style="color:var(--meta);">活动期暂免收</td><td style="text-align:right;font-weight:700;">{{ Helpers::format_currency(0) }}</td><td><span class="nzo-badge b-green">暂免</span></td><td style="color:var(--meta);">—</td></tr>
+                                {{-- 平台佣金流水行: 业主0718定·商家端全隐藏佣金展示; 恢复删本 Blade 注释 --}}
+                                {{-- <tr><td>平台佣金</td><td style="color:var(--meta);">活动期暂免收</td><td style="text-align:right;font-weight:700;">{{ Helpers::format_currency(0) }}</td><td><span class="nzo-badge b-green">暂免</span></td><td style="color:var(--meta);">—</td></tr> --}}
                             </tbody>
                         </table>
                     </div>
