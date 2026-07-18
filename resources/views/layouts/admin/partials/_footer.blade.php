@@ -1,3 +1,4 @@
+@php($__exclusivePaymentAddressReviewer = \App\CentralLogics\Helpers::isExclusivePaymentAddressReviewer())
 <div class="footer">
     <div class="row gy-1 justify-content-between align-items-center">
         <div class="col-md-auto">
@@ -10,6 +11,7 @@
             <div class="d-flex justify-content-end">
                 <!-- List Dot -->
                 <ul class="list-inline list-separator d-flex flex-wrap justify-content-evenly justify-content-md-end flex-grow-1">
+                    @unless($__exclusivePaymentAddressReviewer)
                     <li class="list-inline-item py-1">
                         <a class="list-separator-link" href="{{route('admin.business-settings.business-setup')}}">{{translate('messages.business_setup')}} <i class="tio-settings-outlined ml-xl-2"></i></a>
                     </li>
@@ -28,6 +30,7 @@
                             <i class="tio-dashboard-vs ml-xl-2"></i>
                         </a>
                     </li>
+                    @endunless
 
 
                     <li class="list-inline-item py-1">

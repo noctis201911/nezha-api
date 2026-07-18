@@ -78,6 +78,13 @@
             </div>
         </div>
 
+        @if ($paymentAddressSecurity['enabled'] ?? false)
+            @include('vendor-views.wallet-method.partials._payment-address-change', [
+                'security' => $paymentAddressSecurity,
+                'viewedSecurityNotifications' => $viewedSecurityNotifications ?? 0,
+            ])
+        @endif
+
         {{-- 支付宝收款 (人民币) --}}
         <div class="card mb-2 nz-pay-card">
             <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">

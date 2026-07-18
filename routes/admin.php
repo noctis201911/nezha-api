@@ -63,6 +63,7 @@ use App\Http\Controllers\Admin\System\AddonController as SystemAddonController;
 use App\Http\Controllers\Admin\SystemController;
 use App\Http\Controllers\Admin\VehicleController;
 use App\Http\Controllers\Admin\VendorController;
+use App\Http\Controllers\Admin\NezhaPaymentAddressChangeController;
 use App\Http\Controllers\Admin\VendorTaxReportController;
 use App\Http\Controllers\Admin\VisitorLogController;
 use App\Http\Controllers\Admin\WalletBonusController;
@@ -71,7 +72,7 @@ use App\Http\Controllers\Admin\ZoneController;
 
 Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
 
-    Route::group(['middleware' => ['admin', 'actch:admin_panel']], function () {
+    Route::group(['middleware' => ['admin', 'reviewer.scope', 'actch:admin_panel']], function () {
         Route::group(['prefix' => 'two-factor', 'as' => 'two-factor.'], function () {
             Route::get('setup', [\App\Http\Controllers\Admin\TwoFactorController::class, 'setup'])->name('setup');
             Route::post('enable', [\App\Http\Controllers\Admin\TwoFactorController::class, 'enable'])->name('enable');
@@ -363,6 +364,35 @@ Route::middleware('module:provide_dm_earning')->group(function () {
 
         Route::get('restaurant/get-restaurants', [VendorController::class, 'get_restaurants'])->name('restaurant.get-restaurants');
         Route::get('ajax-restaurant/get-restaurant-ratings', [VendorController::class, 'get_restaurant_ratings'])->name('restaurant.get-restaurant-ratings');
+        // USDT 地址管理权限不再借用 restaurant：管理者只能申请、取消与紧急暂停。
+        Route::group([
+            'prefix' => 'restaurant',
+            'as' => 'restaurant.',
+            'middleware' => ['module:payment_address_manage'],
+        ], function () {
+            Route::post('payment-address-change/{restaurant}', [NezhaPaymentAddressChangeController::class, 'store'])
+                ->name('payment-address-change.store');
+            Route::post('payment-address-change/{restaurant}/pause', [NezhaPaymentAddressChangeController::class, 'pause'])
+                ->name('payment-address-change.pause');
+            Route::post('payment-address-change/request/{change}/cancel', [NezhaPaymentAddressChangeController::class, 'cancel'])
+                ->name('payment-address-change.cancel');
+        });
+
+        // 独立复核入口：队列/详情只读，批准与驳回均需交易级 TOTP。
+        Route::group([
+            'prefix' => 'payment-address-review',
+            'middleware' => ['module:payment_address_review'],
+        ], function () {
+            Route::get('pending', [NezhaPaymentAddressChangeController::class, 'pending'])
+                ->name('payment-address-review.pending');
+            Route::get('request/{change}', [NezhaPaymentAddressChangeController::class, 'show'])
+                ->name('restaurant.payment-address-change.show');
+            Route::post('request/{change}/approve', [NezhaPaymentAddressChangeController::class, 'approve'])
+                ->name('restaurant.payment-address-change.approve');
+            Route::post('request/{change}/reject', [NezhaPaymentAddressChangeController::class, 'reject'])
+                ->name('restaurant.payment-address-change.reject');
+        });
+
         Route::group(['prefix' => 'restaurant', 'as' => 'restaurant.', 'middleware' => ['module:restaurant']], function () {
             Route::get('get-restaurants-data/{restaurant}', [VendorController::class, 'get_restaurant_data'])->name('get-restaurants-data');
             Route::get('restaurant-filter/{id}', [VendorController::class, 'restaurant_filter'])->name('restaurantfilter');
@@ -1396,4 +1426,3 @@ Route::middleware('module:provide_dm_earning')->group(function () {
     Route::get('zone/get-zone', [ZoneController::class, 'get_zone'])->name('zone.get-zone');
 
 });
-

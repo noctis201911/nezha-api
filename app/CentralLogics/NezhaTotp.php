@@ -25,18 +25,30 @@ class NezhaTotp
     /** 验证一个 6 位验证码, 允许前后各 $window 个时间步的容错(防时钟漂移) */
     public static function verify(string $secret, string $code, int $window = 1): bool
     {
+        return self::matchingCounter($secret, $code, $window) !== null;
+    }
+
+    /**
+     * 返回匹配的 30 秒时间步，供资金地址交易级验证做数据库防重放。
+     * 只返回计数器，不返回或记录验证码；普通登录仍可继续使用 verify()。
+     */
+    public static function matchingCounter(string $secret, string $code, int $window = 1): ?int
+    {
         $code = preg_replace('/\s+/', '', $code);
         if (!preg_match('/^\d{6}$/', $code)) {
-            return false;
+            return null;
         }
+
         $timeStep = (int) floor(time() / 30);
         for ($i = -$window; $i <= $window; $i++) {
-            $candidate = self::codeAt($secret, $timeStep + $i);
+            $counter = $timeStep + $i;
+            $candidate = self::codeAt($secret, $counter);
             if ($candidate !== '' && hash_equals($candidate, $code)) {
-                return true;
+                return $counter;
             }
         }
-        return false;
+
+        return null;
     }
 
     /** 计算指定时间步的验证码(供 verify + 测试用) */

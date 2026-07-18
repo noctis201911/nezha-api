@@ -1,6 +1,13 @@
 @extends('layouts.admin.app')
 
-@section('title',translate('messages.profile_settings'))
+@php($__exclusivePaymentAddressReviewer = \App\CentralLogics\Helpers::isExclusivePaymentAddressReviewer())
+@php($__settingsHomeUrl = $__exclusivePaymentAddressReviewer
+    ? (auth('admin')->user()?->two_factor_enabled
+        ? route('admin.payment-address-review.pending')
+        : route('admin.two-factor.setup'))
+    : route('admin.dashboard'))
+
+@section('title', $__exclusivePaymentAddressReviewer ? '修改密码' : translate('messages.profile_settings'))
 
 @push('css_or_js')
 
@@ -14,13 +21,14 @@
             <div class="d-flex flex-wrap justify-content-between align-items-center">
                 <div>
                     <h1 class="page-header-title">
-                        <span class="page-header-icon"><i class="tio-settings"></i></span>
-                        <span>{{translate('messages.settings')}}</span>
+                        <span class="page-header-icon"><i class="{{ $__exclusivePaymentAddressReviewer ? 'tio-lock-outlined' : 'tio-settings' }}"></i></span>
+                        <span>{{ $__exclusivePaymentAddressReviewer ? '修改密码' : translate('messages.settings') }}</span>
                     </h1>
                 </div>
                 <div>
-                    <a class="btn btn--primary" href="{{route('admin.dashboard')}}">
-                        <i class="tio-dashboard-vs ml-xl-2"></i> {{translate('messages.dashboard')}}
+                    <a class="btn btn--primary" href="{{ $__settingsHomeUrl }}">
+                        <i class="{{ $__exclusivePaymentAddressReviewer ? 'tio-checkmark-square' : 'tio-dashboard-vs' }} ml-xl-2"></i>
+                        {{ $__exclusivePaymentAddressReviewer ? (auth('admin')->user()?->two_factor_enabled ? '返回复核队列' : '返回两步验证') : translate('messages.dashboard') }}
                     </a>
                 </div>
             </div>
@@ -29,6 +37,7 @@
         <!-- End Page Header -->
 
         <div class="row">
+            @unless($__exclusivePaymentAddressReviewer)
             <div class="col-lg-3">
                 <!-- Navbar -->
                 <div class="navbar-vertical navbar-expand-lg mb-3 mb-lg-5 profile-sidebar-sticky">
@@ -70,8 +79,10 @@
                 </div>
                 <!-- End Navbar -->
             </div>
+            @endunless
 
-            <div class="col-lg-9">
+            <div class="{{ $__exclusivePaymentAddressReviewer ? 'col-lg-12' : 'col-lg-9' }}">
+                @unless($__exclusivePaymentAddressReviewer)
                 <form action="{{env('APP_MODE')!='demo'?route('admin.settings'):'javascript:'}}" method="post" enctype="multipart/form-data" id="admin-settings-form">
                 @csrf
                 <!-- Card -->
@@ -167,6 +178,7 @@
                     </div>
                     <!-- End Card -->
                 </form>
+                @endunless
 
                 <!-- Card -->
                 <div id="passwordDiv" class="card mb-3">
@@ -273,6 +285,7 @@
 @push('script_2')
     <script>
         "use strict";
+        @unless($__exclusivePaymentAddressReviewer)
         function readURL(input) {
             if (input.files && input.files[0]) {
                 let reader = new FileReader();
@@ -304,5 +317,6 @@
                 scrollTop: $("#passwordDiv").offset().top - 100
             }, 600);
         });
+        @endunless
     </script>
 @endpush

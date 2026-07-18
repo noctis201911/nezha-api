@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\CentralLogics\Helpers;
+use App\CentralLogics\NezhaBackofficeEmailBoundary;
 use App\CentralLogics\RestaurantLogic;
 use App\Exports\DisbursementHistoryExport;
 use App\Exports\RestauranrWiseFoodReviewExport;
@@ -35,6 +36,7 @@ use App\Models\Vendor;
 use App\Models\WithdrawRequest;
 use App\Models\Zone;
 use App\Scopes\RestaurantScope;
+use App\Rules\UniqueBackofficeEmail;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\Request;
@@ -73,7 +75,7 @@ class VendorController extends Controller
             'address' => 'required|max:1000',
             'latitude' => 'required|numeric|min:-90|max:90',
             'longitude' => 'required|numeric|min:-180|max:180',
-            'email' => 'required|unique:vendors',
+            'email' => ['required', new UniqueBackofficeEmail()],
             'phone' => 'required|regex:/^([0-9\s\-\+\(\)]*)$/|min:9|max:20|unique:vendors',
             'minimum_delivery_time' => 'required',
             'maximum_delivery_time' => 'required|gt:minimum_delivery_time',
@@ -313,7 +315,7 @@ class VendorController extends Controller
             'f_name' => 'required|max:100',
             'l_name' => 'nullable|max:100',
             'name' => 'required|max:191',
-            'email' => 'required|unique:vendors,email,' . $restaurant?->vendor?->id,
+            'email' => ['required', new UniqueBackofficeEmail('vendors', (int) $restaurant?->vendor?->id)],
             'phone' => 'required|regex:/^([0-9\s\-\+\(\)]*)$/|min:9|max:20|unique:vendors,phone,' . $restaurant?->vendor?->id,
             'zone_id' => 'required',
             'latitude' => 'required|min:-90|max:90',
@@ -607,6 +609,24 @@ class VendorController extends Controller
             return back();
         }
 
+        // 地址状态机开启后，旧表单仍可维护支付宝/收款人，但不得绕过
+        // 交易级 TOTP、商家确认和不同管理员复核直接改 USDT 地址。
+        try {
+            $nzUsdtInput = [];
+            foreach (['usdt_address', 'usdt_bep20_address', 'usdt_network'] as $nzUsdtField) {
+                if ($request->exists($nzUsdtField)) {
+                    $nzUsdtInput[$nzUsdtField] = $request->input($nzUsdtField);
+                }
+            }
+            \App\CentralLogics\NezhaPaymentAddressChangeService::assertLegacyUsdtWriteAllowed(
+                $restaurant,
+                $nzUsdtInput
+            );
+        } catch (\DomainException $e) {
+            Toastr::error('USDT 收款地址已启用受控变更流程，请从地址变更申请入口操作');
+            return back()->withInput();
+        }
+
         // 哪吒[收款码变更安全提醒]: 改动前快照收款字段旧值(含收款码图片), 保存后比对真正变了哪些。
         $nz_pay_before = [
             'rmb_qr_image'       => $restaurant->rmb_qr_image,
@@ -628,9 +648,11 @@ class VendorController extends Controller
             $restaurant->rmb_qr_url = \App\CentralLogics\NezhaAlipayQr::decodeUrl($restaurant->rmb_qr_image);
         }
         $restaurant->payee_name   = $request->payee_name;
-        $restaurant->usdt_address = $request->usdt_address;
-        $restaurant->usdt_bep20_address = $request->usdt_bep20_address;
-        if ($request->has('usdt_network')) { $restaurant->usdt_network = $request->usdt_network; }
+        if (! \App\CentralLogics\NezhaPaymentAddressChangeService::enabled()) {
+            $restaurant->usdt_address = $request->usdt_address;
+            $restaurant->usdt_bep20_address = $request->usdt_bep20_address;
+            if ($request->has('usdt_network')) { $restaurant->usdt_network = $request->usdt_network; }
+        }
         $restaurant->save();
 
         // 哪吒[收款码变更安全提醒]: 收款信息=钱往哪走, 任何改动都可能是被冒用/误录。比对实际变了哪些字段,
@@ -807,7 +829,12 @@ class VendorController extends Controller
             $rmbRate = (float)(BusinessSetting::where('key', 'nezha_usd_to_rmb_rate')->first()?->value ?? 7.1);
             $cnyToAmd = (float)(BusinessSetting::where('key', 'nezha_rate_cny_to_amd')->first()?->value ?? 55);
             $usdToAmd = (float)(BusinessSetting::where('key', 'nezha_rate_usd_to_amd')->first()?->value ?? 400);
-            return view('admin-views.vendor.view.payment-info', compact('restaurant', 'depositMode', 'depositThreshold', 'depositBalance', 'depositLogs', 'rmbRate', 'cnyToAmd', 'usdToAmd'));
+            $paymentAddressSecurity = \App\CentralLogics\NezhaPaymentAddressChangeView::admin(
+                $restaurant,
+                request()->query('review'),
+                auth('admin')->user()
+            );
+            return view('admin-views.vendor.view.payment-info', compact('restaurant', 'depositMode', 'depositThreshold', 'depositBalance', 'depositLogs', 'rmbRate', 'cnyToAmd', 'usdToAmd', 'paymentAddressSecurity'));
         } elseif ($tab == 'order') {
             $orders = Order::where('restaurant_id', $restaurant->id)->with('customer')
                 ->when(isset($key), function ($q) use ($key) {
@@ -1828,6 +1855,12 @@ class VendorController extends Controller
 
                         return back();
                     }
+                    $normalizedEmail = NezhaBackofficeEmailBoundary::normalize($collection['email']);
+                    if (NezhaBackofficeEmailBoundary::conflicts($normalizedEmail)) {
+                        Toastr::error((new UniqueBackofficeEmail())->message());
+
+                        return back();
+                    }
                     if (isset($collection['DeliveryTime']) && explode('-', (string) $collection['DeliveryTime'])[0] > explode('-', (string) $collection['DeliveryTime'])[1]) {
                         Toastr::error(translate('messages.max_delivery_time_must_be_greater_than_min_delivery_time_on_id') . ' ' . $collection['id']);
 
@@ -1876,7 +1909,7 @@ class VendorController extends Controller
                         'l_name' => $collection['ownerLastName'],
                         'password' => bcrypt(12345678),
                         'phone' => $collection['phone'],
-                        'email' => $collection['email'],
+                        'email' => $normalizedEmail,
                         'status' => 1,
                         'created_at' => now(),
                         'updated_at' => now(),
@@ -1886,7 +1919,7 @@ class VendorController extends Controller
                         'logo' => $collection['logo'] ?? null,
                         'cover_photo' => $collection['CoverPhoto'] ?? null,
                         'phone' => $collection['phone'],
-                        'email' => $collection['email'],
+                        'email' => $normalizedEmail,
                         'latitude' => $collection['latitude'],
                         'longitude' => $collection['longitude'],
                         'vendor_id' => $vendor_id + $key + 1,
@@ -1984,6 +2017,12 @@ class VendorController extends Controller
 
                         return back();
                     }
+                    $normalizedEmail = NezhaBackofficeEmailBoundary::normalize($collection['email']);
+                    if (NezhaBackofficeEmailBoundary::conflicts($normalizedEmail, 'vendors', isset($collection['ownerID']) ? (int) $collection['ownerID'] : null)) {
+                        Toastr::error((new UniqueBackofficeEmail())->message());
+
+                        return back();
+                    }
                     if (isset($collection['DeliveryTime']) && explode('-', (string) $collection['DeliveryTime'])[0] > explode('-', (string) $collection['DeliveryTime'])[1]) {
                         Toastr::error(translate('messages.max_delivery_time_must_be_greater_than_min_delivery_time_on_id') . ' ' . $collection['id']);
 
@@ -2031,7 +2070,7 @@ class VendorController extends Controller
                         'f_name' => $collection['ownerFirstName'],
                         'l_name' => $collection['ownerLastName'],
                         'phone' => $collection['phone'],
-                        'email' => $collection['email'],
+                        'email' => $normalizedEmail,
                         'status' => 1,
                         'password' => bcrypt(12345678),
                         'updated_at' => now(),
@@ -2042,7 +2081,7 @@ class VendorController extends Controller
                         'logo' => $collection['logo'] ?? null,
                         'cover_photo' => $collection['CoverPhoto'] ?? null,
                         'phone' => $collection['phone'],
-                        'email' => $collection['email'],
+                        'email' => $normalizedEmail,
                         'latitude' => $collection['latitude'],
                         'longitude' => $collection['longitude'],
                         'vendor_id' => $collection['ownerID'],
