@@ -34,6 +34,7 @@ use App\Http\Controllers\Vendor\NezhaTopupController;
 use App\Http\Controllers\Vendor\NezhaConsolidationController;
 use App\Http\Controllers\Vendor\NezhaConsolidationRoundController;
 use App\Http\Controllers\Vendor\WalletMethodController;
+use App\Http\Controllers\Vendor\NezhaPaymentAddressChangeController;
 
 Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
     Route::group(['middleware' => ['vendor' ,'maintenance','actch:admin_panel']], function () {
@@ -284,6 +285,13 @@ Route::group(['prefix' => 'withdraw-method', 'as' => 'wallet-method.', 'middlewa
             Route::post('status-update', [WalletMethodController::class, 'status_update'])->name('status-update');
             Route::post('default-status-update', [WalletMethodController::class, 'default_status_update'])->name('default-status-update');
 
+        });
+
+        // 默认关闭；VendorMiddleware 也容纳员工，控制器会再次硬性要求 vendor owner guard。
+        Route::group(['prefix' => 'payment-address-change', 'as' => 'payment-address-change.'], function () {
+            Route::get('{change}', [NezhaPaymentAddressChangeController::class, 'show'])->name('show');
+            Route::post('{change}/confirm', [NezhaPaymentAddressChangeController::class, 'confirm'])->name('confirm');
+            Route::post('{change}/reject', [NezhaPaymentAddressChangeController::class, 'reject'])->name('reject');
         });
 
 

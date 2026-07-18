@@ -609,6 +609,24 @@ class VendorController extends Controller
             return back();
         }
 
+        // 地址状态机开启后，旧表单仍可维护支付宝/收款人，但不得绕过
+        // 交易级 TOTP、商家确认和不同管理员复核直接改 USDT 地址。
+        try {
+            $nzUsdtInput = [];
+            foreach (['usdt_address', 'usdt_bep20_address', 'usdt_network'] as $nzUsdtField) {
+                if ($request->exists($nzUsdtField)) {
+                    $nzUsdtInput[$nzUsdtField] = $request->input($nzUsdtField);
+                }
+            }
+            \App\CentralLogics\NezhaPaymentAddressChangeService::assertLegacyUsdtWriteAllowed(
+                $restaurant,
+                $nzUsdtInput
+            );
+        } catch (\DomainException $e) {
+            Toastr::error('USDT 收款地址已启用受控变更流程，请从地址变更申请入口操作');
+            return back()->withInput();
+        }
+
         // 哪吒[收款码变更安全提醒]: 改动前快照收款字段旧值(含收款码图片), 保存后比对真正变了哪些。
         $nz_pay_before = [
             'rmb_qr_image'       => $restaurant->rmb_qr_image,
@@ -630,9 +648,11 @@ class VendorController extends Controller
             $restaurant->rmb_qr_url = \App\CentralLogics\NezhaAlipayQr::decodeUrl($restaurant->rmb_qr_image);
         }
         $restaurant->payee_name   = $request->payee_name;
-        $restaurant->usdt_address = $request->usdt_address;
-        $restaurant->usdt_bep20_address = $request->usdt_bep20_address;
-        if ($request->has('usdt_network')) { $restaurant->usdt_network = $request->usdt_network; }
+        if (! \App\CentralLogics\NezhaPaymentAddressChangeService::enabled()) {
+            $restaurant->usdt_address = $request->usdt_address;
+            $restaurant->usdt_bep20_address = $request->usdt_bep20_address;
+            if ($request->has('usdt_network')) { $restaurant->usdt_network = $request->usdt_network; }
+        }
         $restaurant->save();
 
         // 哪吒[收款码变更安全提醒]: 收款信息=钱往哪走, 任何改动都可能是被冒用/误录。比对实际变了哪些字段,
@@ -809,7 +829,12 @@ class VendorController extends Controller
             $rmbRate = (float)(BusinessSetting::where('key', 'nezha_usd_to_rmb_rate')->first()?->value ?? 7.1);
             $cnyToAmd = (float)(BusinessSetting::where('key', 'nezha_rate_cny_to_amd')->first()?->value ?? 55);
             $usdToAmd = (float)(BusinessSetting::where('key', 'nezha_rate_usd_to_amd')->first()?->value ?? 400);
-            return view('admin-views.vendor.view.payment-info', compact('restaurant', 'depositMode', 'depositThreshold', 'depositBalance', 'depositLogs', 'rmbRate', 'cnyToAmd', 'usdToAmd'));
+            $paymentAddressSecurity = \App\CentralLogics\NezhaPaymentAddressChangeView::admin(
+                $restaurant,
+                request()->query('review'),
+                auth('admin')->user()
+            );
+            return view('admin-views.vendor.view.payment-info', compact('restaurant', 'depositMode', 'depositThreshold', 'depositBalance', 'depositLogs', 'rmbRate', 'cnyToAmd', 'usdToAmd', 'paymentAddressSecurity'));
         } elseif ($tab == 'order') {
             $orders = Order::where('restaurant_id', $restaurant->id)->with('customer')
                 ->when(isset($key), function ($q) use ($key) {

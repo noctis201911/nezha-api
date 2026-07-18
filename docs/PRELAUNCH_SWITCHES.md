@@ -33,6 +33,8 @@
 | `nezha_kyc_sanction_screen_status` | 1 | 商家入驻 KYC 人名制裁筛查 | 🔴L1-6 |
 | `nezha_timeout_status` | 1 | 订单超时自动处理（催/取消未付单/升级） | L1-1 邻 |
 | `nezha_yandex_link_purge_status` | 1 | Yandex 链接 PII 到期清除 | L1-7 |
+| `nezha_payment_address_credential_status` | 1 | USDT 付款地址版本凭据：绑定顾客/商家/网络/方式的加密地址快照；2026-07-15 完成 migration、网络初始化及签发/复用/消费/过期 production canary 后按顺序启用。关闭不删除证据。 | L1-1 邻 |
+| `nezha_payment_address_change_status` | 1 | USDT 收款地址受控变更：旧入口禁直写，交易级 TOTP → 商户 owner 确认 → 不同管理员 TOTP 复核；2026-07-15 完成驳回、批准、恢复原地址和通知审计 production canary 后启用。 | L1-1 邻 |
 | `offline_payment`（直付） | 应开 | B方案顾客直付商家的核心付款方式（**关了没人能下单**，上线务必确认开） | 核心 |
 | `home_delivery`（配送） | 1 | 唯一在运营的履约类型 | 核心 |
 | reCAPTCHA（`recaptcha.status`）+ 邮件（`config mail.status`） | 应开 | 注册防刷 / 邮箱找回等邮件（不在 business_settings，见 config，上线确认） | — |
@@ -54,6 +56,7 @@
 | 开关 key | 现值 | 卡在哪 / 何时才能开 | 等级 |
 |---|---|---|---|
 | `nezha_consolidation_rounds_status` | **0** | 集运期次撮合**总闸**（阶段 B 骨架 dormant）。真开=①staging 整链 QA（建期次→报名→状态机 draft→open→closed/canceled→脱敏导出）②业主批准③开城后有实际拼柜需求。开=vendor 端显 open 期次卡+报名流+成团进度；关=vendor 端期次/报名整体零透出（admin 端始终可用·运营先建期次）。🔴 **翻本闸只是必要条件**：集运仅面向经营达标的深度合作商家，**每店资格另由 `restaurants.nezha_consolidation_eligible` 控（默认全关）**，须在 admin「平台集运申报 → 需求汇总」页逐家点「开通」；**只翻闸不开资格 = 商家端仍全 404（这不是 bug）**。开期通知同样只发已开通资格的商家。提示卡与 v1 问卷面向全体、不受资格限制（摸底用）。平台只组织撮合、公示货代报价·付款商家直付货代·不碰钱。见 `fable-brief/PLAN_consolidation_roadmap.md §3-B`。 | L3 |
+| `nezha_payment_address_change_approval_ttl_min` | 1440 | 地址变更申请等待商家/复核的有效期，默认 24 小时，可调 30–10080 分钟；它只使未完成申请超时并对用户显示“已驳回（超时）”，底层保留 system/expired 审计。它不是资金地址冷静期，也不延长任何已签发凭据。 | L1-1 邻参数 |
 | `schedule_order`（全局·StackFood 平台级 business_settings） | **1（`/config schedule_order=true`）** | **当前已开；它只是预约前置，不是预约功能签收** | 预约功能隐藏前置。2026-07-14 production 只读核对已为 1，因此 `nezha_preorder_status=1` 不再是“总闸开但依赖关”的静默死链；仍须 exact-main 隔离全链、商家操作与产品 owner 签收。影响面仅 opt-in 预约店（每店列=1）；不得把当前值冒充已批准值。 | L2 |
 | `nezha_preorder_status` | **1（未签收）** | 预约下单/集中配送**总闸**。2026-07-14 live=1 且 `schedule_order=true`；当前阻断从“隐藏依赖关闭”校准为“功能已暴露但缺 owner 签收”。exact-main 强制 SQLite `:memory:` 的预约聚焦 53 tests 已过，Web 取消动作契约也通过；这关闭服务端时序/窗口/取消/作业台等自动语义，不等于真实 UI 完整链。关闭前端/接口透出或继续保持 1 都是产品决定。剩余签收：①隔离真实浏览器下单/取消/并发/刷新；②产品 owner；③商家运营；④UI 目标视口证据。当前值不等于批准值。 | L2 |
 | `nezha_preorder_min_lead_hours` / `nezha_preorder_max_days_ahead` | 2 / 3 | 预约下单提前量参数(**参数非布尔**·后台可调)。顾客下预约单时,窗口起始须 ≥ now + `min_lead_hours` 且 ≤ now + `max_days_ahead` 天(M6 净新增服务端硬校验·债辩纠正① delivery 原只拦「不能约过去」)。空/0 回落默认。改后须 `Cache::forget('business_settings_all_data')`。 | L2 |

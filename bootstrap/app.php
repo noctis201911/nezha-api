@@ -13,6 +13,7 @@ use App\Http\Middleware\LocalizationMiddleware;
 use App\Http\Middleware\MaintenanceMode;
 // Custom middleware
 use App\Http\Middleware\ModulePermissionMiddleware;
+use App\Http\Middleware\PaymentAddressReviewerScopeMiddleware;
 use App\Http\Middleware\RateLimiterMiddleware;
 use App\Http\Middleware\ReactValid;
 use App\Http\Middleware\RedirectIfAuthenticated;
@@ -69,6 +70,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'vendor.api' => VendorTokenIsValid::class,
             'dm.api' => DmTokenIsValid::class,
             'module' => ModulePermissionMiddleware::class,
+            'reviewer.scope' => PaymentAddressReviewerScopeMiddleware::class,
             'vmodule' => \App\Http\Middleware\VendorApiModulePermission::class,
             'installation-check' => InstallationMiddleware::class,
             'actch' => ActivationCheckMiddleware::class,
@@ -125,6 +127,12 @@ return Application::configure(basePath: dirname(__DIR__))
         //   每分钟扫描, 据阈值执行幂等动作(提醒商家/自动取消未付款单/已付款单待退款留痕+通知商家退款/备餐超时升级客服)。
         //   总开关 business_settings.nezha_timeout_status(默认1开)。
         $schedule->command('nezha:order-timeout-sweep')->everyMinute()->withoutOverlapping();
+        // 默认关闭：地址变更闸为 0 或迁移未启用时命令只返回 disabled；开启后清理过期审批，
+        // 并只为升级前遗留的 draining 记录完成兼容收尾。新审批会原子切换，不再阻断新凭据。
+        $schedule->command('nezha:payment-address-maintain')->everyMinute()->withoutOverlapping();
+        // 地址凭据隐私留存：未消费且过期/撤销满 30 天后，只清除加密地址快照和 secret hash；
+        // 已消费订单证据、绑定、指纹、状态和时间戳不动。迁移未就绪时命令只返回 not_ready。
+        $schedule->command('nezha:payment-address-credential-retain')->dailyAt('03:35')->withoutOverlapping();
         // 哪吒商家版App: 新单报警兜底网(内联只是best-effort, 真正保底靠这里每分钟重试)
         $schedule->command('nezha:vendor-alarm-sweep')->everyMinute()->withoutOverlapping();
         // 哪吒 新单反复提醒: 对未接单按商家设定间隔反复发 TG 催单(纯通知·总闸 nezha_new_order_nag_status 默0 dormant→整条 return)。

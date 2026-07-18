@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Vendor;
 
 use App\Models\DisbursementWithdrawalMethod;
 use App\CentralLogics\Helpers;
+use App\CentralLogics\NezhaPaymentAddressChangeView;
 use App\Models\WithdrawalMethod;
 use App\Http\Controllers\Controller;
 use Brian2694\Toastr\Facades\Toastr;
@@ -21,7 +22,15 @@ class WalletMethodController extends Controller
         // 代为登记在 restaurant 表, 此页改为只读"我的收款方式"核对页, 让商家核对平台
         // 给自己设置的收款信息是否正确(如有误需联系平台修改, 防误改导致收不到款)。
         $restaurant = \App\Models\Restaurant::find(Helpers::get_restaurant_id());
-        return view('vendor-views.wallet-method.index', compact('restaurant'));
+        $isOwner = auth('vendor')->check();
+        $paymentAddressSecurity = $restaurant
+            ? NezhaPaymentAddressChangeView::merchant($restaurant, $isOwner)
+            : ['enabled' => false, 'storage_ready' => false, 'is_owner' => $isOwner, 'open_changes' => collect(), 'notifications' => collect()];
+        $viewedSecurityNotifications = $isOwner
+            ? NezhaPaymentAddressChangeView::markMerchantSecurityNotificationsViewed((int) auth('vendor')->id())
+            : 0;
+
+        return view('vendor-views.wallet-method.index', compact('restaurant', 'paymentAddressSecurity', 'viewedSecurityNotifications'));
     }
 
     public function store(Request $request)

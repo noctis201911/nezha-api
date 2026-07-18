@@ -740,7 +740,8 @@ $countryCode = strtolower($country ?? 'auto');
         document.addEventListener('keydown', function (event) {
             if (event.ctrlKey && event.key === 'k') {
                 event.preventDefault();
-                document.getElementById('modalOpener').click();
+                var modalOpener = document.getElementById('modalOpener');
+                if (modalOpener) modalOpener.click();
             }
         });
 
@@ -929,7 +930,7 @@ $countryCode = strtolower($country ?? 'auto');
         @php($order_notification_type = \App\CentralLogics\Helpers::get_business_settings('order_notification_type') ?? 'firebase')
         var new_order_type = 'restaurant_order';
 
-        @if (isset($fcm_credentials['apiKey']) && is_string($fcm_credentials['apiKey']) && strlen($fcm_credentials['apiKey']) > 3)
+        @if (!\App\CentralLogics\Helpers::isExclusivePaymentAddressReviewer() && isset($fcm_credentials['apiKey']) && is_string($fcm_credentials['apiKey']) && strlen($fcm_credentials['apiKey']) > 3)
 
         messaging.onMessage(function (payload) {
             console.log(payload.data);
@@ -962,9 +963,10 @@ $countryCode = strtolower($country ?? 'auto');
 
         {{-- 哪吒[2026-06-22]: 超管新订单轮询弹窗已停用(B方案平台不接单)。异常订单(超时/逾期退款)提醒走 nz-admin-abn-toast 独立轮询块。 --}}
 
-        @if (isset($fcm_credentials['apiKey']) && is_string($fcm_credentials['apiKey']) && strlen($fcm_credentials['apiKey']) > 3)
+        @if (!\App\CentralLogics\Helpers::isExclusivePaymentAddressReviewer() && isset($fcm_credentials['apiKey']) && is_string($fcm_credentials['apiKey']) && strlen($fcm_credentials['apiKey']) > 3)
             startFCM();
         @endif
+        @unless(\App\CentralLogics\Helpers::isExclusivePaymentAddressReviewer())
         conversationList();
 
         if (getUrlParameter('conversation')) {
@@ -972,6 +974,7 @@ $countryCode = strtolower($country ?? 'auto');
             vendorConversationView();
             dmConversationView();
         }
+        @endunless
 
         $(document).on('click', '.call-demo', function (e) {
             @if(getEnvMode() == 'demo')

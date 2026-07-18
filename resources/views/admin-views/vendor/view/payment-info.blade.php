@@ -81,6 +81,7 @@
 
             {{-- 微信收款已下线: 平台放弃微信支付方式(2026-06-19), 商家无需再上传微信收款码 --}}
 
+            @if (!($paymentAddressSecurity['enabled'] ?? false))
             <div class="card mb-2">
                 <div class="card-header">
                     <h5 class="card-title">
@@ -126,13 +127,23 @@
                     </div>
                 </div>
             </div>
+            @endif
 
             <div class="card mb-2">
                 <div class="card-body text-right">
-                    <button type="submit" class="btn btn-primary">{{ translate('保存收款信息') }}</button>
+                    <button type="submit" class="btn btn-primary">
+                        {{ ($paymentAddressSecurity['enabled'] ?? false) ? translate('保存支付宝收款信息') : translate('保存收款信息') }}
+                    </button>
                 </div>
             </div>
         </form>
+
+        @if ($paymentAddressSecurity['enabled'] ?? false)
+            @include('admin-views.vendor.view.partials._payment-address-security', [
+                'security' => $paymentAddressSecurity,
+                'restaurant' => $restaurant,
+            ])
+        @endif
         <script>
         (function () {
             var DEF = @json(translate('未选择文件'));

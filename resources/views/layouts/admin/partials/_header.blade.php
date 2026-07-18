@@ -1,3 +1,9 @@
+@php($__exclusivePaymentAddressReviewer = \App\CentralLogics\Helpers::isExclusivePaymentAddressReviewer())
+@php($__adminHomeUrl = $__exclusivePaymentAddressReviewer
+    ? (auth('admin')->user()?->two_factor_enabled
+        ? route('admin.payment-address-review.pending')
+        : route('admin.two-factor.setup'))
+    : route('admin.dashboard'))
 <div id="headerMain" class="d-none">
     <header id="header"
             class="navbar navbar-expand-lg navbar-fixed navbar-height navbar-flush navbar-container navbar-bordered">
@@ -7,7 +13,7 @@
                 {{-- @php($restaurant_logo=\App\Models\BusinessSetting::where(['key'=>'logo'])->first()) --}}
                 @php($restaurant_logo=\App\CentralLogics\Helpers::getSettingsDataFromConfig(settings:'logo',relations:['storage']))
 
-                <a class="navbar-brand d-none d-md-block" href="{{route('admin.dashboard')}}" aria-label="">
+                <a class="navbar-brand d-none d-md-block" href="{{ $__adminHomeUrl }}" aria-label="">
                          <img class="navbar-brand-logo brand--logo-design-2"
                          src="{{ \App\CentralLogics\Helpers::get_full_url('business',$restaurant_logo?->value,$restaurant_logo?->storage[0]?->value ?? 'public', 'favicon') }}"
                          alt="image">
@@ -40,6 +46,7 @@
                         <span class="nz-env-badge {{ $__nzEnv ? 'nz-env-badge--prod' : 'nz-env-badge--staging' }}">{{ $__nzEnv ? '生产' : 'STAGING' }}</span>
                     </li>
                     <style>.nz-env-badge{display:inline-block;padding:4px 11px;border-radius:6px;font-size:12px;font-weight:600;letter-spacing:.5px;line-height:1.4;}.nz-env-badge--prod{background:#102A4C;color:#fff;}.nz-env-badge--staging{background:#FCF1E3;color:#D97A08;border:1px solid #D97A08;}</style>
+                    @unless($__exclusivePaymentAddressReviewer)
                     <li class="nav-item max-sm-m-0 w-md-200px">
                         <button type="button" id="modalOpener" class="title-color bg--secondary border-0 rounded justify-content-between w-100 align-items-center py-2 px-2 px-md-3 d-flex gap-1" data-toggle="modal" data-target="#staticBackdrop">
                             <div class="d-flex gap-1 align-items-center">
@@ -49,6 +56,7 @@
                             <span class="bg-card text-muted border rounded-3 p-1 fs-12 fw-bold lh-1 ms-1 ctrlplusk d-none d-md-block">Ctrl+K</span>
                         </button>
                     </li>
+                    @endunless
                     <li class="nav-item d-none d-sm-inline-block mr-2">
                         <div class="hs-unfold">
                             <div>
@@ -86,6 +94,7 @@
                             </div>
                         </div>
                     </li>
+                    @unless($__exclusivePaymentAddressReviewer)
                     <li class="nav-item d-none d-sm-inline-block mr-4">
                         <!-- Notification -->
                         <div class="hs-unfold">
@@ -103,7 +112,9 @@
                         </div>
                         <!-- End Notification -->
                     </li>
+                    @endunless
                     {{-- 哪吒M2-D3: 顶栏通知铃铛(收编异常订单+逾期退款浮窗·数据源 admin.get-restaurant-data·行内跳转不新造端点) --}}
+                    @unless($__exclusivePaymentAddressReviewer)
                     <li class="nav-item d-none d-sm-inline-block mr-4">
                         <div class="hs-unfold">
                             <a id="nzBellInvoker" class="js-hs-unfold-invoker btn btn-icon btn-soft-secondary rounded-circle position-relative" href="javascript:;"
@@ -138,7 +149,9 @@
                         .nz-bell-row__s--warn{color:#D97A08;}
                         .nz-bell-cta{flex-shrink:0;background:#102A4C;color:#fff;border-radius:8px;padding:4px 12px;font-size:12px;font-weight:600;}
                     </style>
+                    @endunless
                     {{-- 哪吒M2-D3: 铃铛 poll/render JS 移至布局尾 app.blade(防主题移动 header 致缓存引用失效); 此处仅 markup+style --}}
+                    @unless($__exclusivePaymentAddressReviewer)
                     <li class="nav-item d-none d-sm-inline-block mr-4">
                         <!-- Notification -->
                         <div class="hs-unfold">
@@ -153,6 +166,7 @@
                         </div>
                         <!-- End Notification -->
                     </li>
+                    @endunless
                     <li class="nav-item">
                         <!-- Account -->
                         <div class="hs-unfold">
@@ -197,14 +211,20 @@
 
                                 <div class="dropdown-divider"></div>
 
-                                <a class="dropdown-item" href="{{route('admin.settings')}}">
-                                    <span class="text-truncate pr-2" title="Settings">{{translate('messages.settings')}}</span>
-                                </a>
+                                @if($__exclusivePaymentAddressReviewer)
+                                    <a class="dropdown-item" href="{{ route('admin.settings') }}">
+                                        <span class="text-truncate pr-2" title="修改密码">修改密码</span>
+                                    </a>
+                                @else
+                                    <a class="dropdown-item" href="{{route('admin.settings')}}">
+                                        <span class="text-truncate pr-2" title="Settings">{{translate('messages.settings')}}</span>
+                                    </a>
 
-                                {{-- 哪吒: 后台两步验证入口 (原脚手架无 UI 入口, 只能手打 URL) --}}
-                                <a class="dropdown-item" href="{{ route('admin.two-factor.setup') }}">
-                                    <span class="text-truncate pr-2" title="两步验证 (2FA)">🔐 两步验证 (2FA)</span>
-                                </a>
+                                    {{-- 哪吒: 后台两步验证入口 (原脚手架无 UI 入口, 只能手打 URL) --}}
+                                    <a class="dropdown-item" href="{{ route('admin.two-factor.setup') }}">
+                                        <span class="text-truncate pr-2" title="两步验证 (2FA)">🔐 两步验证 (2FA)</span>
+                                    </a>
+                                @endif
 
                                 <div class="dropdown-divider"></div>
 
