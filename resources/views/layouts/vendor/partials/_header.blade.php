@@ -122,44 +122,238 @@
                             <a id="nzSoundBtn" class="btn btn-icon btn-soft-secondary rounded-circle" href="javascript:;" data-toggle="tooltip" title="提示音设置" aria-label="提示音设置">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
                             </a>
-                            <div id="nzSoundPop" style="display:none;position:absolute;right:0;top:calc(100% + 8px);width:340px;max-width:88vw;background:#fff;border:1px solid #ededed;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.16);z-index:100001;font-family:'PingFang SC','Microsoft YaHei',sans-serif;text-align:left;">
-                                <style>
-                                #nzSoundPop .nz-snd-grp{font-size:12px;color:#9aa0a6;padding:10px 14px 4px;}
-                                #nzSoundPop .nz-snd-row{display:flex;align-items:center;gap:10px;padding:6px 14px;}
-                                #nzSoundPop .nz-snd-name{width:78px;flex:none;font-size:13.5px;color:#1f1f1f;}
-                                #nzSoundPop .nz-snd-sl{flex:1;min-width:0;accent-color:#C4193E;height:20px;}
-                                #nzSoundPop .nz-snd-val{width:36px;flex:none;text-align:right;font-size:12.5px;color:#6b7075;}
-                                #nzSoundPop .nz-snd-test{flex:none;width:28px;height:28px;border-radius:7px;border:1px solid #e6e6e6;background:#fafafa;color:#6b7075;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;font-size:10px;line-height:1;}
-                                #nzSoundPop .nz-snd-test:hover{background:#f0f0f0;}
-                                #nzSoundPop .nz-snd-off .nz-snd-row{opacity:.4;}
-                                #nzSoundPop .nz-snd-sw{position:relative;display:inline-block;width:42px;height:24px;vertical-align:middle;}
-                                #nzSoundPop .nz-snd-sw input{opacity:0;width:0;height:0;position:absolute;margin:0;}
-                                #nzSoundPop .nz-snd-sw .nz-snd-track{position:absolute;inset:0;background:#ccc;border-radius:20px;transition:.15s;cursor:pointer;}
-                                #nzSoundPop .nz-snd-sw .nz-snd-track:before{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.15s;}
-                                #nzSoundPop .nz-snd-sw input:checked + .nz-snd-track{background:#C4193E;}
-                                #nzSoundPop .nz-snd-sw input:checked + .nz-snd-track:before{transform:translateX(18px);}
-                                </style>
-                                <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #f0f0f0;">
-                                    <span style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px;color:#1f1f1f;">
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C4193E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
-                                        提示音
-                                    </span>
-                                    <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:#6b7075;cursor:pointer;margin:0;">全部开启
-                                        <span class="nz-snd-sw"><input type="checkbox" id="nzSoundMaster" checked><span class="nz-snd-track"></span></span>
-                                    </label>
-                                </div>
-                                <div id="nzSoundBody">
-                                    <div class="nz-snd-grp">接单提醒</div>
-                                    <div class="nz-snd-row"><span class="nz-snd-name">新订单</span><input type="range" class="nz-snd-sl" data-cat="new_order" min="0" max="100" step="1" value="90"><span class="nz-snd-val" data-cat="new_order">90%</span><button type="button" class="nz-snd-test" data-cat="new_order" data-el="myAudio" aria-label="试听新订单">&#9654;</button></div>
-                                    <div class="nz-snd-row"><span class="nz-snd-name">订单超时</span><input type="range" class="nz-snd-sl" data-cat="timeout" min="0" max="100" step="1" value="90"><span class="nz-snd-val" data-cat="timeout">90%</span><button type="button" class="nz-snd-test" data-cat="timeout" data-el="myAudio" aria-label="试听订单超时">&#9654;</button></div>
-                                    <div class="nz-snd-grp">消息提醒</div>
-                                    <div class="nz-snd-row"><span class="nz-snd-name">顾客消息</span><input type="range" class="nz-snd-sl" data-cat="customer_msg" min="0" max="100" step="1" value="70"><span class="nz-snd-val" data-cat="customer_msg">70%</span><button type="button" class="nz-snd-test" data-cat="customer_msg" data-el="nzMsgAudio" aria-label="试听顾客消息">&#9654;</button></div>
-                                    <div class="nz-snd-row"><span class="nz-snd-name">平台客服</span><input type="range" class="nz-snd-sl" data-cat="platform_msg" min="0" max="100" step="1" value="70"><span class="nz-snd-val" data-cat="platform_msg">70%</span><button type="button" class="nz-snd-test" data-cat="platform_msg" data-el="nzAdminMsgAudio" aria-label="试听平台客服">&#9654;</button></div>
-                                    <div class="nz-snd-grp">物流提醒</div>
-                                    <div class="nz-snd-row"><span class="nz-snd-name">催配送</span><input type="range" class="nz-snd-sl" data-cat="deliv" min="0" max="100" step="1" value="70"><span class="nz-snd-val" data-cat="deliv">70%</span><button type="button" class="nz-snd-test" data-cat="deliv" data-el="nzDelivAudio" aria-label="试听催配送">&#9654;</button></div>
-                                </div>
-                                <div style="padding:10px 14px;background:#FFF7E6;color:#8a6d1b;font-size:12px;line-height:1.55;border-top:1px solid #f5ecd0;">静音只关声音——新订单提示弹窗和订单列表照常显示，不会漏单。</div>
-                            </div>
+                            <div id="nzSoundPop" style="display:none;position:absolute;right:0;top:calc(100% + 8px);width:352px;max-width:88vw;background:#fff;border:1px solid #E7EAEF;border-radius:14px;box-shadow:0 12px 40px rgba(23,28,38,.10);z-index:100001;font-family:'PingFang SC','Microsoft YaHei',sans-serif;text-align:left;color:#1F2329;overflow:hidden;">
+    <style>
+    #nzSoundPop *{box-sizing:border-box;}
+    #nzSoundPop .nz-snd-sw{position:relative;display:inline-block;width:40px;height:22px;flex:none;vertical-align:middle;}
+    #nzSoundPop .nz-snd-sw input{opacity:0;width:0;height:0;position:absolute;margin:0;}
+    #nzSoundPop .nz-snd-sw .nz-snd-track{position:absolute;inset:0;background:#D6DAE0;border-radius:99px;transition:.15s;cursor:pointer;}
+    #nzSoundPop .nz-snd-sw .nz-snd-track:before{content:"";position:absolute;width:18px;height:18px;left:2px;top:2px;background:#fff;border-radius:50%;box-shadow:0 1px 2px rgba(23,28,38,.18);transition:.15s;}
+    #nzSoundPop .nz-snd-sw input:checked + .nz-snd-track{background:#1F2329;}
+    #nzSoundPop .nz-snd-sw input:checked + .nz-snd-track:before{transform:translateX(18px);}
+    #nzSoundPop .nz-hd{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;}
+    #nzSoundPop .nz-hd-t{display:flex;align-items:center;gap:7px;font-size:15px;font-weight:600;color:#1F2329;}
+    #nzSoundPop .nz-hd-m{display:flex;align-items:center;gap:7px;font-size:12px;color:#5A6069;margin:0;cursor:pointer;}
+    #nzSoundPop .nz-vrows{padding:4px 16px 0;}
+    #nzSoundPop .nz-vrow{display:flex;align-items:center;gap:10px;height:44px;}
+    #nzSoundPop .nz-vname{width:104px;flex:none;font-size:13px;color:#1F2329;line-height:1.3;}
+    #nzSoundPop .nz-vname i{font-style:normal;font-size:10px;color:#9AA0A8;display:block;}
+    #nzSoundPop .nz-snd-sl{-webkit-appearance:none;appearance:none;flex:1;min-width:0;height:14px;background:transparent;cursor:pointer;margin:0;}
+    #nzSoundPop .nz-snd-sl:focus{outline:none;}
+    #nzSoundPop .nz-snd-sl::-webkit-slider-runnable-track{height:4px;border-radius:99px;background:linear-gradient(to right,#A9AFB8 var(--p,0%),#EEF0F3 var(--p,0%));}
+    #nzSoundPop .nz-snd-sl::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:14px;height:14px;margin-top:-5px;border-radius:50%;background:#1F2329;border:2.5px solid #fff;box-shadow:0 1px 3px rgba(23,28,38,.28);}
+    #nzSoundPop .nz-snd-sl::-moz-range-track{height:4px;border-radius:99px;background:#EEF0F3;}
+    #nzSoundPop .nz-snd-sl::-moz-range-progress{height:4px;border-radius:99px;background:#A9AFB8;}
+    #nzSoundPop .nz-snd-sl::-moz-range-thumb{width:14px;height:14px;border:2.5px solid #fff;border-radius:50%;background:#1F2329;box-shadow:0 1px 3px rgba(23,28,38,.28);}
+    #nzSoundPop .nz-vval{width:28px;flex:none;text-align:right;font-size:12px;color:#9AA0A8;font-variant-numeric:tabular-nums;}
+    #nzSoundPop .nz-snd-test{flex:none;width:26px;height:26px;border-radius:8px;border:none;background:transparent;color:#5A6069;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;}
+    #nzSoundPop .nz-snd-test:hover{background:#F3F4F6;}
+    #nzSoundPop .nz-snd-off .nz-vrow{opacity:.4;}
+    #nzSoundPop .nz-vnotes{padding:8px 16px 14px;}
+    #nzSoundPop .nz-vnotes p{font-size:11.5px;line-height:1.65;color:#9AA0A8;margin:0;}
+    #nzSoundPop .nz-vnotes p + p{margin-top:2px;}
+    #nzSoundPop .nz-div{height:1px;background:#F0F2F4;}
+    #nzSoundPop .nz-nag{padding:13px 16px 16px;}
+    #nzSoundPop .nz-nag-hd{display:flex;align-items:center;justify-content:space-between;}
+    #nzSoundPop .nz-nag-t{font-size:14px;font-weight:600;color:#1F2329;}
+    #nzSoundPop .nz-nag-sub{margin-top:5px;font-size:12px;color:#5A6069;line-height:1.6;}
+    #nzSoundPop .nz-nag-body{margin-top:12px;}
+    #nzSoundPop .nz-setrow{display:flex;align-items:center;justify-content:space-between;}
+    #nzSoundPop .nz-setrow + .nz-setrow{margin-top:10px;}
+    #nzSoundPop .nz-setrow .nz-lb{font-size:13px;color:#1F2329;}
+    #nzSoundPop .nz-numin{display:flex;align-items:center;gap:2px;width:110px;height:32px;padding:0 10px 0 12px;border:1px solid #DDE1E7;border-radius:8px;background:#fff;}
+    #nzSoundPop .nz-numin input{flex:1;min-width:0;border:none;outline:none;background:transparent;font-size:13.5px;color:#1F2329;font-variant-numeric:tabular-nums;text-align:right;padding:0;-moz-appearance:textfield;}
+    #nzSoundPop .nz-numin input::-webkit-outer-spin-button,#nzSoundPop .nz-numin input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+    #nzSoundPop .nz-numin i{font-style:normal;font-size:12px;color:#9AA0A8;flex:none;}
+    #nzSoundPop .nz-setnote{margin-top:8px;font-size:11.5px;line-height:1.6;color:#9AA0A8;}
+    #nzSoundPop .nz-phrow{display:flex;align-items:center;justify-content:space-between;margin-top:13px;padding-top:13px;border-top:1px solid #F0F2F4;cursor:pointer;}
+    #nzSoundPop .nz-phrow .nz-lb{font-size:13px;font-weight:600;color:#1F2329;}
+    #nzSoundPop .nz-phrow .nz-chev{font-size:12px;color:#9AA0A8;}
+    #nzSoundPop .nz-guide{margin-top:11px;background:#FAFBFC;border:1px solid #F0F2F4;border-radius:10px;padding:13px 13px 14px;}
+    #nzSoundPop .nz-glead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+    #nzSoundPop .nz-chip{display:inline-block;padding:3px 8px;border-radius:99px;background:#E5F1EA;color:#2B7A57;font-size:11px;font-weight:600;}
+    #nzSoundPop .nz-glead .nz-gt{font-size:12px;color:#5A6069;}
+    #nzSoundPop .nz-seg{margin-top:12px;display:flex;background:#F0F2F4;border-radius:8px;padding:2px;}
+    #nzSoundPop .nz-seg span{flex:1;text-align:center;font-size:11.5px;padding:5px 0;border-radius:6px;color:#5A6069;cursor:pointer;user-select:none;}
+    #nzSoundPop .nz-seg span.nz-sel{background:#1F2329;color:#fff;font-weight:600;}
+    #nzSoundPop .nz-steps{margin-top:12px;}
+    #nzSoundPop .nz-step{display:flex;gap:9px;}
+    #nzSoundPop .nz-step + .nz-step{margin-top:10px;}
+    #nzSoundPop .nz-stepn{width:17px;height:17px;flex:none;margin-top:1px;border-radius:50%;background:#E9EBEF;color:#5A6069;font-size:10.5px;font-weight:600;display:flex;align-items:center;justify-content:center;}
+    #nzSoundPop .nz-stept{font-size:12.5px;line-height:1.65;color:#1F2329;}
+    #nzSoundPop .nz-kw{display:inline-block;padding:0 6px;border-radius:4px;background:#F0F2F4;font-weight:600;}
+    #nzSoundPop .nz-altnote{margin-top:11px;padding-top:10px;border-top:1px dashed #E7EAEF;font-size:11px;color:#9AA0A8;line-height:1.6;}
+    #nzSoundPop .nz-altnote a{color:#1F2329;font-weight:600;text-decoration:none;}
+    #nzSoundPop .nz-bind{margin-top:11px;position:relative;background:#fff;border:1px solid #E7EAEF;border-radius:10px;padding:13px 14px 13px 17px;overflow:hidden;}
+    #nzSoundPop .nz-bind:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:#D9A521;}
+    #nzSoundPop .nz-bind .nz-bt{font-size:13px;font-weight:600;color:#1F2329;}
+    #nzSoundPop .nz-bind .nz-bd{margin-top:5px;font-size:12px;color:#5A6069;line-height:1.65;}
+    #nzSoundPop .nz-bind .nz-bl{display:inline-block;margin-top:9px;font-size:12.5px;font-weight:600;color:#1F2329;text-decoration:none;}
+    #nzSoundPop .nz-save{margin-top:14px;width:100%;height:38px;border:none;border-radius:10px;background:#1F2329;color:#fff;font-size:13.5px;font-weight:600;cursor:pointer;letter-spacing:2px;}
+    #nzSoundPop .nz-saved{margin-top:14px;display:flex;align-items:center;justify-content:center;gap:6px;height:24px;font-size:12.5px;color:#2B7A57;}
+    </style>
+
+    @php($nzSndR = \App\CentralLogics\Helpers::get_restaurant_data())
+    @php($nzTgBound = !empty(optional($nzSndR)->telegram_chat_id))
+
+    <div class="nz-hd">
+        <span class="nz-hd-t">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1F2329" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path></svg>
+            提示音
+        </span>
+        <label class="nz-hd-m">总开关
+            <span class="nz-snd-sw"><input type="checkbox" id="nzSoundMaster" checked><span class="nz-snd-track"></span></span>
+        </label>
+    </div>
+
+    <div id="nzSoundBody">
+        <div class="nz-vrows">
+            <div class="nz-vrow">
+                <span class="nz-vname">订单<i>新订单 · 超时</i></span>
+                <input type="range" class="nz-snd-sl" data-cat="new_order" data-cats="new_order,timeout" min="0" max="100" step="1" value="90">
+                <span class="nz-vval" data-cat="new_order">90</span>
+                <button type="button" class="nz-snd-test" data-cat="new_order" data-el="myAudio" aria-label="试听订单提示音"><svg width="9" height="10" viewBox="0 0 9 10"><path d="M0 0 L9 5 L0 10 Z" fill="currentColor"/></svg></button>
+            </div>
+            <div class="nz-vrow">
+                <span class="nz-vname">消息与配送<i>顾客 · 客服 · 配送</i></span>
+                <input type="range" class="nz-snd-sl" data-cat="customer_msg" data-cats="customer_msg,platform_msg,deliv" min="0" max="100" step="1" value="70">
+                <span class="nz-vval" data-cat="customer_msg">70</span>
+                <button type="button" class="nz-snd-test" data-cat="customer_msg" data-el="nzMsgAudio" aria-label="试听消息提示音"><svg width="9" height="10" viewBox="0 0 9 10"><path d="M0 0 L9 5 L0 10 Z" fill="currentColor"/></svg></button>
+            </div>
+        </div>
+        <div class="nz-vnotes">
+            <p>静音仅关闭声音——新订单弹窗与订单列表不受影响，不会漏单。</p>
+            <p>音量调整即时生效，仅保存在本设备。</p>
+        </div>
+    </div>
+
+    <div class="nz-div"></div>
+
+    {{-- 哪吒 · 新单循环提醒(方案A网页循环播报 + B手机TG反复补发 · 共读一份·此处保存写后端5列) --}}
+    <div class="nz-nag">
+        <div class="nz-nag-hd">
+            <span class="nz-nag-t">新单循环提醒</span>
+            <span class="nz-snd-sw"><input type="checkbox" id="nzRepeatEnabled" {{ !empty(optional($nzSndR)->new_order_repeat_enabled) ? 'checked' : '' }}><span class="nz-snd-track"></span></span>
+        </div>
+        <div class="nz-nag-sub">新订单未处理时按设定间隔循环响铃，处理后自动停止。</div>
+        <div class="nz-nag-body" id="nzRepeatBody">
+            <div class="nz-setrow">
+                <span class="nz-lb">提醒间隔</span>
+                <span class="nz-numin"><input type="number" id="nzRepeatInterval" min="10" max="120" step="1" value="{{ (int)(optional($nzSndR)->new_order_repeat_interval_sec ?? 20) }}"><i>秒</i></span>
+            </div>
+            <div class="nz-setrow">
+                <span class="nz-lb">最长提醒</span>
+                <span class="nz-numin"><input type="number" id="nzRepeatMax" min="1" max="5" step="1" value="{{ (int)(optional($nzSndR)->new_order_repeat_max_minutes ?? 5) }}"><i>分钟</i></span>
+            </div>
+            <div class="nz-setnote">间隔可设 10–120 秒，最长提醒 1–5 分钟；手机 Telegram 固定约 60 秒提醒一次。</div>
+
+            <div class="nz-phrow" id="nzRepeatMobileToggle">
+                <span class="nz-lb">手机 Telegram 提醒</span>
+                <span class="nz-chev" id="nzRepeatMobileChev">展开 ›</span>
+            </div>
+
+            <div id="nzRepeatMobileSteps" style="display:none;">
+                @if($nzTgBound)
+                <div class="nz-guide">
+                    <div class="nz-glead">
+                        <span class="nz-chip">免费 · 一次设置长期有效</span>
+                        <span class="nz-gt">为 @@Nz_order_bot 的新单通知设置专属提示音</span>
+                    </div>
+                    <div class="nz-seg" id="nzTgSeg">
+                        <span class="nz-sel" data-os="ios">iPhone</span><span data-os="android">安卓</span>
+                    </div>
+                    <div class="nz-steps">
+                        <div class="nz-step"><span class="nz-stepn">1</span><span class="nz-stept">在 Telegram 中向 <span class="nz-kw">@@Nz_order_bot</span> 发送 <span class="nz-kw">语音</span>，机器人将回复 3 秒提示音文件</span></div>
+                        <div class="nz-step"><span class="nz-stepn">2</span><span class="nz-stept">长按该语音 → 选择「保存为提示音（Save for Notifications）」</span></div>
+                        <div class="nz-step"><span class="nz-stepn">3</span><span class="nz-stept"><span class="nz-os" data-os="ios">在该聊天中点击顶部名称 →「静音」→「自定义」，在「声音」中选中该提示音，点击「完成」</span><span class="nz-os" data-os="android" style="display:none;">在该聊天中点击右上「⋮」→「静音」→「自定义」→ 打开「自定义通知」，在「声音」中选中该提示音</span></span></div>
+                    </div>
+                    <div class="nz-altnote">使用电脑？可 <a href="{{ dynamicAsset('assets/admin/sound/new-order-voice.mp3') }}" download>下载 mp3 ›</a>，在通知设置的「上传声音」中手动添加。</div>
+                </div>
+                @else
+                <div class="nz-bind">
+                    <div class="nz-bt">手机提醒需先绑定 Telegram</div>
+                    <div class="nz-bd">前往 业务设置 → 通知设置，按提示完成绑定（约 1 分钟），之后手机即可接收新单提醒。</div>
+                    <a class="nz-bl" href="{{ route('vendor.business-settings.notification-setup') }}">前往绑定 ›</a>
+                </div>
+                @endif
+            </div>
+
+            <button type="button" id="nzRepeatSave" class="nz-save" style="display:none;">保存设置</button>
+            <div id="nzRepeatSaved" class="nz-saved" style="display:none;">
+                <svg width="12" height="10" viewBox="0 0 12 10"><path d="M1 5 L4.4 8.4 L11 1" stroke="#2B7A57" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span>已保存，网页与手机端同步生效</span>
+            </div>
+            <div id="nzRepeatMsg" style="font-size:12px;margin-top:6px;min-height:0;"></div>
+        </div>
+    </div>
+
+    <script>
+    (function(){
+        var enEl = document.getElementById('nzRepeatEnabled');
+        if (!enEl) { return; }
+        var body = document.getElementById('nzRepeatBody');
+        var ivEl = document.getElementById('nzRepeatInterval');
+        var mxEl = document.getElementById('nzRepeatMax');
+        var saveBtn = document.getElementById('nzRepeatSave');
+        var savedLine = document.getElementById('nzRepeatSaved');
+        var msg = document.getElementById('nzRepeatMsg');
+        var mob = document.getElementById('nzRepeatMobileToggle');
+        var mobChev = document.getElementById('nzRepeatMobileChev');
+        var mobSteps = document.getElementById('nzRepeatMobileSteps');
+        var seg = document.getElementById('nzTgSeg');
+
+        function clampVal(el){ var v = parseInt(el.value, 10); var mn = parseInt(el.min,10), mx = parseInt(el.max,10); if (isNaN(v)) v = mn; v = Math.max(mn, Math.min(mx, v)); el.value = v; return v; }
+        var baseline = { enabled: enEl.checked, interval: clampVal(ivEl), max: clampVal(mxEl) };
+        function current(){ return { enabled: enEl.checked, interval: clampVal(ivEl), max: clampVal(mxEl) }; }
+        function dirty(){ var c = current(); return c.enabled !== baseline.enabled || c.interval !== baseline.interval || c.max !== baseline.max; }
+        function syncBody(){ if (body) { body.style.opacity = enEl.checked ? '1' : '.55'; } }
+        function refreshSave(){ if (!saveBtn) return; if (dirty()) { saveBtn.style.display = 'block'; if (savedLine) savedLine.style.display = 'none'; } else { saveBtn.style.display = 'none'; } }
+
+        enEl.addEventListener('change', function(){ syncBody(); if (msg) msg.textContent=''; refreshSave(); });
+        [ivEl, mxEl].forEach(function(el){ el.addEventListener('input', function(){ if (msg) msg.textContent=''; refreshSave(); }); el.addEventListener('blur', function(){ clampVal(el); refreshSave(); }); });
+        syncBody(); refreshSave();
+
+        if (mob && mobSteps) { mob.addEventListener('click', function(){
+            var open = mobSteps.style.display === 'block';
+            mobSteps.style.display = open ? 'none' : 'block';
+            if (mobChev) mobChev.textContent = open ? '展开 ›' : '收起 ‹';
+        }); }
+        if (seg) { seg.querySelectorAll('span').forEach(function(sp){ sp.addEventListener('click', function(){
+            var os = sp.getAttribute('data-os');
+            seg.querySelectorAll('span').forEach(function(x){ x.classList.toggle('nz-sel', x === sp); });
+            if (mobSteps) mobSteps.querySelectorAll('.nz-os').forEach(function(x){ x.style.display = (x.getAttribute('data-os') === os) ? '' : 'none'; });
+        }); }); }
+
+        if (saveBtn) { saveBtn.addEventListener('click', function(){
+            saveBtn.disabled = true; if (msg) { msg.style.color = '#9AA0A8'; msg.textContent = '保存中…'; }
+            var iv = clampVal(ivEl), mx = clampVal(mxEl);
+            $.post('{{ route('vendor.business-settings.nezha-new-order-repeat') }}', {
+                _token: '{{ csrf_token() }}',
+                enabled: enEl.checked ? 1 : 0,
+                interval_sec: iv,
+                max_minutes: mx
+            }).done(function(r){
+                if (r && r.ok) {
+                    if (msg) msg.textContent = '';
+                    if (r.data) {
+                        baseline = { enabled: !!r.data.enabled, interval: parseInt(r.data.interval_sec,10), max: parseInt(r.data.max_minutes,10) };
+                        enEl.checked = !!r.data.enabled; ivEl.value = r.data.interval_sec; mxEl.value = r.data.max_minutes;
+                        if (window.nzOrderRepeat) {
+                            window.nzOrderRepeat.enabled = !!r.data.enabled;
+                            window.nzOrderRepeat.intervalSec = r.data.interval_sec;
+                            window.nzOrderRepeat.maxMinutes = r.data.max_minutes;
+                            window.nzOrderRepeat.scopes = { accept: !!r.data.scope_accept, payment: !!r.data.scope_payment };
+                        }
+                    }
+                    if (saveBtn) saveBtn.style.display = 'none';
+                    if (savedLine) { savedLine.style.display = 'flex'; setTimeout(function(){ if (!dirty()) savedLine.style.display = 'none'; }, 3200); }
+                } else if (msg) { msg.style.color = '#C0392B'; msg.textContent = (r && r.msg) || '保存失败'; }
+            }).fail(function(){ if (msg) { msg.style.color = '#C0392B'; msg.textContent = '保存失败，请重试'; }
+            }).always(function(){ saveBtn.disabled = false; });
+        }); }
+    })();
+    </script>
+</div>
                         </div>
                     </li>
                     <li class="nav-item nav--item">

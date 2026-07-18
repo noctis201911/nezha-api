@@ -275,6 +275,12 @@ return [
             'settings_route' => null, 'ops_note' => "无专用后台 UI(DB flag)。{$OPS_FORGET}。=0 影子抄送跳静默(不影响商家 TG/邮件/风控告警)",
         ],
         [
+            'key' => 'nezha_new_order_nag_status', 'label' => '新单反复提醒商家接单(网页响铃+手机TG)', 'section' => 'D', 'level' => 'L1-1邻',
+            'l1_clause' => $L1['L1-1'] . '(邻区·纯通知反复催单·不碰取消/退款/状态/资金)', 'expected' => 0, 'value_type' => 'bool',
+            'prereq' => '方案A(网页循环播报)+B(手机TG反复补发)代码上线 dormant·真开=业主批准+商家自行开启并勾选类别+≥1商家绑 telegram_chat_id+亲测催单到达。开=NezhaNewOrderNagSweep 每分钟按商家设定间隔(手机≥60s)对未接单反复发 TG·商家一查看/接单即停。待催口径=vendor toast 三桶(checked=0)·见 app/CentralLogics/NezhaNewOrderNag.php。见桌面 商家新单提醒-循环播报方案-20260718.md',
+            'settings_route' => null, 'ops_note' => "无专用后台开关 UI(DB flag)。{$OPS_FORGET}。=0 整条 sweep 直接 return(dormant 零真实影响)·商家端设置面板独立于本总闸",
+        ],
+        [
             'key' => 'nezha_timeout_escalate_owner_min', 'label' => '业主超时升级阈值(分钟)', 'section' => 'D', 'level' => 'L2',
             'expected' => null, 'value_type' => 'param', 'default' => 5,
             'prereq' => '参数非布尔·后台可调(默认 5)。仅在 nezha_timeout_escalate_status 开时生效——业主 TG 升级挪到 T+5(不复用 remind/email_merchant·§0.5④)·20min 自动取消前留 ~15min 挽回窗。见 fable-brief/PLAN_merchant_order_alert_reliability.md §5-8/§9-2',

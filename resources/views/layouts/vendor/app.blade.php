@@ -633,7 +633,20 @@
         var master=document.getElementById('nzSoundMaster');var body=document.getElementById('nzSoundBody');
         function reflect(){if(!body)return;if(prefs.on)body.classList.remove('nz-snd-off');else body.classList.add('nz-snd-off');body.querySelectorAll('input.nz-snd-sl,button.nz-snd-test').forEach(function(el){el.disabled=!prefs.on;});}
         if(master)master.checked=!!prefs.on;
-        pop.querySelectorAll('input.nz-snd-sl').forEach(function(sl){var cat=sl.getAttribute('data-cat');sl.value=prefs[cat];var val=pop.querySelector('.nz-snd-val[data-cat="'+cat+'"]');if(val)val.textContent=prefs[cat]+'%';sl.addEventListener('input',function(){if(val)val.textContent=Math.round(sl.value)+'%';window.nzSound.setCat(cat,sl.value);});});
+        // 哪吒 v3.3: 音量 2 行(订单=new_order+timeout / 消息与配送=customer_msg+platform_msg+deliv); 拖动条渐变填充; 行显示取代表键现值(去%); 拖动该行归一写入该行全部键。
+        function nzPaintSl(sl){ try { sl.style.setProperty('--p', (parseInt(sl.value,10)||0) + '%'); } catch(e){} }
+        pop.querySelectorAll('input.nz-snd-sl').forEach(function(sl){
+            var rep = sl.getAttribute('data-cat');
+            var cats = (sl.getAttribute('data-cats') || rep || '').split(',');
+            sl.value = prefs[rep]; nzPaintSl(sl);
+            var val = pop.querySelector('.nz-snd-val[data-cat="'+rep+'"]');
+            if (val) val.textContent = Math.round(prefs[rep]);
+            sl.addEventListener('input', function(){
+                if (val) val.textContent = Math.round(sl.value);
+                nzPaintSl(sl);
+                cats.forEach(function(c){ if (c) window.nzSound.setCat(c, sl.value); });
+            });
+        });
         pop.querySelectorAll('button.nz-snd-test').forEach(function(b){b.addEventListener('click',function(ev){ev.preventDefault();ev.stopPropagation();var cat=b.getAttribute('data-cat');var a=document.getElementById(b.getAttribute('data-el'));if(!a)return;var v=window.nzSound.getVol(cat);try{a.volume=Math.max(0,v);a.currentTime=0;var p=a.play();if(p&&p.catch)p.catch(function(){});}catch(e){}});});
         if(master)master.addEventListener('change',function(){window.nzSound.setOn(master.checked);reflect();});
         reflect();
@@ -1066,6 +1079,19 @@
     @endif
 
     @if(\App\CentralLogics\Helpers::employee_module_permission_check('order') && $order_notification_type == 'manual')
+        {{-- 哪吒: 新单反复提醒设置(方案A网页/B手机 共读一份·按当前商家注入; 列未迁移或未开→enabled:false, 保持原"响一次") --}}
+        @php($nzRepeatR = \App\CentralLogics\Helpers::get_restaurant_data())
+        <script>
+          window.nzOrderRepeat = {
+            enabled: {{ !empty(optional($nzRepeatR)->new_order_repeat_enabled) ? 'true' : 'false' }},
+            intervalSec: {{ (int)(optional($nzRepeatR)->new_order_repeat_interval_sec ?? 20) }},
+            maxMinutes: {{ (int)(optional($nzRepeatR)->new_order_repeat_max_minutes ?? 5) }},
+            scopes: {
+              accept: {{ (optional($nzRepeatR)->new_order_repeat_scope_accept ?? 1) ? 'true' : 'false' }},
+              payment: {{ !empty(optional($nzRepeatR)->new_order_repeat_scope_payment) ? 'true' : 'false' }}
+            }
+          };
+        </script>
         (function(){
             var SEEN_KEY = 'nz_seen_order_ids_v1';
             var toast    = document.getElementById('nz-new-order-toast');
@@ -1076,6 +1102,20 @@
             var listBase = '{{url('/')}}/restaurant-panel/order/list/';
             var currentTarget = 'pending';
             var dismissed = false;
+            // 哪吒: 新单反复提醒(到接单/清零/上限为止)状态 —— 读 window.nzOrderRepeat(后端按当前商家注入)
+            var nzRepeatCfg    = window.nzOrderRepeat || {};
+            var nzRepeatOn     = !!nzRepeatCfg.enabled;
+            var nzRepeatScopes = nzRepeatCfg.scopes || {};
+            var nzRepeatIntSec = Math.max(10, Math.min(120, parseInt(nzRepeatCfg.intervalSec, 10) || 20));
+            var nzRepeatMaxMs  = (Math.max(1, parseInt(nzRepeatCfg.maxMinutes, 10) || 5)) * 60000;
+            var nzNagSince     = 0;   // >0 = 这波待接单起始时刻; 0 = 无待接单
+            var nzNagLastRing  = 0;   // 上次反复响铃时刻
+            // 类别映射: poll target → 反复类别(accept=待接单 pending/confirmed; payment=待收款 offline_pending); 未勾选的类别不反复。
+            function nzNagCatEnabled(target){
+                if (target === 'offline_pending') { return !!nzRepeatScopes.payment; }
+                if (target === 'pending' || target === 'confirmed') { return !!nzRepeatScopes.accept; }
+                return false;
+            }
             var memSeen = new Set();
             // 哪吒: 订单超时紧急提示(系统渠道)——独立 seen-set, 与新订单提示互不干扰
             var TIMEOUT_SEEN_KEY = 'nz_seen_timeout_ids_v1';
@@ -1178,7 +1218,7 @@
                 if (toast) { toast.style.display = 'none'; }
             }
             if (goBtn) { goBtn.addEventListener('click', function(){ location.href = listBase + currentTarget; }); }
-            if (closeBtn) { closeBtn.addEventListener('click', function(){ dismissed = true; hideToast(); }); }
+            if (closeBtn) { closeBtn.addEventListener('click', function(){ dismissed = true; nzNagSince = 0; nzNagLastRing = 0; hideToast(); }); }
 
             // 哪吒 P3 接单机模式: 断连检测。poll 成功即更新时戳; watchdog 每 10s 查, ≥60s 无成功 → 顶部红条(接单机可能收不到新单)。
             var nzLastPollOk = Date.now();
@@ -1199,7 +1239,7 @@
                         var total = data.new_total || 0;
                         currentTarget = data.target || 'pending';
 
-                        if (total === 0) { hideToast(); dismissed = false; return; }
+                        if (total === 0) { hideToast(); dismissed = false; nzNagSince = 0; nzNagLastRing = 0; return; }
 
                         var label = data.target_label || '待接单';
                         var seen = loadSeen();
@@ -1212,14 +1252,28 @@
                             freshIds.forEach(function(id){ seen.add(id); });
                             saveSeen(seen);
                             showToast(total, label);
+                            nzNagSince = Date.now(); nzNagLastRing = Date.now();   // 新一波: 重启反复窗口, 刚响过从此刻起算间隔
                         } else if (!dismissed) {
                             showToast(total, label);
                         }
+                        if (nzNagSince === 0) { nzNagSince = Date.now(); }   // 页面加载时已有未接单(无 fresh)也开始反复计时
                     }
                 });
             }
             poll();
             setInterval(poll, 6000);
+            // 哪吒: 新单反复提醒 tick(1s 轻量·判定走 nz-heartbeat-core 纯函数·仅当前 target 类别被商家勾选+到间隔+仍有待接单+已解锁+未在场 才再响)
+            setInterval(function(){
+                var suppressed = nzOnWorkbench() || !!nzViewingOrderDetail();   // 在场抑制 → 静默(计数/队列照常)
+                var ok = (window.nzHeartbeatCore && window.nzHeartbeatCore.nzShouldNag)
+                    ? window.nzHeartbeatCore.nzShouldNag({
+                        enabled: nzRepeatOn && nzNagCatEnabled(currentTarget),
+                        pendingSince: nzNagSince, lastRingAt: nzNagLastRing,
+                        intervalSec: nzRepeatIntSec, maxMs: nzRepeatMaxMs,
+                        now: Date.now(), unlocked: !!window.nzAudioUnlocked, suppressed: suppressed
+                    }) : false;
+                if (ok) { playAudio('new_order'); nzNagLastRing = Date.now(); }
+            }, 1000);
         })();
         @endif
 

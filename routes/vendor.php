@@ -384,6 +384,7 @@ Route::group(['prefix' => 'withdraw-method', 'as' => 'wallet-method.', 'middlewa
             Route::get('notification-setup', [BusinessSettingsController::class, 'notification_index'])->name('notification-setup')->middleware('module:notification_setup');
             Route::get('notification-status-change/{key}/{type}', [BusinessSettingsController::class, 'notification_status_change'])->name('notification_status_change')->middleware('module:notification_setup');;
             Route::post('nezha-notify', [BusinessSettingsController::class, 'nezhaNotifySave'])->name('nezha-notify');
+            Route::post('nezha-new-order-repeat', [BusinessSettingsController::class, 'nezhaNewOrderRepeatSave'])->name('nezha-new-order-repeat'); // 哪吒: 新单反复提醒设置(提示音面板 AJAX 保存)
             Route::get('nezha-telegram-detect', [BusinessSettingsController::class, 'nezhaTelegramDetect'])->name('nezha-telegram-detect');
             Route::post('add-schedule', [BusinessSettingsController::class, 'add_schedule'])->name('add-schedule');
             Route::get('remove-schedule/{restaurant_schedule}', [BusinessSettingsController::class, 'remove_schedule'])->name('remove-schedule');

@@ -118,6 +118,43 @@ class BusinessSettingsController extends Controller
         return back();
     }
 
+    // 哪吒 · 新单反复提醒设置(方案 A 网页 + B 手机 TG 共读一份 · AJAX 从提示音面板保存)。
+    // dormant-safe: 5 列未 migrate 时 Schema 守卫直接返回, 不报错。纯 L3 · 不碰 L1。
+    public function nezhaNewOrderRepeatSave(Request $request)
+    {
+        $restaurant = Restaurant::find(Helpers::get_restaurant_id());
+        if (! $restaurant) {
+            return response()->json(['ok' => false, 'msg' => '店铺不存在'], 404);
+        }
+        if (! \Illuminate\Support\Facades\Schema::hasColumn('restaurants', 'new_order_repeat_enabled')) {
+            return response()->json(['ok' => false, 'msg' => '功能尚未就绪'], 400);
+        }
+
+        $interval = max(10, min(120, (int) $request->input('interval_sec', 20)));
+        $maxMin   = max(1, min(5, (int) $request->input('max_minutes', 5))); // v3.3: 最长提醒 1-5 分钟(面板可填)
+
+        $restaurant->new_order_repeat_enabled       = $request->boolean('enabled') ? 1 : 0;
+        $restaurant->new_order_repeat_interval_sec  = $interval;
+        $restaurant->new_order_repeat_max_minutes   = $maxMin;
+        // v3.3(业主 0718): 面板删除「提醒哪些单」勾选 —— 待接单与待收款核对同属待处理新单, 两类强制全覆盖。
+        // 两列保留(运营可后台按店改), 商家每次保存都归位为 1; A/B 线读列逻辑不变。
+        $restaurant->new_order_repeat_scope_accept  = 1;
+        $restaurant->new_order_repeat_scope_payment = 1;
+        $restaurant->save();
+
+        return response()->json([
+            'ok'   => true,
+            'msg'  => '新单反复提醒设置已更新',
+            'data' => [
+                'enabled'       => (int) $restaurant->new_order_repeat_enabled,
+                'interval_sec'  => (int) $restaurant->new_order_repeat_interval_sec,
+                'max_minutes'   => (int) $restaurant->new_order_repeat_max_minutes,
+                'scope_accept'  => (int) $restaurant->new_order_repeat_scope_accept,
+                'scope_payment' => (int) $restaurant->new_order_repeat_scope_payment,
+            ],
+        ]);
+    }
+
     // 哪吒: 商家自助绑定 Telegram — 按一次性验证码在 getUpdates 里精确匹配本店会话(只认本店的码, 不暴露别家会话)
     public function nezhaTelegramDetect(Request $request)
     {

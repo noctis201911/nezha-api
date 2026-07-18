@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\CentralLogics\Helpers;
 use App\CentralLogics\NezhaCsAssistant;
+use App\CentralLogics\NezhaNotifyLog;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -54,11 +57,14 @@ class TelegramWebhookController extends Controller
                     }
                 }
             }
-            // 阶段D-③: 非回复的纯文本 → 尝试当绑定码(发码自动绑)
+            // 阶段D-③: 非回复的纯文本 → 先尝试当绑定码(发码自动绑); 不是绑定码再看是否"索取提示音"关键词。
             elseif ($chatId !== null && $text !== '') {
                 $name = NezhaCsAssistant::consumeBindCode($text, $chatId);
                 if ($name) {
                     Helpers::sendTelegramRaw((string) $chatId, "✅ 已绑定到店铺「{$name}」，今后该店的新订单 / 超时提醒会发送到这里。", $msg['message_id'] ?? null);
+                } else {
+                    // 哪吒 #14: 已绑商家发「语音/提示音/铃声」→ 回一条 3 秒提示音(sendAudio), 供长按"保存为提示音"。
+                    $this->maybeSendVoiceSample((string) $chatId, $text);
                 }
             }
         } catch (\Throwable $e) {
@@ -67,5 +73,52 @@ class TelegramWebhookController extends Controller
 
         // 始终 200，避免 Telegram 重试风暴
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * 哪吒 #14: 已绑定商家在 Telegram 里索取"提示音/语音"关键词时, 回一条 3 秒提示音文件(sendAudio),
+     * 供其长按 →「保存为提示音(Save for Notifications)」→ 通知设置里选中。
+     *
+     * additive 末位分支: 只对**已绑定本店**的 chat 生效(未绑/陌生 chat 静默); 每 chat 60 秒限流;
+     * 任何异常吞掉, 绝不影响绑定/客服回复两支。纯通知能力(与绑定同级的显式索取), 无顾客 PII、无新开关。
+     * 复用 telegramSyncSend 的健壮性(读 HTTP 码 + 解析 ok 真值); 用 Http 客户端而非裸 curl, 以便 Http::fake 覆盖。
+     */
+    private function maybeSendVoiceSample(string $chatId, string $text): void
+    {
+        // 仅"语音 / 提示音 / 铃声 / sound"关键词触发(其它文本一律不打扰)。
+        if (! preg_match('/语音|提示音|铃声|sound/iu', $text)) {
+            return;
+        }
+        // 必须命中"已绑定本店"的 chat(未绑/陌生 chat 静默, 与本 webhook 其它分支同纪律)。
+        $restaurant = DB::table('restaurants')->select('id')->where('telegram_chat_id', $chatId)->first();
+        if (! $restaurant) {
+            return;
+        }
+        // 每 chat 60 秒限流(防连点刷屏); 抢不到锁 = 近期已发, 直接跳过。
+        if (! Cache::add('nz_voice_file_' . $chatId, 1, 60)) {
+            return;
+        }
+
+        $ok = false;
+        try {
+            $token = Helpers::get_business_settings('telegram_bot_token', false);
+            if ($token && is_string($token)) {
+                $resp = Http::asForm()->connectTimeout(3)->timeout(8)
+                    ->post('https://api.telegram.org/bot' . $token . '/sendAudio', [
+                        'chat_id' => $chatId,
+                        'audio'   => dynamicAsset('assets/admin/sound/new-order-voice.mp3'),
+                        'caption' => '哪吒新单提示音（3 秒）。长按本条语音 → 选择「保存为提示音（Save for Notifications）」→ 点击顶部名称进入通知设置，在「声音」中选中即可。',
+                    ]);
+                $ok = $resp->ok() && ($resp->json('ok') === true);
+            }
+        } catch (\Throwable $e) {
+            Log::info('nz voice sample fail: chat=…' . substr($chatId, -4) . ' ' . $e->getMessage());
+        }
+
+        try {
+            NezhaNotifyLog::record('telegram', 'merchant', 'voice_file', $ok ? 'ok' : 'failed', null, (int) $restaurant->id);
+        } catch (\Throwable $e) {
+            // best-effort 记账, 绝不影响 webhook 200。
+        }
     }
 }
