@@ -83,11 +83,19 @@
                             <form action="{{ route('vendor.payment-address-change.reject', $change->public_id) }}" method="post">
                                 @csrf
                                 <input type="hidden" name="new_fingerprint" value="{{ $change->new_fingerprint }}">
+                                <label class="input-label mt-2">Current password</label>
+                                <input class="form-control" type="password" name="current_password" autocomplete="current-password" required>
+                                <label class="input-label mt-2">Six-digit authenticator code</label>
+                                <input class="form-control" type="text" name="two_factor_code" inputmode="numeric" autocomplete="one-time-code" maxlength="16" required>
                                 <button class="btn btn-outline-danger" type="submit">地址不属于我，拒绝申请</button>
                             </form>
                             <form action="{{ route('vendor.payment-address-change.confirm', $change->public_id) }}" method="post">
                                 @csrf
                                 <input type="hidden" name="new_fingerprint" value="{{ $change->new_fingerprint }}">
+                                <label class="input-label mt-2">Current password</label>
+                                <input class="form-control" type="password" name="current_password" autocomplete="current-password" required>
+                                <label class="input-label mt-2">Six-digit authenticator code</label>
+                                <input class="form-control" type="text" name="two_factor_code" inputmode="numeric" autocomplete="one-time-code" maxlength="16" required>
                                 <button class="btn btn-primary" type="submit">完整地址属于我，确认并继续</button>
                             </form>
                         </div>
@@ -97,6 +105,10 @@
                             <form action="{{ route('vendor.payment-address-change.reject', $change->public_id) }}" method="post" class="mt-2">
                                 @csrf
                                 <input type="hidden" name="new_fingerprint" value="{{ $change->new_fingerprint }}">
+                                <label class="input-label mt-2">Current password</label>
+                                <input class="form-control" type="password" name="current_password" autocomplete="current-password" required>
+                                <label class="input-label mt-2">Six-digit authenticator code</label>
+                                <input class="form-control" type="text" name="two_factor_code" inputmode="numeric" autocomplete="one-time-code" maxlength="16" required>
                                 <button class="btn btn-outline-danger" type="submit">拒绝并保留当前地址</button>
                             </form>
                         </details>

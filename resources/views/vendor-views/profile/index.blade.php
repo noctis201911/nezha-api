@@ -62,6 +62,11 @@
                                     <i class="tio-lock-outlined nav-icon"></i> {{translate('messages.password')}}
                                 </a>
                             </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" href="{{ route('merchant.2fa.setup') }}">
+                                    <i class="tio-security nav-icon"></i> Two-factor authentication
+                                </a>
+                            </li>
                         </ul>
                         <!-- End Navbar Nav -->
                     </div>
@@ -170,6 +175,14 @@
                     <!-- End Card -->
                 </form>
 
+                <div class="card mb-3 mb-lg-5">
+                    <div class="card-header"><h4 class="card-title">Two-factor authentication</h4></div>
+                    <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+                        <p class="mb-0 text-muted">Manage your authenticator and one-time recovery codes. Security changes revoke other Web sessions and App tokens.</p>
+                        <a class="btn btn-outline-primary" href="{{ route('merchant.2fa.setup') }}">Open security settings</a>
+                    </div>
+                </div>
+
                 <!-- Card -->
                 <div id="passwordDiv" class="card mb-3 mb-lg-5">
                     <div class="card-header">
@@ -181,7 +194,15 @@
                         <!-- Form -->
                         <form id="changePasswordForm" action="{{env('APP_MODE')!='demo'?route('vendor.profile.settings-password'):'javascript:'}}" method="post"
                               enctype="multipart/form-data">
-                        @csrf
+                            @csrf
+                            <div class="row form-group">
+                                <label class="col-sm-3 col-form-label input-label">Current password</label>
+                                <div class="col-sm-9"><input type="password" class="form-control" name="current_password" autocomplete="current-password" required></div>
+                            </div>
+                            <div class="row form-group">
+                                <label class="col-sm-3 col-form-label input-label">Authenticator code</label>
+                                <div class="col-sm-9"><input type="text" class="form-control" name="two_factor_code" inputmode="numeric" autocomplete="one-time-code" maxlength="16" required></div>
+                            </div>
 
                         <!-- Form Group -->
                             <div class="row form-group">

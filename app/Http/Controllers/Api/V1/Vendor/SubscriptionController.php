@@ -41,7 +41,10 @@ class SubscriptionController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        $restaurant = Restaurant::Where('id', $request->restaurant_id)->first();
+        $restaurant = $this->ownedRestaurant($request, (int) $request->restaurant_id);
+        if (! $restaurant) {
+            return response()->json(['errors' => [['code' => 'auth-001', 'message' => 'Unauthorized.']]], 403);
+        }
         if ($request->business_plan == 'subscription' && $request->package_id != null) {
 
             $package = SubscriptionPackage::withoutGlobalScope('translate')->find($request->package_id);
@@ -163,14 +166,17 @@ class SubscriptionController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        RestaurantSubscription::where([ 'id'=>$request->subscription_id , 'restaurant_id' => $request->restaurant_id])->update([
+        $restaurant = $this->ownedRestaurant($request, (int) $request->restaurant_id);
+        if (! $restaurant) {
+            return response()->json(['errors' => [['code' => 'auth-001', 'message' => 'Unauthorized.']]], 403);
+        }
+
+        RestaurantSubscription::where([ 'id'=>$request->subscription_id , 'restaurant_id' => $restaurant->id])->update([
             'is_canceled' => 1,
             'canceled_by' => 'restaurant',
         ]);
 
         try {
-            $restaurant=Restaurant::where('id',$request->restaurant_id)->first();
-
                 $vendor = $restaurant->vendor;
                 $reataurant_notification_status=Helpers::getRestaurantNotificationStatusData($restaurant?->id,'restaurant_subscription_cancel');
                 $message =Helpers::getPushNotificationMessage(status:'restaurant_subscription_cancel',userType: 'restaurant' , lang:$vendor->current_language_key, restaurantName:$restaurant->name);
@@ -204,12 +210,17 @@ class SubscriptionController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        $disable_item_count=0;
-        if(data_get(Helpers::subscriptionConditionsCheck(restaurant_id:$request->restaurant_id,package_id:$request->package_id) , 'disable_item_count') > 0){
-            $disable_item_count = (int) (data_get(Helpers::subscriptionConditionsCheck(restaurant_id:$request->restaurant_id,package_id:$request->package_id) , 'disable_item_count',0));
+        $restaurant = $this->ownedRestaurant($request, (int) $request->restaurant_id);
+        if (! $restaurant) {
+            return response()->json(['errors' => [['code' => 'auth-001', 'message' => 'Unauthorized.']]], 403);
         }
 
-        $restaurant = Restaurant::where('id',$request->restaurant_id)->with('restaurant_sub_update_application')->first();
+        $disable_item_count=0;
+        if(data_get(Helpers::subscriptionConditionsCheck(restaurant_id:$restaurant->id,package_id:$request->package_id) , 'disable_item_count') > 0){
+            $disable_item_count = (int) (data_get(Helpers::subscriptionConditionsCheck(restaurant_id:$restaurant->id,package_id:$request->package_id) , 'disable_item_count',0));
+        }
+
+        $restaurant->load('restaurant_sub_update_application');
         $restaurant_subscription= $restaurant->restaurant_sub_update_application;
         $cash_backs=[];
 
@@ -220,6 +231,23 @@ class SubscriptionController extends Controller
         return  response()->json(['disable_item_count'=> $disable_item_count,
                                     'back_amount'=> (float)data_get($cash_backs,'back_amount',0),
                                     'days'=> (int) data_get($cash_backs,'days',0) ],200);
+    }
+
+    private function ownedRestaurant(Request $request, int $restaurantId): ?Restaurant
+    {
+        if ($request['vendor_employee'] ?? null) {
+            return null;
+        }
+
+        $vendor = $request['vendor'] ?? null;
+        if (! $vendor) {
+            return null;
+        }
+
+        return Restaurant::query()
+            ->whereKey($restaurantId)
+            ->where('vendor_id', $vendor->id)
+            ->first();
     }
 
 }
