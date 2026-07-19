@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Schema;
  * 字段：
  *   merchant_id  = 被联系的本地生活商家（local_life_merchants.id；无 FK，商家删后事件留存做历史统计）
  *   channel      = 联系渠道白名单 wechat/phone/whatsapp/telegram（与 LocalLifeMerchant 白名单同 4 值）
- *   question     = 快捷提问 key（where/price/hours/booking/hello）；wechat/phone 恒 NULL；乱值降级 NULL
+ *   question     = 快捷提问 key（promo/price/hours/booking）；wechat/phone 恒 NULL；乱值降级 NULL
  *   created_at   = 事件时间（Asia/Yerevan 全站口径）；无 updated_at（append-only 事件流）
  *
  * L1-1 纯信息墙：埋点只是信息层，不含任何交易/下单/收款元素。
