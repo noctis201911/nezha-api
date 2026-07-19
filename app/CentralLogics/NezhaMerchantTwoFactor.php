@@ -425,6 +425,8 @@ final class NezhaMerchantTwoFactor
 
     public static function scheduleLegacyGrace(Carbon $deadline): array
     {
+        $deadline = $deadline->copy()->utc();
+
         if (! $deadline->isFuture()) {
             throw new \InvalidArgumentException('The merchant 2FA deadline must be in the future.');
         }
