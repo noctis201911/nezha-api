@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Vendor;
 use App\Models\VendorEmployee;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Tests\Support\IsolatedDatabaseFixtures;
 use Tests\TestCase;
@@ -72,5 +73,22 @@ class NezhaMerchantTwoFactorGraceScheduleTest extends TestCase
         $this->assertTrue(Vendor::findOrFail(1)->two_factor_grace_pending);
         $this->assertNull(Vendor::findOrFail(1)->two_factor_required_at);
         $this->assertTrue(VendorEmployee::findOrFail(91)->two_factor_grace_pending);
+    }
+
+    public function test_explicit_offset_is_normalized_to_utc_before_timestamp_persistence(): void
+    {
+        $input = '2099-07-26T17:00:00+02:00';
+        $expected = Carbon::parse($input)->utc();
+
+        $this->artisan('nezha:merchant-2fa-schedule', [
+            'deadline' => $input,
+        ])->assertSuccessful();
+
+        $this->assertSame(
+            '2099-07-26 15:00:00',
+            DB::table('vendors')->where('id', 1)->value('two_factor_required_at')
+        );
+        $this->assertTrue(Vendor::findOrFail(1)->two_factor_required_at->equalTo($expected));
+        $this->assertTrue(VendorEmployee::findOrFail(91)->two_factor_required_at->equalTo($expected));
     }
 }
