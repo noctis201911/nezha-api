@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Models\Vendor;
 use App\Models\VendorEmployee;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Tests\Support\IsolatedDatabaseFixtures;
 use Tests\TestCase;
@@ -42,24 +41,19 @@ class NezhaMerchantTwoFactorGraceScheduleTest extends TestCase
         ]);
     }
 
-    public function test_exact_future_deadline_is_persisted_once_for_pending_legacy_actors(): void
+    public function test_schedule_command_is_permanently_disabled_without_mutation(): void
     {
         $deadline = now()->addDays(7)->startOfSecond();
         $this->artisan('nezha:merchant-2fa-schedule', [
             'deadline' => $deadline->toIso8601String(),
-        ])->assertSuccessful();
+        ])->expectsOutputToContain('voluntary')->assertFailed();
 
         $owner = Vendor::findOrFail(1);
         $employee = VendorEmployee::findOrFail(91);
-        $this->assertFalse($owner->two_factor_grace_pending);
-        $this->assertFalse($employee->two_factor_grace_pending);
-        $this->assertTrue($owner->two_factor_required_at->equalTo($deadline));
-        $this->assertTrue($employee->two_factor_required_at->equalTo($deadline));
-
-        $this->artisan('nezha:merchant-2fa-schedule', [
-            'deadline' => $deadline->copy()->addDay()->toIso8601String(),
-        ])->expectsOutputToContain('owners=0, employees=0')->assertSuccessful();
-        $this->assertTrue(Vendor::findOrFail(1)->two_factor_required_at->equalTo($deadline));
+        $this->assertTrue($owner->two_factor_grace_pending);
+        $this->assertTrue($employee->two_factor_grace_pending);
+        $this->assertNull($owner->two_factor_required_at);
+        $this->assertNull($employee->two_factor_required_at);
     }
 
     public function test_ambiguous_or_past_deadline_is_rejected_without_mutation(): void
@@ -75,20 +69,4 @@ class NezhaMerchantTwoFactorGraceScheduleTest extends TestCase
         $this->assertTrue(VendorEmployee::findOrFail(91)->two_factor_grace_pending);
     }
 
-    public function test_explicit_offset_is_normalized_to_utc_before_timestamp_persistence(): void
-    {
-        $input = '2099-07-26T17:00:00+02:00';
-        $expected = Carbon::parse($input)->utc();
-
-        $this->artisan('nezha:merchant-2fa-schedule', [
-            'deadline' => $input,
-        ])->assertSuccessful();
-
-        $this->assertSame(
-            '2099-07-26 15:00:00',
-            DB::table('vendors')->where('id', 1)->value('two_factor_required_at')
-        );
-        $this->assertTrue(Vendor::findOrFail(1)->two_factor_required_at->equalTo($expected));
-        $this->assertTrue(VendorEmployee::findOrFail(91)->two_factor_required_at->equalTo($expected));
-    }
 }

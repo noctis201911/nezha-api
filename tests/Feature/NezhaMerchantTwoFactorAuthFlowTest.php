@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\CentralLogics\NezhaMerchantTwoFactor;
 use App\CentralLogics\NezhaTotp;
 use App\Http\Controllers\MerchantTwoFactorController;
 use App\Http\Middleware\VendorMiddleware;
@@ -101,7 +102,7 @@ class NezhaMerchantTwoFactorAuthFlowTest extends TestCase
         }
     }
 
-    public function test_web_password_success_creates_only_pending_state_until_enrollment_finishes(): void
+    public function test_web_password_success_signs_in_and_two_factor_setup_is_voluntary(): void
     {
         $response = $this->withSession([
             'six_captcha' => 'ABCDE',
@@ -114,20 +115,27 @@ class NezhaMerchantTwoFactorAuthFlowTest extends TestCase
             'set_default_captcha' => 1,
         ]);
 
-        $response->assertRedirect(route('merchant.2fa.setup'));
-        $this->assertFalse(Auth::guard('vendor')->check());
-        $response->assertSessionHas(MerchantTwoFactorController::PENDING_ID, 1);
-        $response->assertSessionMissing(MerchantTwoFactorController::SESSION_GENERATION);
+        $response->assertRedirect(route('vendor.dashboard'));
+        $this->assertTrue(Auth::guard('vendor')->check());
+        $response->assertSessionMissing(MerchantTwoFactorController::PENDING_ID);
+        $response->assertSessionHas(MerchantTwoFactorController::SESSION_GENERATION, 0);
 
         $setup = $this->get(route('merchant.2fa.setup'));
         $setup->assertOk()
             ->assertHeader('Cache-Control', 'no-store, private')
-            ->assertSee('Protect your merchant account');
+            ->assertSee('Enable optional two-factor authentication');
         $encryptedSecret = session('merchant_2fa.setup_secret');
         $secret = Crypt::decryptString($encryptedSecret);
         $this->assertNotEmpty($secret);
         $this->assertStringNotContainsString($secret, $encryptedSecret);
 
+        $cancelled = $this->post(route('merchant.2fa.cancel'));
+        $cancelled->assertRedirect(route('vendor.profile.view'));
+        $this->assertTrue(Auth::guard('vendor')->check());
+        $this->assertFalse(Vendor::findOrFail(1)->two_factor_enabled);
+
+        $this->get(route('merchant.2fa.setup'))->assertOk();
+        $secret = Crypt::decryptString(session('merchant_2fa.setup_secret'));
         $enabled = $this->post(route('merchant.2fa.enable'), [
             'code' => NezhaTotp::codeAt($secret, (int) floor(time() / 30)),
         ]);
@@ -138,7 +146,7 @@ class NezhaMerchantTwoFactorAuthFlowTest extends TestCase
         $this->assertTrue(Vendor::findOrFail(1)->two_factor_enabled);
     }
 
-    public function test_app_password_success_returns_no_token_until_one_time_enrollment_ticket_passes(): void
+    public function test_app_password_success_for_disabled_owner_returns_token_without_challenge(): void
     {
         $login = $this->postJson('/api/v1/auth/vendor/login', [
             'vendor_type' => 'owner',
@@ -146,32 +154,66 @@ class NezhaMerchantTwoFactorAuthFlowTest extends TestCase
             'password' => 'Correct-Horse-9!',
         ]);
 
-        $login->assertStatus(202)
+        $login->assertOk()
             ->assertHeader('Cache-Control', 'no-store, private')
-            ->assertJsonPath('two_factor_required', true)
-            ->assertJsonPath('purpose', 'enroll')
-            ->assertJsonMissing(['token']);
-        $this->assertNull(DB::table('vendors')->where('id', 1)->value('auth_token'));
-
-        $challengeToken = $login->json('challenge_token');
-        $secret = $login->json('setup.secret');
-        $verify = $this->postJson('/api/v1/auth/vendor/two-factor/verify', [
-            'challenge_token' => $challengeToken,
-            'code' => NezhaTotp::codeAt($secret, (int) floor(time() / 30)),
-        ]);
-
-        $verify->assertOk()
-            ->assertHeader('Cache-Control', 'no-store, private')
-            ->assertJsonStructure(['token', 'recovery_codes']);
+            ->assertJsonStructure(['token'])
+            ->assertJsonMissing(['challenge_token', 'setup', 'recovery_codes']);
         $this->assertNotNull(DB::table('vendors')->where('id', 1)->value('auth_token'));
-
-        $this->postJson('/api/v1/auth/vendor/two-factor/verify', [
-            'challenge_token' => $challengeToken,
-            'code' => NezhaTotp::codeAt($secret, (int) floor(time() / 30)),
-        ])->assertUnauthorized()->assertJsonMissing(['token']);
     }
 
-    public function test_employee_has_an_independent_app_enrollment_and_token_challenge(): void
+    public function test_enabled_owner_web_login_still_requires_two_factor(): void
+    {
+        [$secret, $counter] = $this->enableVendorTwoFactor();
+
+        $login = $this->withSession([
+            'six_captcha' => 'ABCDE',
+            'six_captcha_list' => ['ABCDE'],
+        ])->post('/login_submit', [
+            'role' => 'vendor',
+            'email' => 'merchant-2fa@example.test',
+            'password' => 'Correct-Horse-9!',
+            'custome_recaptcha' => 'ABCDE',
+            'set_default_captcha' => 1,
+        ]);
+
+        $login->assertRedirect(route('merchant.2fa.challenge'));
+        $this->assertFalse(Auth::guard('vendor')->check());
+        $login->assertSessionHas(MerchantTwoFactorController::PENDING_ID, 1);
+
+        $verified = $this->post(route('merchant.2fa.verify'), [
+            'code' => NezhaTotp::codeAt($secret, $counter + 1),
+        ]);
+        $verified->assertRedirect(route('vendor.dashboard'));
+        $this->assertTrue(Auth::guard('vendor')->check());
+        $verified->assertSessionHas(MerchantTwoFactorController::SESSION_PASSED_GENERATION, 1);
+    }
+
+    public function test_web_recovery_code_disables_two_factor_without_forcing_reenrollment(): void
+    {
+        [, , $recoveryCodes] = $this->enableVendorTwoFactor();
+
+        $this->withSession([
+            'six_captcha' => 'ABCDE',
+            'six_captcha_list' => ['ABCDE'],
+        ])->post('/login_submit', [
+            'role' => 'vendor',
+            'email' => 'merchant-2fa@example.test',
+            'password' => 'Correct-Horse-9!',
+            'custome_recaptcha' => 'ABCDE',
+            'set_default_captcha' => 1,
+        ])->assertRedirect(route('merchant.2fa.challenge'));
+
+        $recovered = $this->post(route('merchant.2fa.verify'), ['code' => $recoveryCodes[0]]);
+        $recovered->assertRedirect(route('vendor.dashboard'));
+        $this->assertTrue(Auth::guard('vendor')->check());
+        $recovered->assertSessionMissing(MerchantTwoFactorController::PENDING_ID);
+        $vendor = Vendor::findOrFail(1);
+        $this->assertFalse($vendor->two_factor_enabled);
+        $this->assertNull($vendor->two_factor_required_at);
+        $this->assertSame(2, $vendor->auth_generation);
+    }
+
+    public function test_disabled_employee_app_password_success_returns_token_without_challenge(): void
     {
         DB::table('vendor_employees')->insert([
             'id' => 71,
@@ -197,27 +239,16 @@ class NezhaMerchantTwoFactorAuthFlowTest extends TestCase
             'password' => 'Employee-Horse-9!',
         ]);
 
-        $login->assertStatus(202)
-            ->assertJsonPath('purpose', 'enroll')
-            ->assertJsonMissing(['token']);
-        $this->assertNull(VendorEmployee::findOrFail(71)->auth_token);
-
-        $verified = $this->postJson('/api/v1/auth/vendor/two-factor/verify', [
-            'challenge_token' => $login->json('challenge_token'),
-            'code' => NezhaTotp::codeAt(
-                $login->json('setup.secret'),
-                (int) floor(time() / 30)
-            ),
-        ]);
-
-        $verified->assertOk()
-            ->assertJsonStructure(['token', 'role', 'recovery_codes']);
+        $login->assertOk()
+            ->assertJsonStructure(['token', 'role'])
+            ->assertJsonMissing(['challenge_token', 'setup', 'recovery_codes']);
         $this->assertNotNull(VendorEmployee::findOrFail(71)->auth_token);
         $this->assertNull(Vendor::findOrFail(1)->auth_token);
     }
 
     public function test_app_plan_write_requires_post_2fa_owner_token_and_restaurant_ownership(): void
     {
+        [$secret, $counter] = $this->enableVendorTwoFactor();
         DB::table('vendors')->where('id', 1)->update(['status' => false]);
         DB::table('restaurants')->where('id', 6)->update([
             'status' => false,
@@ -244,12 +275,12 @@ class NezhaMerchantTwoFactorAuthFlowTest extends TestCase
             'email' => 'merchant-2fa@example.test',
             'password' => 'Correct-Horse-9!',
         ]);
-        $login->assertStatus(202)->assertJsonMissing(['token']);
+        $login->assertStatus(202)->assertJsonPath('purpose', 'challenge')->assertJsonMissing(['token', 'setup.secret']);
         $verified = $this->postJson('/api/v1/auth/vendor/two-factor/verify', [
             'challenge_token' => $login->json('challenge_token'),
             'code' => NezhaTotp::codeAt(
-                $login->json('setup.secret'),
-                (int) floor(time() / 30)
+                $secret,
+                $counter + 1
             ),
         ]);
         $verified->assertOk();
@@ -274,6 +305,7 @@ class NezhaMerchantTwoFactorAuthFlowTest extends TestCase
 
     public function test_app_challenge_account_limit_trips_before_the_ip_limit(): void
     {
+        $this->enableVendorTwoFactor();
         $login = $this->postJson('/api/v1/auth/vendor/login', [
             'vendor_type' => 'owner',
             'email' => 'merchant-2fa@example.test',
@@ -303,6 +335,7 @@ class NezhaMerchantTwoFactorAuthFlowTest extends TestCase
 
     public function test_app_challenge_restart_is_bounded_and_rate_limited_per_actor_and_ip(): void
     {
+        $this->enableVendorTwoFactor();
         $firstToken = null;
         foreach (range(1, 5) as $attempt) {
             $response = $this->postJson('/api/v1/auth/vendor/login', [
@@ -331,7 +364,7 @@ class NezhaMerchantTwoFactorAuthFlowTest extends TestCase
         ])->assertUnauthorized()->assertJsonMissing(['token']);
     }
 
-    public function test_interrupted_onboarding_requires_password_then_2fa_before_plan_write(): void
+    public function test_interrupted_onboarding_requires_password_but_does_not_force_two_factor(): void
     {
         DB::table('vendors')->where('id', 1)->update(['status' => false]);
         DB::table('restaurants')->where('id', 6)->update([
@@ -377,21 +410,10 @@ class NezhaMerchantTwoFactorAuthFlowTest extends TestCase
             'custome_recaptcha' => 'FGHIJ',
             'set_default_captcha' => 1,
         ]);
-        $login->assertRedirect(route('merchant.2fa.setup'));
+        $login->assertRedirect(route('restaurant.business_plan'));
         $login->assertSessionHas(MerchantTwoFactorController::ONBOARDING_RESTAURANT_ID, 6);
-        $login->assertSessionHas(MerchantTwoFactorController::ONBOARDING_AUTHORIZED, false);
-
-        $this->post('/restaurant/business-plan', [
-            'restaurant_id' => 6,
-            'business_plan' => 'commission-base',
-        ])->assertForbidden();
-
-        $this->get(route('merchant.2fa.setup'))->assertOk();
-        $secret = Crypt::decryptString(session('merchant_2fa.setup_secret'));
-        $this->post(route('merchant.2fa.enable'), [
-            'code' => NezhaTotp::codeAt($secret, (int) floor(time() / 30)),
-        ])->assertRedirect(route('merchant.2fa.setup'))
-            ->assertSessionHas(MerchantTwoFactorController::ONBOARDING_AUTHORIZED, true);
+        $login->assertSessionHas(MerchantTwoFactorController::ONBOARDING_AUTHORIZED, true);
+        $login->assertSessionMissing(MerchantTwoFactorController::PENDING_ID);
 
         $planRequest = Request::create('/restaurant/business-plan', 'POST', [
             'restaurant_id' => 6,
@@ -405,7 +427,7 @@ class NezhaMerchantTwoFactorAuthFlowTest extends TestCase
         $this->assertSame('commission', DB::table('restaurants')->where('id', 6)->value('restaurant_model'));
     }
 
-    public function test_web_session_and_app_token_are_rejected_when_generation_or_enrollment_state_is_stale(): void
+    public function test_legacy_schedule_does_not_reject_tokens_but_stale_web_generation_does(): void
     {
         $vendor = Vendor::findOrFail(1);
         $vendor->forceFill([
@@ -436,8 +458,8 @@ class NezhaMerchantTwoFactorAuthFlowTest extends TestCase
 
             return response()->noContent();
         });
-        $this->assertFalse($reached);
-        $this->assertSame(401, $response->getStatusCode());
+        $this->assertTrue($reached);
+        $this->assertSame(204, $response->getStatusCode());
 
         $this->actingAs($vendor->fresh(), 'vendor');
         $webRequest = Request::create('/vendor', 'GET');
@@ -446,6 +468,24 @@ class NezhaMerchantTwoFactorAuthFlowTest extends TestCase
         $response = (new VendorMiddleware)->handle($webRequest, fn () => response()->noContent());
         $this->assertSame(302, $response->getStatusCode());
         $this->assertFalse(Auth::guard('vendor')->check());
+    }
+
+    public function test_two_factor_management_rejects_stale_generation_and_inactive_actor(): void
+    {
+        $vendor = Vendor::findOrFail(1);
+        $this->actingAs($vendor, 'vendor');
+
+        $this->withSession([
+            MerchantTwoFactorController::SESSION_GENERATION => 99,
+        ])->get(route('merchant.2fa.setup'))
+            ->assertRedirect(route('login', ['tab' => 'vendor']));
+
+        $vendor->forceFill(['status' => false])->save();
+        $this->actingAs($vendor->fresh(), 'vendor');
+        $this->withSession([
+            MerchantTwoFactorController::SESSION_GENERATION => 0,
+        ])->get(route('merchant.2fa.setup'))
+            ->assertRedirect(route('login', ['tab' => 'vendor']));
     }
 
     public function test_web_logout_clears_onboarding_authority_from_the_browser_session(): void
@@ -477,5 +517,20 @@ class NezhaMerchantTwoFactorAuthFlowTest extends TestCase
         $this->assertStringContainsString('merchant login is not kept across browser sessions', $source);
         $this->assertStringContainsString('name="remember"', $source);
         $this->assertStringNotContainsString('value="{{ $password', $source);
+    }
+
+    private function enableVendorTwoFactor(): array
+    {
+        $vendor = Vendor::findOrFail(1);
+        $secret = NezhaTotp::generateSecret();
+        $counter = (int) floor(time() / 30);
+        $result = NezhaMerchantTwoFactor::completeEnrollment(
+            $vendor,
+            $secret,
+            NezhaTotp::codeAt($secret, $counter),
+            0
+        );
+
+        return [$secret, $counter, $result['recovery_codes']];
     }
 }

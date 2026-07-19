@@ -67,6 +67,7 @@ class NezhaMerchantTwoFactorRecoveryCommandTest extends TestCase
         $this->assertFalse($vendor->two_factor_enabled);
         $this->assertNull($vendor->two_factor_secret);
         $this->assertNull($vendor->two_factor_recovery_codes);
+        $this->assertNull($vendor->two_factor_required_at);
         $this->assertNull($vendor->auth_token);
         $this->assertSame(5, $vendor->auth_generation);
 

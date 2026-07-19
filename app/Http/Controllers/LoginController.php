@@ -288,7 +288,7 @@ class LoginController extends Controller
                 $request->session()->put(MerchantTwoFactorController::ONBOARDING_AUTHORIZED, false);
             }
             $state = NezhaMerchantTwoFactor::state($actor);
-            if ($state === NezhaMerchantTwoFactor::STATE_GRACE) {
+            if ($state === NezhaMerchantTwoFactor::STATE_OPTIONAL) {
                 MerchantTwoFactorController::finishLogin($request, $actor, false);
 
                 return redirect()->to(MerchantTwoFactorController::continuationUrl($actor));
@@ -298,7 +298,12 @@ class LoginController extends Controller
                 ? 'restaurant_login_url'
                 : 'restaurant_employee_login_url';
             $loginUrl = DataSetting::where('key', $loginKey)->value('value') ?: $loginKey;
-            MerchantTwoFactorController::beginPending($request, $actor, $loginUrl);
+            MerchantTwoFactorController::beginPending(
+                $request,
+                $actor,
+                $loginUrl,
+                $state === NezhaMerchantTwoFactor::STATE_ENROLLMENT
+            );
 
             return redirect()->route(
                 $state === NezhaMerchantTwoFactor::STATE_ENROLLMENT
