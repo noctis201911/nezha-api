@@ -210,6 +210,14 @@ class VendorController extends Controller
 
     public function update_profile(Request $request)
     {
+        if ($request['vendor_employee']) {
+            return response()->json([
+                'errors' => [
+                    ['code' => 'auth-001', 'message' => 'Unauthorized.']
+                ]
+            ], 403);
+        }
+
         $vendor = $request['vendor'];
         $validator = Validator::make($request->all(), [
             'f_name' => 'required',
@@ -985,6 +993,14 @@ class VendorController extends Controller
 
     public function remove_account(Request $request)
     {
+        if ($request['vendor_employee']) {
+            return response()->json([
+                'errors' => [
+                    ['code' => 'auth-001', 'message' => 'Unauthorized.']
+                ]
+            ], 403);
+        }
+
         $vendor = $request['vendor'];
 
         if(Order::where('restaurant_id', $vendor?->restaurants[0]?->id)->whereIn('order_status', ['pending','accepted','confirmed','processing','handover','picked_up'])->count())
