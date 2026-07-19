@@ -349,9 +349,7 @@ class DeliverymanController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
-        $dm=DeliveryMan::where(['auth_token' => $request['token']])->with('shifts')->first();
-
-        $shifts = $dm->shifts;
+        $dm=DeliveryMan::where(['auth_token' => $request['token']])->first();
 
         if ($request->has('lat') && $request->has('lng') && $dm && $dm->earning)  {
         try {
@@ -368,60 +366,109 @@ class DeliverymanController extends Controller
             } catch (\Throwable $th) { }
     }
 
-        $order = Order::where('id', $request['order_id'])
-        ->whereNull('delivery_man_id')
-        ->Notpos();
+        $claim = DB::transaction(function () use ($request) {
+            $dm = DeliveryMan::where(['auth_token' => $request['token']])->with('shifts')->lockForUpdate()->first();
+            $shifts = $dm->shifts;
 
-        if($dm->earning){
-                $order = $order->where(function ($q) use ($shifts) {
-                foreach ($shifts as $shift) {
-                    $q->orWhereBetween(
-                        DB::raw("DATE_FORMAT(schedule_at, '%H:%i')"),
-                        [$shift['start_time'], $shift['end_time']]
-                    );
-                }
-            });
+            $order = Order::where('id', $request['order_id'])
+                ->whereNull('delivery_man_id')
+                ->when($dm->type === 'zone_wise', function ($query) use ($dm) {
+                    $query->where('zone_id', $dm->zone_id)
+                        ->where(function ($query) {
+                            $query->whereHas('restaurant', function ($restaurant) {
+                                $restaurant->where('restaurant_model', 'subscription')
+                                    ->whereHas('restaurant_sub', function ($subscription) {
+                                        $subscription->where('self_delivery', 0);
+                                    });
+                            })->orWhereHas('restaurant', function ($restaurant) {
+                                $restaurant->where('restaurant_model', 'commission')
+                                    ->where('self_delivery_system', 0);
+                            });
+                        });
+                }, function ($query) use ($dm) {
+                    $query->where('restaurant_id', $dm->restaurant_id);
+                })
+                ->when(
+                    config('order_confirmation_model') === 'deliveryman' && $dm->type === 'zone_wise',
+                    function ($query) {
+                        $query->whereIn('order_status', ['pending', 'confirmed', 'processing', 'handover']);
+                    },
+                    function ($query) {
+                        $query->where(function ($query) {
+                            $query->where(function ($query) {
+                                $query->where('order_status', 'pending')
+                                    ->whereNotNull('subscription_id');
+                            })->orWhereIn('order_status', ['confirmed', 'processing', 'handover']);
+                        });
+                    }
+                )
+                ->when($dm->vehicle_id, function ($query) use ($dm) {
+                    $query->where('vehicle_id', $dm->vehicle_id);
+                })
+                ->when($dm->earning, function ($query) use ($shifts) {
+                    $query->where(function ($query) use ($shifts) {
+                        foreach ($shifts as $shift) {
+                            $query->orWhereBetween(
+                                DB::raw("DATE_FORMAT(schedule_at, '%H:%i')"),
+                                [$shift['start_time'], $shift['end_time']]
+                            );
+                        }
+                    });
+                })
+                ->delivery()
+                ->where(function ($query) {
+                    $query->OrderScheduledIn(30);
+                })
+                ->NotDigitalOrder()
+                ->Notpos()
+                ->lockForUpdate()
+                ->first();
+            if(!$order)
+            {
+                return response()->json([
+                    'errors' => [
+                        ['code' => 'order', 'message' => translate('messages.can_not_accept')]
+                    ]
+                ], 404);
+            }
+            if($dm->current_orders >= config('dm_maximum_orders'))
+            {
+                return response()->json([
+                    'errors'=>[
+                        ['code' => 'dm_maximum_order_exceed', 'message'=> translate('messages.dm_maximum_order_exceed_warning')]
+                    ]
+                ], 405);
+            }
+
+            $cash_in_hand =$dm?->wallet?->collected_cash ?? 0;
+            $cash_in_hand_overflow_delivery_man=Helpers::get_business_data('cash_in_hand_overflow_delivery_man');
+
+            $dm_max_cash_in_hand=  BusinessSetting::where('key','dm_max_cash_in_hand')->first()?->value ?? 0;
+
+            if($order->payment_method == "cash_on_delivery" && $cash_in_hand_overflow_delivery_man && (($cash_in_hand+$order->order_amount) >= $dm_max_cash_in_hand)){
+                return response()->json(['errors' => Helpers::error_formater('dm_max_cash_in_hand',translate('delivery man max cash in hand exceeds'))], 203);
+            }
+
+            $order->order_status = in_array($order->order_status, ['pending', 'confirmed'])?'accepted':$order->order_status;
+            $order->delivery_man_id = $dm->id;
+            $order->accepted = now();
+            $order->save();
+
+            $dm->current_orders = $dm->current_orders+1;
+            $dm->save();
+
+            $dm->increment('assigned_order_count');
+
+
+            OrderLogic::update_subscription_log($order);
+            return $order;
+        });
+
+        if (! $claim instanceof Order) {
+            return $claim;
         }
+        $order = $claim;
 
-        $order = $order->first();
-        if(!$order)
-        {
-            return response()->json([
-                'errors' => [
-                    ['code' => 'order', 'message' => translate('messages.can_not_accept')]
-                ]
-            ], 404);
-        }
-        if($dm->current_orders >= config('dm_maximum_orders'))
-        {
-            return response()->json([
-                'errors'=>[
-                    ['code' => 'dm_maximum_order_exceed', 'message'=> translate('messages.dm_maximum_order_exceed_warning')]
-                ]
-            ], 405);
-        }
-
-        $cash_in_hand =$dm?->wallet?->collected_cash ?? 0;
-        $cash_in_hand_overflow_delivery_man=Helpers::get_business_data('cash_in_hand_overflow_delivery_man');
-
-        $dm_max_cash_in_hand=  BusinessSetting::where('key','dm_max_cash_in_hand')->first()?->value ?? 0;
-
-        if($order->payment_method == "cash_on_delivery" && $cash_in_hand_overflow_delivery_man && (($cash_in_hand+$order->order_amount) >= $dm_max_cash_in_hand)){
-            return response()->json(['errors' => Helpers::error_formater('dm_max_cash_in_hand',translate('delivery man max cash in hand exceeds'))], 203);
-        }
-
-        $order->order_status = in_array($order->order_status, ['pending', 'confirmed'])?'accepted':$order->order_status;
-        $order->delivery_man_id = $dm->id;
-        $order->accepted = now();
-        $order->save();
-
-        $dm->current_orders = $dm->current_orders+1;
-        $dm->save();
-
-        $dm->increment('assigned_order_count');
-
-
-        OrderLogic::update_subscription_log($order);
         try {
 
             $fcm_token = ($order->is_guest == 0 ? $order?->customer?->cm_firebase_token : $order?->guest?->fcm_token) ?? null;
@@ -654,10 +701,62 @@ class DeliverymanController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
         // OrderLogic::create_subscription_log($request->order_id);
-        $dm = DeliveryMan::where(['auth_token' => $request['token']])->first();
-        $order = Order::with(['details'])->where('id',$request['order_id'])->where(function($query) use($dm){
-            $query->whereNull('delivery_man_id')
-                ->orWhere('delivery_man_id', $dm['id']);
+        $dm = DeliveryMan::where(['auth_token' => $request['token']])->with('shifts')->first();
+        $shifts = $dm->shifts;
+        $order = Order::with(['details'])->where('id',$request['order_id'])->where(function($query) use($dm, $shifts){
+            $query->where('delivery_man_id', $dm->id)
+                ->orWhere(function ($query) use ($dm, $shifts) {
+                    $query->whereNull('delivery_man_id')
+                        ->when($dm->type === 'zone_wise', function ($query) use ($dm) {
+                            $query->where('zone_id', $dm->zone_id)
+                                ->where(function ($query) {
+                                    $query->whereHas('restaurant', function ($restaurant) {
+                                        $restaurant->where('restaurant_model', 'subscription')
+                                            ->whereHas('restaurant_sub', function ($subscription) {
+                                                $subscription->where('self_delivery', 0);
+                                            });
+                                    })->orWhereHas('restaurant', function ($restaurant) {
+                                        $restaurant->where('restaurant_model', 'commission')
+                                            ->where('self_delivery_system', 0);
+                                    });
+                                });
+                        }, function ($query) use ($dm) {
+                            $query->where('restaurant_id', $dm->restaurant_id);
+                        })
+                        ->when(
+                            config('order_confirmation_model') === 'deliveryman' && $dm->type === 'zone_wise',
+                            function ($query) {
+                                $query->whereIn('order_status', ['pending', 'confirmed', 'processing', 'handover']);
+                            },
+                            function ($query) {
+                                $query->where(function ($query) {
+                                    $query->where(function ($query) {
+                                        $query->where('order_status', 'pending')
+                                            ->whereNotNull('subscription_id');
+                                    })->orWhereIn('order_status', ['confirmed', 'processing', 'handover']);
+                                });
+                            }
+                        )
+                        ->when($dm->vehicle_id, function ($query) use ($dm) {
+                            $query->where('vehicle_id', $dm->vehicle_id);
+                        })
+                        ->when($dm->earning, function ($query) use ($shifts) {
+                            $query->where(function ($query) use ($shifts) {
+                                foreach ($shifts as $shift) {
+                                    $query->orWhereBetween(
+                                        DB::raw("DATE_FORMAT(schedule_at, '%H:%i')"),
+                                        [$shift['start_time'], $shift['end_time']]
+                                    );
+                                }
+                            });
+                        })
+                        ->delivery()
+                        ->where(function ($query) {
+                            $query->OrderScheduledIn(30);
+                        })
+                        ->NotDigitalOrder()
+                        ->Notpos();
+                });
         })->Notpos()->first();
         if(!$order)
         {
