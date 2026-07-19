@@ -254,7 +254,7 @@
                         <div class="input-group">
                             <label class="field-label" for="signupSrPassword">{{ translate('messages.password') }}</label>
                             <div class="input-wrapper">
-                                <input type="password" class="form-input" name="password" id="signupSrPassword" value="{{ $password ?? '' }}"
+                                <input type="password" class="form-input" name="password" id="signupSrPassword"
                                        tabindex="2" required placeholder="{{ translate('messages.password') }}"
                                        style="padding-right: 48px;"
                                        data-msg="{{ translate('messages.invalid_password_warning') }}">
@@ -287,7 +287,7 @@
 
                         <div class="form-meta">
                             <label class="remember" for="termsCheckbox">
-                                <input type="checkbox" id="termsCheckbox" name="remember" {{ $password ? 'checked' : '' }}>
+                                <input type="checkbox" id="termsCheckbox" name="remember" {{ ($remember ?? false) ? 'checked' : '' }}>
                                 {{ translate('messages.remember_me') }}
                             </label>
                             @if (($role ?? '') === 'vendor')

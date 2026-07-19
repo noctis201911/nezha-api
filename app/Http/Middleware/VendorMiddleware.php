@@ -28,10 +28,9 @@ class VendorMiddleware
                 return to_route('login',[$user_link]);
             }
             return $next($request);
-        }
-        else if (Auth::guard('vendor_employee')->check()) {
-            if(!auth('vendor_employee')->user()->restaurant->status)
-            {
+        } elseif (Auth::guard('vendor_employee')->check()) {
+            $employee = auth('vendor_employee')->user();
+            if (! $employee->status || ! $employee->restaurant?->status) {
                 auth()->guard('vendor_employee')->logout();
                 $user_link = Helpers::get_login_url('restaurant_employee_login_url');
                 return to_route('login',[$user_link]);

@@ -22,7 +22,6 @@ use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Crypt;
 use App\Mail\PasswordResetRequestMail;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Session;
@@ -116,42 +115,45 @@ class LoginController extends Controller
         $nz_caps[] = $nz_phrase;
         Session::put('six_captcha_list', array_slice($nz_caps, -5));
 
-        $email =  null;
-        $password = null;
-        if (Cookie::has('p_token') && Cookie::has('e_token') && Cookie::has('role')  &&  Cookie::get('role') == $role) {
-            $email = Crypt::decryptString(Cookie::get('e_token'));
-            $password = Crypt::decryptString(Cookie::get('p_token'));
-        }
+        $remember = false;
+        $this->forgetLegacyLoginCookies();
 
         $loginTemplate = ($role === 'admin') ? 'auth.admin-login' : 'auth.login';
-        return view($loginTemplate, compact('custome_recaptcha','email','password','role','site_direction','locale'));
+        return view($loginTemplate, compact('custome_recaptcha','remember','role','site_direction','locale'));
     }
 
-    public function login_attemp($role,$email ,$password, $ip, $remember = false){
-        $auth= ($role == 'admin_employee' ? 'admin' :$role);
-        if (auth($auth)->attempt(['email' => $email, 'password' => $password], $remember)) {
+    public function login_attemp($role, $email, $password, $ip, $remember = false)
+    {
+        $auth = ($role == 'admin_employee' ? 'admin' : $role);
+        $credentials = ['email' => $email, 'password' => $password];
+        if ($auth === 'vendor_employee') {
+            $credentials['status'] = 1;
+        }
 
-            if ($remember) {
-                    Cookie::queue('role', $role, 120);
-                    Cookie::queue('e_token', Crypt::encryptString($email), 120);
-                    Cookie::queue('p_token', Crypt::encryptString($password), 120);
-                } else {
-                    $user = auth($auth)?->user();
-                    $user?->update([
-                        'remember_token' => null
-                    ]);
-                    Cookie::queue(Cookie::forget('e_token'));
-                    Cookie::queue(Cookie::forget('p_token'));
-                    Cookie::queue(Cookie::forget('role'));
-                }
-                RateLimiter::clear('login-attempts:' . $ip);
-                if($auth == 'admin'){
-                    return 'admin';
-                } else {
-                    return 'vendor';
-                }
+        if (auth($auth)->attempt($credentials, $remember)) {
+            $this->forgetLegacyLoginCookies();
+            if (! $remember) {
+                $user = auth($auth)?->user();
+                $user?->update([
+                    'remember_token' => null
+                ]);
             }
+            RateLimiter::clear('login-attempts:' . $ip);
+            if ($auth == 'admin') {
+                return 'admin';
+            }
+
+            return 'vendor';
+        }
+
         return false;
+    }
+
+    private function forgetLegacyLoginCookies(): void
+    {
+        foreach (['e_token', 'p_token', 'role'] as $cookie) {
+            Cookie::queue(Cookie::forget($cookie));
+        }
     }
 
 

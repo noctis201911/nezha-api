@@ -50,7 +50,7 @@ class VendorTokenIsValid
             }
             $request['vendor']=$vendor;
         }elseif($vendor_type == 'employee'){
-            $vendor = VendorEmployee::where('auth_token', $token)->first();
+            $vendor = VendorEmployee::where('auth_token', $token)->where('status', 1)->first();
             if(!isset($vendor))
             {
                 return response()->json([
