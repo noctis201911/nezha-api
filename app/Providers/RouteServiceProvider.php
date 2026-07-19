@@ -120,5 +120,14 @@ class RouteServiceProvider extends ServiceProvider
                 Limit::perDay(200)->by('guides_helpful_ip_' . $request->ip()),
             ];
         });
+
+        // 哪吒[本地生活联系归因 2026-07-19]: 联系意图埋点端点限流。无登录墙(匿名软计数), 按 IP 键防脚本刷;
+        // 同 nezha_guides_helpful 档(20/min + 200/day)。命名限流器独立 key, 不与其它 throttle 互撞计数(未命名共用 key 坑)。
+        RateLimiter::for('nezha_ll_contact', function (Request $request) {
+            return [
+                Limit::perMinute(20)->by($request->ip()),
+                Limit::perDay(200)->by('ll_contact_ip_' . $request->ip()),
+            ];
+        });
     }
 }

@@ -632,6 +632,43 @@
 **⑦ 商家自助入驻表单（档B）暂不做**
 现阶段商家不多，运营代录够用。若**月真实入驻咨询 ≥5** 或要规模化，再上「商家自助填表 + 审核队列」（档B），届时另做。
 
+**⑧ 本地生活·咨询量怎么看（2026-07-19 新增）**
+商家列表页新增 **「近30天咨询」** 列，顾客在店铺页每点一次联系渠道（微信 / 电话 / WhatsApp / Telegram）就记一次，帮你看哪家店热、哪家冷。
+
+- 🔴 **这个数字是「意图上界」，不是成交数、也不是访客数**：
+  - 顾客**点了联系 ≠ 真发了消息**（WA/TG 是拉起对话框、顾客可能没按发送；微信是复制号）。它只是"想联系"的次数**上界**，用来横向比冷热、看趋势，别当精确咨询量。
+  - 埋点**不记任何身份**（无账号 ID / IP / 设备），所以**含同一个人重复点击**，不能当"独立顾客数"或做去重漏斗。
+  - 联系方式在**登录后**才可见，数字只代表**登录用户**的点击。
+  - **从上线那天起算、无回溯**，所以刚上线时列≈0 是正常的，攒几周才有参考量。
+
+**月咨询量 / 冷热 SQL（在 phpMyAdmin 或数据库客户端跑）**——表 `local_life_contact_events`：
+
+① 每月总咨询次数（看整体走势）：
+```sql
+SELECT DATE_FORMAT(created_at, '%Y-%m') AS 月份, COUNT(*) AS 咨询次数
+FROM local_life_contact_events
+GROUP BY 1 ORDER BY 1 DESC;
+```
+
+② 本月分渠道（看顾客爱用哪个联系方式）：
+```sql
+SELECT channel AS 渠道, COUNT(*) AS 次数
+FROM local_life_contact_events
+WHERE created_at >= DATE_FORMAT(NOW(), '%Y-%m-01')
+GROUP BY channel ORDER BY 次数 DESC;
+```
+
+③ 本月分问题（看顾客最想知道什么；仅 WA/TG 点快捷提问芯片才带问题，微信/电话为「未选问题」）：
+```sql
+SELECT COALESCE(question, '(微信/电话·未选问题)') AS 问题, COUNT(*) AS 次数
+FROM local_life_contact_events
+WHERE created_at >= DATE_FORMAT(NOW(), '%Y-%m-01')
+GROUP BY question ORDER BY 次数 DESC;
+```
+> 问题 key 对照：`promo`=有优惠吗 · `price`=怎么收费 · `hours`=营业时间 · `booking`=需要预约。
+> 想看**单个商家**：任一条 SQL 的 `WHERE` 里加 `AND merchant_id = <商家ID>`（商家 ID 在列表 → 编辑页 URL 里）。
+> ⚠️ 月份边界按数据库服务器时区切；跨时区精确统计时留意（分析用途足够）。
+
 ### 8.1e 店内视频（外链卡·档1）〔2026-07-11〕
 
 商家详情页可挂**店内视频**：商家在外部平台（抖音 / 小红书 / TikTok / Instagram）已有的视频，以封面卡在店铺页「店内视频」横条展示，顾客点击后**外跳**到对应平台观看。**平台不托管视频、不嵌入播放、不转码、零带宽**——只存一张封面 + 一个链接。合规同店铺页：L1-1 纯信息展示。

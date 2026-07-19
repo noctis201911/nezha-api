@@ -8,6 +8,7 @@ use App\Models\LocalLifePost;
 use App\Models\LocalLifeCategory;
 use App\Models\LocalLifeMerchant;
 use App\Models\LocalLifeMerchantNote;
+use App\Models\LocalLifeContactEvent;
 use App\Models\LocalLifeReport;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -553,6 +554,54 @@ class LocalLifeController extends Controller
     private function maxImagesFor(?string $category): int
     {
         return self::MAX_IMAGES_BY_CATEGORY[trim((string) $category)] ?? self::MAX_IMAGES_DEFAULT;
+    }
+
+    /**
+     * 接口 A：联系意图埋点（快捷提问归因 · 本地生活联系归因批 2026-07-19）
+     * POST /api/v1/local-life/merchants/{id}/contact-intent  (公开·无 auth·throttle:nezha_ll_contact)
+     *
+     * 度量顾客点了哪个联系渠道、点前想问什么，仅落聚合事实到 local_life_contact_events。
+     * 🔴 零主体标识：全程不读 $request->user()、不写 user_id/IP/UA/设备/platform（业主 0719 拍板·甲）。
+     * 🔴 永不阻塞：无论何种输入一律 204（脏值降级/静默丢弃），唯一非 204 = 429（throttle 中间件）。
+     *   - channel 不在白名单 → 204 零写入
+     *   - merchant 不存在 → 204 零写入
+     *   - question 不在白名单 或 渠道为 wechat/phone → 落行但 question=NULL（不拒）
+     *   - insert 异常 → try/catch 吞，仍 204
+     * L1-1 纯信息墙：埋点只是信息层，不含任何交易/下单/收款。
+     */
+    public function contactIntent(Request $request, $id)
+    {
+        $noContent = response()->noContent(); // 204
+
+        // channel 白名单（与 LocalLifeMerchant::normalizedContacts 同 4 值）；非法 → 零写入
+        $channel = strtolower(trim((string) $request->input('channel', '')));
+        if (!in_array($channel, ['wechat', 'phone', 'whatsapp', 'telegram'], true)) {
+            return $noContent;
+        }
+
+        // merchant 不存在 → 零写入（不暴露存在性差异，同样 204）
+        if (!LocalLifeMerchant::whereKey($id)->exists()) {
+            return $noContent;
+        }
+
+        // question 白名单（与前端快捷提问芯片 key 同步）；wechat/phone 恒 NULL；乱值降级 NULL（照常落行，不拒）
+        $question = strtolower(trim((string) $request->input('question', '')));
+        $allowedQ = ['promo', 'price', 'hours', 'booking'];
+        if (in_array($channel, ['wechat', 'phone'], true) || !in_array($question, $allowedQ, true)) {
+            $question = null;
+        }
+
+        try {
+            LocalLifeContactEvent::create([
+                'merchant_id' => (int) $id,
+                'channel'     => $channel,
+                'question'    => $question,
+            ]);
+        } catch (\Throwable $e) {
+            // 静默吞：埋点永不阻塞、永不 5xx
+        }
+
+        return $noContent;
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\LocalLifeCategory;
+use App\Models\LocalLifeContactEvent;
 use App\Models\LocalLifeMerchant;
 use App\Models\LocalLifeMerchantAccount;
 use App\Models\LocalLifeReport;
@@ -51,7 +52,12 @@ class LocalLifeMerchantController extends Controller
             ->whereIn('merchant_id', $merchants->pluck('id'))
             ->selectRaw('merchant_id, count(*) as c')
             ->groupBy('merchant_id')->pluck('c', 'merchant_id');
-        return view('admin-views.local-life.merchants.list', compact('merchants', 'categories', 'reportCounts'));
+        // 各商家近30天联系咨询数（A·联系归因埋点聚合；意图上界口径，非独立用户数）
+        $contact30 = LocalLifeContactEvent::where('created_at', '>=', now()->subDays(30))
+            ->whereIn('merchant_id', $merchants->pluck('id'))
+            ->selectRaw('merchant_id, count(*) as c')
+            ->groupBy('merchant_id')->pluck('c', 'merchant_id');
+        return view('admin-views.local-life.merchants.list', compact('merchants', 'categories', 'reportCounts', 'contact30'));
     }
 
     /** 某商家的举报列表（待处理在前） */

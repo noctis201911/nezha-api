@@ -49,10 +49,11 @@
                     <tr>
                         <th style="width:6%">排序</th>
                         <th style="width:8%">Logo</th>
-                        <th style="width:22%">商家名</th>
+                        <th style="width:18%">商家名</th>
                         <th style="width:13%">类目</th>
                         <th style="width:9%">评分</th>
-                        <th style="width:11%">区域</th>
+                        <th class="text-center" style="width:9%" title="近30天顾客点击联系的意图次数（上界口径，非独立用户数）">近30天咨询</th>
+                        <th style="width:10%">区域</th>
                         <th class="text-center" style="width:7%">敏感</th>
                         <th class="text-center" style="width:7%">状态</th>
                         <th style="width:10%">操作</th>
@@ -78,6 +79,7 @@
                             </td>
                             <td><span class="badge badge-soft-secondary">{{ $m->category }}</span></td>
                             <td>★ {{ number_format($m->rating, 1) }}@if($m->google_rating) <small class="text-muted">G {{ number_format($m->google_rating,1) }}</small>@endif</td>
+                            <td class="text-center">{{ $contact30[$m->id] ?? 0 }}</td>
                             <td>{{ $m->area ?: '—' }}</td>
                             <td class="text-center">
                                 @if($m->is_sensitive)
@@ -110,7 +112,7 @@
                             </td>
                         </tr>
                         @empty
-                        <tr><td colspan="9" class="text-center text-muted py-4">还没有商家，点右上角「新建商家」添加</td></tr>
+                        <tr><td colspan="10" class="text-center text-muted py-4">还没有商家，点右上角「新建商家」添加</td></tr>
                         @endforelse
                     </tbody>
                 </table>

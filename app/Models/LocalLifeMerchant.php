@@ -38,6 +38,12 @@ class LocalLifeMerchant extends Model
         'sort_order'    => 'integer',
     ];
 
+    /** 联系意图埋点事件（A·近30天咨询 withCount 用；append-only 零主体标识） */
+    public function contactEvents()
+    {
+        return $this->hasMany(LocalLifeContactEvent::class, 'merchant_id');
+    }
+
     /** 当前是否营业中（按埃里温时区；无营业时间数据时返回 null=未知） */
     public function isOpenNow(): ?bool
     {

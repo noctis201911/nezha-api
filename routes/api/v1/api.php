@@ -583,6 +583,8 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         Route::get('guides/{slug}', [GuideController::class, 'show']);
         // 有用 +1（无登录墙·命名 throttle 防刷；前端 localStorage 防重复点）
         Route::post('guides/{id}/helpful', [GuideController::class, 'helpful'])->middleware('throttle:nezha_guides_helpful')->where('id', '[0-9]+');
+        // 联系意图埋点（A·无登录墙·命名 throttle 防刷；控制器永 204，前端 fire-and-forget·零主体标识）
+        Route::post('merchants/{id}/contact-intent', [LocalLifeController::class, 'contactIntent'])->middleware('throttle:nezha_ll_contact')->where('id', '[0-9]+');
     });
 
     // 本地生活 UGC：发帖 / 我的发布（需登录；游客不能发，PII 仅本人可见）
