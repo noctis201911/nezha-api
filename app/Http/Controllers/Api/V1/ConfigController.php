@@ -9,6 +9,7 @@ use App\Models\Currency;
 use App\Models\ReactFaq;
 use App\Models\DataSetting;
 use App\Models\SocialMedia;
+use App\Services\Auth\TelegramLoginService;
 use App\Traits\AddonHelper;
 use App\Models\ReactService;
 use Illuminate\Http\Request;
@@ -209,6 +210,15 @@ class ConfigController extends Controller
                 'status' => (bool)$social['status']
             ];
             array_push($social_login, $config);
+        }
+        if (
+            app(TelegramLoginService::class)->isAvailable()
+            && ! collect($social_login)->contains('login_medium', 'telegram')
+        ) {
+            $social_login[] = [
+                'login_medium' => 'telegram',
+                'status' => true,
+            ];
         }
 
         //addon settings publish status

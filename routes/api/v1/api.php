@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\V1\Auth\DeliveryManLoginController;
 use App\Http\Controllers\Api\V1\Auth\DMPasswordResetController;
 use App\Http\Controllers\Api\V1\Auth\PasswordResetController;
+use App\Http\Controllers\Api\V1\Auth\TelegramAuthController;
 use App\Http\Controllers\Api\V1\Auth\VendorLoginController;
 use App\Http\Controllers\Api\V1\Auth\VendorPasswordResetController;
 use App\Http\Controllers\Api\V1\BannerController;
@@ -108,6 +109,19 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         // Nezha: Google 整页跳转登录(ux_mode:redirect) — redirect-login 校验 id_token 返回一次性短码, social/exchange 凭短码换 token
         Route::post('google/redirect-login', [CustomerAuthController::class, 'google_redirect_login']);
         Route::post('social/exchange', [CustomerAuthController::class, 'social_exchange']);
+
+        // Customer H5 only: Telegram OIDC uses a dedicated login bot/client.
+        // Normal Google login above is unchanged; phone collisions require exact old-account proof.
+        Route::post('telegram/start', [TelegramAuthController::class, 'start'])
+            ->middleware('throttle:10,1');
+        Route::get('telegram/callback', [TelegramAuthController::class, 'callback'])
+            ->middleware('throttle:30,1');
+        Route::post('telegram/exchange', [TelegramAuthController::class, 'exchange'])
+            ->middleware('throttle:20,1');
+        Route::post('telegram/link/password', [TelegramAuthController::class, 'linkWithPassword'])
+            ->middleware('throttle:5,1');
+        Route::post('telegram/link/google', [TelegramAuthController::class, 'linkWithGoogle'])
+            ->middleware('throttle:10,1');
 
         Route::group(['prefix' => 'delivery-man', 'as' => 'delivery-man.', 'middleware' => 'actch:deliveryman_app'], function () {
             Route::post('login', [DeliveryManLoginController::class, 'login'])->name('login');
