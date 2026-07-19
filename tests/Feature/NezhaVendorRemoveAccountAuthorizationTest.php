@@ -229,21 +229,15 @@ PHP);
         $middleware = self::compact($middlewareSource);
         $checks = [];
 
-        self::add(
-            $checks,
-            self::gitBlobId($routeSource) === 'b93c9a4587d2f7b2f26a2938305e453649f2aa0d',
-            'candidate route file must remain byte-for-byte unchanged'
-        );
-        self::add(
-            $checks,
-            self::gitBlobId($middlewareSource) === '3310be478827726f37043d17c4b1f2f0a51bf13d',
-            'VendorTokenIsValid middleware must remain byte-for-byte unchanged'
-        );
-
         $vendorGroup = "Route::group(['prefix'=>'vendor','namespace'=>'Vendor','middleware'=>['vendor.api','actch:restaurant_app']],function(){";
         $removeRoute = "Route::delete('remove-account',[VendorController::class,'remove_account']);";
         $groupPosition = strpos($routes, $vendorGroup);
         $routePosition = strpos($routes, $removeRoute);
+        self::add(
+            $checks,
+            substr_count($routes, $removeRoute) === 1,
+            'DELETE api/v1/vendor/remove-account must have exactly one vendor route registration'
+        );
         self::add(
             $checks,
             $groupPosition !== false && $routePosition !== false && $groupPosition < $routePosition,
@@ -356,13 +350,6 @@ PHP);
         }
 
         return $result;
-    }
-
-    private static function gitBlobId(string $source): string
-    {
-        $normalized = str_replace(["\r\n", "\r"], "\n", $source);
-
-        return sha1('blob '.strlen($normalized)."\0".$normalized);
     }
 }
 

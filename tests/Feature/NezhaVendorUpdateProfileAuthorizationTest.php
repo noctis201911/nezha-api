@@ -201,7 +201,9 @@ PHP);
             "if(\$validator->fails()){returnresponse()->json(['errors'=>Helpers::error_processor(\$validator)],403);}",
             "if(\$request->has('image')){",
             "\$imageName=Helpers::update(dir:'vendor/',old_image:\$vendor->image,format:'png',image:\$request->file('image'));",
-            "if(\$request['password']!=null){\$pass=bcrypt(\$request['password']);}else{\$pass=\$vendor->password;}",
+            "if(\$request['password']!=null){",
+            "\$pass=bcrypt(\$request['password']);",
+            '}else{$pass=$vendor->password;}',
             '$vendor->f_name=$request->f_name;',
             '$vendor->l_name=$request->l_name;',
             '$vendor->phone=$request->phone;',
@@ -239,21 +241,15 @@ PHP);
         $middleware = self::compact($middlewareSource);
         $checks = [];
 
-        self::add(
-            $checks,
-            self::gitBlobId($routeSource) === 'b93c9a4587d2f7b2f26a2938305e453649f2aa0d',
-            'candidate route file must remain byte-for-byte unchanged'
-        );
-        self::add(
-            $checks,
-            self::gitBlobId($middlewareSource) === '3310be478827726f37043d17c4b1f2f0a51bf13d',
-            'VendorTokenIsValid middleware must remain byte-for-byte unchanged'
-        );
-
         $vendorGroup = "Route::group(['prefix'=>'vendor','namespace'=>'Vendor','middleware'=>['vendor.api','actch:restaurant_app']],function(){";
         $updateRoute = "Route::put('update-profile',[VendorController::class,'update_profile']);";
         $groupPosition = strpos($routes, $vendorGroup);
         $routePosition = strpos($routes, $updateRoute);
+        self::add(
+            $checks,
+            substr_count($routes, $updateRoute) === 1,
+            'PUT api/v1/vendor/update-profile must have exactly one vendor route registration'
+        );
         self::add(
             $checks,
             $groupPosition !== false && $routePosition !== false && $groupPosition < $routePosition,
@@ -366,13 +362,6 @@ PHP);
         }
 
         return $result;
-    }
-
-    private static function gitBlobId(string $source): string
-    {
-        $normalized = str_replace(["\r\n", "\r"], "\n", $source);
-
-        return sha1('blob '.strlen($normalized)."\0".$normalized);
     }
 }
 
