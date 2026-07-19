@@ -286,10 +286,14 @@
                         </div>
 
                         <div class="form-meta">
-                            <label class="remember" for="termsCheckbox">
-                                <input type="checkbox" id="termsCheckbox" name="remember" {{ ($remember ?? false) ? 'checked' : '' }}>
-                                {{ translate('messages.remember_me') }}
-                            </label>
+                            @if ($isVendor)
+                                <span class="remember">For your security, merchant login is not kept across browser sessions.</span>
+                            @else
+                                <label class="remember" for="termsCheckbox">
+                                    <input type="checkbox" id="termsCheckbox" name="remember" {{ ($remember ?? false) ? 'checked' : '' }}>
+                                    {{ translate('messages.remember_me') }}
+                                </label>
+                            @endif
                             @if (($role ?? '') === 'vendor')
                                 <button type="button" class="link" id="openForgetModal">{{ translate('Forget_Password') }}?</button>
                             @endif

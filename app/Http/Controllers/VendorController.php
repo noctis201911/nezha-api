@@ -194,6 +194,11 @@ class VendorController extends Controller
             Helpers::add_or_update_translations(request: $request, key_data: 'address', name_field: 'address', model_name: 'Restaurant', data_id: $restaurant->id, data_value: $restaurant->address);
 
             DB::commit();
+            $request->session()->put(
+                MerchantTwoFactorController::ONBOARDING_RESTAURANT_ID,
+                (int) $restaurant->id
+            );
+            $request->session()->put(MerchantTwoFactorController::ONBOARDING_AUTHORIZED, true);
 
             // 阶段1 制裁名字筛查(L1-6): 自注册法人姓名比对 OFAC SDN 人名名单 → 命中/疑似写风控队列。
             // 非阻断(商家本就 status=0 待运营审核), 由运营在审核队列/入驻审核处据实拒绝。
@@ -244,6 +249,7 @@ class VendorController extends Controller
                 } elseif ($request->business_plan == 'commission-base') {
                     $restaurant->restaurant_model = 'commission';
                     $restaurant->save();
+                    $this->clearOnboardingSession($request);
 
                     return response()->json([
                         'message' => translate('messages.registration_successful'),
@@ -265,6 +271,7 @@ class VendorController extends Controller
             } else {
                 $restaurant->restaurant_model = 'commission';
                 $restaurant->save();
+                $this->clearOnboardingSession($request);
                 Toastr::success(translate('messages.your_restaurant_registration_is_successful'));
 
                 return response()->json([
@@ -289,7 +296,8 @@ class VendorController extends Controller
 
     public function business_plan(Request $request)
     {
-        $restaurant = Restaurant::find($request->restaurant_id);
+        $restaurant = $this->onboardingRestaurant($request, $request->integer('restaurant_id'));
+        $request->merge(['restaurant_id' => $restaurant->id]);
 
         if ($request->business_plan == 'subscription-base' && $request->package_id != null) {
             $key = ['subscription_free_trial_days', 'subscription_free_trial_type', 'subscription_free_trial_status'];
@@ -305,6 +313,7 @@ class VendorController extends Controller
         } elseif ($request->business_plan == 'commission-base') {
             $restaurant->restaurant_model = 'commission';
             $restaurant->save();
+            $this->clearOnboardingSession($request);
 
             return view('vendor-views.auth.register-complete', [
                 'type' => 'commission',
@@ -332,7 +341,7 @@ class VendorController extends Controller
             'restaurant_id' => 'required',
             'payment' => 'required',
         ]);
-        $restaurant = Restaurant::Where('id', $request->restaurant_id)->first(['id', 'vendor_id']);
+        $restaurant = $this->onboardingRestaurant($request, $request->integer('restaurant_id'));
         $package = SubscriptionPackage::withoutGlobalScope('translate')->find($request->package_id);
 
         if (! in_array($request->payment, ['free_trial'])) {
@@ -342,6 +351,7 @@ class VendorController extends Controller
         }
         if ($request->payment == 'free_trial') {
             $plan_data = Helpers::subscription_plan_chosen(restaurant_id: $restaurant->id, package_id: $package->id, payment_method: 'free_trial', discount: 0, reference: 'free_trial', type: 'new_join');
+            $this->clearOnboardingSession($request);
         }
         $plan_data != false ? Toastr::success(translate('Successfully_Subscribed.')) : Toastr::error(translate('Something_went_wrong!.'));
 
@@ -352,7 +362,8 @@ class VendorController extends Controller
     {
         // $restaurant_id = $request->restaurant_id;
         $restaurant_id = base64_decode($request->restaurant_id);
-        Restaurant::findOrFail($restaurant_id);
+        $restaurant = $this->onboardingRestaurant($request, (int) $restaurant_id);
+        $restaurant_id = $restaurant->id;
         $admin_commission = BusinessSetting::where('key', 'admin_commission')->first();
         $business_name = BusinessSetting::where('key', 'business_name')->first();
         $packages = SubscriptionPackage::where('status', 1)->latest()->get();
@@ -378,5 +389,31 @@ class VendorController extends Controller
         }
 
         return view('vendor-views.auth.register-complete', ['restaurant_id' => $restaurant_id, 'payment_status' => $payment_status, 'type' => $type]);
+    }
+
+    private function onboardingRestaurant(Request $request, ?int $requestedId = null): Restaurant
+    {
+        $sessionId = (int) $request->session()->get(
+            MerchantTwoFactorController::ONBOARDING_RESTAURANT_ID,
+            0
+        );
+        $restaurantId = $requestedId ?: $sessionId;
+        abort_if(! $sessionId
+            || ! $request->session()->get(MerchantTwoFactorController::ONBOARDING_AUTHORIZED, false)
+            || $restaurantId !== $sessionId, 403);
+
+        $restaurant = Restaurant::findOrFail($restaurantId);
+        $vendor = auth('vendor')->user();
+        abort_if($vendor && (int) $restaurant->vendor_id !== (int) $vendor->id, 403);
+
+        return $restaurant;
+    }
+
+    private function clearOnboardingSession(Request $request): void
+    {
+        $request->session()->forget([
+            MerchantTwoFactorController::ONBOARDING_RESTAURANT_ID,
+            MerchantTwoFactorController::ONBOARDING_AUTHORIZED,
+        ]);
     }
 }
