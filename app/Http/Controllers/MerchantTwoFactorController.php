@@ -25,6 +25,8 @@ class MerchantTwoFactorController extends Controller
 
     public const PENDING_LOGIN_URL = 'merchant_2fa.pending_login_url';
 
+    public const PENDING_SETUP_REQUIRED = 'merchant_2fa.pending_setup_required';
+
     public const SESSION_GENERATION = 'merchant_2fa.auth_generation';
 
     public const SESSION_PASSED_GENERATION = 'merchant_2fa.passed_generation';
@@ -33,7 +35,12 @@ class MerchantTwoFactorController extends Controller
 
     public const ONBOARDING_AUTHORIZED = 'merchant_2fa.onboarding_authorized';
 
-    public static function beginPending(Request $request, Authenticatable $actor, string $loginUrl): void
+    public static function beginPending(
+        Request $request,
+        Authenticatable $actor,
+        string $loginUrl,
+        bool $setupRequired = false
+    ): void
     {
         $request->session()->put([
             self::PENDING_TYPE => NezhaMerchantTwoFactor::actorType($actor),
@@ -41,6 +48,7 @@ class MerchantTwoFactorController extends Controller
             self::PENDING_GENERATION => (int) $actor->auth_generation,
             self::PENDING_EXPIRES => now()->addMinutes(5)->getTimestamp(),
             self::PENDING_LOGIN_URL => $loginUrl,
+            self::PENDING_SETUP_REQUIRED => $setupRequired,
         ]);
         $request->session()->forget([
             'merchant_2fa.setup_secret',
@@ -78,7 +86,13 @@ class MerchantTwoFactorController extends Controller
         if (! $actor) {
             return $this->loginRedirect($request);
         }
-        if (NezhaMerchantTwoFactor::state($actor) === NezhaMerchantTwoFactor::STATE_ENROLLMENT) {
+        $state = NezhaMerchantTwoFactor::state($actor);
+        if ($state === NezhaMerchantTwoFactor::STATE_OPTIONAL) {
+            self::finishLogin($request, $actor, false);
+
+            return redirect()->to(self::continuationUrl($actor));
+        }
+        if ($state === NezhaMerchantTwoFactor::STATE_ENROLLMENT) {
             return redirect()->route('merchant.2fa.setup');
         }
 
@@ -122,14 +136,11 @@ class MerchantTwoFactorController extends Controller
                     (int) $request->session()->get(self::PENDING_GENERATION),
                     $context
                 );
-                self::beginPending(
-                    $request,
-                    $recovered,
-                    (string) $request->session()->get(self::PENDING_LOGIN_URL, $this->loginUrl($recovered))
-                );
                 $this->clearLimits($request, $actor);
+                $continuationUrl = self::continuationUrl($recovered);
+                self::finishLogin($request, $recovered, false);
 
-                return redirect()->route('merchant.2fa.setup')
+                return redirect()->to($continuationUrl)
                     ->with('merchant_2fa.recovery_notice', true);
             } catch (\DomainException) {
                 $this->hitLimits($request, $actor);
@@ -141,9 +152,17 @@ class MerchantTwoFactorController extends Controller
 
     public function setup(Request $request)
     {
-        $actor = $this->pendingActor($request) ?: $this->authenticatedActor();
+        $pendingActor = $this->pendingActor($request);
+        $actor = $pendingActor ?: $this->authenticatedActor();
         if (! $actor) {
             return $this->loginRedirect($request);
+        }
+        if ($pendingActor
+            && NezhaMerchantTwoFactor::state($actor) === NezhaMerchantTwoFactor::STATE_OPTIONAL
+            && ! $request->session()->get(self::PENDING_SETUP_REQUIRED, false)) {
+            self::finishLogin($request, $actor, false);
+
+            return redirect()->to(self::continuationUrl($actor));
         }
 
         if ($actor->two_factor_enabled) {
@@ -231,6 +250,16 @@ class MerchantTwoFactorController extends Controller
 
     public function cancel(Request $request)
     {
+        $authenticatedActor = $this->authenticatedActor();
+        if ($authenticatedActor && ! $request->session()->has(self::PENDING_ID)) {
+            $request->session()->forget([
+                'merchant_2fa.setup_secret',
+                'merchant_2fa.setup_generation',
+            ]);
+
+            return redirect()->route('vendor.profile.view');
+        }
+
         $url = (string) $request->session()->get(self::PENDING_LOGIN_URL, 'vendor');
         self::clearPending($request);
         foreach (['vendor', 'vendor_employee'] as $guard) {
@@ -312,7 +341,7 @@ class MerchantTwoFactorController extends Controller
 
         $this->clearLimits($request, $actor);
         $loginUrl = $this->loginUrl($recovery);
-        self::beginPending($request, $recovery, $loginUrl);
+        self::beginPending($request, $recovery, $loginUrl, true);
         auth(NezhaMerchantTwoFactor::actorType($actor) === NezhaMerchantTwoFactor::OWNER
             ? 'vendor'
             : 'vendor_employee')->logout();
@@ -329,6 +358,7 @@ class MerchantTwoFactorController extends Controller
             self::PENDING_GENERATION,
             self::PENDING_EXPIRES,
             self::PENDING_LOGIN_URL,
+            self::PENDING_SETUP_REQUIRED,
             'merchant_2fa.setup_secret',
             'merchant_2fa.setup_generation',
         ]);
@@ -337,7 +367,10 @@ class MerchantTwoFactorController extends Controller
     private function pendingActor(Request $request): Vendor|VendorEmployee|null
     {
         $expires = (int) $request->session()->get(self::PENDING_EXPIRES, 0);
-        if (! $expires || $expires < now()->getTimestamp()) {
+        if (! $expires) {
+            return null;
+        }
+        if ($expires < now()->getTimestamp()) {
             self::clearPending($request);
 
             return null;
@@ -358,7 +391,15 @@ class MerchantTwoFactorController extends Controller
 
     private function authenticatedActor(): Vendor|VendorEmployee|null
     {
-        return auth('vendor')->user() ?: auth('vendor_employee')->user();
+        $actor = auth('vendor')->user() ?: auth('vendor_employee')->user();
+        if (! $actor || ! $this->active($actor)) {
+            return null;
+        }
+        if (session(self::SESSION_GENERATION) !== (int) $actor->auth_generation) {
+            return null;
+        }
+
+        return $actor;
     }
 
     private function active(Vendor|VendorEmployee $actor): bool

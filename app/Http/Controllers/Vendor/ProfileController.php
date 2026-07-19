@@ -9,6 +9,7 @@ use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\RateLimiter;
 use Brian2694\Toastr\Facades\Toastr;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
 class ProfileController extends Controller
@@ -61,9 +62,10 @@ class ProfileController extends Controller
 
     public function settings_password_update(Request $request)
     {
+        $seller = auth('vendor')->check()?Helpers::get_vendor_data():auth('vendor_employee')->user();
         $request->validate([
             'current_password' => ['required', 'string'],
-            'two_factor_code' => ['required', 'string', 'max:16'],
+            'two_factor_code' => [Rule::requiredIf((bool) $seller?->two_factor_enabled), 'nullable', 'string', 'max:16'],
             'password' => ['required', 'same:confirm_password', Password::min(8)->mixedCase()->letters()->numbers()->symbols()->uncompromised()],
             'confirm_password' => 'required',
         ],[
@@ -76,7 +78,6 @@ class ProfileController extends Controller
             'password.custom' => translate('The password cannot contain white spaces.'),
         ]);
 
-        $seller = auth('vendor')->check()?Helpers::get_vendor_data():auth('vendor_employee')->user();
         $rateKeys = [
             'merchant-profile-step-up:ip:'.NezhaMerchantTwoFactor::requestHash($request->ip()),
             'merchant-profile-step-up:account:'.hash(
@@ -91,7 +92,7 @@ class ProfileController extends Controller
             NezhaMerchantTwoFactor::verifySensitiveStepUp(
                 $seller,
                 (string) $request->input('current_password'),
-                (string) $request->input('two_factor_code'),
+                $request->filled('two_factor_code') ? (string) $request->input('two_factor_code') : null,
                 [
                     'ip' => $request->ip(),
                     'user_agent' => $request->userAgent(),

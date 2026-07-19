@@ -154,12 +154,12 @@
 
 正本是 `MERCHANT_TWO_FACTOR_SECURITY_CONTRACT.md`。每次修改商家登录、token、密码、状态或资金地址确认入口，至少复核：
 
-1. Web 密码通过后，在绑定/挑战完成前 vendor guard 仍未登录；商家登录页没有 remember 控件。setup session 中的 secret 为密文，含 secret/恢复码的页面带 `Cache-Control: no-store, private`。
-2. App 登录在绑定/挑战完成前返回 202 且没有 token；ticket 只存 SHA-256，pending secret 加密，5 分钟过期、单次消费、同 actor 只保留一个 active ticket，并按账号/IP限制创建与验证。
+1. 未启用的 owner/employee 密码通过后直接建立 Web 会话；无论旧 grace/deadline 为 true、null、未来或过期都不得被带到 setup。已启用者在挑战完成前 vendor guard 仍未登录。商家登录页没有 remember 控件；Web 自愿 setup 的 session secret 为密文，含 secret/恢复码的页面带 `Cache-Control: no-store, private`，取消 setup 不登出当前会话。
+2. 未启用的 owner/employee App 密码登录直接签发 token；已启用者返回 202 且挑战完成前没有 token。ticket 只存 SHA-256，5 分钟过期、单次消费、同 actor 只保留一个 active ticket，并按账号/IP限制创建与验证。第一阶段没有 App enrollment API。
 3. owner/employee 的 secret、恢复码、counter、generation 相互独立。相同 TOTP counter 或恢复码并发请求最多一个成功；结论必须在可丢弃 MySQL 5.7.44 上验证，SQLite 不替代。
-4. recovery code 只能走登录恢复，使用后 secret/codes/token/remember 清空、generation 增加并强制重绑；资金地址 confirm/reject 只接受 owner 当前密码 + 新鲜 TOTP，不接受恢复码。
+4. recovery code 只能走登录恢复，使用后 secret/codes/token/remember 清空、generation 增加、当前密码登录完成且 2FA 保持关闭，不得强制重绑。密码修改和资金地址 confirm/reject 始终要求当前密码；仅已启用 actor 再要求新鲜 TOTP，恢复码永不接受。
 5. 密码变更/重置、认证器/恢复码替换、owner/employee 停用删除、餐厅停用和 logout-all 后，旧 Web session 与 App token 都被拒绝。普通 logout 也清除中断入驻的 session authority。
 6. 支持恢复命令必须有两个不同 role_id=1 的 approver 和非空 reason；邮件中不含秘密。邮件失败须以失败退出并明确“撤销已完成”，不得为了通知失败回滚安全撤销。
-7. migration 后既有行只能进入 `two_factor_grace_pending=1`，新行默认 0。只有收到精确、带时区且未来的 ISO-8601 截止时间，才可运行 `nezha:merchant-2fa-schedule`；命令幂等且不得覆盖已排期/已绑定 actor。
+7. 已运行 schema 保留但 grace/deadline 字段对访问判定完全惰性；不得新增 enforcement migration。`nezha:merchant-2fa-schedule` 必须永久失败且零写入。发布顺序必须先上线 optional 代码，再以备份和精确 guard 清理遗留排期；清理后禁止单独回滚到把 null deadline 当强制的旧 release。
 
 自动化入口：直接用项目固定 PHP 运行 PHPUnit，并把 `sys_temp_dir` 指向 worktree 内可写目录；Windows 上不要经 `artisan test` 二次启动丢失该参数。MySQL 并发测试需显式设置 `NEZHA_MERCHANT_2FA_MYSQL57_CONCURRENCY=1`，worker 会拒绝冻结端口 33317。

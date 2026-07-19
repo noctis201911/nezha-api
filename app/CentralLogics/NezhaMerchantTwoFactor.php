@@ -18,7 +18,7 @@ final class NezhaMerchantTwoFactor
 
     public const EMPLOYEE = 'employee';
 
-    public const STATE_GRACE = 'grace';
+    public const STATE_OPTIONAL = 'optional';
 
     public const STATE_ENROLLMENT = 'enrollment_required';
 
@@ -58,16 +58,11 @@ final class NezhaMerchantTwoFactor
             return self::STATE_CHALLENGE;
         }
 
-        if ($actor->two_factor_grace_pending) {
-            return self::STATE_GRACE;
+        if ($actor->two_factor_enabled) {
+            return self::STATE_ENROLLMENT;
         }
 
-        $at ??= now();
-        if ($actor->two_factor_required_at && $actor->two_factor_required_at->gt($at)) {
-            return self::STATE_GRACE;
-        }
-
-        return self::STATE_ENROLLMENT;
+        return self::STATE_OPTIONAL;
     }
 
     public static function completeEnrollment(
@@ -93,7 +88,7 @@ final class NezhaMerchantTwoFactor
                 'two_factor_secret' => $secret,
                 'two_factor_enabled' => true,
                 'two_factor_recovery_codes' => $hashed,
-                'two_factor_required_at' => now(),
+                'two_factor_required_at' => null,
                 'two_factor_enrolled_at' => now(),
                 'two_factor_last_counter' => $counter,
                 'two_factor_grace_pending' => false,
@@ -155,7 +150,7 @@ final class NezhaMerchantTwoFactor
                 throw new \DomainException('merchant_2fa_invalid_code');
             }
 
-            self::forceRecoveryState($locked);
+            self::resetTwoFactorState($locked);
             self::event($locked, 'recovery_code_consumed', $context);
 
             return $locked;
@@ -165,7 +160,7 @@ final class NezhaMerchantTwoFactor
     public static function verifySensitiveStepUp(
         Vendor|VendorEmployee $actor,
         string $password,
-        string $code,
+        ?string $code,
         array $context = []
     ): Vendor|VendorEmployee {
         return DB::transaction(function () use ($actor, $password, $code, $context) {
@@ -174,10 +169,12 @@ final class NezhaMerchantTwoFactor
                 throw new \DomainException('merchant_2fa_step_up_failed');
             }
 
-            try {
-                self::acceptTotp($locked, $code);
-            } catch (\DomainException) {
-                throw new \DomainException('merchant_2fa_step_up_failed');
+            if ($locked->two_factor_enabled) {
+                try {
+                    self::acceptTotp($locked, (string) $code);
+                } catch (\DomainException) {
+                    throw new \DomainException('merchant_2fa_step_up_failed');
+                }
             }
 
             self::event($locked, 'sensitive_step_up_passed', $context);
@@ -221,16 +218,16 @@ final class NezhaMerchantTwoFactor
         Authenticatable $actor,
         string $eventType,
         array $context = [],
-        bool $forceEnrollment = false
+        bool $resetTwoFactor = false
     ): Vendor|VendorEmployee {
-        return DB::transaction(function () use ($actor, $eventType, $context, $forceEnrollment) {
+        return DB::transaction(function () use ($actor, $eventType, $context, $resetTwoFactor) {
             $locked = self::actor(self::actorType($actor), (int) $actor->getAuthIdentifier(), true);
             if (! $locked) {
                 throw new \DomainException('merchant_2fa_actor_not_found');
             }
 
-            if ($forceEnrollment) {
-                self::forceRecoveryState($locked);
+            if ($resetTwoFactor) {
+                self::resetTwoFactorState($locked);
             } else {
                 $locked->forceFill([
                     'auth_generation' => (int) $locked->auth_generation + 1,
@@ -281,7 +278,7 @@ final class NezhaMerchantTwoFactor
             }
 
             $state = self::state($locked);
-            if ($state === self::STATE_GRACE) {
+            if ($state === self::STATE_OPTIONAL) {
                 throw new \DomainException('merchant_2fa_challenge_not_required');
             }
 
@@ -375,7 +372,7 @@ final class NezhaMerchantTwoFactor
                     'two_factor_secret' => $challenge->pending_secret,
                     'two_factor_enabled' => true,
                     'two_factor_recovery_codes' => $hashed,
-                    'two_factor_required_at' => now(),
+                    'two_factor_required_at' => null,
                     'two_factor_enrolled_at' => now(),
                     'two_factor_last_counter' => $counter,
                     'two_factor_grace_pending' => false,
@@ -397,11 +394,11 @@ final class NezhaMerchantTwoFactor
                 return ['status' => 'authenticated', 'actor' => $actor, 'recovery_codes' => null];
             } catch (\DomainException) {
                 if (self::matchesRecoveryCode($actor, $code)) {
-                    self::forceRecoveryState($actor);
+                    self::resetTwoFactorState($actor);
                     $challenge->forceFill(['consumed_at' => now()])->save();
                     self::event($actor, 'recovery_code_consumed', ['ip' => $ip, 'metadata' => ['channel' => 'app']]);
 
-                    return ['status' => 'recovery_required', 'actor' => $actor];
+                    return ['status' => 'authenticated', 'actor' => $actor, 'recovery_codes' => null];
                 }
             }
 
@@ -414,37 +411,12 @@ final class NezhaMerchantTwoFactor
             throw new \DomainException('merchant_2fa_invalid_code');
         }
 
-        if ($result['status'] === 'recovery_required') {
-            $next = self::startAppChallenge($result['actor'], $ip);
-
-            return ['status' => 'recovery_required'] + $next;
-        }
-
         return $result;
     }
 
     public static function scheduleLegacyGrace(Carbon $deadline): array
     {
-        $deadline = $deadline->copy()->utc();
-
-        if (! $deadline->isFuture()) {
-            throw new \InvalidArgumentException('The merchant 2FA deadline must be in the future.');
-        }
-
-        return DB::transaction(function () use ($deadline): array {
-            $counts = [];
-            foreach ([self::OWNER => Vendor::class, self::EMPLOYEE => VendorEmployee::class] as $type => $model) {
-                $counts[$type] = $model::query()
-                    ->where('two_factor_grace_pending', true)
-                    ->update([
-                        'two_factor_grace_pending' => false,
-                        'two_factor_required_at' => $deadline,
-                        'updated_at' => now(),
-                    ]);
-            }
-
-            return $counts;
-        }, 3);
+        throw new \LogicException('Merchant two-factor authentication is voluntary; enforcement scheduling is disabled.');
     }
 
     public static function requestHash(?string $value): ?string
@@ -487,13 +459,13 @@ final class NezhaMerchantTwoFactor
         return false;
     }
 
-    private static function forceRecoveryState(Vendor|VendorEmployee $actor): void
+    private static function resetTwoFactorState(Vendor|VendorEmployee $actor): void
     {
         $actor->forceFill([
             'two_factor_secret' => null,
             'two_factor_enabled' => false,
             'two_factor_recovery_codes' => null,
-            'two_factor_required_at' => now(),
+            'two_factor_required_at' => null,
             'two_factor_enrolled_at' => null,
             'two_factor_last_counter' => null,
             'two_factor_grace_pending' => false,

@@ -31,6 +31,7 @@ use Illuminate\Support\Facades\Config;
 use App\Library\Payment as PaymentInfo;
 use App\Models\SubscriptionTransaction;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use App\Models\SubscriptionBillingAndRefundHistory;
 
@@ -225,7 +226,12 @@ class VendorController extends Controller
             'phone' => 'required|unique:vendors,phone,'.$vendor->id,
             'password' => ['nullable', Password::min(8)->mixedCase()->letters()->numbers()->symbols()->uncompromised()],
             'current_password' => ['required_with:password', 'string'],
-            'two_factor_code' => ['required_with:password', 'string', 'max:16'],
+            'two_factor_code' => [
+                Rule::requiredIf(fn (): bool => $request->filled('password') && (bool) $vendor->two_factor_enabled),
+                'nullable',
+                'string',
+                'max:16',
+            ],
             'image' => 'nullable|max:2048',
         ], [
             'f_name.required' => translate('messages.first_name_is_required'),
@@ -266,7 +272,7 @@ class VendorController extends Controller
                 NezhaMerchantTwoFactor::verifySensitiveStepUp(
                     $vendor,
                     (string) $request->input('current_password'),
-                    (string) $request->input('two_factor_code'),
+                    $request->filled('two_factor_code') ? (string) $request->input('two_factor_code') : null,
                     [
                         'ip' => $request->ip(),
                         'user_agent' => $request->userAgent(),

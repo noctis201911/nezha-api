@@ -79,7 +79,7 @@ class RecoverMerchantTwoFactor extends Command
             return self::FAILURE;
         }
 
-        $this->info('Merchant 2FA recovery recorded; sessions revoked and re-enrollment required.');
+        $this->info('Merchant 2FA recovery recorded; two-factor authentication was disabled and all sessions were revoked.');
 
         return self::SUCCESS;
     }

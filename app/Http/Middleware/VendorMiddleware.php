@@ -56,7 +56,7 @@ class VendorMiddleware
             return false;
         }
 
-        return $state === NezhaMerchantTwoFactor::STATE_GRACE
+        return $state === NezhaMerchantTwoFactor::STATE_OPTIONAL
             || $request->session()->get(MerchantTwoFactorController::SESSION_PASSED_GENERATION) === $generation;
     }
 

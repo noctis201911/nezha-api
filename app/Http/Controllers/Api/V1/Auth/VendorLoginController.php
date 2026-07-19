@@ -68,7 +68,7 @@ class VendorLoginController extends Controller
             return $accessError;
         }
 
-        if (NezhaMerchantTwoFactor::state($actor) === NezhaMerchantTwoFactor::STATE_GRACE) {
+        if (NezhaMerchantTwoFactor::state($actor) === NezhaMerchantTwoFactor::STATE_OPTIONAL) {
             return $this->issueTokenResponse($actor);
         }
 
@@ -131,20 +131,6 @@ class VendorLoginController extends Controller
         if ($accountKey) {
             RateLimiter::clear($accountKey);
         }
-        if ($result['status'] === 'recovery_required') {
-            return $this->noStore(response()->json([
-                'two_factor_required' => true,
-                'recovery_used' => true,
-                'purpose' => $result['purpose'],
-                'challenge_token' => $result['challenge_token'],
-                'expires_at' => $result['expires_at']->toIso8601String(),
-                'setup' => [
-                    'secret' => $result['secret'],
-                    'otpauth_uri' => $result['otpauth_uri'],
-                ],
-            ], 202));
-        }
-
         foreach ($this->challengeStartRateKeys($result['actor'], $request->ip()) as $rateKey) {
             RateLimiter::clear($rateKey);
         }

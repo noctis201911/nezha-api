@@ -19,7 +19,7 @@
             <div class="error">Unable to verify that code. Check the latest code and try again.</div>
         @endif
         @if (session('merchant_2fa.recovery_notice'))
-            <div class="notice">Your recovery code was accepted. All existing sessions were revoked. Enroll a new authenticator before continuing.</div>
+            <div class="notice">Your recovery code was accepted. Two-factor authentication was disabled and all existing sessions were revoked. You may enable it again later.</div>
         @endif
 
         @if ($mode === 'challenge')
@@ -32,8 +32,8 @@
                 <button type="submit">Verify and sign in</button>
             </form>
         @elseif ($mode === 'setup')
-            <h1>Protect your merchant account</h1>
-            <p class="sub">Scan this QR code with an authenticator app. The secret is stored only after you confirm a valid code.</p>
+            <h1>Enable optional two-factor authentication</h1>
+            <p class="sub">This is your choice. Scan this QR code with an authenticator app; the secret is stored only after you confirm a valid code.</p>
             <div class="qr"><img src="data:image/svg+xml;base64,{{ $qr_svg }}" alt="Authenticator QR code"></div>
             <p class="hint">Cannot scan? Enter this time-based secret manually:</p>
             <div class="secret">{{ $secret }}</div>
@@ -41,7 +41,7 @@
                 @csrf
                 <label for="merchant-2fa-code">Current six-digit code</label>
                 <input id="merchant-2fa-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="16" required autofocus>
-                <button type="submit">Confirm and continue</button>
+                <button type="submit">Enable two-factor authentication</button>
             </form>
         @else
             <h1>Two-factor authentication is active</h1>
@@ -76,7 +76,7 @@
         @if ($mode !== 'enabled')
             <form method="post" action="{{ route('merchant.2fa.cancel') }}">
                 @csrf
-                <button class="secondary" type="submit">Cancel and return to login</button>
+                <button class="secondary" type="submit">{{ auth('vendor')->check() || auth('vendor_employee')->check() ? 'Cancel and return to profile' : 'Cancel and return to login' }}</button>
             </form>
         @endif
     </section>

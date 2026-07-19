@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class NezhaPaymentAddressChangeController extends Controller
 {
@@ -53,7 +54,7 @@ class NezhaPaymentAddressChangeController extends Controller
         $validator = Validator::make($request->all(), [
             'new_fingerprint' => ['required', 'string', 'regex:/^[0-9a-fA-F]{64}$/'],
             'current_password' => ['required', 'string'],
-            'two_factor_code' => ['required', 'string', 'max:16'],
+            'two_factor_code' => [Rule::requiredIf((bool) $vendor->two_factor_enabled), 'nullable', 'string', 'max:16'],
         ]);
         if ($validator->fails()) {
             if ($request->expectsJson()) {
@@ -77,7 +78,7 @@ class NezhaPaymentAddressChangeController extends Controller
             NezhaMerchantTwoFactor::verifySensitiveStepUp(
                 $vendor,
                 (string) $request->input('current_password'),
-                (string) $request->input('two_factor_code'),
+                $request->filled('two_factor_code') ? (string) $request->input('two_factor_code') : null,
                 [
                     'ip' => $request->ip(),
                     'user_agent' => $request->userAgent(),
