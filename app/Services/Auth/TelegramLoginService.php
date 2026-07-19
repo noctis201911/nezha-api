@@ -457,11 +457,16 @@ class TelegramLoginService
 
     private function verifiedPhone(array $claims): string
     {
-        $verified = ($claims['phone_number_verified'] ?? null) === true;
+        // Telegram documents phone_number as the verified number returned for
+        // the requested `phone` scope; it does not require a separate
+        // phone_number_verified claim. Keep the optional negative claim as a
+        // fail-closed signal if Telegram ever sends it explicitly.
+        $explicitlyUnverified = array_key_exists('phone_number_verified', $claims)
+            && $claims['phone_number_verified'] === false;
         $phone = is_string($claims['phone_number'] ?? null)
             ? trim($claims['phone_number'])
             : null;
-        if (! $verified || ! is_string($phone)) {
+        if ($explicitlyUnverified || ! is_string($phone)) {
             throw new TelegramLoginException(
                 'telegram_phone_required',
                 'Please allow Telegram to share its verified phone number.',

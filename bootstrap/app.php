@@ -110,6 +110,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('nezha:purge-restaurant-reports')->dailyAt('03:57')->withoutOverlapping();
         // 哪吒[数据最小化 0708]: 顾客个人系统通知(UserNotification)超保留期删除(默认30天, nezha_notification_retention_days 可调, 治通知表膨胀)
         $schedule->command('nezha:purge-notifications')->dailyAt('03:58')->withoutOverlapping();
+        // 哪吒[L1-7]: Telegram/OIDC 登录临时 state、PKCE 凭据与授权资料到期即无用途；
+        // 每 15 分钟整行清除，正常留存上界为 attempt TTL(默认10分钟)+调度间隔。
+        // 持久身份归属 user_external_identities 不在本命令范围，防同一 provider subject 被错绑。
+        $schedule->command('nezha:purge-external-identity-attempts')->everyFifteenMinutes()->withoutOverlapping();
 
         // 每天 09:00 检查商家预存佣金, 低于商家自设阈值(或为负)发提醒邮件(商家可在商家后台自助开关/设阈值/设邮箱)。
         $schedule->command('nezha:check-deposit-alerts')->dailyAt('09:00')->withoutOverlapping();

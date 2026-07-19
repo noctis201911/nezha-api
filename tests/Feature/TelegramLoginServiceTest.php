@@ -196,15 +196,54 @@ class TelegramLoginServiceTest extends TestCase
         $this->assertSame(0, DB::table('user_external_identities')->count());
     }
 
-    public function test_missing_verified_phone_is_rejected_without_creating_data(): void
+    public function test_phone_claim_without_optional_verified_flag_is_accepted(): void
     {
-        $claims = $this->claims('tg-no-phone', '+37499000007');
+        $claims = $this->claims('tg-standard-phone-claim', '37499000007');
+        unset(
+            $claims['phone_number_verified'],
+            $claims['given_name'],
+            $claims['family_name'],
+        );
+        [$start, $state] = $this->beginWithClaims($claims);
+
+        $code = $this->service->completeCallback($state, 'telegram-code');
+        $result = $this->service->exchange($code, $start['browser_secret']);
+
+        $this->assertSame('authenticated', $result['status']);
+        $this->assertDatabaseHas('users', [
+            'phone' => '+37499000007',
+            'f_name' => 'Telegram 用户',
+            'login_medium' => 'telegram',
+        ]);
+    }
+
+    public function test_explicitly_unverified_phone_is_rejected_without_creating_data(): void
+    {
+        $claims = $this->claims('tg-explicitly-unverified', '+37499000070');
         $claims['phone_number_verified'] = false;
         [$start, $state] = $this->beginWithClaims($claims);
 
         try {
             $this->service->completeCallback($state, 'telegram-code');
             $this->fail('Unverified phone unexpectedly completed Telegram callback.');
+        } catch (TelegramLoginException $error) {
+            $this->assertSame('telegram_phone_required', $error->errorCode);
+        }
+
+        $this->assertSame(0, DB::table('users')->count());
+        $this->assertSame(0, DB::table('user_external_identities')->count());
+        $this->assertNotEmpty($start['browser_secret']);
+    }
+
+    public function test_missing_phone_claim_is_rejected_without_creating_data(): void
+    {
+        $claims = $this->claims('tg-missing-phone', '+37499000071');
+        unset($claims['phone_number']);
+        [$start, $state] = $this->beginWithClaims($claims);
+
+        try {
+            $this->service->completeCallback($state, 'telegram-code');
+            $this->fail('Missing Telegram phone unexpectedly completed callback.');
         } catch (TelegramLoginException $error) {
             $this->assertSame('telegram_phone_required', $error->errorCode);
         }

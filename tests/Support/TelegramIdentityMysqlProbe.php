@@ -101,6 +101,15 @@ foreach (['user_external_identities', 'external_identity_login_attempts'] as $ta
     if (! in_array($table, $tables, true)) {
         throw new RuntimeException("Migration table missing: {$table}");
     }
+
+    $createOptions = (string) $pdo->query(
+        'SELECT CREATE_OPTIONS FROM information_schema.TABLES WHERE TABLE_SCHEMA = '
+        .$pdo->quote($database).' AND TABLE_NAME = '.$pdo->quote($table)
+    )->fetchColumn();
+    if (stripos($createOptions, 'ENCRYPTION="Y"') === false
+        && stripos($createOptions, "ENCRYPTION='Y'") === false) {
+        throw new RuntimeException("Migration table is not encrypted: {$table}");
+    }
 }
 
 $pdo->exec('DELETE FROM user_external_identities');
@@ -146,4 +155,4 @@ $expectDuplicate(
         VALUES ('telegram', REPEAT('a', 64), REPEAT('d', 64), 'initiated', DATE_ADD(NOW(), INTERVAL 10 MINUTE), NOW(), NOW())",
 );
 
-echo "mysql57-schema-and-constraints-ok\n";
+echo "mysql57-schema-encryption-and-constraints-ok\n";
