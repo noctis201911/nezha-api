@@ -7,6 +7,10 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    private const ENCRYPTION_METADATA_ATTEMPTS = 10;
+
+    private const ENCRYPTION_METADATA_RETRY_MICROSECONDS = 100_000;
+
     public function up(): void
     {
         $isMysql = DB::connection()->getDriverName() === 'mysql';
@@ -88,16 +92,27 @@ return new class extends Migration
         // run before Laravel records the migration as complete.
         DB::statement("ALTER TABLE `{$table}` ENCRYPTION='Y'");
 
-        $row = DB::selectOne(
-            'SELECT CREATE_OPTIONS AS create_options FROM information_schema.TABLES '
-            .'WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? LIMIT 1',
-            [DB::connection()->getDatabaseName(), $table]
-        );
-        $options = strtoupper((string) ($row->create_options ?? ''));
+        // Some MySQL 5.7 installations expose the new CREATE_OPTIONS value
+        // shortly after ALTER TABLE returns. Retry only the metadata read;
+        // an unconfirmed encrypted tablespace still fails closed.
+        for ($attempt = 1; $attempt <= self::ENCRYPTION_METADATA_ATTEMPTS; $attempt++) {
+            $row = DB::selectOne(
+                'SELECT CREATE_OPTIONS AS create_options FROM information_schema.TABLES '
+                .'WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? LIMIT 1',
+                [DB::connection()->getDatabaseName(), $table]
+            );
+            $options = strtoupper((string) ($row->create_options ?? ''));
 
-        if (strpos($options, 'ENCRYPTION="Y"') === false
-            && strpos($options, "ENCRYPTION='Y'") === false) {
-            throw new RuntimeException("MySQL tablespace encryption verification failed: {$table}");
+            if (strpos($options, 'ENCRYPTION="Y"') !== false
+                || strpos($options, "ENCRYPTION='Y'") !== false) {
+                return;
+            }
+
+            if ($attempt < self::ENCRYPTION_METADATA_ATTEMPTS) {
+                usleep(self::ENCRYPTION_METADATA_RETRY_MICROSECONDS);
+            }
         }
+
+        throw new RuntimeException("MySQL tablespace encryption verification failed: {$table}");
     }
 };
