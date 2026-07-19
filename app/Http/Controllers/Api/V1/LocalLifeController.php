@@ -370,7 +370,27 @@ class LocalLifeController extends Controller
             'price_from'    => $this->firstServicePrice($m),
             // 好店列表卡服务锚点(v3 §④-5)：招牌优先/前 2 项可解析价目 [{title,amount,suffix}]；无可解析项则 []
             'service_anchors' => $this->serviceAnchors($m),
+            // 无数字价目时的简介兜底：仅取商家简介首句，避免列表返回整段详情文案。
+            'service_summary' => $this->serviceSummary($m),
         ];
+    }
+
+    /** 好店列表卡服务简介：首句、纯文本、最多 60 字；无简介则不展示。 */
+    private function serviceSummary(LocalLifeMerchant $m): ?string
+    {
+        $intro = trim(strip_tags((string) $m->intro));
+        if ($intro === '') {
+            return null;
+        }
+
+        $intro = preg_replace('/\s+/u', ' ', $intro) ?? $intro;
+        $sentence = trim((string) (preg_split('/[。！？!?\r\n]+/u', $intro, 2)[0] ?? ''));
+        $name = trim((string) $m->name);
+        if ($name !== '' && mb_strpos($sentence, $name) === 0) {
+            $sentence = trim(mb_substr($sentence, mb_strlen($name)));
+        }
+
+        return $sentence === '' ? null : mb_substr($sentence, 0, 60);
     }
 
     /**
