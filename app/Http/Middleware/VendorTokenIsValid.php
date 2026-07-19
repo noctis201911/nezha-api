@@ -30,7 +30,7 @@ class VendorTokenIsValid
                 ]
             ], 401);
         }
-        if (!$request->hasHeader('vendorType')) {
+        if (! $request->hasHeader('vendorType') || ! in_array($request->header('vendorType'), ['owner', 'employee'], true)) {
             $errors = [];
             array_push($errors, ['code' => 'vendor_type', 'message' => translate('messages.vendor_type_required')]);
             return response()->json([
