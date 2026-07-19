@@ -7,6 +7,7 @@ use Closure;
 use Illuminate\Http\Request;
 use App\CentralLogics\Helpers;
 use App\Models\Vendor;
+use App\CentralLogics\NezhaMerchantTwoFactor;
 
 class VendorTokenIsValid
 {
@@ -40,7 +41,13 @@ class VendorTokenIsValid
         $vendor_type= $request->header('vendorType');
         if($vendor_type == 'owner'){
             $vendor = Vendor::where('auth_token', $token)->first();
-            if(!isset($vendor))
+            $restaurant = $vendor?->restaurants()->first();
+            $activeOrOnboarding = $restaurant
+                && ($restaurant->restaurant_model === 'none'
+                    || ((bool) $vendor->status && (bool) $restaurant->status));
+            if(!isset($vendor)
+                || ! $activeOrOnboarding
+                || NezhaMerchantTwoFactor::state($vendor) === NezhaMerchantTwoFactor::STATE_ENROLLMENT)
             {
                 return response()->json([
                     'errors' => [
@@ -51,7 +58,9 @@ class VendorTokenIsValid
             $request['vendor']=$vendor;
         }elseif($vendor_type == 'employee'){
             $vendor = VendorEmployee::where('auth_token', $token)->where('status', 1)->first();
-            if(!isset($vendor))
+            if(!isset($vendor)
+                || ! $vendor->restaurant?->status
+                || NezhaMerchantTwoFactor::state($vendor) === NezhaMerchantTwoFactor::STATE_ENROLLMENT)
             {
                 return response()->json([
                     'errors' => [

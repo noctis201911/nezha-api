@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Vendor;
 
+use App\CentralLogics\NezhaMerchantTwoFactor;
 use App\Models\EmployeeRole;
 use App\Rules\UniqueBackofficeEmail;
 use Illuminate\Http\Request;
@@ -133,7 +134,8 @@ class EmployeeController extends Controller
             return redirect()->route('vendor.employee.list');
         }
 
-        if ($request['password'] == null) {
+        $passwordChanged = $request['password'] != null;
+        if (! $passwordChanged) {
             $pass = $e['password'];
         } else {
             $pass = bcrypt($request['password']);
@@ -156,6 +158,16 @@ class EmployeeController extends Controller
             'updated_at' => now(),
         ]);
 
+        if ($passwordChanged) {
+            NezhaMerchantTwoFactor::revokeActor($e->fresh(), 'password_changed_by_owner', [
+                'initiator_type' => 'vendor',
+                'initiator_id' => auth('vendor')->id(),
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'metadata' => ['channel' => 'web'],
+            ]);
+        }
+
         Toastr::success('Employee updated successfully!');
         return redirect()->route('vendor.employee.list');
     }
@@ -170,6 +182,11 @@ class EmployeeController extends Controller
             return redirect()->route('vendor.employee.list');
         }
 
+        NezhaMerchantTwoFactor::revokeActor($role, 'employee_deleted', [
+            'initiator_type' => 'vendor',
+            'initiator_id' => auth('vendor')->id(),
+            'metadata' => ['channel' => 'web'],
+        ]);
         $role->delete();
         Toastr::info(translate('messages.employee_deleted_successfully'));
         return back();

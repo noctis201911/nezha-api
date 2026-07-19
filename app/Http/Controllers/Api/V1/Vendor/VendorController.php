@@ -14,6 +14,8 @@ use App\Models\Notification;
 use App\Models\OrderPayment;
 use Illuminate\Http\Request;
 use App\CentralLogics\Helpers;
+use App\CentralLogics\NezhaMerchantTwoFactor;
+use Illuminate\Support\Facades\RateLimiter;
 use App\Models\BusinessSetting;
 use App\Models\WithdrawRequest;
 use App\Models\RestaurantWallet;
@@ -214,6 +216,8 @@ class VendorController extends Controller
             'l_name' => 'required',
             'phone' => 'required|unique:vendors,phone,'.$vendor->id,
             'password' => ['nullable', Password::min(8)->mixedCase()->letters()->numbers()->symbols()->uncompromised()],
+            'current_password' => ['required_with:password', 'string'],
+            'two_factor_code' => ['required_with:password', 'string', 'max:16'],
             'image' => 'nullable|max:2048',
         ], [
             'f_name.required' => translate('messages.first_name_is_required'),
@@ -237,6 +241,43 @@ class VendorController extends Controller
             $imageName = $vendor->image;
         }
         if ($request['password'] != null) {
+            $rateKeys = [
+                'merchant-profile-step-up:ip:'.NezhaMerchantTwoFactor::requestHash($request->ip()),
+                'merchant-profile-step-up:account:'.hash(
+                    'sha256',
+                    NezhaMerchantTwoFactor::actorType($vendor).':'.$vendor->getAuthIdentifier()
+                ),
+            ];
+            if (collect($rateKeys)->contains(fn (string $key): bool => RateLimiter::tooManyAttempts($key, 5))) {
+                return response()->json(['errors' => [[
+                    'code' => 'step_up_failed',
+                    'message' => 'The current password or authenticator code could not be verified.',
+                ]]], 403);
+            }
+            try {
+                NezhaMerchantTwoFactor::verifySensitiveStepUp(
+                    $vendor,
+                    (string) $request->input('current_password'),
+                    (string) $request->input('two_factor_code'),
+                    [
+                        'ip' => $request->ip(),
+                        'user_agent' => $request->userAgent(),
+                        'metadata' => ['channel' => 'app', 'route' => optional($request->route())->getName()],
+                    ]
+                );
+            } catch (\DomainException) {
+                foreach ($rateKeys as $rateKey) {
+                    RateLimiter::hit($rateKey, 120);
+                }
+
+                return response()->json(['errors' => [[
+                    'code' => 'step_up_failed',
+                    'message' => 'The current password or authenticator code could not be verified.',
+                ]]], 403);
+            }
+            foreach ($rateKeys as $rateKey) {
+                RateLimiter::clear($rateKey);
+            }
             $pass = bcrypt($request['password']);
         } else {
             $pass = $vendor->password;
@@ -248,6 +289,19 @@ class VendorController extends Controller
         $vendor->password = $pass;
         $vendor->updated_at = now();
         $vendor->save();
+
+        if ($request['password'] != null) {
+            NezhaMerchantTwoFactor::revokeActor($vendor, 'password_changed', [
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'metadata' => ['channel' => 'app'],
+            ]);
+
+            return response()->json([
+                'message' => translate('messages.profile_updated_successfully'),
+                'reauthentication_required' => true,
+            ], 200);
+        }
 
         return response()->json(['message' => translate('messages.profile_updated_successfully')], 200);
     }

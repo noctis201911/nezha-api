@@ -149,3 +149,17 @@
 - **P-1 凭证图越权 真 web session 复验(已上线 a487ff8 之后)**:服务端 mint vendor6 真会话(release app·shared .env/storage·cookie 加密注入)经**真实 HTTPS**复验——会话有效(dashboard 200 vs 未登录 302);**跨租户**对 R7 订单 remove-proof-image(throwaway 单 1999001230 植 2-marker)→ marker 完好(2→2)=**拦截**;**本店**对店6 订单9 remove → 成功(2→1)=放行。对称 PoC 坐实修复在真 HTTP 下生效。测试单 order_proof 已还原 null·会话文件已删·零残留。
 - **核实安全(本轮)**:Vendor/OrderController 其余 by-id 全 id+restaurant_id 圈定;顾客 refund_request 按 user_id+order_id(404);聊天 messages 参与者校验在(L471-474 H3 完好);NezhaKycController save 显式 $fillable 白名单(无 mass-assignment)+PII model encrypted;local-life reports blade 仅 `$r->user_id` 裸整数(模型无 user 关系取不到 PII);nezha-cs 后台不泄 api_key(只算 $hasKey 布尔)。
 - **未覆盖(诚实)**:P-2/P-3 动态=中间件逻辑级(非真受限账号 Playwright 像素 E2E,因 0 受限账号);P-3 真 HTTP 因 vendor API 503 到不了 vmodule(逻辑已回滚事务验);轴 B/D/G/H/I/K 沿用既有结论未重跑。
+
+### 2026-07-19 商家 2FA 发布闸（owner + employee）
+
+正本是 `MERCHANT_TWO_FACTOR_SECURITY_CONTRACT.md`。每次修改商家登录、token、密码、状态或资金地址确认入口，至少复核：
+
+1. Web 密码通过后，在绑定/挑战完成前 vendor guard 仍未登录；商家登录页没有 remember 控件。setup session 中的 secret 为密文，含 secret/恢复码的页面带 `Cache-Control: no-store, private`。
+2. App 登录在绑定/挑战完成前返回 202 且没有 token；ticket 只存 SHA-256，pending secret 加密，5 分钟过期、单次消费、同 actor 只保留一个 active ticket，并按账号/IP限制创建与验证。
+3. owner/employee 的 secret、恢复码、counter、generation 相互独立。相同 TOTP counter 或恢复码并发请求最多一个成功；结论必须在可丢弃 MySQL 5.7.44 上验证，SQLite 不替代。
+4. recovery code 只能走登录恢复，使用后 secret/codes/token/remember 清空、generation 增加并强制重绑；资金地址 confirm/reject 只接受 owner 当前密码 + 新鲜 TOTP，不接受恢复码。
+5. 密码变更/重置、认证器/恢复码替换、owner/employee 停用删除、餐厅停用和 logout-all 后，旧 Web session 与 App token 都被拒绝。普通 logout 也清除中断入驻的 session authority。
+6. 支持恢复命令必须有两个不同 role_id=1 的 approver 和非空 reason；邮件中不含秘密。邮件失败须以失败退出并明确“撤销已完成”，不得为了通知失败回滚安全撤销。
+7. migration 后既有行只能进入 `two_factor_grace_pending=1`，新行默认 0。只有收到精确、带时区且未来的 ISO-8601 截止时间，才可运行 `nezha:merchant-2fa-schedule`；命令幂等且不得覆盖已排期/已绑定 actor。
+
+自动化入口：直接用项目固定 PHP 运行 PHPUnit，并把 `sys_temp_dir` 指向 worktree 内可写目录；Windows 上不要经 `artisan test` 二次启动丢失该参数。MySQL 并发测试需显式设置 `NEZHA_MERCHANT_2FA_MYSQL57_CONCURRENCY=1`，worker 会拒绝冻结端口 33317。

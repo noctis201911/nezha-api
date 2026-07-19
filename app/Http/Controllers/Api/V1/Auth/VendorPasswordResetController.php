@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Auth;
 
+use App\CentralLogics\NezhaMerchantTwoFactor;
 use App\Models\Vendor;
 use Carbon\CarbonInterval;
 use Illuminate\Http\Request;
@@ -33,6 +34,9 @@ class VendorPasswordResetController extends Controller
             DB::table('password_resets')->updateOrInsert(['email' => $vendor['email']],
             [
                 'token' => $token,
+                'otp_hit_count' => 0,
+                'is_temp_blocked' => 0,
+                'temp_block_time' => null,
                 'created_at' => now(),
             ]);
             try{
@@ -162,8 +166,13 @@ class VendorPasswordResetController extends Controller
                 ]], 400);
             }
             if ($request['password'] == $request['confirm_password']) {
-                DB::table('vendors')->where(['email' => $request->email])->update([
-                    'password' => bcrypt($request['confirm_password'])
+                $vendor = Vendor::where('email', $request->email)->firstOrFail();
+                $vendor->password = bcrypt($request['confirm_password']);
+                $vendor->save();
+                NezhaMerchantTwoFactor::revokeActor($vendor, 'password_reset', [
+                    'ip' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                    'metadata' => ['channel' => 'app'],
                 ]);
                 DB::table('password_resets')->where(['token' => $request['reset_token']])->delete();
                 return response()->json(['message' => translate('Password changed successfully.')], 200);
@@ -173,22 +182,72 @@ class VendorPasswordResetController extends Controller
             ]], 401);
         }
 
+        $result = DB::transaction(function () use ($request): string {
+            $now = now();
+            $data = DB::table('password_resets')
+                ->where('email', $request->email)
+                ->lockForUpdate()
+                ->first();
 
-        $data = DB::table('password_resets')->where(['email'=>$request['email'],'token' => $request['reset_token']])->first();
-        if (isset($data)) {
-            if ($request['password'] == $request['confirm_password']) {
-                DB::table('vendors')->where(['email' => $data->email])->update([
-                    'password' => bcrypt($request['confirm_password'])
-                ]);
-                DB::table('password_resets')->where(['token' => $request['reset_token']])->delete();
-                return response()->json(['message' => translate('Password changed successfully.')], 200);
+            if (! $data) {
+                return 'invalid';
             }
-            return response()->json(['errors' => [
-                ['code' => 'mismatch', 'message' => translate('messages.password_mismatch')]
-            ]], 401);
+
+            if ($data->is_temp_blocked && $data->temp_block_time) {
+                $blockedAt = Carbon::parse($data->temp_block_time);
+                if ($blockedAt->gt($now->copy()->subSeconds(600))) {
+                    return 'blocked';
+                }
+
+                DB::table('password_resets')->where('email', $request->email)->update([
+                    'otp_hit_count' => 0,
+                    'is_temp_blocked' => 0,
+                    'temp_block_time' => null,
+                ]);
+                $data->otp_hit_count = 0;
+            }
+
+            $createdAt = $data->created_at ? Carbon::parse($data->created_at) : null;
+            $fresh = $createdAt
+                && $createdAt->lte($now)
+                && $createdAt->gt($now->copy()->subSeconds(600));
+            if (hash_equals((string) $data->token, (string) $request->reset_token) && $fresh) {
+                $vendor = Vendor::where('email', $data->email)->lockForUpdate()->firstOrFail();
+                $vendor->password = bcrypt($request->confirm_password);
+                $vendor->save();
+                NezhaMerchantTwoFactor::revokeActor($vendor, 'password_reset', [
+                    'ip' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                    'metadata' => ['channel' => 'app'],
+                ]);
+                DB::table('password_resets')->where('email', $request->email)->delete();
+
+                return 'success';
+            }
+
+            $attempts = (int) $data->otp_hit_count + 1;
+            DB::table('password_resets')->where('email', $request->email)->update([
+                'otp_hit_count' => $attempts,
+                'is_temp_blocked' => $attempts >= 5,
+                'temp_block_time' => $attempts >= 5 ? $now : null,
+            ]);
+
+            return $attempts >= 5 ? 'blocked' : 'invalid';
+        }, 3);
+
+        if ($result === 'success') {
+            return response()->json(['message' => translate('Password changed successfully.')], 200);
         }
-        return response()->json(['errors' => [
-            ['code' => 'invalid', 'message' => translate('messages.invalid_otp')]
-        ]], 400);
+        if ($result === 'blocked') {
+            return response()->json(['errors' => [[
+                'code' => 'otp_temp_blocked',
+                'message' => translate('messages.Too_many_attemps'),
+            ]]], 405);
+        }
+
+        return response()->json(['errors' => [[
+            'code' => 'invalid',
+            'message' => translate('messages.invalid_otp'),
+        ]]], 400);
     }
 }

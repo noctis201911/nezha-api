@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Vendor;
 
+use App\CentralLogics\NezhaMerchantTwoFactor;
 use App\CentralLogics\NezhaPaymentAddressChangeService;
 use App\Http\Controllers\Controller;
 use App\Models\NezhaPaymentAddressChange;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Validator;
 
 class NezhaPaymentAddressChangeController extends Controller
@@ -50,6 +52,8 @@ class NezhaPaymentAddressChangeController extends Controller
         }
         $validator = Validator::make($request->all(), [
             'new_fingerprint' => ['required', 'string', 'regex:/^[0-9a-fA-F]{64}$/'],
+            'current_password' => ['required', 'string'],
+            'two_factor_code' => ['required', 'string', 'max:16'],
         ]);
         if ($validator->fails()) {
             if ($request->expectsJson()) {
@@ -60,6 +64,35 @@ class NezhaPaymentAddressChangeController extends Controller
         }
         if (! $this->owns($vendor->id, $change)) {
             return $this->error($request, 'address_change_not_found', 404);
+        }
+
+        $rateKeys = [
+            'merchant-address-step-up:ip:'.NezhaMerchantTwoFactor::requestHash($request->ip()),
+            'merchant-address-step-up:owner:'.$vendor->id,
+        ];
+        if (collect($rateKeys)->contains(fn (string $key): bool => RateLimiter::tooManyAttempts($key, 5))) {
+            return $this->error($request, 'address_change_step_up_failed', 429);
+        }
+        try {
+            NezhaMerchantTwoFactor::verifySensitiveStepUp(
+                $vendor,
+                (string) $request->input('current_password'),
+                (string) $request->input('two_factor_code'),
+                [
+                    'ip' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                    'metadata' => ['channel' => 'web', 'route' => optional($request->route())->getName()],
+                ]
+            );
+            foreach ($rateKeys as $rateKey) {
+                RateLimiter::clear($rateKey);
+            }
+        } catch (\DomainException) {
+            foreach ($rateKeys as $rateKey) {
+                RateLimiter::hit($rateKey, 120);
+            }
+
+            return $this->error($request, 'address_change_step_up_failed', 403);
         }
 
         try {
@@ -125,6 +158,12 @@ class NezhaPaymentAddressChangeController extends Controller
                 'error' => $code,
                 'message' => '收款地址确认未执行，请刷新后核对完整地址',
             ], $status);
+        }
+
+        if ($code === 'address_change_step_up_failed') {
+            Toastr::error('The current password or authenticator code could not be verified. No address action was performed.');
+
+            return back();
         }
 
         $message = match ($code) {

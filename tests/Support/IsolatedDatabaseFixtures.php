@@ -65,6 +65,14 @@ final class IsolatedDatabaseFixtures
                 $table->string('email')->unique();
                 $table->string('password');
                 $table->rememberToken();
+                $table->text('two_factor_secret')->nullable();
+                $table->boolean('two_factor_enabled')->default(false);
+                $table->text('two_factor_recovery_codes')->nullable();
+                $table->timestamp('two_factor_required_at')->nullable();
+                $table->timestamp('two_factor_enrolled_at')->nullable();
+                $table->unsignedBigInteger('two_factor_last_counter')->nullable();
+                $table->unsignedBigInteger('auth_generation')->default(0);
+                $table->boolean('two_factor_grace_pending')->default(false);
                 $table->timestamps();
             });
         }
@@ -82,6 +90,50 @@ final class IsolatedDatabaseFixtures
                 $table->string('password');
                 $table->boolean('status')->default(true);
                 $table->rememberToken();
+                $table->text('two_factor_secret')->nullable();
+                $table->boolean('two_factor_enabled')->default(false);
+                $table->text('two_factor_recovery_codes')->nullable();
+                $table->timestamp('two_factor_required_at')->nullable();
+                $table->timestamp('two_factor_enrolled_at')->nullable();
+                $table->unsignedBigInteger('two_factor_last_counter')->nullable();
+                $table->unsignedBigInteger('auth_generation')->default(0);
+                $table->boolean('two_factor_grace_pending')->default(false);
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('merchant_two_factor_challenges')) {
+            $schema->create('merchant_two_factor_challenges', function (Blueprint $table): void {
+                $table->id();
+                $table->char('token_hash', 64)->unique();
+                $table->string('actor_type', 16);
+                $table->unsignedBigInteger('actor_id');
+                $table->string('purpose', 16);
+                $table->text('pending_secret')->nullable();
+                $table->unsignedBigInteger('auth_generation');
+                $table->unsignedSmallInteger('attempts')->default(0);
+                $table->char('ip_hash', 64)->nullable();
+                $table->timestamp('expires_at')->index();
+                $table->timestamp('consumed_at')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('merchant_two_factor_events')) {
+            $schema->create('merchant_two_factor_events', function (Blueprint $table): void {
+                $table->id();
+                $table->string('actor_type', 16);
+                $table->unsignedBigInteger('actor_id');
+                $table->string('event_type', 64);
+                $table->unsignedBigInteger('auth_generation')->default(0);
+                $table->string('initiator_type', 24)->nullable();
+                $table->unsignedBigInteger('initiator_id')->nullable();
+                $table->unsignedBigInteger('approver_one_id')->nullable();
+                $table->unsignedBigInteger('approver_two_id')->nullable();
+                $table->string('reason', 500)->nullable();
+                $table->char('ip_hash', 64)->nullable();
+                $table->char('user_agent_hash', 64)->nullable();
+                $table->json('metadata')->nullable();
                 $table->timestamps();
             });
         }

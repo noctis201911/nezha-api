@@ -19,13 +19,23 @@ class Vendor extends Authenticatable
 
     protected $casts = [
         'created_at' => 'datetime',
-        'updated_at' => 'datetime'
+        'updated_at' => 'datetime',
+        'two_factor_secret' => 'encrypted',
+        'two_factor_enabled' => 'boolean',
+        'two_factor_recovery_codes' => 'array',
+        'two_factor_required_at' => 'datetime',
+        'two_factor_enrolled_at' => 'datetime',
+        'two_factor_last_counter' => 'integer',
+        'auth_generation' => 'integer',
+        'two_factor_grace_pending' => 'boolean',
     ];
 
     protected $hidden = [
         'password',
         'auth_token',
         'remember_token',
+        'two_factor_secret',
+        'two_factor_recovery_codes',
     ];
 
     protected $appends = ['image_full_url'];

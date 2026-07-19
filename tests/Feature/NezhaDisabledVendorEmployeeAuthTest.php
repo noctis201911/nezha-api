@@ -51,6 +51,7 @@ class NezhaDisabledVendorEmployeeAuthTest extends TestCase
                 'restaurant_id' => 6,
                 'password' => Hash::make('employee-secret'),
                 'status' => $status,
+                'two_factor_grace_pending' => true,
                 'auth_token' => $token,
                 'created_at' => now(),
                 'updated_at' => now(),
