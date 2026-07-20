@@ -27,8 +27,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register()
     {
-
-
+        $this->app->bind(
+            \App\CentralLogics\MerchantDirectPayment\MerchantDirectPaymentUsdtObservationGateway::class,
+            \App\CentralLogics\MerchantDirectPayment\DefaultMerchantDirectPaymentUsdtObservationGateway::class,
+        );
     }
 
     /**

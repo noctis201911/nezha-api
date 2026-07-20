@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AddonCategoryController;
 use App\Http\Controllers\Api\V1\AdvertisementController;
 use App\Http\Controllers\Api\V1\MerchantLeadController;
+use App\Http\Controllers\Api\V1\MerchantDirectPaymentLateCaseController;
 use App\Http\Controllers\Api\V1\LocalLifeController;
 use App\Http\Controllers\Api\V1\GuideController;
 use App\Http\Controllers\Api\V1\Auth\CustomerAuthController;
@@ -438,6 +439,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         Route::post('update-profile', [CustomerController::class, 'update_profile']);
         Route::post('update-interest', [CustomerController::class, 'update_interest']);
         Route::put('cm-firebase-token', [CustomerController::class, 'update_cm_firebase_token']);
+        Route::put('web-push-subscription', [CustomerController::class, 'update_web_push_subscription']);
         Route::get('notification-preferences', [CustomerController::class, 'get_notification_preferences']);
         Route::put('notification-preferences', [CustomerController::class, 'update_notification_preferences']);
         Route::get('suggested-foods', [CustomerController::class, 'get_suggested_food']);
@@ -494,6 +496,13 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
 
     Route::group(['prefix' => 'customer', 'as' => 'customer.', 'middleware' => 'apiGuestCheck'], function () {
         Route::group(['prefix' => 'order'], function () {
+            Route::post('late-payment/report', [MerchantDirectPaymentLateCaseController::class, 'report'])
+                ->middleware('throttle:10,1');
+            Route::get('late-payment/order/{orderId}', [MerchantDirectPaymentLateCaseController::class, 'lookup'])
+                ->whereNumber('orderId');
+            Route::get('late-payment/{caseId}', [MerchantDirectPaymentLateCaseController::class, 'show']);
+            Route::post('late-payment/{caseId}/dispute', [MerchantDirectPaymentLateCaseController::class, 'dispute'])
+                ->middleware('throttle:5,1');
             Route::get('list', [OrderController::class, 'get_order_list']);
             Route::get('order-subscription-list', [OrderController::class, 'get_order_subscription_list']);
             Route::get('running-orders', [OrderController::class, 'get_running_orders']);

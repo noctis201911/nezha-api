@@ -375,6 +375,9 @@
                     <p>{{ $nzCurrentMeta['hint'] }}</p>
                 </div>
                 <div class="nz-status-hero-actions">
+                    <a class="btn btn-sm btn-white" href="{{ route('vendor.order.late-payment.index') }}">
+                        <i class="tio-search mr-1"></i>迟到付款
+                    </a>
                     <a class="btn btn-sm btn-white" href="{{route('vendor.order.list',['all'])}}">
                         <i class="tio-refresh mr-1"></i>全部
                     </a>
