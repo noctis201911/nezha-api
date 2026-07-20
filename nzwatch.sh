@@ -138,7 +138,9 @@ done
 SANC=$(cd /www/wwwroot/api-deploy/current 2>/dev/null && php artisan tinker --execute='$j=json_decode(DB::table("business_settings")->where("key","nezha_sanction_last_sync")->value("value"),true); $ok=DB::table("nezha_sanction_addresses")->max("last_seen_sync"); if(!$ok){echo "NEVER";} else {$h=(int)round((time()-strtotime($ok))/3600); $st=$j["status"]??"unknown"; $r=($st==="ok"&&$h<=30)?"OK":("BAD:".$st.":".$h); echo $r;}' 2>/dev/null | tail -1 | tr -d "[:space:]")
 case "$SANC" in
   NEVER)
-    add "制裁名单(OFAC SDN)从未成功同步 — 筛查可能在用空名单(违 L1-6 制裁拦截)" "sanction-3d" ;;
+    # 名单为空 = L1-6 筛查拦不住任何地址 = 灾难态, 不是"每日任务今天没跑成"。
+    # 故独立类别且【不进】下面的 24h 慢冷却名单, 保持默认 1h 快报。
+    add "🔴 制裁名单(OFAC SDN)从未成功同步 — 名单为空, L1-6 制裁筛查形同虚设" "sanction-empty" ;;
   BAD:*)
     SST=$(printf '%s' "$SANC" | cut -d: -f2)
     SH=$(printf '%s' "$SANC" | cut -d: -f3)
@@ -172,8 +174,9 @@ exec 8>&-
 
 # 冷却: 按"告警类别集合"做指纹, 同一组问题默认1小时内只发一封; 出现新类别立即另发。
 # 〔2026-07-20〕制裁名单同步是每日一次的任务, 每小时重复报同一件事没有新信息, 只会造成告警疲劳
-# (当天连收 8 封同文邮件)。故【纯制裁类】告警单独给 24h 冷却 = 每天最多一封;
+# (当天连收 8 封同文邮件)。故【纯制裁陈旧类】告警单独给 24h 冷却 = 每天最多一封;
 # 与其它类混合出现时仍走默认 1h(其它类需要快报)。严重度升档会换类别名 → 指纹变 → 立即另发, 不受此冷却压制。
+# 🔴 sanction-empty(名单为空) 故意【不在】此名单内 — 那是 L1-6 全盲的灾难态, 必须保持 1h 快报。
 CD=$COOLDOWN
 case "${CATS%,}" in
   sanction|sanction-2d|sanction-3d) CD=86400 ;;
