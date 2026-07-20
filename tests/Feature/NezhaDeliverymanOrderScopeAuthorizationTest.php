@@ -441,25 +441,28 @@ class NezhaDeliverymanOrderScopeAuthorizationTest extends TestCase
             });
         }
 
-        if (! Schema::hasColumn('orders', 'zone_id')) {
-            Schema::table('orders', function (Blueprint $table): void {
-                $table->unsignedBigInteger('zone_id')->nullable();
-                $table->string('order_type')->default('delivery');
-                $table->string('payment_method')->default('cash_on_delivery');
-                $table->unsignedBigInteger('subscription_id')->nullable();
-                $table->unsignedBigInteger('vehicle_id')->nullable();
-                $table->unsignedBigInteger('delivery_man_id')->nullable();
-                $table->decimal('order_amount', 24, 2)->default(0);
-                $table->boolean('is_guest')->default(false);
-                $table->timestamp('schedule_at')->nullable();
-                $table->text('order_proof')->nullable();
-            });
-        }
+        // 逐列守卫: 共享 fixture (IsolatedDatabaseFixtures) 随时可能先声明其中某一列,
+        // 用单个哨兵列守整批会在那时整批重建 -> "duplicate column name"。
+        $orderColumns = [
+            'zone_id'         => fn (Blueprint $table) => $table->unsignedBigInteger('zone_id')->nullable(),
+            'order_type'      => fn (Blueprint $table) => $table->string('order_type')->default('delivery'),
+            'payment_method'  => fn (Blueprint $table) => $table->string('payment_method')->default('cash_on_delivery'),
+            'subscription_id' => fn (Blueprint $table) => $table->unsignedBigInteger('subscription_id')->nullable(),
+            'vehicle_id'      => fn (Blueprint $table) => $table->unsignedBigInteger('vehicle_id')->nullable(),
+            'delivery_man_id' => fn (Blueprint $table) => $table->unsignedBigInteger('delivery_man_id')->nullable(),
+            'order_amount'    => fn (Blueprint $table) => $table->decimal('order_amount', 24, 2)->default(0),
+            'is_guest'        => fn (Blueprint $table) => $table->boolean('is_guest')->default(false),
+            'schedule_at'     => fn (Blueprint $table) => $table->timestamp('schedule_at')->nullable(),
+            'order_proof'     => fn (Blueprint $table) => $table->text('order_proof')->nullable(),
+            'user_id'         => fn (Blueprint $table) => $table->unsignedBigInteger('user_id')->nullable(),
+        ];
 
-        if (! Schema::hasColumn('orders', 'user_id')) {
-            Schema::table('orders', function (Blueprint $table): void {
-                $table->unsignedBigInteger('user_id')->nullable();
-            });
+        foreach ($orderColumns as $column => $define) {
+            if (! Schema::hasColumn('orders', $column)) {
+                Schema::table('orders', function (Blueprint $table) use ($define): void {
+                    $define($table);
+                });
+            }
         }
 
         if (! Schema::hasTable('delivery_men')) {

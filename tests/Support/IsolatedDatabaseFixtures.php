@@ -288,6 +288,7 @@ final class IsolatedDatabaseFixtures
                 $table->boolean('nezha_commission_enabled')->default(false);
                 $table->string('nezha_notify_email')->nullable();
                 $table->string('telegram_chat_id')->nullable();
+                $table->boolean('timeout_notify_telegram')->default(true);
                 $table->timestamps();
             });
         }
@@ -311,9 +312,14 @@ final class IsolatedDatabaseFixtures
                 $table->id();
                 $table->unsignedBigInteger('restaurant_id')->index();
                 $table->unsignedBigInteger('user_id')->nullable()->index();
+                $table->unsignedBigInteger('subscription_id')->nullable()->index();
                 $table->decimal('restaurant_discount_amount', 24, 2)->default(0);
                 $table->string('order_status')->default('pending');
+                $table->string('payment_method')->nullable();
+                $table->string('order_type')->default('delivery');
+                $table->boolean('checked')->default(false);
                 $table->boolean('scheduled')->default(false);
+                $table->timestamp('schedule_at')->nullable();
                 $table->timestamp('confirmed')->nullable();
                 $table->timestamp('accepted')->nullable();
                 $table->timestamp('processing')->nullable();
@@ -321,6 +327,47 @@ final class IsolatedDatabaseFixtures
                 $table->timestamp('picked_up')->nullable();
                 $table->timestamp('delivered')->nullable();
                 $table->timestamp('canceled')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('subscriptions')) {
+            $schema->create('subscriptions', function (Blueprint $table): void {
+                $table->id();
+                $table->string('status')->nullable();
+                $table->date('start_at')->nullable();
+                $table->date('end_at')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('subscription_schedules')) {
+            $schema->create('subscription_schedules', function (Blueprint $table): void {
+                $table->unsignedBigInteger('subscription_id')->index();
+                $table->string('type')->nullable();
+                $table->integer('day')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('subscription_pauses')) {
+            $schema->create('subscription_pauses', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('subscription_id')->index();
+                $table->date('from')->nullable();
+                $table->date('to')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('subscription_logs')) {
+            $schema->create('subscription_logs', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('order_id')->index();
+                $table->unsignedBigInteger('subscription_id')->nullable();
+                $table->unsignedBigInteger('delivery_man_id')->nullable();
+                $table->string('order_status')->nullable();
+                $table->timestamp('schedule_at')->nullable();
                 $table->timestamps();
             });
         }
