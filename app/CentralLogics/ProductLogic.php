@@ -34,7 +34,10 @@ class ProductLogic
 
     public static function get_latest_products($limit, $offset, $restaurant_id, $category_id, $request, $type='all',$additional_data = [])
     {
-        $paginator = Food::active()
+        // 哪吒[外卖TG化 Phase1·挂牌态] 挂牌店 status=0, Food::active() 内的 restaurant.status=1 会把菜单清空。
+        // 本方法恒按 restaurant_id 收窄(见下方 where), 故放宽范围天然只限单店, 不外溢。
+        // 🔴 放宽走参数而非改 scopeActive: 后者全站 19 处共用, 改它会让挂牌店菜品泄漏进搜索/热门/分类聚合。
+        $paginator = Food::active(true)
                 ->applyFilters($additional_data)
                 ->applySorting($additional_data['sort_by'])
                 ->applyRating($request)

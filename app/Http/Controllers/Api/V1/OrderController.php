@@ -2593,6 +2593,15 @@ class OrderController extends Controller
                 'message' =>  'restaurant_not_found',
                 'status' => 403
             ],
+            // 哪吒[外卖TG化 Phase1·挂牌态] 后端硬闸: 挂牌店只展示不接单(顾客经 TG 联系商家自行下单)。
+            // 紧跟 !$restaurant、先于其余全部判定 —— 挂牌店无论营业/打烊/押金/挂起状态一律拒单。
+            // 前端已整体不渲染下单入口, 此闸防「绕过前端直调 API」(前端藏 + 后端拒 = 双闸)。
+            // ?? false: 迁移未跑时列不存在 → 恒 false 不 fatal(降级安全)。
+            (bool) ($restaurant->nezha_listing_only ?? false) => [
+                'code' => 'restaurant',
+                'message' => translate('本店暂通过 Telegram 接单，请回到店铺页联系商家'),
+                'status' => 403
+            ],
             in_array($restaurant->restaurant_model,['unsubscribed','none']) || ( in_array($restaurant->restaurant_model,['subscription']) && $restaurant?->restaurant_sub == null) || (in_array($restaurant->restaurant_model,['subscription']) && $restaurant?->restaurant_sub?->max_order != "unlimited" && $restaurant?->restaurant_sub?->max_order <= 0 ) => [
                 'code' => 'restaurant',
                 'message' =>  'Sorry_the_restaurant_is_unable_to_take_any_order',

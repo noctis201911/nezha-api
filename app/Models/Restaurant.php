@@ -68,6 +68,9 @@ class Restaurant extends Model
         'nezha_busy_until' => 'datetime',
         'nezha_pause_until' => 'datetime',
         'nezha_busy_min' => 'integer',
+        // 哪吒[外卖TG化 Phase1·挂牌态] 逐店开关 + 顾客侧公开联系方式(与本地生活 contacts 同构)
+        'nezha_listing_only' => 'boolean',
+        'nezha_contacts' => 'array',
     ];
 
     protected $appends = ['gst_status','gst_code','free_delivery_distance_status','free_delivery_distance_value',

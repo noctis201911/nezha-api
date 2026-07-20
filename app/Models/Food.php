@@ -99,11 +99,22 @@ class Food extends Model
 
 
 
-    public function scopeActive($query)
+    /**
+     * 哪吒[外卖TG化 Phase1·挂牌态] $allowListed 默认 false = 与改动前逐字等价(全站 19 处调用零回归)。
+     * 仅「读挂牌店菜单」这一条路径显式传 true(见 ProductLogic::get_latest_products), 放宽 restaurant.status
+     * —— 挂牌店 status=0 只展示不接单, 但菜单必须能浏览。
+     * 🔴 禁把 true 设为默认值: 会让挂牌店菜品泄漏进全站菜品面(搜索/热门/分类聚合)。
+     */
+    public function scopeActive($query, $allowListed = false)
     {
         return $query->where('status', 1)
-        ->whereHas('restaurant', function($query) {
-            $query->where('status', 1)
+        ->whereHas('restaurant', function($query) use ($allowListed) {
+            $query->where(function($query) use ($allowListed) {
+                        $query->where('status', 1);
+                        if ($allowListed) {
+                            $query->orWhere('nezha_listing_only', 1);
+                        }
+                    })
                     ->where(function($query) {
                         $query->where('restaurant_model', 'commission')
                                 ->orWhereHas('restaurant_sub', function($query) {

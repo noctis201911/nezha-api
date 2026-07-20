@@ -1092,7 +1092,7 @@ class Helpers
                 unset($data['closeing_time']);
             }
 
-            $data['foods'] = $data->foods()->active()->with(['newVariations', 'newVariationOptions'])->take(50)->get(["id", "image", "name", "price", "variations", "add_ons", "category_id", "restaurant_id", "veg", "status"]);
+            $data['foods'] = $data->foods()->active((bool) ($data->nezha_listing_only ?? false))->with(['newVariations', 'newVariationOptions'])->take(50)->get(["id", "image", "name", "price", "variations", "add_ons", "category_id", "restaurant_id", "veg", "status"]);
             $restaurant_id = (string) $data->id;
             $data['coupons'] = Coupon::Where(function ($q) use ($restaurant_id) {
                 $q->Where('coupon_type', 'restaurant_wise')->whereJsonContains('data', [$restaurant_id])
@@ -1118,7 +1118,7 @@ class Helpers
 
             $positive_rating = RestaurantLogic::calculate_positive_rating($data['rating']);
             $data['positive_rating'] = (int) $positive_rating['rating'];
-            $data['price_starts_from'] = (float) $data->foods()->active()->min('price');
+            $data['price_starts_from'] = (float) $data->foods()->active((bool) ($data->nezha_listing_only ?? false))->min('price');
             $data['customer_order_date'] = (int) $data?->restaurant_config?->customer_order_date;
             $data['customer_date_order_sratus'] = (bool) $data?->restaurant_config?->customer_date_order_sratus;
             $data['instant_order'] = (bool) $data?->restaurant_config?->instant_order;

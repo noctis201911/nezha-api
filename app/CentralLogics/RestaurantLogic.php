@@ -437,7 +437,13 @@ class RestaurantLogic
     {
         return Restaurant::with(['discount'=>function($q){
             return $q->validate();
-        }, 'campaigns', 'schedules','restaurant_sub'])->active()
+        }, 'campaigns', 'schedules','restaurant_sub'])
+            // 哪吒[外卖TG化 Phase1·挂牌态] 挂牌店保持 status=0 → 天然不进任何列表/搜索/附近/推荐,
+            // 但直链详情必须可达。放行只落在「按 id/slug 读单店详情」这一条路径,
+            // 🔴 不改 Restaurant::scopeActive —— 它被全站列表共用, 改它 = 挂牌店泄漏进列表。
+            ->where(function ($q) {
+                $q->active()->orWhere('restaurants.nezha_listing_only', 1);
+            })
             ->withcount('reviews_comments')
         ->when(is_numeric($restaurant_id),function ($qurey) use($restaurant_id){
             $qurey-> where('id', $restaurant_id);
