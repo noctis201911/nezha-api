@@ -112,7 +112,7 @@ class MerchantTwoFactorController extends Controller
             return $this->loginRedirect($request);
         }
         if ($this->limited($request, $actor)) {
-            return back()->withErrors(['code' => 'Unable to verify that code. Wait before trying again.']);
+            return back()->withErrors(['code' => '尝试次数过多，请稍等一会儿再试。']);
         }
 
         $context = $this->context($request, 'web');
@@ -130,7 +130,7 @@ class MerchantTwoFactorController extends Controller
         } catch (\DomainException) {
             $this->hitLimits($request, $actor);
 
-            return back()->withErrors(['code' => 'Unable to verify that code.']);
+            return back()->withErrors(['code' => '验证码不正确。请查看验证器里当前显示的六位数字后重试。']);
         }
     }
 
@@ -206,7 +206,7 @@ class MerchantTwoFactorController extends Controller
             return $this->loginRedirect($request);
         }
         if ($this->limited($request, $actor)) {
-            return back()->withErrors(['code' => 'Unable to verify that code. Wait before trying again.']);
+            return back()->withErrors(['code' => '尝试次数过多，请稍等一会儿再试。']);
         }
 
         try {
@@ -220,7 +220,7 @@ class MerchantTwoFactorController extends Controller
         } catch (\DomainException) {
             $this->hitLimits($request, $actor);
 
-            return back()->withErrors(['code' => 'Unable to verify that code.']);
+            return back()->withErrors(['code' => '验证码不正确。请查看验证器里当前显示的六位数字后重试。']);
         }
 
         $this->clearLimits($request, $actor);
@@ -267,7 +267,7 @@ class MerchantTwoFactorController extends Controller
         ]);
         $actor = $this->authenticatedActor();
         if (! $actor || $this->limited($request, $actor)) {
-            return back()->withErrors(['code' => 'Unable to verify those credentials.']);
+            return $this->panelError($request, 'disable');
         }
 
         try {
@@ -280,7 +280,7 @@ class MerchantTwoFactorController extends Controller
         } catch (\DomainException) {
             $this->hitLimits($request, $actor);
 
-            return back()->withErrors(['code' => 'Unable to verify those credentials.']);
+            return $this->panelError($request, 'disable');
         }
 
         // Disabling revokes every session including this one; re-establish the
@@ -300,7 +300,7 @@ class MerchantTwoFactorController extends Controller
         ]);
         $actor = $this->authenticatedActor();
         if (! $actor || $this->limited($request, $actor)) {
-            return back()->withErrors(['code' => 'Unable to verify those credentials.']);
+            return $this->panelError($request, 'replace');
         }
 
         try {
@@ -319,7 +319,7 @@ class MerchantTwoFactorController extends Controller
         } catch (\DomainException) {
             $this->hitLimits($request, $actor);
 
-            return back()->withErrors(['code' => 'Unable to verify those credentials.']);
+            return $this->panelError($request, 'replace');
         }
 
         $this->clearLimits($request, $actor);
@@ -432,6 +432,17 @@ class MerchantTwoFactorController extends Controller
             'merchant-2fa:ip:'.NezhaMerchantTwoFactor::requestHash($request->ip()),
             'merchant-2fa:account:'.hash('sha256', NezhaMerchantTwoFactor::actorType($actor).':'.$actor->getAuthIdentifier()),
         ];
+    }
+
+    /**
+     * The management page collapses each action, so a failed submit must re-open
+     * the panel it came from — otherwise the error shows with no visible form.
+     */
+    private function panelError(Request $request, string $panel)
+    {
+        return back()
+            ->withErrors(['code' => '密码或验证码不正确，请重新输入。'])
+            ->with('merchant_2fa.open_panel', $panel);
     }
 
     private function context(Request $request, string $channel): array

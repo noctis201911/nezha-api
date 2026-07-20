@@ -123,7 +123,7 @@ class NezhaMerchantTwoFactorAuthFlowTest extends TestCase
         $setup = $this->get(route('merchant.2fa.setup'));
         $setup->assertOk()
             ->assertHeader('Cache-Control', 'no-store, private')
-            ->assertSee('Enable optional two-factor authentication');
+            ->assertSee('开启两步验证（可选）');
         $encryptedSecret = session('merchant_2fa.setup_secret');
         $secret = Crypt::decryptString($encryptedSecret);
         $this->assertNotEmpty($secret);
@@ -241,11 +241,20 @@ class NezhaMerchantTwoFactorAuthFlowTest extends TestCase
             'code' => NezhaTotp::codeAt($secret, $counter + 1),
         ])->assertRedirect(route('vendor.dashboard'));
 
-        // Wrong password is refused and leaves two-factor on.
+        // The management page lists both actions collapsed.
+        $this->get(route('merchant.2fa.setup'))
+            ->assertOk()
+            ->assertSee('两步验证已开启')
+            ->assertSee('关闭两步验证')
+            ->assertSee('更换验证器');
+
+        // Wrong password is refused, leaves two-factor on, and re-opens the panel
+        // it came from so the error is not shown next to a collapsed form.
         $this->post(route('merchant.2fa.disable'), [
             'current_password' => 'Wrong-Password-1!',
             'code' => NezhaTotp::codeAt($secret, $counter + 2),
-        ])->assertSessionHasErrors('code');
+        ])->assertSessionHasErrors('code')
+            ->assertSessionHas('merchant_2fa.open_panel', 'disable');
         $this->assertTrue(Vendor::findOrFail(1)->two_factor_enabled);
 
         $disabled = $this->post(route('merchant.2fa.disable'), [
