@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Auth;
 
+use App\CentralLogics\NezhaMerchantTwoFactor;
 use App\Models\Tag;
 use App\Rules\UniqueBackofficeEmail;
 use App\Models\VendorEmployee;
@@ -17,7 +18,9 @@ use App\Models\BusinessSetting;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\Rule;
 use MatanYadaev\EloquentSpatial\Objects\Point;
 
 
@@ -25,78 +28,252 @@ class VendorLoginController extends Controller
 {
     public function login(Request $request)
     {
-
         $validator = Validator::make($request->all(), [
             'email' => 'required',
-            'password' => 'required|min:6'
+            'password' => 'required|min:6',
+            'vendor_type' => ['required', Rule::in(['owner', 'employee'])],
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        $vendor_type = $request->vendor_type;
-
-        $data = [
-            'email' => $request->email,
-            'password' => $request->password
-        ];
-        if($vendor_type == 'owner'){
-            if (auth('vendor')->attempt($data)) {
-                $token = $this->genarate_token($request['email']);
-                $vendor = Vendor::where(['email' => $request['email']])->first();
-
-                $restaurantSubscriptionCheck =  $this->restaurantSubscriptionCheck($vendor?->restaurants[0], $vendor, $token);
-                if (data_get($restaurantSubscriptionCheck, 'type') != null) {
-                    return response()->json(data_get($restaurantSubscriptionCheck, 'data'), data_get($restaurantSubscriptionCheck, 'code'));
-                }
-                $vendor->auth_token = $token;
-                $vendor?->save();
-                return response()->json(['token' => $token, 'zone_wise_topic' => $vendor?->restaurants[0]?->zone?->restaurant_wise_topic], 200);
-            } else {
-                $errors = [];
-                array_push($errors, ['code' => 'auth-001', 'message' => translate('Credential_do_not_match,_please_try_again.')]);
-                return response()->json([
-                    'errors' => $errors
-                ], 401);
-            }
-        }elseif ($vendor_type == 'employee'){
-            if (auth('vendor_employee')->attempt($data)) {
-                $token = $this->genarate_token($request['email']);
-                $vendor = VendorEmployee::where(['email' => $request['email']])->first();
-                $restaurantSubscriptionCheck =  $this->restaurantSubscriptionCheck($vendor?->vendor, $vendor, $token);
-                if(data_get($restaurantSubscriptionCheck,'type') != null){
-                    return response()->json(data_get($restaurantSubscriptionCheck,'data'), data_get($restaurantSubscriptionCheck,'code'));
-                }
-
-                $vendor->auth_token = $token;
-                $vendor->save();
-                $role = $vendor->role ? json_decode($vendor->role->modules):[];
-                return response()->json(['token' => $token, 'zone_wise_topic' => $vendor?->vendor?->restaurants[0]?->zone?->restaurant_wise_topic, 'role' => $role,], 200);
-            } else {
-                $errors = [];
-                array_push($errors, ['code' => 'auth-001', 'message' => translate('Credential_do_not_match,_please_try_again')]);
-                return response()->json([
-                    'errors' => $errors
-                ], 401);
-            }
-        } else {
-            $errors = [];
-            array_push($errors, ['code' => 'auth-001', 'message' => translate('Credential_do_not_match,_please_try_again')]);
-            return response()->json([
-                'errors' => $errors
-            ], 401);
+        $vendorType = (string) $request->vendor_type;
+        $loginRateKeys = $this->loginRateKeys($request, $vendorType, (string) $request->email);
+        if (RateLimiter::tooManyAttempts($loginRateKeys['ip'], 20)
+            || RateLimiter::tooManyAttempts($loginRateKeys['account'], 5)) {
+            return $this->unauthorized();
         }
+        $guard = $vendorType === 'owner' ? auth('vendor') : auth('vendor_employee');
+        $credentials = [
+            'email' => $request->email,
+            'password' => $request->password,
+        ];
+        $actor = $guard->getProvider()->retrieveByCredentials($credentials);
+        if (! $actor
+            || ($actor instanceof VendorEmployee && ! $actor->status)
+            || ! $guard->getProvider()->validateCredentials($actor, $credentials)) {
+            foreach ($loginRateKeys as $rateKey) {
+                RateLimiter::hit($rateKey, 120);
+            }
+
+            return $this->unauthorized();
+        }
+        foreach ($loginRateKeys as $rateKey) {
+            RateLimiter::clear($rateKey);
+        }
+
+        $restaurant = $actor instanceof Vendor ? $actor->restaurants[0] ?? null : $actor->restaurant;
+        if ($accessError = $this->restaurantAccessError($restaurant, $actor)) {
+            return $accessError;
+        }
+
+        if (NezhaMerchantTwoFactor::state($actor) === NezhaMerchantTwoFactor::STATE_OPTIONAL) {
+            return $this->issueTokenResponse($actor);
+        }
+
+        $startRateKeys = $this->challengeStartRateKeys($actor, $request->ip());
+        if (RateLimiter::tooManyAttempts($startRateKeys['ip'], 10)
+            || RateLimiter::tooManyAttempts($startRateKeys['account'], 5)) {
+            return $this->unauthorized();
+        }
+        foreach ($startRateKeys as $rateKey) {
+            RateLimiter::hit($rateKey, 300);
+        }
+        $challenge = NezhaMerchantTwoFactor::startAppChallenge($actor, $request->ip());
+
+        return $this->noStore(response()->json([
+            'two_factor_required' => true,
+            'purpose' => $challenge['purpose'],
+            'challenge_token' => $challenge['challenge_token'],
+            'expires_at' => $challenge['expires_at']->toIso8601String(),
+            'setup' => $challenge['purpose'] === 'enroll' ? [
+                'secret' => $challenge['secret'],
+                'otpauth_uri' => $challenge['otpauth_uri'],
+            ] : null,
+        ], 202));
     }
 
-    private function genarate_token($email)
+    public function verifyTwoFactor(Request $request)
     {
-        $token = Str::random(120);
-        $is_available = Vendor::where('auth_token', $token)->where('email', '!=', $email)->count();
-        if ($is_available) {
-            $this->genarate_token($email);
+        $validator = Validator::make($request->all(), [
+            'challenge_token' => ['required', 'string', 'size:64'],
+            'code' => ['required', 'string', 'max:32'],
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
+
+        $plainToken = (string) $request->challenge_token;
+        $ipKey = 'merchant-app-2fa:ip:'.NezhaMerchantTwoFactor::requestHash($request->ip());
+        $accountKey = NezhaMerchantTwoFactor::challengeAccountRateKey($plainToken);
+        if (RateLimiter::tooManyAttempts($ipKey, 10)
+            || ($accountKey && RateLimiter::tooManyAttempts($accountKey, 5))) {
+            return $this->unauthorized();
+        }
+
+        try {
+            $result = NezhaMerchantTwoFactor::completeAppChallenge(
+                $plainToken,
+                (string) $request->code,
+                $request->ip()
+            );
+        } catch (\DomainException) {
+            RateLimiter::hit($ipKey, 120);
+            if ($accountKey) {
+                RateLimiter::hit($accountKey, 120);
+            }
+
+            return $this->unauthorized();
+        }
+
+        RateLimiter::clear($ipKey);
+        if ($accountKey) {
+            RateLimiter::clear($accountKey);
+        }
+        foreach ($this->challengeStartRateKeys($result['actor'], $request->ip()) as $rateKey) {
+            RateLimiter::clear($rateKey);
+        }
+
+        $response = $this->issueTokenResponse($result['actor']);
+        if (! empty($result['recovery_codes']) && $response->isSuccessful()) {
+            $payload = $response->getData(true);
+            $payload['recovery_codes'] = $result['recovery_codes'];
+
+            return $this->noStore(response()->json($payload, $response->getStatusCode()));
+        }
+
+        return $response;
+    }
+
+    public function logout(Request $request)
+    {
+        $actor = $request['vendor_employee'] ?? $request['vendor'];
+        NezhaMerchantTwoFactor::revokeActor($actor, 'app_logout', [
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'metadata' => ['channel' => 'app'],
+        ]);
+
+        return response()->json(['message' => 'Logged out.']);
+    }
+
+    public function logoutAll(Request $request)
+    {
+        $actor = $request['vendor_employee'] ?? $request['vendor'];
+        NezhaMerchantTwoFactor::revokeActor($actor, 'all_sessions_revoked', [
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'metadata' => ['channel' => 'app'],
+        ]);
+
+        return response()->json(['message' => 'All sessions were revoked.']);
+    }
+
+    private function generateToken(): string
+    {
+        do {
+            $token = Str::random(120);
+        } while (Vendor::where('auth_token', $token)->exists()
+            || VendorEmployee::where('auth_token', $token)->exists());
+
         return $token;
+    }
+
+    private function issueTokenResponse(Vendor|VendorEmployee $actor)
+    {
+        $token = $this->generateToken();
+        $restaurant = $actor instanceof Vendor ? $actor->restaurants[0] ?? null : $actor->restaurant;
+        $subscriptionCheck = $this->restaurantSubscriptionCheck($restaurant, $actor, $token);
+        if (data_get($subscriptionCheck, 'type') !== null) {
+            return $this->noStore(response()->json(
+                data_get($subscriptionCheck, 'data'),
+                data_get($subscriptionCheck, 'code')
+            ));
+        }
+
+        $actor->auth_token = $token;
+        $actor->save();
+
+        $payload = [
+            'token' => $token,
+            'zone_wise_topic' => $restaurant?->zone?->restaurant_wise_topic,
+        ];
+        if ($actor instanceof VendorEmployee) {
+            $payload['role'] = $actor->role ? json_decode($actor->role->modules) : [];
+        }
+
+        return $this->noStore(response()->json($payload));
+    }
+
+    private function noStore($response)
+    {
+        return $response->withHeaders([
+            'Cache-Control' => 'no-store, private',
+            'Pragma' => 'no-cache',
+        ]);
+    }
+
+    private function loginRateKeys(Request $request, string $vendorType, string $email): array
+    {
+        return [
+            'ip' => 'merchant-app-login:ip:'.NezhaMerchantTwoFactor::requestHash($request->ip()),
+            'account' => 'merchant-app-login:account:'.hash(
+                'sha256',
+                $vendorType.':'.mb_strtolower(trim($email))
+            ),
+        ];
+    }
+
+    private function challengeStartRateKeys(Vendor|VendorEmployee $actor, ?string $ip): array
+    {
+        return [
+            'ip' => 'merchant-app-2fa-start:ip:'.NezhaMerchantTwoFactor::requestHash($ip),
+            'account' => 'merchant-app-2fa-start:account:'.hash(
+                'sha256',
+                NezhaMerchantTwoFactor::actorType($actor).':'.$actor->getAuthIdentifier()
+            ),
+        ];
+    }
+
+    private function restaurantAccessError($restaurant, Vendor|VendorEmployee $actor)
+    {
+        if (! $restaurant) {
+            return $this->unauthorized();
+        }
+        if ($restaurant->restaurant_model === 'none') {
+            return null;
+        }
+        if (! $restaurant->status && ! $actor->status) {
+            return response()->json(['errors' => [[
+                'code' => 'auth-002',
+                'message' => translate('messages.Your_registration_is_not_approved_yet._You_can_login_once_admin_approved_the_request'),
+            ]]], 403);
+        }
+        if (! $restaurant->status || ($actor instanceof Vendor && ! $actor->status)) {
+            return response()->json(['errors' => [[
+                'code' => 'auth-002',
+                'message' => translate('messages.Your_account_is_suspended'),
+            ]]], 403);
+        }
+        if ($restaurant->restaurant_model === 'subscription'
+            && $restaurant->restaurant_sub
+            && ! $restaurant->restaurant_sub->mobile_app) {
+            return response()->json(['errors' => [[
+                'code' => 'no_mobile_app',
+                'message' => translate('messages.Your Subscription Plan is not Active for Mobile App'),
+            ]]], 401);
+        }
+
+        return null;
+    }
+
+    private function unauthorized()
+    {
+        return response()->json(['errors' => [[
+            'code' => 'auth-001',
+            'message' => translate('Credential_do_not_match,_please_try_again'),
+        ]]], 401);
     }
 
 

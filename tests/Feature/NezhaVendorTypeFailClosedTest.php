@@ -19,6 +19,7 @@ class NezhaVendorTypeFailClosedTest extends TestCase
 
         Schema::table('vendors', function (Blueprint $table): void {
             $table->string('auth_token')->nullable();
+            $table->boolean('status')->default(true);
         });
         Schema::table('vendor_employees', function (Blueprint $table): void {
             $table->string('auth_token')->nullable();
@@ -26,6 +27,8 @@ class NezhaVendorTypeFailClosedTest extends TestCase
 
         DB::table('vendors')->where('id', 1)->update([
             'auth_token' => 'owner-token',
+            'status' => true,
+            'two_factor_grace_pending' => true,
         ]);
         DB::table('vendor_employees')->insert([
             'id' => 7,
@@ -37,6 +40,7 @@ class NezhaVendorTypeFailClosedTest extends TestCase
             'restaurant_id' => 6,
             'password' => 'not-used',
             'status' => 1,
+            'two_factor_grace_pending' => true,
             'auth_token' => 'employee-token',
             'created_at' => now(),
             'updated_at' => now(),

@@ -7,6 +7,7 @@ use App\Models\Vendor;
 use App\Models\DataSetting;
 use Illuminate\Http\Request;
 use App\CentralLogics\Helpers;
+use App\CentralLogics\NezhaMerchantTwoFactor;
 use App\Models\VendorEmployee;
 use Illuminate\Support\Carbon;
 use App\Models\BusinessSetting;
@@ -245,57 +246,73 @@ class LoginController extends Controller
                     ->withErrors(['Email does not match.']);
             }
         }
-        elseif($request->role == 'vendor'){
-            $vendor = Vendor::where('email', $request->email)->first();
-            if($vendor){
-                if($vendor?->restaurants[0]?->restaurant_model == 'none'){
-                    $admin_commission= BusinessSetting::where('key','admin_commission')->first();
-                    $business_name= BusinessSetting::where('key','business_name')->first();
-                    $packages= SubscriptionPackage::where('status',1)->get();
-
-                    return view('vendor-views.auth.register-step-2',[
-                        'restaurant_id' => $vendor?->restaurants[0]?->id,
-                        'packages' =>$packages,
-                        'business_name' =>$business_name?->value,
-                        'admin_commission' =>$admin_commission?->value,
-                    ]);
-                }
-
-                if($vendor?->restaurants[0]?->restaurant_model == 'subscription' && $vendor?->restaurants[0]?->restaurant_sub_trans && $vendor?->restaurants[0]?->restaurant_sub_trans->transaction_status == 0  && $vendor?->status == 0){
-                    return to_route('vendor.subscription.digital_payment_methods' , ['subscription_transaction_id'=>$vendor?->restaurants[0]?->restaurant_sub_trans->id , 'type' => 'new_join']);
-                }
-
-
-                if($vendor?->restaurants[0]?->status == 0 &&  $vendor?->status == 0) {
-                        return redirect()->back()->withInput($request->only('email', 'remember'))->withErrors([translate('messages.inactive_vendor_warning')]);
-                }
-            } else {
+        if (in_array($request->role, ['vendor', 'vendor_employee'], true)) {
+            $guard = auth($request->role);
+            $credentials = ['email' => $request->email, 'password' => $request->password];
+            $actor = $guard->getProvider()->retrieveByCredentials($credentials);
+            if (! $actor || ! $guard->getProvider()->validateCredentials($actor, $credentials)) {
                 RateLimiter::hit($key, $decayMinutes * 60);
-                return redirect()->back()->withInput($request->only('email', 'remember'))
-                ->withErrors(['Email does not match.']);
+
+                return redirect()->back()
+                    ->withInput($request->only('email'))
+                    ->withErrors(['Password does not match.']);
             }
+
+            RateLimiter::clear($key);
+            $restaurant = $actor instanceof Vendor ? $actor->restaurants()->first() : $actor->restaurant;
+            $pendingSubscription = $actor instanceof Vendor
+                && $restaurant?->restaurant_model === 'subscription'
+                && ! $actor->status
+                && $restaurant?->restaurant_sub_trans?->transaction_status == 0;
+            $onboarding = $actor instanceof Vendor
+                && ($restaurant?->restaurant_model === 'none' || $pendingSubscription);
+
+            if (! $restaurant
+                || ($actor instanceof VendorEmployee
+                    && (! $actor->status
+                        || ! $restaurant->status
+                        || in_array($restaurant->restaurant_model, ['none', 'unsubscribed'], true)))
+                || ($actor instanceof Vendor
+                    && ! $onboarding
+                    && (! $actor->status || ! $restaurant->status))) {
+                return redirect()->back()
+                    ->withInput($request->only('email'))
+                    ->withErrors([translate('messages.inactive_vendor_warning')]);
+            }
+
+            if ($onboarding) {
+                $request->session()->put(
+                    MerchantTwoFactorController::ONBOARDING_RESTAURANT_ID,
+                    (int) $restaurant->id
+                );
+                $request->session()->put(MerchantTwoFactorController::ONBOARDING_AUTHORIZED, false);
+            }
+            $state = NezhaMerchantTwoFactor::state($actor);
+            if ($state === NezhaMerchantTwoFactor::STATE_OPTIONAL) {
+                MerchantTwoFactorController::finishLogin($request, $actor, false);
+
+                return redirect()->to(MerchantTwoFactorController::continuationUrl($actor));
+            }
+
+            $loginKey = $request->role === 'vendor'
+                ? 'restaurant_login_url'
+                : 'restaurant_employee_login_url';
+            $loginUrl = DataSetting::where('key', $loginKey)->value('value') ?: $loginKey;
+            MerchantTwoFactorController::beginPending(
+                $request,
+                $actor,
+                $loginUrl,
+                $state === NezhaMerchantTwoFactor::STATE_ENROLLMENT
+            );
+
+            return redirect()->route(
+                $state === NezhaMerchantTwoFactor::STATE_ENROLLMENT
+                    ? 'merchant.2fa.setup'
+                    : 'merchant.2fa.challenge'
+            );
         }
 
-        elseif($request->role == 'vendor_employee'){
-            $employee = VendorEmployee::where('email', $request->email)->first();
-            if($employee){
-                if($employee?->restaurant?->status == 0)
-                {
-                    return redirect()->back()->withInput($request->only('email', 'remember'))
-                ->withErrors([translate('messages.inactive_vendor_warning')]);
-                }
-            }
-             if ($employee && (in_array($employee?->restaurant?->restaurant_model, ['none', 'unsubscribed']) || $employee?->restaurant?->status == 0)) {
-                    return redirect()->back()->withInput($request->only('email', 'remember'))
-                        ->withErrors([translate('messages.store_is_inactive')]);
-                }
-            elseif (!$employee) {
-                RateLimiter::hit($key, $decayMinutes * 60);
-                return redirect()->back()->withInput($request->only('email', 'remember'))->withErrors(['Email does not match.']);
-            }
-        }
-
-    $data=$this->login_attemp($request->role,$request->email ,$request->password,$request->ip(), $request->remember);
+        $data=$this->login_attemp($request->role,$request->email ,$request->password,$request->ip(), $request->remember);
 
     if($data == 'admin'){
         $admin = auth('admin')->user();
@@ -522,6 +539,11 @@ class LoginController extends Controller
             'password.custom' => translate('The password cannot contain white spaces.'),
         ]);
         $data = DB::table('password_resets')->where(['token' => $request['reset_token']])->first();
+        if ($data && (! $data->created_at
+            || Carbon::parse($data->created_at)->isFuture()
+            || Carbon::parse($data->created_at)->diffInMinutes(now()) >= 60)) {
+            $data = null;
+        }
         if (isset($data)) {
             if ($request['password'] == $request['confirm_password']) {
                 if($data->created_by == 'admin'){
@@ -530,8 +552,13 @@ class LoginController extends Controller
                     ]);
                     $user_link = Helpers::get_login_url('admin_login_url');
                 }else{
-                    DB::table('vendors')->where(['email' => $data->email])->update([
-                        'password' => bcrypt($request['confirm_password'])
+                    $vendor = Vendor::where('email', $data->email)->firstOrFail();
+                    $vendor->password = bcrypt($request['confirm_password']);
+                    $vendor->save();
+                    NezhaMerchantTwoFactor::revokeActor($vendor, 'password_reset', [
+                        'ip' => $request->ip(),
+                        'user_agent' => $request->userAgent(),
+                        'metadata' => ['channel' => 'web'],
                     ]);
                     $user_link = Helpers::get_login_url('restaurant_login_url');
                 }
@@ -545,7 +572,7 @@ class LoginController extends Controller
 
     }
 
-    public function logout()
+    public function logout(Request $request)
     {
 
         try {
@@ -573,6 +600,15 @@ class LoginController extends Controller
                 }
                 auth()?->guard('admin')?->logout();
             }
+            MerchantTwoFactorController::clearPending($request);
+            $request->session()->forget([
+                MerchantTwoFactorController::SESSION_GENERATION,
+                MerchantTwoFactorController::SESSION_PASSED_GENERATION,
+                MerchantTwoFactorController::ONBOARDING_RESTAURANT_ID,
+                MerchantTwoFactorController::ONBOARDING_AUTHORIZED,
+            ]);
+            $request->session()->regenerate();
+
             return to_route('login',[$user_link]);
         } catch (\Throwable $th) {
             return to_route('home');

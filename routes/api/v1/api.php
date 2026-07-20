@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\V1\Auth\DeliveryManLoginController;
 use App\Http\Controllers\Api\V1\Auth\DMPasswordResetController;
 use App\Http\Controllers\Api\V1\Auth\PasswordResetController;
+use App\Http\Controllers\Api\V1\Auth\TelegramAuthController;
 use App\Http\Controllers\Api\V1\Auth\VendorLoginController;
 use App\Http\Controllers\Api\V1\Auth\VendorPasswordResetController;
 use App\Http\Controllers\Api\V1\BannerController;
@@ -110,6 +111,19 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         Route::post('google/redirect-login', [CustomerAuthController::class, 'google_redirect_login']);
         Route::post('social/exchange', [CustomerAuthController::class, 'social_exchange']);
 
+        // Customer H5 only: Telegram OIDC uses a dedicated login bot/client.
+        // Normal Google login above is unchanged; phone collisions require exact old-account proof.
+        Route::post('telegram/start', [TelegramAuthController::class, 'start'])
+            ->middleware('throttle:10,1');
+        Route::get('telegram/callback', [TelegramAuthController::class, 'callback'])
+            ->middleware('throttle:30,1');
+        Route::post('telegram/exchange', [TelegramAuthController::class, 'exchange'])
+            ->middleware('throttle:20,1');
+        Route::post('telegram/link/password', [TelegramAuthController::class, 'linkWithPassword'])
+            ->middleware('throttle:5,1');
+        Route::post('telegram/link/google', [TelegramAuthController::class, 'linkWithGoogle'])
+            ->middleware('throttle:10,1');
+
         Route::group(['prefix' => 'delivery-man', 'as' => 'delivery-man.', 'middleware' => 'actch:deliveryman_app'], function () {
             Route::post('login', [DeliveryManLoginController::class, 'login'])->name('login');
             Route::post('biometric-login', [DeliveryManLoginController::class, 'biometricLogin']);
@@ -128,6 +142,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         });
         Route::group(['prefix' => 'vendor', 'as' => 'vendor.', 'middleware' => 'actch:restaurant_app'], function () {
             Route::post('login', [VendorLoginController::class, 'login'])->name('login');
+            Route::post('two-factor/verify', [VendorLoginController::class, 'verifyTwoFactor'])->name('two-factor.verify');
             Route::post('forgot-password', [VendorPasswordResetController::class, 'reset_password_request'])->name('forgot-password');
             Route::post('verify-token', [VendorPasswordResetController::class, 'verify_token']);
             Route::put('reset-password', [VendorPasswordResetController::class, 'reset_password_submit'])->name('reset-password');
@@ -138,9 +153,11 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     // Store Subscription
     Route::group(['prefix' => 'vendor', 'namespace' => 'Vendor', 'middleware' => 'actch:restaurant_app'], function () {
         Route::get('package-view', [SubscriptionController::class, 'package_view']);
-        Route::post('business_plan', [SubscriptionController::class, 'business_plan']);
-        Route::post('cancel-subscription', [SubscriptionController::class, 'cancelSubscription']);
-        Route::get('check-product-limits', [SubscriptionController::class, 'checkProductLimits']);
+        Route::group(['middleware' => 'vendor.api'], function () {
+            Route::post('business_plan', [SubscriptionController::class, 'business_plan']);
+            Route::post('cancel-subscription', [SubscriptionController::class, 'cancelSubscription']);
+            Route::get('check-product-limits', [SubscriptionController::class, 'checkProductLimits']);
+        });
     });
 
     // DM Start
@@ -204,6 +221,9 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
 
     // vendor start
     Route::group(['prefix' => 'vendor', 'namespace' => 'Vendor', 'middleware' => ['vendor.api', 'actch:restaurant_app']], function () {
+
+        Route::post('logout', [\App\Http\Controllers\Api\V1\Auth\VendorLoginController::class, 'logout']);
+        Route::post('logout-all', [\App\Http\Controllers\Api\V1\Auth\VendorLoginController::class, 'logoutAll']);
 
         Route::get('notifications', [VendorController::class, 'get_notifications']);
         Route::get('profile', [VendorController::class, 'get_profile']);

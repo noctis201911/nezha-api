@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\CentralLogics\NezhaMerchantTwoFactor;
 use App\CentralLogics\Helpers;
 use App\CentralLogics\NezhaBackofficeEmailBoundary;
 use App\CentralLogics\RestaurantLogic;
@@ -1257,12 +1258,18 @@ class VendorController extends Controller
         $restaurant?->save();
         $vendor = $restaurant?->vendor;
 
+        if (! $restaurant->status && $vendor) {
+            NezhaMerchantTwoFactor::revokeVendorFamily($vendor, 'restaurant_suspended', [
+                'initiator_type' => 'admin',
+                'initiator_id' => auth('admin')->id(),
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'metadata' => ['channel' => 'admin'],
+            ]);
+        }
+
         try {
             if ($restaurant->status  == 0) {
-
-                 $vendor->auth_token = null;
-                 $vendor?->save();
-
                 $reataurant_push_notification_status = Helpers::getRestaurantNotificationStatusData($restaurant->id, 'restaurant_account_block');
 
                 $message =Helpers::getPushNotificationMessage(status:'restaurant_account_block',userType: 'restaurant' , lang:$vendor->current_language_key, restaurantName:$restaurant->name);
@@ -1583,6 +1590,13 @@ class VendorController extends Controller
             $restaurant->restaurant_model = 'subscription';
         }
         $restaurant?->save();
+        if (! $status) {
+            NezhaMerchantTwoFactor::revokeVendorFamily($restaurant->vendor, 'restaurant_application_disabled', [
+                'initiator_type' => 'admin',
+                'initiator_id' => auth('admin')->id(),
+                'metadata' => ['channel' => 'admin'],
+            ]);
+        }
         try {
             if ($status == 1) {
                 $notification_status = Helpers::getNotificationStatusData('restaurant', 'restaurant_registration_approval');
