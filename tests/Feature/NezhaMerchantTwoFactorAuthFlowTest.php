@@ -213,6 +213,38 @@ class NezhaMerchantTwoFactorAuthFlowTest extends TestCase
         $this->assertSame(1, $vendor->auth_generation, 'A rejected code must not rotate the generation.');
     }
 
+    public function test_rate_limited_disable_tells_the_merchant_to_wait_not_to_retype(): void
+    {
+        [$secret, $counter] = $this->enableVendorTwoFactor();
+
+        $this->withSession([
+            'six_captcha' => 'ABCDE',
+            'six_captcha_list' => ['ABCDE'],
+        ])->post('/login_submit', [
+            'role' => 'vendor',
+            'email' => 'merchant-2fa@example.test',
+            'password' => 'Correct-Horse-9!',
+            'custome_recaptcha' => 'ABCDE',
+            'set_default_captcha' => 1,
+        ]);
+        $this->post(route('merchant.2fa.verify'), [
+            'code' => NezhaTotp::codeAt($secret, $counter + 1),
+        ])->assertRedirect(route('vendor.dashboard'));
+
+        $wrong = ['current_password' => 'Wrong-Password-1!', 'code' => '000000'];
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $this->post(route('merchant.2fa.disable'), $wrong)
+                ->assertSessionHasErrors(['code' => '密码或验证码不正确，请重新输入。']);
+        }
+
+        // Once locked out, telling them to retype is a dead-end instruction.
+        $this->post(route('merchant.2fa.disable'), $wrong)
+            ->assertSessionHasErrors(['code' => '尝试次数过多，请稍等一会儿再试。'])
+            ->assertSessionHas('merchant_2fa.open_panel', 'disable');
+
+        $this->assertTrue(Vendor::findOrFail(1)->two_factor_enabled);
+    }
+
     public function test_authenticated_merchant_can_disable_two_factor_with_password_and_code(): void
     {
         // Enrol one step back so the challenge and the later disable each get a

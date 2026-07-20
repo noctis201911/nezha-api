@@ -266,8 +266,11 @@ class MerchantTwoFactorController extends Controller
             'code' => ['required', 'string', 'max:16'],
         ]);
         $actor = $this->authenticatedActor();
-        if (! $actor || $this->limited($request, $actor)) {
+        if (! $actor) {
             return $this->panelError($request, 'disable');
+        }
+        if ($this->limited($request, $actor)) {
+            return $this->panelError($request, 'disable', '尝试次数过多，请稍等一会儿再试。');
         }
 
         try {
@@ -299,8 +302,11 @@ class MerchantTwoFactorController extends Controller
             'code' => ['required', 'string', 'max:16'],
         ]);
         $actor = $this->authenticatedActor();
-        if (! $actor || $this->limited($request, $actor)) {
+        if (! $actor) {
             return $this->panelError($request, 'replace');
+        }
+        if ($this->limited($request, $actor)) {
+            return $this->panelError($request, 'replace', '尝试次数过多，请稍等一会儿再试。');
         }
 
         try {
@@ -438,10 +444,10 @@ class MerchantTwoFactorController extends Controller
      * The management page collapses each action, so a failed submit must re-open
      * the panel it came from — otherwise the error shows with no visible form.
      */
-    private function panelError(Request $request, string $panel)
+    private function panelError(Request $request, string $panel, ?string $message = null)
     {
         return back()
-            ->withErrors(['code' => '密码或验证码不正确，请重新输入。'])
+            ->withErrors(['code' => $message ?: '密码或验证码不正确，请重新输入。'])
             ->with('merchant_2fa.open_panel', $panel);
     }
 
