@@ -182,9 +182,12 @@ class RestaurantController extends Controller
             return $noContent;
         }
 
-        // question 白名单（与前端快捷提问芯片 key 同步）；wechat/phone 恒 NULL；乱值降级 NULL（照常落行，不拒）
+        // question 白名单（与前端 NezhaListingContactBar 的 ASK_QUESTIONS key 同步，改一处必改另一处，
+        // 否则新 key 落不进白名单 → 静默记成 NULL → 报表看不出顾客到底问了什么）；
+        // wechat/phone 恒 NULL；乱值降级 NULL（照常落行，不拒）
+        // 业主 0720 定稿四问：能下单吗 / 有优惠吗 / 多久送到 / 能付U吗
         $question = strtolower(trim((string) $request->input('question', '')));
-        $allowedQ = ['hours', 'order', 'delivery', 'recommend'];
+        $allowedQ = ['order', 'promo', 'eta', 'usdt'];
         if (in_array($channel, ['wechat', 'phone'], true) || !in_array($question, $allowedQ, true)) {
             $question = null;
         }
