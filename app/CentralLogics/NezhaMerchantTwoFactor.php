@@ -83,11 +83,10 @@ final class NezhaMerchantTwoFactor
                 throw new \DomainException('merchant_2fa_challenge_expired');
             }
 
-            [$plain, $hashed] = self::recoveryCodes();
             $locked->forceFill([
                 'two_factor_secret' => $secret,
                 'two_factor_enabled' => true,
-                'two_factor_recovery_codes' => $hashed,
+                'two_factor_recovery_codes' => null,
                 'two_factor_required_at' => null,
                 'two_factor_enrolled_at' => now(),
                 'two_factor_last_counter' => $counter,
@@ -99,7 +98,7 @@ final class NezhaMerchantTwoFactor
 
             self::event($locked, 'enrolled', $context);
 
-            return ['actor' => $locked, 'recovery_codes' => $plain];
+            return ['actor' => $locked];
         }, 3);
     }
 
@@ -122,36 +121,35 @@ final class NezhaMerchantTwoFactor
         }, 3);
     }
 
-    public static function consumeRecoveryCode(
-        Authenticatable $actor,
-        string $input,
-        ?int $expectedGeneration = null,
+    /**
+     * Voluntary self-service disable. Requires the current password and a fresh,
+     * non-replayed TOTP code, so it is only reachable by the person holding the
+     * authenticator. An actor who lost the authenticator uses support recovery.
+     */
+    public static function disableTwoFactor(
+        Vendor|VendorEmployee $actor,
+        string $password,
+        string $code,
         array $context = []
     ): Vendor|VendorEmployee {
-        $normalized = self::normalizeRecoveryCode($input);
-        if ($normalized === '') {
-            throw new \DomainException('merchant_2fa_invalid_code');
-        }
-
-        return DB::transaction(function () use ($actor, $normalized, $expectedGeneration, $context) {
+        return DB::transaction(function () use ($actor, $password, $code, $context) {
             $locked = self::actor(self::actorType($actor), (int) $actor->getAuthIdentifier(), true);
-            if (! $locked || ($expectedGeneration !== null && (int) $locked->auth_generation !== $expectedGeneration)) {
-                throw new \DomainException('merchant_2fa_challenge_expired');
+            if (! $locked || ! Hash::check($password, $locked->password)) {
+                throw new \DomainException('merchant_2fa_step_up_failed');
             }
 
-            $matched = false;
-            foreach ($locked->two_factor_recovery_codes ?: [] as $hash) {
-                if (Hash::check($normalized, $hash)) {
-                    $matched = true;
-                    break;
-                }
+            if (! $locked->two_factor_enabled) {
+                throw new \DomainException('merchant_2fa_not_enabled');
             }
-            if (! $matched) {
-                throw new \DomainException('merchant_2fa_invalid_code');
+
+            try {
+                self::acceptTotp($locked, $code);
+            } catch (\DomainException) {
+                throw new \DomainException('merchant_2fa_step_up_failed');
             }
 
             self::resetTwoFactorState($locked);
-            self::event($locked, 'recovery_code_consumed', $context);
+            self::event($locked, 'disabled_by_merchant', $context);
 
             return $locked;
         }, 3);
@@ -180,37 +178,6 @@ final class NezhaMerchantTwoFactor
             self::event($locked, 'sensitive_step_up_passed', $context);
 
             return $locked;
-        }, 3);
-    }
-
-    public static function regenerateRecoveryCodes(
-        Vendor|VendorEmployee $actor,
-        string $password,
-        string $code,
-        array $context = []
-    ): array {
-        return DB::transaction(function () use ($actor, $password, $code, $context): array {
-            $locked = self::actor(self::actorType($actor), (int) $actor->getAuthIdentifier(), true);
-            if (! $locked || ! Hash::check($password, $locked->password)) {
-                throw new \DomainException('merchant_2fa_step_up_failed');
-            }
-
-            try {
-                self::acceptTotp($locked, $code);
-            } catch (\DomainException) {
-                throw new \DomainException('merchant_2fa_step_up_failed');
-            }
-
-            [$plain, $hashed] = self::recoveryCodes();
-            $locked->forceFill([
-                'two_factor_recovery_codes' => $hashed,
-                'auth_generation' => (int) $locked->auth_generation + 1,
-                'auth_token' => null,
-                'remember_token' => null,
-            ])->save();
-            self::event($locked, 'recovery_codes_regenerated', $context);
-
-            return ['actor' => $locked, 'recovery_codes' => $plain];
         }, 3);
     }
 
@@ -367,11 +334,10 @@ final class NezhaMerchantTwoFactor
                     return ['status' => 'invalid'];
                 }
 
-                [$plain, $hashed] = self::recoveryCodes();
                 $actor->forceFill([
                     'two_factor_secret' => $challenge->pending_secret,
                     'two_factor_enabled' => true,
-                    'two_factor_recovery_codes' => $hashed,
+                    'two_factor_recovery_codes' => null,
                     'two_factor_required_at' => null,
                     'two_factor_enrolled_at' => now(),
                     'two_factor_last_counter' => $counter,
@@ -383,7 +349,7 @@ final class NezhaMerchantTwoFactor
                 $challenge->forceFill(['consumed_at' => now()])->save();
                 self::event($actor, 'enrolled', ['ip' => $ip, 'metadata' => ['channel' => 'app']]);
 
-                return ['status' => 'authenticated', 'actor' => $actor, 'recovery_codes' => $plain];
+                return ['status' => 'authenticated', 'actor' => $actor];
             }
 
             try {
@@ -391,15 +357,10 @@ final class NezhaMerchantTwoFactor
                 $challenge->forceFill(['consumed_at' => now()])->save();
                 self::event($actor, 'challenge_passed', ['ip' => $ip, 'metadata' => ['channel' => 'app']]);
 
-                return ['status' => 'authenticated', 'actor' => $actor, 'recovery_codes' => null];
+                return ['status' => 'authenticated', 'actor' => $actor];
             } catch (\DomainException) {
-                if (self::matchesRecoveryCode($actor, $code)) {
-                    self::resetTwoFactorState($actor);
-                    $challenge->forceFill(['consumed_at' => now()])->save();
-                    self::event($actor, 'recovery_code_consumed', ['ip' => $ip, 'metadata' => ['channel' => 'app']]);
-
-                    return ['status' => 'authenticated', 'actor' => $actor, 'recovery_codes' => null];
-                }
+                // No recovery-code fallback: a lost authenticator goes through
+                // super-admin support recovery, not a bearer code at the door.
             }
 
             $challenge->increment('attempts');
@@ -443,22 +404,6 @@ final class NezhaMerchantTwoFactor
         $actor->forceFill(['two_factor_last_counter' => $counter])->save();
     }
 
-    private static function matchesRecoveryCode(Vendor|VendorEmployee $actor, string $input): bool
-    {
-        $normalized = self::normalizeRecoveryCode($input);
-        if ($normalized === '') {
-            return false;
-        }
-
-        foreach ($actor->two_factor_recovery_codes ?: [] as $hash) {
-            if (Hash::check($normalized, $hash)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private static function resetTwoFactorState(Vendor|VendorEmployee $actor): void
     {
         $actor->forceFill([
@@ -473,24 +418,6 @@ final class NezhaMerchantTwoFactor
             'auth_token' => null,
             'remember_token' => null,
         ])->save();
-    }
-
-    private static function recoveryCodes(): array
-    {
-        $plain = [];
-        $hashed = [];
-        for ($i = 0; $i < 8; $i++) {
-            $normalized = strtoupper(bin2hex(random_bytes(5)));
-            $plain[] = substr($normalized, 0, 5).'-'.substr($normalized, 5, 5);
-            $hashed[] = Hash::make($normalized);
-        }
-
-        return [$plain, $hashed];
-    }
-
-    private static function normalizeRecoveryCode(string $input): string
-    {
-        return strtoupper((string) preg_replace('/[^A-Za-z0-9]/', '', $input));
     }
 
     private static function event(Authenticatable $actor, string $eventType, array $context = []): void

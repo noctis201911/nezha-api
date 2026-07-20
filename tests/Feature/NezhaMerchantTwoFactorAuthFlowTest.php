@@ -188,9 +188,9 @@ class NezhaMerchantTwoFactorAuthFlowTest extends TestCase
         $verified->assertSessionHas(MerchantTwoFactorController::SESSION_PASSED_GENERATION, 1);
     }
 
-    public function test_web_recovery_code_disables_two_factor_without_forcing_reenrollment(): void
+    public function test_web_login_has_no_recovery_code_downgrade_path(): void
     {
-        [, , $recoveryCodes] = $this->enableVendorTwoFactor();
+        $this->enableVendorTwoFactor();
 
         $this->withSession([
             'six_captcha' => 'ABCDE',
@@ -203,14 +203,67 @@ class NezhaMerchantTwoFactorAuthFlowTest extends TestCase
             'set_default_captcha' => 1,
         ])->assertRedirect(route('merchant.2fa.challenge'));
 
-        $recovered = $this->post(route('merchant.2fa.verify'), ['code' => $recoveryCodes[0]]);
-        $recovered->assertRedirect(route('vendor.dashboard'));
-        $this->assertTrue(Auth::guard('vendor')->check());
-        $recovered->assertSessionMissing(MerchantTwoFactorController::PENDING_ID);
+        $rejected = $this->post(route('merchant.2fa.verify'), ['code' => 'A3F91-7C2E0']);
+        $rejected->assertSessionHasErrors('code');
+        $this->assertFalse(Auth::guard('vendor')->check(), 'A recovery-shaped code must not sign anyone in.');
+
+        $vendor = Vendor::findOrFail(1);
+        $this->assertTrue($vendor->two_factor_enabled, 'A rejected code must never disable two-factor.');
+        $this->assertNotNull($vendor->two_factor_secret);
+        $this->assertSame(1, $vendor->auth_generation, 'A rejected code must not rotate the generation.');
+    }
+
+    public function test_authenticated_merchant_can_disable_two_factor_with_password_and_code(): void
+    {
+        // Enrol one step back so the challenge and the later disable each get a
+        // strictly increasing counter that still sits inside the +/-1 TOTP window.
+        $vendor = Vendor::findOrFail(1);
+        $secret = NezhaTotp::generateSecret();
+        $counter = (int) floor(time() / 30) - 1;
+        NezhaMerchantTwoFactor::completeEnrollment(
+            $vendor,
+            $secret,
+            NezhaTotp::codeAt($secret, $counter),
+            0
+        );
+
+        $this->withSession([
+            'six_captcha' => 'ABCDE',
+            'six_captcha_list' => ['ABCDE'],
+        ])->post('/login_submit', [
+            'role' => 'vendor',
+            'email' => 'merchant-2fa@example.test',
+            'password' => 'Correct-Horse-9!',
+            'custome_recaptcha' => 'ABCDE',
+            'set_default_captcha' => 1,
+        ])->assertRedirect(route('merchant.2fa.challenge'));
+        $this->post(route('merchant.2fa.verify'), [
+            'code' => NezhaTotp::codeAt($secret, $counter + 1),
+        ])->assertRedirect(route('vendor.dashboard'));
+
+        // Wrong password is refused and leaves two-factor on.
+        $this->post(route('merchant.2fa.disable'), [
+            'current_password' => 'Wrong-Password-1!',
+            'code' => NezhaTotp::codeAt($secret, $counter + 2),
+        ])->assertSessionHasErrors('code');
+        $this->assertTrue(Vendor::findOrFail(1)->two_factor_enabled);
+
+        $disabled = $this->post(route('merchant.2fa.disable'), [
+            'current_password' => 'Correct-Horse-9!',
+            'code' => NezhaTotp::codeAt($secret, $counter + 2),
+        ]);
+        $disabled->assertRedirect(route('merchant.2fa.setup'));
+
         $vendor = Vendor::findOrFail(1);
         $this->assertFalse($vendor->two_factor_enabled);
-        $this->assertNull($vendor->two_factor_required_at);
-        $this->assertSame(2, $vendor->auth_generation);
+        $this->assertNull($vendor->two_factor_secret);
+        $this->assertSame(
+            NezhaMerchantTwoFactor::STATE_OPTIONAL,
+            NezhaMerchantTwoFactor::state($vendor)
+        );
+        // The browser session survives its own revocation so the merchant is not bounced.
+        $this->assertTrue(Auth::guard('vendor')->check());
+        $disabled->assertSessionHas(MerchantTwoFactorController::SESSION_GENERATION, (int) $vendor->auth_generation);
     }
 
     public function test_disabled_employee_app_password_success_returns_token_without_challenge(): void
@@ -524,13 +577,13 @@ class NezhaMerchantTwoFactorAuthFlowTest extends TestCase
         $vendor = Vendor::findOrFail(1);
         $secret = NezhaTotp::generateSecret();
         $counter = (int) floor(time() / 30);
-        $result = NezhaMerchantTwoFactor::completeEnrollment(
+        NezhaMerchantTwoFactor::completeEnrollment(
             $vendor,
             $secret,
             NezhaTotp::codeAt($secret, $counter),
             0
         );
 
-        return [$secret, $counter, $result['recovery_codes']];
+        return [$secret, $counter];
     }
 }

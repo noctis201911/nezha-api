@@ -52,13 +52,12 @@ class NezhaMerchantTwoFactorRecoveryCommandTest extends TestCase
         ])->save();
     }
 
-    public function test_support_recovery_requires_two_distinct_super_admins_and_records_no_secrets(): void
+    public function test_support_recovery_runs_on_a_single_super_admin_and_records_no_secrets(): void
     {
         $exitCode = Artisan::call('nezha:merchant-2fa-recover', [
             'actor_type' => 'owner',
             'actor_id' => 1,
-            'approver_one_email' => 'first-approver@example.test',
-            'approver_two_email' => 'second-approver@example.test',
+            'approver_email' => 'first-approver@example.test',
             '--reason' => 'Verified identity after authenticator loss.',
         ]);
         $this->assertSame(0, $exitCode, Artisan::output());
@@ -74,7 +73,7 @@ class NezhaMerchantTwoFactorRecoveryCommandTest extends TestCase
         $event = DB::table('merchant_two_factor_events')->where('event_type', 'support_recovery')->first();
         $this->assertNotNull($event);
         $this->assertSame(1, (int) $event->approver_one_id);
-        $this->assertSame(2, (int) $event->approver_two_id);
+        $this->assertNull($event->approver_two_id);
         $this->assertSame('Verified identity after authenticator loss.', $event->reason);
         $serialized = json_encode($event, JSON_THROW_ON_ERROR);
         $this->assertStringNotContainsString('active-token', $serialized);
@@ -82,13 +81,36 @@ class NezhaMerchantTwoFactorRecoveryCommandTest extends TestCase
         Mail::assertSentCount(1);
     }
 
-    public function test_same_approver_twice_is_rejected_without_mutation(): void
+    public function test_optional_second_approver_is_recorded_when_supplied(): void
+    {
+        $exitCode = Artisan::call('nezha:merchant-2fa-recover', [
+            'actor_type' => 'owner',
+            'actor_id' => 1,
+            'approver_email' => 'first-approver@example.test',
+            '--second-approver' => 'second-approver@example.test',
+            '--reason' => 'Dual approval available.',
+        ]);
+        $this->assertSame(0, $exitCode, Artisan::output());
+
+        $event = DB::table('merchant_two_factor_events')->where('event_type', 'support_recovery')->first();
+        $this->assertSame(1, (int) $event->approver_one_id);
+        $this->assertSame(2, (int) $event->approver_two_id);
+    }
+
+    public function test_unknown_or_duplicate_approver_is_rejected_without_mutation(): void
     {
         $this->artisan('nezha:merchant-2fa-recover', [
             'actor_type' => 'owner',
             'actor_id' => 1,
-            'approver_one_email' => 'first-approver@example.test',
-            'approver_two_email' => 'first-approver@example.test',
+            'approver_email' => 'not-an-admin@example.test',
+            '--reason' => 'Unknown approver.',
+        ])->assertFailed();
+
+        $this->artisan('nezha:merchant-2fa-recover', [
+            'actor_type' => 'owner',
+            'actor_id' => 1,
+            'approver_email' => 'first-approver@example.test',
+            '--second-approver' => 'first-approver@example.test',
             '--reason' => 'Invalid duplicate approval.',
         ])->assertFailed();
 
@@ -108,8 +130,7 @@ class NezhaMerchantTwoFactorRecoveryCommandTest extends TestCase
         $this->artisan('nezha:merchant-2fa-recover', [
             'actor_type' => 'owner',
             'actor_id' => 1,
-            'approver_one_email' => 'first-approver@example.test',
-            'approver_two_email' => 'second-approver@example.test',
+            'approver_email' => 'first-approver@example.test',
             '--reason' => 'Verified identity; notification transport test.',
         ])->assertFailed();
 

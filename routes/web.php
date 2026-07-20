@@ -74,7 +74,7 @@ Route::post('merchant-two-factor/challenge', [MerchantTwoFactorController::class
 Route::get('merchant-two-factor/setup', [MerchantTwoFactorController::class, 'setup'])->name('merchant.2fa.setup');
 Route::post('merchant-two-factor/setup', [MerchantTwoFactorController::class, 'enable'])->name('merchant.2fa.enable');
 Route::post('merchant-two-factor/cancel', [MerchantTwoFactorController::class, 'cancel'])->name('merchant.2fa.cancel');
-Route::post('merchant-two-factor/recovery-codes', [MerchantTwoFactorController::class, 'regenerateRecovery'])->name('merchant.2fa.recovery.regenerate');
+Route::post('merchant-two-factor/disable', [MerchantTwoFactorController::class, 'disable'])->name('merchant.2fa.disable');
 Route::post('merchant-two-factor/replace', [MerchantTwoFactorController::class, 'replaceAuthenticator'])->name('merchant.2fa.replace');
 Route::get('/reload-captcha', [HomeController::class, 'reloadCaptcha'])->name('reload-captcha');
 Route::get('/reset-password', [LoginController::class, 'reset_password_request'])->name('reset-password')->middleware('throttle:5,1');

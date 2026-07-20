@@ -18,22 +18,22 @@
         @if ($errors->any())
             <div class="error">Unable to verify that code. Check the latest code and try again.</div>
         @endif
-        @if (session('merchant_2fa.recovery_notice'))
-            <div class="notice">Your recovery code was accepted. Two-factor authentication was disabled and all existing sessions were revoked. You may enable it again later.</div>
+        @if (session('merchant_2fa.disabled_notice'))
+            <div class="notice">Two-factor authentication is now off and all existing sessions were revoked. You may enable it again at any time.</div>
         @endif
 
         @if ($mode === 'challenge')
             <h1>Verify it is you</h1>
-            <p class="sub">Enter the current six-digit code from your authenticator. A recovery code can be used here only; it cannot approve sensitive actions.</p>
+            <p class="sub">Enter the current six-digit code from your authenticator. Lost access to it? Contact the platform to have two-factor authentication reset for you.</p>
             <form method="post" action="{{ route('merchant.2fa.verify') }}" data-single-submit>
                 @csrf
-                <label for="merchant-2fa-code">Authenticator or recovery code</label>
-                <input id="merchant-2fa-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="32" required autofocus>
+                <label for="merchant-2fa-code">Authenticator code</label>
+                <input id="merchant-2fa-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="16" required autofocus>
                 <button type="submit">Verify and sign in</button>
             </form>
         @elseif ($mode === 'setup')
             <h1>Enable optional two-factor authentication</h1>
-            <p class="sub">This is your choice. Scan this QR code with an authenticator app; the secret is stored only after you confirm a valid code.</p>
+            <p class="sub">This is your choice. Scan this QR code with an authenticator app; the secret is stored only after you confirm a valid code. If you later lose the authenticator, contact the platform to have it reset — there are no printable backup codes.</p>
             <div class="qr"><img src="data:image/svg+xml;base64,{{ $qr_svg }}" alt="Authenticator QR code"></div>
             <p class="hint">Cannot scan? Enter this time-based secret manually:</p>
             <div class="secret">{{ $secret }}</div>
@@ -45,20 +45,16 @@
             </form>
         @else
             <h1>Two-factor authentication is active</h1>
-            <p class="sub">Your account now requires an authenticator code after every successful password check.</p>
-            @if (! empty($recovery_codes))
-                <div class="notice">Save these one-time recovery codes now. They will not be shown again.</div>
-                <div class="codes">@foreach ($recovery_codes as $recoveryCode)<div>{{ $recoveryCode }}</div>@endforeach</div>
-            @endif
-            <h2>Recovery codes</h2>
-            <p class="sub">Generating a new set invalidates the old set and every other session or App token.</p>
-            <form method="post" action="{{ route('merchant.2fa.recovery.regenerate') }}" data-single-submit>
+            <p class="sub">Your account now requires an authenticator code after every successful password check. Keep the authenticator app installed — if you lose it, only the platform can reset this for you.</p>
+            <h2>Turn off two-factor authentication</h2>
+            <p class="sub">This is your choice. Turning it off revokes all sessions and App tokens; your password alone will sign you in again.</p>
+            <form method="post" action="{{ route('merchant.2fa.disable') }}" data-single-submit>
                 @csrf
-                <label for="recovery-password">Current password</label>
-                <input id="recovery-password" name="current_password" type="password" autocomplete="current-password" required>
-                <label for="recovery-code">Current authenticator code</label>
-                <input id="recovery-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="16" required>
-                <button type="submit">Generate new recovery codes</button>
+                <label for="disable-password">Current password</label>
+                <input id="disable-password" name="current_password" type="password" autocomplete="current-password" required>
+                <label for="disable-code">Current authenticator code</label>
+                <input id="disable-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="16" required>
+                <button type="submit">Turn off two-factor authentication</button>
             </form>
             <h2>Replace authenticator</h2>
             <p class="sub">This revokes all sessions and requires scanning a new secret before access is restored.</p>

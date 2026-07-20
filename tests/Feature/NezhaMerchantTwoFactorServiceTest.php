@@ -68,7 +68,7 @@ class NezhaMerchantTwoFactorServiceTest extends TestCase
         );
     }
 
-    public function test_enrollment_encrypts_secret_hashes_recovery_codes_and_rejects_totp_replay(): void
+    public function test_enrollment_encrypts_secret_issues_no_recovery_codes_and_rejects_totp_replay(): void
     {
         $vendor = Vendor::findOrFail(1);
         $secret = NezhaTotp::generateSecret();
@@ -88,12 +88,9 @@ class NezhaMerchantTwoFactorServiceTest extends TestCase
         $this->assertNotSame($secret, DB::table('vendors')->where('id', 1)->value('two_factor_secret'));
         $this->assertSame(1, $enrolled->auth_generation);
         $this->assertNull($enrolled->auth_token);
-        $this->assertCount(8, $result['recovery_codes']);
-        $this->assertCount(8, $enrolled->two_factor_recovery_codes);
-        $this->assertTrue(Hash::check(
-            str_replace('-', '', $result['recovery_codes'][0]),
-            $enrolled->two_factor_recovery_codes[0]
-        ));
+        $this->assertArrayNotHasKey('recovery_codes', $result);
+        $this->assertNull($enrolled->two_factor_recovery_codes);
+        $this->assertNull(DB::table('vendors')->where('id', 1)->value('two_factor_recovery_codes'));
 
         $this->expectException(\DomainException::class);
         NezhaMerchantTwoFactor::verifyTotp(
@@ -103,38 +100,66 @@ class NezhaMerchantTwoFactorServiceTest extends TestCase
         );
     }
 
-    public function test_recovery_code_is_one_time_disables_two_factor_and_revokes_sessions(): void
+    public function test_self_service_disable_requires_password_and_fresh_totp_then_revokes_sessions(): void
     {
         $vendor = Vendor::findOrFail(1);
         $secret = NezhaTotp::generateSecret();
-        $result = NezhaMerchantTwoFactor::completeEnrollment(
+        $counter = (int) floor(time() / 30);
+        $enrolled = NezhaMerchantTwoFactor::completeEnrollment(
             $vendor,
             $secret,
-            NezhaTotp::codeAt($secret, (int) floor(time() / 30)),
+            NezhaTotp::codeAt($secret, $counter),
             0
-        );
-        $enrolled = $result['actor'];
+        )['actor'];
         $enrolled->forceFill(['auth_token' => 'issued-after-enrollment'])->save();
 
-        $recovered = NezhaMerchantTwoFactor::consumeRecoveryCode(
-            $enrolled,
-            $result['recovery_codes'][0],
-            1
+        // Wrong password is refused even with a valid code.
+        try {
+            NezhaMerchantTwoFactor::disableTwoFactor(
+                $enrolled,
+                'Wrong-Password-1!',
+                NezhaTotp::codeAt($secret, $counter + 1)
+            );
+            $this->fail('Disable unexpectedly accepted a wrong password.');
+        } catch (\DomainException $e) {
+            $this->assertSame('merchant_2fa_step_up_failed', $e->getMessage());
+        }
+
+        // A replayed code is refused even with the right password.
+        try {
+            NezhaMerchantTwoFactor::disableTwoFactor(
+                $enrolled->fresh(),
+                'Correct-Horse-9!',
+                NezhaTotp::codeAt($secret, $counter)
+            );
+            $this->fail('Disable unexpectedly accepted a replayed TOTP code.');
+        } catch (\DomainException $e) {
+            $this->assertSame('merchant_2fa_step_up_failed', $e->getMessage());
+        }
+
+        $this->assertTrue($enrolled->fresh()->two_factor_enabled, 'Failed attempts must not disable 2FA.');
+
+        $disabled = NezhaMerchantTwoFactor::disableTwoFactor(
+            $enrolled->fresh(),
+            'Correct-Horse-9!',
+            NezhaTotp::codeAt($secret, $counter + 1)
         );
 
-        $this->assertFalse($recovered->two_factor_enabled);
-        $this->assertNull($recovered->two_factor_secret);
-        $this->assertNull($recovered->two_factor_recovery_codes);
-        $this->assertNull($recovered->auth_token);
-        $this->assertSame(2, $recovered->auth_generation);
-        $this->assertNull($recovered->two_factor_required_at);
-        $this->assertSame(NezhaMerchantTwoFactor::STATE_OPTIONAL, NezhaMerchantTwoFactor::state($recovered));
+        $this->assertFalse($disabled->two_factor_enabled);
+        $this->assertNull($disabled->two_factor_secret);
+        $this->assertNull($disabled->auth_token);
+        $this->assertSame(NezhaMerchantTwoFactor::STATE_OPTIONAL, NezhaMerchantTwoFactor::state($disabled));
+        $this->assertSame(
+            1,
+            DB::table('merchant_two_factor_events')->where('event_type', 'disabled_by_merchant')->count()
+        );
 
+        // Already disabled: the entry point closes instead of silently succeeding.
         $this->expectException(\DomainException::class);
-        NezhaMerchantTwoFactor::consumeRecoveryCode($recovered, $result['recovery_codes'][0], 2);
+        NezhaMerchantTwoFactor::disableTwoFactor($disabled->fresh(), 'Correct-Horse-9!', '000000');
     }
 
-    public function test_sensitive_step_up_requires_password_and_fresh_totp_not_recovery(): void
+    public function test_sensitive_step_up_requires_password_and_a_fresh_non_replayed_totp(): void
     {
         $vendor = Vendor::findOrFail(1);
         $secret = NezhaTotp::generateSecret();
@@ -157,14 +182,15 @@ class NezhaMerchantTwoFactorServiceTest extends TestCase
             Vendor::findOrFail(1)->two_factor_last_counter
         );
 
-        foreach ([$nextCode, $result['recovery_codes'][0]] as $replayOrRecovery) {
+        // A replayed code and a recovery-code-shaped string are both refused.
+        foreach ([$nextCode, 'A3F91-7C2E0'] as $replayOrBearerCode) {
             try {
                 NezhaMerchantTwoFactor::verifySensitiveStepUp(
                     Vendor::findOrFail(1),
                     'Correct-Horse-9!',
-                    $replayOrRecovery
+                    $replayOrBearerCode
                 );
-                $this->fail('Sensitive step-up unexpectedly accepted a replay or recovery code.');
+                $this->fail('Sensitive step-up unexpectedly accepted a replay or recovery-shaped code.');
             } catch (\DomainException $exception) {
                 $this->assertSame('merchant_2fa_step_up_failed', $exception->getMessage());
             }
@@ -221,7 +247,7 @@ class NezhaMerchantTwoFactorServiceTest extends TestCase
         );
     }
 
-    public function test_app_recovery_authenticates_current_login_and_leaves_two_factor_optional(): void
+    public function test_app_challenge_has_no_recovery_fallback_and_never_downgrades_two_factor(): void
     {
         $vendor = Vendor::findOrFail(1);
         $secret = NezhaTotp::generateSecret();
@@ -234,17 +260,25 @@ class NezhaMerchantTwoFactorServiceTest extends TestCase
         );
         $challenge = NezhaMerchantTwoFactor::startAppChallenge($enrollment['actor'], '127.0.0.8');
 
-        $result = NezhaMerchantTwoFactor::completeAppChallenge(
-            $challenge['challenge_token'],
-            $enrollment['recovery_codes'][0],
-            '127.0.0.8'
-        );
+        try {
+            NezhaMerchantTwoFactor::completeAppChallenge(
+                $challenge['challenge_token'],
+                'A3F91-7C2E0',
+                '127.0.0.8'
+            );
+            $this->fail('App challenge unexpectedly accepted a recovery-code-shaped input.');
+        } catch (\DomainException $exception) {
+            $this->assertSame('merchant_2fa_invalid_code', $exception->getMessage());
+        }
 
-        $this->assertSame('authenticated', $result['status']);
-        $this->assertSame(NezhaMerchantTwoFactor::STATE_OPTIONAL, NezhaMerchantTwoFactor::state($result['actor']));
-        $this->assertFalse($result['actor']->two_factor_enabled);
-        $this->assertNull($result['actor']->two_factor_required_at);
-        $this->assertSame(2, $result['actor']->auth_generation);
-        $this->assertSame(0, MerchantTwoFactorChallenge::query()->whereNull('consumed_at')->count());
+        $actor = Vendor::findOrFail(1);
+        $this->assertTrue($actor->two_factor_enabled, 'A rejected code must never disable two-factor.');
+        $this->assertSame($secret, $actor->two_factor_secret);
+        $this->assertSame(NezhaMerchantTwoFactor::STATE_CHALLENGE, NezhaMerchantTwoFactor::state($actor));
+        $this->assertSame(
+            0,
+            DB::table('merchant_two_factor_events')->where('event_type', 'recovery_code_consumed')->count()
+        );
+        $this->assertSame(1, MerchantTwoFactorChallenge::query()->whereNull('consumed_at')->count());
     }
 }

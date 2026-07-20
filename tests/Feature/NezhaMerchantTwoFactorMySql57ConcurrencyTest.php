@@ -54,7 +54,7 @@ class NezhaMerchantTwoFactorMySql57ConcurrencyTest extends TestCase
         ));
 
         $this->runtimeDirectory = sys_get_temp_dir().DIRECTORY_SEPARATOR.'nezha-merchant-2fa-'.bin2hex(random_bytes(6));
-        foreach (['', 'views', 'barrier-recovery', 'barrier-totp'] as $directory) {
+        foreach (['', 'views', 'barrier-disable', 'barrier-totp'] as $directory) {
             $path = $directory === ''
                 ? $this->runtimeDirectory
                 : $this->runtimeDirectory.DIRECTORY_SEPARATOR.$directory;
@@ -109,15 +109,15 @@ class NezhaMerchantTwoFactorMySql57ConcurrencyTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_recovery_code_and_totp_counter_each_have_exactly_one_concurrent_winner(): void
+    public function test_self_disable_and_totp_counter_each_have_exactly_one_concurrent_winner(): void
     {
         $setup = $this->runWorker(['setup']);
 
-        $recoveryStatuses = $this->race(
-            'recover',
-            (int) $setup['recovery_vendor_id'],
-            (string) $setup['recovery_code'],
-            'barrier-recovery'
+        $disableStatuses = $this->race(
+            'disable',
+            (int) $setup['disable_vendor_id'],
+            (string) $setup['disable_code'],
+            'barrier-disable'
         );
         $totpStatuses = $this->race(
             'totp',
@@ -137,23 +137,23 @@ class NezhaMerchantTwoFactorMySql57ConcurrencyTest extends TestCase
             $this->workerEnvironment['DB_PASSWORD'],
             [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION],
         );
-        $recoveryActor = $database->query(sprintf(
-            'SELECT two_factor_enabled, two_factor_recovery_codes, auth_generation FROM vendors WHERE id = %d',
-            (int) $setup['recovery_vendor_id'],
+        $disabledActor = $database->query(sprintf(
+            'SELECT two_factor_enabled, two_factor_secret, auth_generation FROM vendors WHERE id = %d',
+            (int) $setup['disable_vendor_id'],
         ))->fetch(PDO::FETCH_ASSOC);
         $totpCounter = (int) $database->query(sprintf(
             'SELECT two_factor_last_counter FROM vendors WHERE id = %d',
             (int) $setup['totp_vendor_id'],
         ))->fetchColumn();
 
-        $this->assertSame(['invalid', 'success'], $recoveryStatuses);
+        $this->assertSame(['invalid', 'success'], $disableStatuses);
         $this->assertSame(['invalid', 'success'], $totpStatuses);
-        $this->assertSame(0, (int) $recoveryActor['two_factor_enabled']);
-        $this->assertNull($recoveryActor['two_factor_recovery_codes']);
-        $this->assertSame(2, (int) $recoveryActor['auth_generation']);
+        $this->assertSame(0, (int) $disabledActor['two_factor_enabled']);
+        $this->assertNull($disabledActor['two_factor_secret']);
+        $this->assertSame(2, (int) $disabledActor['auth_generation']);
         $this->assertSame((int) $setup['totp_counter'], $totpCounter);
         $this->assertSame(1, (int) $database->query(
-            "SELECT COUNT(*) FROM merchant_two_factor_events WHERE event_type = 'recovery_code_consumed'"
+            "SELECT COUNT(*) FROM merchant_two_factor_events WHERE event_type = 'disabled_by_merchant'"
         )->fetchColumn());
         $this->assertSame(1, (int) $database->query(
             "SELECT COUNT(*) FROM merchant_two_factor_events WHERE event_type = 'challenge_passed'"

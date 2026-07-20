@@ -98,7 +98,6 @@ class MerchantTwoFactorController extends Controller
 
         return $this->twoFactorView([
             'mode' => 'challenge',
-            'recovery_codes' => null,
             'continuation_url' => self::continuationUrl($actor),
             'site_direction' => session('vendor_site_direction', 'ltr'),
             'locale' => session('vendor_local', 'en'),
@@ -129,24 +128,9 @@ class MerchantTwoFactorController extends Controller
 
             return redirect()->to(self::continuationUrl($verified));
         } catch (\DomainException) {
-            try {
-                $recovered = NezhaMerchantTwoFactor::consumeRecoveryCode(
-                    $actor,
-                    (string) $request->input('code'),
-                    (int) $request->session()->get(self::PENDING_GENERATION),
-                    $context
-                );
-                $this->clearLimits($request, $actor);
-                $continuationUrl = self::continuationUrl($recovered);
-                self::finishLogin($request, $recovered, false);
+            $this->hitLimits($request, $actor);
 
-                return redirect()->to($continuationUrl)
-                    ->with('merchant_2fa.recovery_notice', true);
-            } catch (\DomainException) {
-                $this->hitLimits($request, $actor);
-
-                return back()->withErrors(['code' => 'Unable to verify that code.']);
-            }
+            return back()->withErrors(['code' => 'Unable to verify that code.']);
         }
     }
 
@@ -168,7 +152,6 @@ class MerchantTwoFactorController extends Controller
         if ($actor->two_factor_enabled) {
             return $this->twoFactorView([
                 'mode' => 'enabled',
-                'recovery_codes' => session('merchant_2fa.recovery_plain'),
                 'continuation_url' => self::continuationUrl($actor),
                 'site_direction' => session('vendor_site_direction', 'ltr'),
                 'locale' => session('vendor_local', 'en'),
@@ -203,7 +186,6 @@ class MerchantTwoFactorController extends Controller
             'mode' => 'setup',
             'secret' => $secret,
             'qr_svg' => base64_encode(QrCode::format('svg')->size(220)->margin(1)->generate($uri)),
-            'recovery_codes' => null,
             'continuation_url' => self::continuationUrl($actor),
             'site_direction' => session('vendor_site_direction', 'ltr'),
             'locale' => session('vendor_local', 'en'),
@@ -243,7 +225,6 @@ class MerchantTwoFactorController extends Controller
 
         $this->clearLimits($request, $actor);
         self::finishLogin($request, $result['actor'], true);
-        $request->session()->flash('merchant_2fa.recovery_plain', $result['recovery_codes']);
 
         return redirect()->route('merchant.2fa.setup');
     }
@@ -278,7 +259,7 @@ class MerchantTwoFactorController extends Controller
         return redirect()->route('login', ['tab' => $url]);
     }
 
-    public function regenerateRecovery(Request $request)
+    public function disable(Request $request)
     {
         $request->validate([
             'current_password' => ['required', 'string'],
@@ -290,7 +271,7 @@ class MerchantTwoFactorController extends Controller
         }
 
         try {
-            $result = NezhaMerchantTwoFactor::regenerateRecoveryCodes(
+            $disabled = NezhaMerchantTwoFactor::disableTwoFactor(
                 $actor,
                 (string) $request->input('current_password'),
                 (string) $request->input('code'),
@@ -302,11 +283,13 @@ class MerchantTwoFactorController extends Controller
             return back()->withErrors(['code' => 'Unable to verify those credentials.']);
         }
 
+        // Disabling revokes every session including this one; re-establish the
+        // current browser session so the merchant is not bounced to login.
         $this->clearLimits($request, $actor);
-        self::finishLogin($request, $result['actor'], true);
-        $request->session()->flash('merchant_2fa.recovery_plain', $result['recovery_codes']);
+        self::finishLogin($request, $disabled, false);
 
-        return redirect()->route('merchant.2fa.setup');
+        return redirect()->route('merchant.2fa.setup')
+            ->with('merchant_2fa.disabled_notice', true);
     }
 
     public function replaceAuthenticator(Request $request)

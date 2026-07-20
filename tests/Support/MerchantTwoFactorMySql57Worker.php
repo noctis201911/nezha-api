@@ -62,13 +62,13 @@ if ($action === 'setup') {
     $migration = require $root.'/database/migrations/2026_07_19_150000_add_merchant_two_factor_authentication.php';
     $migration->up();
 
-    $recoveryVendor = new Vendor;
-    $recoveryVendor->forceFill([
-        'email' => 'mysql57-recovery@example.test',
-        'password' => 'unused',
+    $disableVendor = new Vendor;
+    $disableVendor->forceFill([
+        'email' => 'mysql57-disable@example.test',
+        'password' => password_hash('Correct-Horse-9!', PASSWORD_BCRYPT),
         'status' => true,
     ])->save();
-    $recoveryVendor->refresh();
+    $disableVendor->refresh();
     $totpVendor = new Vendor;
     $totpVendor->forceFill([
         'email' => 'mysql57-totp@example.test',
@@ -78,11 +78,11 @@ if ($action === 'setup') {
     $totpVendor->refresh();
 
     $currentCounter = (int) floor(time() / 30);
-    $recoverySecret = NezhaTotp::generateSecret();
-    $recovery = NezhaMerchantTwoFactor::completeEnrollment(
-        $recoveryVendor,
-        $recoverySecret,
-        NezhaTotp::codeAt($recoverySecret, $currentCounter),
+    $disableSecret = NezhaTotp::generateSecret();
+    NezhaMerchantTwoFactor::completeEnrollment(
+        $disableVendor,
+        $disableSecret,
+        NezhaTotp::codeAt($disableSecret, $currentCounter),
         0,
         ['metadata' => ['channel' => 'mysql57-test']]
     );
@@ -96,8 +96,8 @@ if ($action === 'setup') {
     );
 
     echo json_encode([
-        'recovery_vendor_id' => $recoveryVendor->id,
-        'recovery_code' => $recovery['recovery_codes'][0],
+        'disable_vendor_id' => $disableVendor->id,
+        'disable_code' => NezhaTotp::codeAt($disableSecret, $currentCounter + 1),
         'totp_vendor_id' => $totpVendor->id,
         'totp_code' => NezhaTotp::codeAt($totpSecret, $currentCounter),
         'totp_counter' => $currentCounter,
@@ -105,7 +105,7 @@ if ($action === 'setup') {
     exit(0);
 }
 
-if (in_array($action, ['recover', 'totp'], true)) {
+if (in_array($action, ['disable', 'totp'], true)) {
     $vendorId = (int) ($argv[2] ?? 0);
     $code = $argv[3] ?? '';
     $barrier = $argv[4] ?? '';
@@ -126,8 +126,8 @@ if (in_array($action, ['recover', 'totp'], true)) {
 
     try {
         $vendor = Vendor::findOrFail($vendorId);
-        if ($action === 'recover') {
-            NezhaMerchantTwoFactor::consumeRecoveryCode($vendor, $code, 1);
+        if ($action === 'disable') {
+            NezhaMerchantTwoFactor::disableTwoFactor($vendor, 'Correct-Horse-9!', $code);
         } else {
             NezhaMerchantTwoFactor::verifyTotp($vendor, $code, 1);
         }

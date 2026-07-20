@@ -135,15 +135,7 @@ class VendorLoginController extends Controller
             RateLimiter::clear($rateKey);
         }
 
-        $response = $this->issueTokenResponse($result['actor']);
-        if (! empty($result['recovery_codes']) && $response->isSuccessful()) {
-            $payload = $response->getData(true);
-            $payload['recovery_codes'] = $result['recovery_codes'];
-
-            return $this->noStore(response()->json($payload, $response->getStatusCode()));
-        }
-
-        return $response;
+        return $this->issueTokenResponse($result['actor']);
     }
 
     public function logout(Request $request)
