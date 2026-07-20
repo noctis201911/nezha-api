@@ -60,6 +60,14 @@ if [ -n "$BK" ]; then
 else
   red "未找到任何数据库备份 (.enc) — 每日备份未产出?"
 fi
+FBK=$(ls -1t /www/backup/database/nezha-enc/nezha-files-*.tar.gz.enc 2>/dev/null | head -1)
+if [ -n "$FBK" ]; then
+  FAGE=$(( ( $(date +%s) - $(stat -c %Y "$FBK") ) / 3600 ))
+  echo "    最新文件备份: ${FAGE}h 前  ($(basename "$FBK"))"
+  [ "$FAGE" -gt 30 ] && red "最新文件备份 ${FAGE}h 未更新 (>30h) — 图片/支付凭证/.env 未进备份"
+else
+  red "未找到任何文件备份 (nezha-files-*.tar.gz.enc) — storage/app 与 .env 未在备份?"
+fi
 OSOK=/root/nezha-backup/offsite_last_ok
 if [ -f "$OSOK" ]; then
   OAGE=$(( ( $(date +%s) - $(cat "$OSOK" 2>/dev/null || echo 0) ) / 3600 ))

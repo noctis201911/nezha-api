@@ -95,6 +95,32 @@ else
   [ "$OAGE" -gt 26 ] && add "异地备份(R2)已 ${OAGE}h 未成功推送 (>26h) — 异地副本停更, 仅剩本地" "offsite"
 fi
 
+# 6c. 文件备份新鲜度: storage/app + .env 的加密归档 >26h 未更新 → 只剩数据库在备份,
+#     图片/支付凭证/.env 换新机重建不回来(2026-06-17 才补上的那一半又静默丢了没人知道)
+FBK=$(ls -1t /www/backup/database/nezha-enc/nezha-files-*.tar.gz.enc 2>/dev/null | head -1)
+if [ -z "$FBK" ]; then
+  add "未找到任何文件备份(nezha-files-*.tar.gz.enc) — storage/app 与 .env 可能未在备份" "backup-files"
+else
+  FAGE=$(( ( $(date +%s) - $(stat -c %Y "$FBK") ) / 3600 ))
+  [ "$FAGE" -gt 26 ] && add "最新文件备份已 ${FAGE}h 未更新 (>26h) — 仅数据库在备份, 图片/凭证/.env 未覆盖" "backup-files"
+fi
+
+# 6d. 备份脚本漂移对账: cron 现役版(/root) 与仓库版(release current) 必须同源。
+#     2026-07-20 事故形态: 两边各改各的漂移数周, 谁把 cron 接到功能残缺的那版 = 异地与文件备份静默停摆。
+#     发布窗口内短暂不一致是正常的(先部署后 install), 故只在持续 >26h 后才告警。
+LIVE_BK="/root/nezha-backup/nezha-encrypted-backup.sh"
+REPO_BK="/www/wwwroot/api-deploy/current/ops/backup/nezha-encrypted-backup.sh"
+DRIFT_SEEN="/root/nezha-backup/.drift_first_seen"
+if [ ! -r "$LIVE_BK" ] || [ ! -r "$REPO_BK" ]; then
+  add "备份脚本漂移对账失败: cron 现役版或仓库版不可读 — 无法确认二者同源" "backup-drift"
+elif [ "$(md5sum < "$LIVE_BK")" = "$(md5sum < "$REPO_BK")" ]; then
+  rm -f "$DRIFT_SEEN"
+else
+  [ -f "$DRIFT_SEEN" ] || date +%s > "$DRIFT_SEEN"
+  DAGE=$(( ( $(date +%s) - $(cat "$DRIFT_SEEN" 2>/dev/null || echo 0) ) / 3600 ))
+  [ "$DAGE" -gt 26 ] && add "备份脚本已漂移 ${DAGE}h: cron 现役版与仓库版不一致 — 仓库是 SSOT, 发布方式见 README" "backup-drift"
+fi
+
 # 7. SSL 源站证书剩余天数 <14天 → 自动续期可能失败,提前预警(绕CF直查本机源站证书)
 for SD in nezha.am api.nezha.am; do
   CEND=$(echo | timeout 10 openssl s_client -servername "$SD" -connect 127.0.0.1:443 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
