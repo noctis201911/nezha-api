@@ -1081,7 +1081,6 @@
     @if(\App\CentralLogics\Helpers::employee_module_permission_check('order') && $order_notification_type == 'manual')
         {{-- 哪吒: 新单反复提醒设置(方案A网页/B手机 共读一份·按当前商家注入; 列未迁移或未开→enabled:false, 保持原"响一次") --}}
         @php($nzRepeatR = \App\CentralLogics\Helpers::get_restaurant_data())
-        <script>
           window.nzOrderRepeat = {
             enabled: {{ !empty(optional($nzRepeatR)->new_order_repeat_enabled) ? 'true' : 'false' }},
             intervalSec: {{ (int)(optional($nzRepeatR)->new_order_repeat_interval_sec ?? 20) }},
@@ -1091,7 +1090,6 @@
               payment: {{ !empty(optional($nzRepeatR)->new_order_repeat_scope_payment) ? 'true' : 'false' }}
             }
           };
-        </script>
         (function(){
             var SEEN_KEY = 'nz_seen_order_ids_v1';
             var toast    = document.getElementById('nz-new-order-toast');
