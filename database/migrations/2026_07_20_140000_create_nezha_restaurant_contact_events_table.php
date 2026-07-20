@@ -22,7 +22,10 @@ use Illuminate\Support\Facades\Schema;
  * 字段：
  *   restaurant_id = 被联系的挂牌店（restaurants.id；无 FK，店删后事件留存做历史统计）
  *   channel       = 联系渠道白名单 wechat/phone/whatsapp/telegram（与 NezhaContacts::METHODS 同源）
- *   question      = 快捷提问 key（hours/order/delivery/recommend）；wechat/phone 恒 NULL；乱值降级 NULL
+ *   question      = 快捷提问 key；wechat/phone 恒 NULL；乱值降级 NULL
+ *                   🔴 白名单正本在 RestaurantController::contact_intent 的 $allowedQ，会随文案迭代变；
+ *                      本注释不复述具体值（写死会立刻过时——0720 就已从 hours/delivery/recommend
+ *                      改成 order/promo/eta/usdt）。查当前值去读那一处。
  *   created_at    = 事件时间（Asia/Yerevan 全站口径）；无 updated_at（append-only 事件流）
  *
  * L1-1 纯信息墙：埋点只是信息层，不含任何交易/下单/收款元素。
