@@ -6221,4 +6221,10 @@
   'Incomplete_profile' => '资料未完善',
   'order_data_unavailable' => '订单数据当前不可见（跨分区）',
   'review_visibility_updated' => '评价显示状态已更新',
+  'two_factor_authentication' => '两步验证',
+  'two_factor_is_active_desc' => '两步验证已开启。您可以在这里更换验证器，或者关闭它。',
+  'two_factor_optional_desc' => '可选：在密码之外再加一道验证器动态码，账号更安全。开不开由您自己决定。',
+  'security_changes_revoke_sessions_desc' => '安全设置变更后，其它设备和 App 上的登录会失效，需要重新登录。',
+  'manage_two_factor_authentication' => '管理两步验证',
+  'enable_two_factor_authentication' => '开启两步验证',
 );

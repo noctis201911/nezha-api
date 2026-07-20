@@ -1,5 +1,13 @@
-Two-factor authentication recovery was performed on your Nezha merchant account.
+您好，
 
-All existing Web sessions and App tokens were revoked. Sign in with your password and enroll a new authenticator before access is restored.
+平台已按您的申请，为您的哪吒商家账号重置了两步验证。
 
-Support will never ask for an authenticator code or recovery code.
+重置后：
+
+- 两步验证已关闭，您现在用密码就可以登录商家后台和 App。
+- 原先在其它设备和 App 上的登录都已失效，需要重新登录一次。
+- 要不要重新开启两步验证，由您自己决定。可以在商家后台「个人资料 → 两步验证」里随时开启。
+
+如果这次重置不是您本人申请的，请立即联系平台。
+
+平台工作人员不会向您索取登录密码，也不会索取验证器上的动态码。

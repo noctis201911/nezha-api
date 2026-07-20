@@ -64,7 +64,7 @@
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link text-dark" href="{{ route('merchant.2fa.setup') }}">
-                                    <i class="tio-security nav-icon"></i> Two-factor authentication
+                                    <i class="tio-security nav-icon"></i> {{ translate('messages.two_factor_authentication') }}
                                 </a>
                             </li>
                         </ul>
@@ -176,18 +176,18 @@
                 </form>
 
                 <div class="card mb-3 mb-lg-5">
-                    <div class="card-header"><h4 class="card-title">Two-factor authentication</h4></div>
+                    <div class="card-header"><h4 class="card-title">{{ translate('messages.two_factor_authentication') }}</h4></div>
                     <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
                         @php($merchantTwoFactorEnabled = (bool) (auth('vendor')->user()?->two_factor_enabled ?? auth('vendor_employee')->user()?->two_factor_enabled))
                         <p class="mb-0 text-muted">
                             @if ($merchantTwoFactorEnabled)
-                                Two-factor authentication is active. Manage your authenticator and one-time recovery codes.
+                                {{ translate('messages.two_factor_is_active_desc') }}
                             @else
-                                Optional: add an authenticator code after your password for stronger account protection.
+                                {{ translate('messages.two_factor_optional_desc') }}
                             @endif
-                            Security changes revoke other Web sessions and App tokens.
+                            {{ translate('messages.security_changes_revoke_sessions_desc') }}
                         </p>
-                        <a class="btn btn-outline-primary" href="{{ route('merchant.2fa.setup') }}">{{ $merchantTwoFactorEnabled ? 'Manage two-factor authentication' : 'Enable two-factor authentication' }}</a>
+                        <a class="btn btn-outline-primary" href="{{ route('merchant.2fa.setup') }}">{{ $merchantTwoFactorEnabled ? translate('messages.manage_two_factor_authentication') : translate('messages.enable_two_factor_authentication') }}</a>
                     </div>
                 </div>
 
