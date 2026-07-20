@@ -131,12 +131,25 @@ for SD in nezha.am api.nezha.am; do
 done
 
 # 无异常 → 静默退出
-# 8. 制裁名单(OFAC SDN)同步新鲜度: status!=ok 或 >30h 未成功 -> 筛查在用陈旧名单(对称于第6类备份告警, 补合规告警不对称缺口)
-SANC=$(cd /www/wwwroot/api-deploy/current 2>/dev/null && php artisan tinker --execute='$j=json_decode(DB::table("business_settings")->where("key","nezha_sanction_last_sync")->value("value"),true); if(!$j){echo "NEVER";} elseif(($j["status"]??"")!=="ok"){echo "BADSTATUS:".($j["status"]??"unknown");} else{$a=(time()-strtotime($j["at"]??"2000-01-01"))/3600; if($a>30){echo "STALE:".round($a);}}' 2>/dev/null | tail -1 | tr -d "[:space:]")
+# 8. 制裁名单(OFAC SDN)同步新鲜度: 失败或陈旧 -> 筛查在用陈旧名单(对称于第6类备份告警, 补合规告警不对称缺口)
+#    〔2026-07-20 修正〕原逻辑用 last_sync.at 判陈旧, 但该字段每次跑都会刷新(失败也写),
+#    连续失败时天数永远升不上去、只会停在同一档反复报。改用 nezha_sanction_addresses.last_seen_sync
+#    的最大值 —— 只有真正 upsert 成功才更新, 是唯一可信的"上次成功同步"时间。
+SANC=$(cd /www/wwwroot/api-deploy/current 2>/dev/null && php artisan tinker --execute='$j=json_decode(DB::table("business_settings")->where("key","nezha_sanction_last_sync")->value("value"),true); $ok=DB::table("nezha_sanction_addresses")->max("last_seen_sync"); if(!$ok){echo "NEVER";} else {$h=(int)round((time()-strtotime($ok))/3600); $st=$j["status"]??"unknown"; $r=($st==="ok"&&$h<=30)?"OK":("BAD:".$st.":".$h); echo $r;}' 2>/dev/null | tail -1 | tr -d "[:space:]")
 case "$SANC" in
-  NEVER) add "制裁名单(OFAC SDN)从未成功同步 — 筛查可能在用空/陈旧名单(违 L1 制裁拦截)" "sanction" ;;
-  BADSTATUS:*) add "制裁名单最近一次同步失败(status=${SANC#BADSTATUS:}) — 筛查在用陈旧名单, 新增制裁地址可能漏拦" "sanction" ;;
-  STALE:*) add "制裁名单已 ${SANC#STALE:}h 未成功同步(>30h) — OFAC SDN 更新停滞, 筛查在用陈旧名单" "sanction" ;;
+  NEVER)
+    add "制裁名单(OFAC SDN)从未成功同步 — 筛查可能在用空名单(违 L1-6 制裁拦截)" "sanction-3d" ;;
+  BAD:*)
+    SST=$(printf '%s' "$SANC" | cut -d: -f2)
+    SH=$(printf '%s' "$SANC" | cut -d: -f3)
+    # 按"距上次成功同步"的小时数分档。档位变化 = 类别名变化 = 指纹变化 → 立即另发升级邮件, 不被冷却压住。
+    if   [ "${SH:-0}" -gt 78 ]; then
+      add "🔴 制裁名单已 ${SH}h(>3天) 未成功同步(最近一次 status=$SST) — 名单严重陈旧, 新增制裁地址在漏拦, 需人工介入" "sanction-3d"
+    elif [ "${SH:-0}" -gt 54 ]; then
+      add "制裁名单已 ${SH}h(>2天) 未成功同步(最近一次 status=$SST) — 连续失败, 请检查 OFAC 取数链路" "sanction-2d"
+    else
+      add "制裁名单最近一次同步失败(status=$SST, 距上次成功 ${SH}h) — 筛查在用陈旧名单, 新增制裁地址可能漏拦" "sanction"
+    fi ;;
 esac
 
 # 9. 前端 build 运行期漂移哨兵 (0711 退版事故: pm2 从旧 dump/resurrect 顶回旧 build, 部署时健康门管不到; 只告警不自愈)
@@ -157,12 +170,19 @@ exec 8>&-
 
 [ -z "$ALERTS" ] && exit 0
 
-# 冷却: 按"告警类别集合"做指纹, 同一组问题1小时内只发一封; 出现新类别立即另发
+# 冷却: 按"告警类别集合"做指纹, 同一组问题默认1小时内只发一封; 出现新类别立即另发。
+# 〔2026-07-20〕制裁名单同步是每日一次的任务, 每小时重复报同一件事没有新信息, 只会造成告警疲劳
+# (当天连收 8 封同文邮件)。故【纯制裁类】告警单独给 24h 冷却 = 每天最多一封;
+# 与其它类混合出现时仍走默认 1h(其它类需要快报)。严重度升档会换类别名 → 指纹变 → 立即另发, 不受此冷却压制。
+CD=$COOLDOWN
+case "${CATS%,}" in
+  sanction|sanction-2d|sanction-3d) CD=86400 ;;
+esac
 FP=$(printf '%s' "$CATS" | md5sum | cut -c1-12)
 SF="$STATE_DIR/last_$FP"
 NOW=$(date +%s)
 LAST=0; [ -f "$SF" ] && LAST=$(cat "$SF" 2>/dev/null || echo 0)
-[ $((NOW-LAST)) -lt "$COOLDOWN" ] && exit 0
+[ $((NOW-LAST)) -lt "$CD" ] && exit 0
 echo "$NOW" > "$SF"
 
 BODY="哪吒服务器看门狗告警  ($HOSTN  $(date '+%F %T'))

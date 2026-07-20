@@ -325,28 +325,59 @@ class SyncSanctionList extends Command
         Helpers::businessUpdateOrInsert(['key' => self::STATUS_KEY], ['value' => json_encode($payload, JSON_UNESCAPED_UNICODE)]);
     }
 
-    /** PHP 原生 curl 取文本(不依赖 guzzle)。失败返回 null 并填 lastError。 */
+    /**
+     * PHP 原生 curl 取文本(不依赖 guzzle)。失败返回 null 并填 lastError。
+     *
+     * 〔2026-07-20 修复 · SDN.XML 拉取长期失败〕
+     * 现象: 2026-07-20 起每日同步 status=skipped「取数失败: timed out ... 1809401 out of 28733475 bytes」。
+     * 实测(生产, 8 次采样): SDN.XML 恒为 28.7MB 无压缩(OFAC 不返回 Content-Encoding: gzip),
+     *   命中 CDN 边缘缓存时 ~4.5s 下完; 未命中时只有 26~112 KB/s, 200s 下 5.2MB / 600s 下 17MB —— 下不完。
+     *   → 根因是【源站连接不稳定】, 不是超时值设小了; 单纯放大 TIMEOUT 仍会经常失败。
+     * 对策: 低速即断 + 重试。慢连接 30s 内没跑够 50KB/s 就放弃, 隔 30s 重来赌下一次命中缓存。
+     *   单次失败率实测 ~37% → 4 次全失败 ≈ 2%; 最坏耗时约 12 分钟(每日凌晨后台任务, 可接受)。
+     * 注: ENCODING 保留 gzip 是无害的前向声明(源站当前不支持, 将来支持则自动受益)。
+     */
+    private const FETCH_ATTEMPTS   = 4;     // 总尝试次数
+    private const FETCH_RETRY_WAIT = 30;    // 两次尝试之间等待秒数
+
     private function fetch(string $url): ?string
     {
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_TIMEOUT        => 60,
-            CURLOPT_CONNECTTIMEOUT => 15,
-            CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_SSL_VERIFYHOST => 2,
-            CURLOPT_USERAGENT      => 'nezha-sanction-sync/1.0',
-        ]);
-        $body = curl_exec($ch);
-        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $err  = curl_error($ch);
-        curl_close($ch);
+        $errors = [];
 
-        if ($body === false || $code !== 200) {
-            $this->lastError = $err !== '' ? $err : ('HTTP ' . $code);
-            return null;
+        for ($attempt = 1; $attempt <= self::FETCH_ATTEMPTS; $attempt++) {
+            if ($attempt > 1) {
+                sleep(self::FETCH_RETRY_WAIT);
+            }
+
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER  => true,
+                CURLOPT_FOLLOWLOCATION  => true,
+                CURLOPT_ENCODING        => 'gzip',
+                CURLOPT_TIMEOUT         => 180,
+                CURLOPT_CONNECTTIMEOUT  => 15,
+                CURLOPT_LOW_SPEED_LIMIT => 51200,   // 低于 50KB/s
+                CURLOPT_LOW_SPEED_TIME  => 30,      // 持续 30s → 判定慢连接, 早断早重试
+                CURLOPT_SSL_VERIFYPEER  => true,
+                CURLOPT_SSL_VERIFYHOST  => 2,
+                CURLOPT_USERAGENT       => 'nezha-sanction-sync/1.0',
+            ]);
+            $body = curl_exec($ch);
+            $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $err  = curl_error($ch);
+            curl_close($ch);
+
+            if ($body !== false && $code === 200) {
+                if ($attempt > 1) {
+                    Log::info("[nezha-sanction] 取数第 {$attempt} 次尝试成功(前 " . ($attempt - 1) . ' 次失败: ' . implode(' | ', $errors) . ')');
+                }
+                return (string) $body;
+            }
+
+            $errors[] = "第{$attempt}次: " . ($err !== '' ? $err : ('HTTP ' . $code));
         }
-        return (string) $body;
+
+        $this->lastError = self::FETCH_ATTEMPTS . ' 次尝试均失败 — ' . implode(' | ', $errors);
+        return null;
     }
 }
