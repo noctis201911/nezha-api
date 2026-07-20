@@ -289,6 +289,11 @@ final class IsolatedDatabaseFixtures
                 $table->string('nezha_notify_email')->nullable();
                 $table->string('telegram_chat_id')->nullable();
                 $table->boolean('timeout_notify_telegram')->default(true);
+                $table->boolean('new_order_repeat_enabled')->default(false);
+                $table->unsignedSmallInteger('new_order_repeat_interval_sec')->default(20);
+                $table->unsignedSmallInteger('new_order_repeat_max_minutes')->default(5);
+                $table->boolean('new_order_repeat_scope_accept')->default(true);
+                $table->boolean('new_order_repeat_scope_payment')->default(false);
                 $table->timestamps();
             });
         }
@@ -446,6 +451,20 @@ final class IsolatedDatabaseFixtures
                 $table->text('detail')->nullable();
                 $table->timestamps();
                 $table->unique(['order_id', 'action'], 'nezha_oto_order_action_uq');
+            });
+        }
+
+        if (! $schema->hasTable('nezha_notification_log')) {
+            $schema->create('nezha_notification_log', function (Blueprint $table): void {
+                $table->id();
+                $table->string('channel', 16);
+                $table->string('target', 16);
+                $table->string('event_type', 40);
+                $table->string('outcome', 16);
+                $table->unsignedBigInteger('order_id')->nullable()->index();
+                $table->unsignedBigInteger('restaurant_id')->nullable()->index();
+                $table->string('detail', 255)->nullable();
+                $table->timestamps();
             });
         }
 

@@ -14,8 +14,9 @@ use Tests\TestCase;
 /**
  * 哪吒 #14 — Telegram 入站 webhook「发语音」分支测试(v3.3)。
  *
- * 🔴 安全: 本仓 phpunit.xml 未启用独立测试库, 仍连生产 MySQL。
- *   只用 DatabaseTransactions(事务回滚, 绝不 RefreshDatabase=清库); 造店随事务回滚, 零残留。
+ * 🔴 安全: phpunit.xml 已强制 DB_CONNECTION=sqlite / DB_DATABASE=:memory:, 本组用例**不碰任何生产库**。
+ *   建表走 Tests\Support\IsolatedDatabaseFixtures; 仍保留 DatabaseTransactions 保证造店零残留。
+ *   (旧注曾称「仍连生产 MySQL」, 随内存库切换已失效, 2026-07-20 更正。)
  *   Http::fake 拦截 api.telegram.org → 零真实网络。Config::set('<key>_conf'=['value'=>..]) 注入
  *   secret/token 走 get_business_settings 的 Config 缝(绕 DB/静态缓存, 可靠且随测试回滚)。
  *   限流键 nz_voice_file_* 走 Cache(不随事务回滚), 每例前后 forget 防跨例污染。

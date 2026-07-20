@@ -7,6 +7,7 @@ use Carbon\Carbon;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -14,11 +15,11 @@ use Tests\TestCase;
 /**
  * 哪吒 — 新单「反复提醒商家接单」(方案 B) 测试。
  *
- * 🔴 安全: 本仓 phpunit.xml 未启用独立测试库, 仍连生产 MySQL。
- *   只用 DatabaseTransactions(事务回滚, 绝不 RefreshDatabase=清库); 造店/单随事务回滚, 零残留。
+ * 🔴 安全: phpunit.xml 已强制 DB_CONNECTION=sqlite / DB_DATABASE=:memory:, 本组用例**不碰任何生产库**。
+ *   建表走 Tests\Support\IsolatedDatabaseFixtures(含 new_order_repeat_* 5 列与 nezha_notification_log)。
+ *   仍保留 DatabaseTransactions: 同进程内存库跨用例复用, 事务回滚保证造店/单零残留。
  *   telegram_bot_token='' + 同步模式 → sendTelegramToRestaurant 无 token 返 false, 零真实网络。
- *   迁移 5 列在 MySQL 是 DDL(隐式提交, 事务回滚不掉)故绝不在测试内加列:
- *   依赖新列的命令 E2E 用 markTestSkipped 守(部署 migrate 后本组用例自动生效)。
+ *   (旧注曾称「仍连生产 MySQL / 新列须等 migrate」, 随内存库切换已失效, 2026-07-20 更正。)
  *
  * 覆盖: 纯判定 shouldNagNow / scope 口径(confirmed 桶含与排除) / 命令 E2E(总闸关 no-op·催+节流·未勾类别不催)。
  */
@@ -37,6 +38,13 @@ class NezhaNewOrderNagSweepTest extends TestCase
         $this->vendorId = (int) (DB::table('vendors')->value('id') ?: 1);
     }
 
+    /**
+     * 🔴 只写 DB 不够: Helpers::get_business_settings 里的 static $allSettings 是**进程级**静态,
+     * 被本进程首次读取锁死 -> 同类内先跑的用例(如总闸=0 那条)会把旧值带给后跑的用例, 造成
+     * 「单独跑绿、连跑红」。故同时走 Config 缝 <key>_conf(get_business_settings 首先判断它,
+     * 且 Config 每个用例由 TestCase 重建, 天然随用例隔离) —— 与 NezhaVoiceSampleWebhookTest 同法。
+     * DB 写保留: 供绕过 helper 直接查 business_settings 的代码路径。
+     */
     private function setSetting(string $key, $value): void
     {
         if (DB::table('business_settings')->where('key', $key)->exists()) {
@@ -44,6 +52,8 @@ class NezhaNewOrderNagSweepTest extends TestCase
         } else {
             DB::table('business_settings')->insert(['key' => $key, 'value' => $value, 'created_at' => now(), 'updated_at' => now()]);
         }
+
+        Config::set($key . '_conf', ['value' => $value]);
     }
 
     private function mkRestaurant(array $extra = []): int
@@ -113,7 +123,7 @@ class NezhaNewOrderNagSweepTest extends TestCase
     private function skipIfNoColumns(): void
     {
         if (! Schema::hasColumn('restaurants', 'new_order_repeat_enabled')) {
-            $this->markTestSkipped('new_order_repeat_* 列尚未迁移(部署 migrate 后本用例自动生效)');
+            $this->markTestSkipped('new_order_repeat_* 列缺失: 请在 IsolatedDatabaseFixtures 的 restaurants 表补齐');
         }
     }
 
