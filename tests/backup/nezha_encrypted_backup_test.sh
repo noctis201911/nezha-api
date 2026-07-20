@@ -19,9 +19,20 @@ make_case(){
     local name="$1" root="$TMP/$1" bin="$TMP/$1/bin"
     local app="$TMP/$1/app" out="$TMP/$1/out" key="$TMP/$1/backup.key"
     local script="$TMP/$1/nezha-encrypted-backup.sh"
+    local data="$TMP/$1/data" helper="$TMP/$1/nzwatch_mail.py"
 
-    mkdir -p "$bin" "$app" "$out"
+    mkdir -p "$bin" "$app" "$out" "$data/storage/app"
     printf 'test-key\n' > "$key"
+    # 文件备份段的取材来源($DATA): storage/app 实体 + .env 实体
+    printf 'uploaded-artifact\n' > "$data/storage/app/uploaded.bin"
+    cat > "$data/.env" <<'ENVSTUB'
+MAIL_HOST=smtp.invalid
+MAIL_PORT=587
+MAIL_USERNAME=alert@invalid
+MAIL_PASSWORD=SUPER_SECRET_MAIL_PASSWORD
+MAIL_FROM_ADDRESS=alert@invalid
+ENVSTUB
+    printf '# sandbox mail helper placeholder\n' > "$helper"
 
 cat > "$bin/php" <<'STUB'
 #!/usr/bin/env bash
@@ -131,6 +142,38 @@ fi
 exec /usr/bin/rm "$@"
 STUB
 
+    cat > "$bin/tar" <<'STUB'
+#!/usr/bin/env bash
+if [ "${NZ_TAR_FAIL:-0}" = 1 ]; then
+    printf 'tar: injected archive failure\n' >&2
+    exit 2
+fi
+exec /usr/bin/tar "$@"
+STUB
+
+    # rclone/python3 的调用日志路径必须写死进 stub: 生产脚本用绝对路径调它们,
+    # 测试无法靠 PATH 拦截, 只能靠 make_case 的 sed 把 RCLONE_BIN/MAIL_HELPER 钉进沙箱。
+    cat > "$bin/rclone" <<STUB
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$root/rclone.calls"
+for arg in "\$@"; do
+    if [ "\$arg" = 'copy' ]; then
+        if [ "\${NZ_RCLONE_FAIL:-0}" = 1 ]; then
+            printf 'rclone: injected offsite failure\n' >&2
+            exit 7
+        fi
+    fi
+done
+exit 0
+STUB
+
+    cat > "$bin/python3" <<STUB
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$root/python3.calls"
+[ -z "\${NZ_MAIL_ENV_LOG:-}" ] || printf 'to=%s subj=%s user=%s\n' "\${NZ_TO:-}" "\${NZ_SUBJ:-}" "\${NZ_USER:-}" >> "\$NZ_MAIL_ENV_LOG"
+exit 0
+STUB
+
 cat > "$bin/openssl" <<'STUB'
 #!/usr/bin/env bash
 out=''
@@ -159,18 +202,30 @@ if [ -n "${NZ_OPENSSL_FINISH_DELAY:-}" ]; then
 fi
 STUB
 
-    chmod +x "$bin/php" "$bin/mysqldump" "$bin/date" "$bin/flock" "$bin/gzip" "$bin/chmod" "$bin/stat" "$bin/sort" "$bin/rm" "$bin/openssl"
+    chmod +x "$bin/php" "$bin/mysqldump" "$bin/date" "$bin/flock" "$bin/gzip" "$bin/chmod" "$bin/stat" "$bin/sort" "$bin/rm" "$bin/openssl" "$bin/tar" "$bin/rclone" "$bin/python3"
     sed \
         -e "s#^APP=.*#APP=$app#" \
+        -e "s#^DATA=.*#DATA=$data#" \
         -e "s#^PHP=.*#PHP=$bin/php#" \
         -e "s#^KEY=.*#KEY=$key#" \
         -e "s#^OUTDIR=.*#OUTDIR=$out#" \
+        -e "s#^RCLONE_BIN=.*#RCLONE_BIN=$bin/rclone#" \
+        -e "s#^MAIL_HELPER=.*#MAIL_HELPER=$helper#" \
+        -e "s#^SENTINEL=.*#SENTINEL=$root/offsite_last_ok#" \
+        -e "s#^PERR=.*#PERR=$root/r2push.err#" \
         "$SOURCE" > "$script"
     chmod +x "$script"
 
     if grep -Eq '/www/wwwroot|/www/backup|/root/\.nezha' "$script"; then
         fail "$name sandbox script still contains a production path"
     fi
+    # rclone/mail helper 走绝对路径,PATH stub 拦不住 —— 必须确认沙箱脚本已被钉走,
+    # 否则任何一个用例都可能把沙箱垃圾推上生产 R2 或真发告警邮件。
+    if grep -Eq '/usr/local/bin/rclone|nzwatch_mail\.py' "$script" && ! grep -Fq "$bin/rclone" "$script"; then
+        fail "$name sandbox script still points at the production rclone binary"
+    fi
+    grep -Fq "MAIL_HELPER=$helper" "$script" || fail "$name sandbox script still points at the production mail helper"
+    grep -Fq "SENTINEL=$root/offsite_last_ok" "$script" || fail "$name sandbox script still points at the production offsite sentinel"
 
     printf '%s\n' "$root"
 }
@@ -210,6 +265,11 @@ test_utf8mb4_dump_contract(){
     grep -Fxq -- '--default-character-set=utf8mb4' "$args" || {
         sed -n '1,120p' "$output" >&2
         fail 'mysqldump did not request utf8mb4 explicitly'
+    }
+    # --master-data=2 是 README-RESTORE §E 的 PITR 锚点(CHANGE MASTER 注释行), 丢了=时间点恢复断锚
+    grep -Fxq -- '--master-data=2' "$args" || {
+        sed -n '1,120p' "$output" >&2
+        fail 'mysqldump did not request the binlog PITR anchor (--master-data=2)'
     }
     grep -Fxq -- '-hdb.internal' "$args" || fail 'database host was not passed through'
     grep -Fxq -- '-P3307' "$args" || fail 'database port was not passed through'
@@ -273,13 +333,15 @@ test_success_is_published_atomically_once(){
     [ "${#finals[@]}" -eq 1 ] || fail "expected exactly one final artifact, found ${#finals[@]}"
     final=${finals[0]}
     [ -s "$final" ] || fail 'final artifact is empty'
-    temp_target=$(cat "$out_log")
+    # 合流后一轮产两件(DB + files),openssl 收到两个输出目标; 第一个必须是 DB 临时件。
+    temp_target=$(head -1 "$out_log")
     grep -Fxq $'600\t'"$temp_target" "$chmod_log" || fail 'unique temporary artifact did not receive chmod 600 before publication'
-    success_count=$(grep -Fc 'backup ok:' "$output")
-    [ "$success_count" -eq 1 ] || fail "expected one success marker, found $success_count"
+    success_count=$(grep -Fc 'db backup ok:' "$output")
+    [ "$success_count" -eq 1 ] || fail "expected one database success marker, found $success_count"
     ! grep -Fq 'SUPER_SECRET_BACKUP_PASSWORD' "$output" || fail 'database password leaked to output'
     ! grep -Fq 'SUPER_SECRET_BACKUP_PASSWORD' "$args" || fail 'database password leaked to mysqldump arguments'
-    [ "$(wc -l < "$out_log" | tr -d ' ')" -eq 1 ] || fail 'openssl received more than one output target'
+    ! grep -Fq 'SUPER_SECRET_MAIL_PASSWORD' "$output" || fail 'mail credentials leaked to output'
+    [ "$(wc -l < "$out_log" | tr -d ' ')" -eq 2 ] || fail 'openssl did not receive exactly the database and files output targets'
     echo '[backup-test] PASS atomic single publication'
 }
 
@@ -456,7 +518,9 @@ test_unlock_failure_keeps_committed_artifact(){
     [ "$new_count" -eq 1 ] || fail "unlock failure kept $new_count committed new artifacts, expected 1"
     [ ! -f "$root/out/testdb-20260101000001-A00001.sql.gz.enc" ] || fail 'unlock failure did not preserve completed retention pruning'
     [ -f "$root/out/testdb-20260101000002-A00002.sql.gz.enc" ] || fail 'unlock failure pruned more than the oldest managed backup'
-    ! grep -Fq 'backup ok:' "$output" || fail 'unlock failure printed a success marker'
+    # 合流后 db/files 的 ok 行按现役版顺序落在 R2 段之前(锁释放在最后),
+    # 故此处不再断言"无 ok 行", 改断言: 唯一失败点是解锁, 且它没有被伪装成整轮成功。
+    grep -Fq 'R2 offsite push ok' "$output" || fail 'unlock failure test did not reach the offsite stage as expected'
     grep -Fq 'cannot release backup lock' "$output" || fail 'unlock failure did not emit an operator-visible error'
     echo "[backup-test] PASS unlock failure preserves committed artifact rc=$rc"
 }
@@ -817,8 +881,134 @@ test_sigkill_releases_lock_and_next_run_succeeds(){
     [ "$finals" -eq 1 ] || fail "run after SIGKILL left $finals final artifacts, expected 1"
     [ "$temps" -eq 0 ] || fail "run after SIGKILL left $temps orphan temporary artifacts"
     [ ! -d "$root/flock-state" ] || fail 'run after SIGKILL left an active lock state'
-    [ "$(grep -Fc 'backup ok:' "$output2")" -eq 1 ] || fail 'run after SIGKILL did not report exactly one success'
+    [ "$(grep -Fc 'db backup ok:' "$output2")" -eq 1 ] || fail 'run after SIGKILL did not report exactly one success'
     echo "[backup-test] PASS SIGKILL releases lock and next run succeeds rc=$rc1/$rc2"
+}
+
+files_artifacts(){
+    find "$1" -maxdepth 1 -type f -name 'nezha-files-*.tar.gz.enc'
+}
+
+test_files_and_offsite_stages_complete_a_full_round(){
+    local root args output farchive listing sentinel calls
+    root=$(make_case files-offsite-success)
+    args="$root/mysqldump.args"
+    output="$root/output.log"
+
+    NZ_MYSQLDUMP_ARGS="$args" NZ_DATE_TIMESTAMP=20990101010101 PATH="$root/bin:$PATH" \
+        bash "$root/nezha-encrypted-backup.sh" > "$output" 2>&1
+
+    mapfile -t listing < <(files_artifacts "$root/out")
+    [ "${#listing[@]}" -eq 1 ] || fail "full round produced ${#listing[@]} files archives, expected 1"
+    farchive=${listing[0]}
+    [[ "${farchive##*/}" =~ ^nezha-files-[0-9]{14}-[A-Za-z0-9]{6}\.tar\.gz\.enc$ ]] || fail "files archive name is not in the tokenised format: ${farchive##*/}"
+    [ -s "$farchive" ] || fail 'files archive is empty'
+    [ "$(stat -c%a -- "$farchive")" = '600' ] || fail 'files archive was published without 600 permissions'
+    [ "$(find "$root/out" -maxdepth 1 -type f -name '*.sql.gz.enc' | wc -l | tr -d ' ')" -eq 1 ] || fail 'full round did not publish exactly one database artifact'
+
+    # 归档实际内容必须同时含 storage/app 实体与 .env(换新机重建的两个必需项)。
+    # 剥掉 openssl stub 的首行标记后用 tar -tf(自动识别): 沙箱 gzip stub 是直通不真压缩,
+    # 所以这里不能写死 -tzf。
+    tail -n +2 -- "$farchive" | tar -tf - > "$root/archive.listing" 2>/dev/null || fail 'files archive is not a readable tar payload'
+    grep -Fq 'storage/app/uploaded.bin' "$root/archive.listing" || fail 'files archive does not contain the storage/app payload'
+    grep -Fxq '.env' "$root/archive.listing" || fail 'files archive does not contain the .env secret bundle'
+
+    grep -Fq 'files backup ok:' "$output" || fail 'full round did not log the files success line'
+    grep -Fq 'db backup ok:' "$output" || fail 'full round did not log the database success line'
+    grep -Fq 'R2 offsite push ok' "$output" || fail 'full round did not log the offsite success line'
+    ! grep -Fq 'FAILED' "$output" || fail 'full round logged a failure line'
+
+    calls="$root/rclone.calls"
+    [ -f "$calls" ] || fail 'offsite stage never invoked rclone'
+    grep -Fq -- '--bind 178.105.216.158 copy' "$calls" || fail 'offsite copy did not bind the whitelisted IPv4 source address'
+    grep -Fq -- 'delete --min-age 30d' "$calls" || fail 'offsite stage did not run the 30d remote prune'
+    sentinel="$root/offsite_last_ok"
+    [ -s "$sentinel" ] || fail 'offsite sentinel was not refreshed'
+    [[ "$(cat "$sentinel")" =~ ^[0-9]+$ ]] || fail 'offsite sentinel does not hold an epoch timestamp'
+    [ ! -f "$root/python3.calls" ] || fail 'a successful round sent an alert mail'
+    echo '[backup-test] PASS files + offsite stages complete a full round'
+}
+
+test_files_failure_keeps_database_artifact_and_continues(){
+    local root args output rc
+    root=$(make_case files-failure)
+    args="$root/mysqldump.args"
+    output="$root/output.log"
+
+    set +e
+    NZ_MYSQLDUMP_ARGS="$args" NZ_TAR_FAIL=1 NZ_DATE_TIMESTAMP=20990101010101 PATH="$root/bin:$PATH" \
+        bash "$root/nezha-encrypted-backup.sh" > "$output" 2>&1
+    rc=$?
+    set -e
+
+    [ "$rc" -eq 0 ] || { sed -n '1,120p' "$output" >&2; fail "files failure aborted the round (exit $rc); it must log and continue"; }
+    [ "$(files_artifacts "$root/out" | wc -l | tr -d ' ')" -eq 0 ] || fail 'files failure published a files archive anyway'
+    [ "$(find "$root/out" -maxdepth 1 -type f -name '.nezha-files-*.tmp.*' | wc -l | tr -d ' ')" -eq 0 ] || fail 'files failure left a temporary archive behind'
+    [ "$(find "$root/out" -maxdepth 1 -type f -name '*.sql.gz.enc' | wc -l | tr -d ' ')" -eq 1 ] || fail 'files failure discarded the already verified database artifact'
+    grep -Fq 'FILES BACKUP FAILED' "$output" || fail 'files failure was not logged in the grep-stable format'
+    grep -Fq 'db backup ok:' "$output" || fail 'files failure suppressed the database success line'
+    grep -Fq 'R2 offsite push ok' "$output" || fail 'files failure prevented the offsite push of the database artifact'
+    echo "[backup-test] PASS files failure keeps the database artifact and continues rc=$rc"
+}
+
+test_offsite_failure_alerts_and_exits_nonzero(){
+    local root args output rc mail_env
+    root=$(make_case offsite-failure)
+    args="$root/mysqldump.args"
+    output="$root/output.log"
+    mail_env="$root/mail.env"
+
+    set +e
+    NZ_MYSQLDUMP_ARGS="$args" NZ_RCLONE_FAIL=1 NZ_MAIL_ENV_LOG="$mail_env" NZ_DATE_TIMESTAMP=20990101010101 \
+        PATH="$root/bin:$PATH" bash "$root/nezha-encrypted-backup.sh" > "$output" 2>&1
+    rc=$?
+    set -e
+
+    [ "$rc" -ne 0 ] || fail 'offsite failure unexpectedly reported success'
+    grep -Fq 'R2 OFFSITE PUSH FAILED' "$output" || fail 'offsite failure was not logged in the grep-stable format'
+    grep -Fq 'BACKUP POST-COMMIT WARNING:' "$output" || fail 'offsite failure did not identify the post-commit warning state'
+    grep -Fq 'verified artifact kept:' "$output" || fail 'offsite failure did not report that the local artifacts were kept'
+    [ -s "$root/python3.calls" ] || fail 'offsite failure did not invoke the alert mail helper'
+    [ -s "$mail_env" ] || fail 'alert mail helper received no envelope'
+    grep -Fq 'to=noctis201911@gmail.com' "$mail_env" || fail 'alert mail was not addressed to the operator'
+    ! grep -Fq 'SUPER_SECRET_MAIL_PASSWORD' "$output" || fail 'alert path leaked the SMTP password to the log'
+    [ ! -e "$root/offsite_last_ok" ] || fail 'offsite failure still refreshed the sentinel'
+    [ -s "$root/r2push.err" ] || fail 'offsite failure did not capture rclone stderr for triage'
+    [ "$(find "$root/out" -maxdepth 1 -type f -name '*.sql.gz.enc' | wc -l | tr -d ' ')" -eq 1 ] || fail 'offsite failure discarded the database artifact'
+    [ "$(files_artifacts "$root/out" | wc -l | tr -d ' ')" -eq 1 ] || fail 'offsite failure discarded the files archive'
+    echo "[backup-test] PASS offsite failure alerts and exits nonzero rc=$rc"
+}
+
+test_files_retention_prunes_only_whitelisted_excess(){
+    local root args output i stamp token managed_count
+    root=$(make_case files-retention)
+    args="$root/mysqldump.args"
+    output="$root/output.log"
+
+    for ((i = 1; i <= 13; i++)); do
+        printf -v stamp '202601010000%02d' "$i"
+        printf -v token 'A%05d' "$i"
+        printf 'managed-%s\n' "$i" > "$root/out/nezha-files-${stamp}-${token}.tar.gz.enc"
+    done
+    # 存量旧格式(无 token)必须同样被滚动管理, 否则老件永远不被清理
+    printf 'legacy\n' > "$root/out/nezha-files-20260102000000.tar.gz.enc"
+    # 非白名单件(人工留证/外部件)绝不能被误删
+    printf 'external evidence\n' > "$root/out/nezha-files-manual-evidence.tar.gz.enc"
+    printf 'unrelated\n' > "$root/out/unrelated-archive.tar.gz.enc"
+
+    NZ_MYSQLDUMP_ARGS="$args" NZ_DATE_TIMESTAMP=20990101010101 PATH="$root/bin:$PATH" \
+        bash "$root/nezha-encrypted-backup.sh" > "$output" 2>&1
+
+    managed_count=$(find "$root/out" -maxdepth 1 -type f \
+        \( -name 'nezha-files-??????????????-??????.tar.gz.enc' -o -name 'nezha-files-??????????????.tar.gz.enc' \) | wc -l | tr -d ' ')
+    [ "$managed_count" -eq 14 ] || fail "files retention left $managed_count managed archives, expected 14"
+    [ ! -f "$root/out/nezha-files-20260101000001-A00001.tar.gz.enc" ] || fail 'files retention did not prune the oldest managed archive'
+    [ -f "$root/out/nezha-files-20260101000002-A00002.tar.gz.enc" ] || fail 'files retention pruned more than the oldest managed archive'
+    [ -f "$root/out/nezha-files-20260102000000.tar.gz.enc" ] || fail 'files retention deleted a legacy-format archive that was still within the retention window'
+    [ -f "$root/out/nezha-files-manual-evidence.tar.gz.enc" ] || fail 'files retention deleted a non-whitelisted external archive'
+    [ -f "$root/out/unrelated-archive.tar.gz.enc" ] || fail 'files retention deleted an unrelated archive'
+    [ "$(find "$root/out" -maxdepth 1 -type f -name 'nezha-files-20990101010101-??????.tar.gz.enc' | wc -l | tr -d ' ')" -eq 1 ] || fail 'files retention deleted the archive produced by the current round'
+    echo '[backup-test] PASS files retention prunes only whitelisted excess'
 }
 
 test_auto_detected_non_util_linux_flock_is_skipped
@@ -843,4 +1033,8 @@ test_kernel_lock_is_held_by_surviving_pipeline_after_parent_sigkill
 test_real_util_linux_flock_is_held_by_surviving_pipeline_after_parent_sigkill
 test_missing_flock_fails_closed
 test_sigkill_releases_lock_and_next_run_succeeds
+test_files_and_offsite_stages_complete_a_full_round
+test_files_failure_keeps_database_artifact_and_continues
+test_offsite_failure_alerts_and_exits_nonzero
+test_files_retention_prunes_only_whitelisted_excess
 echo '[backup-test] ALL PASS'

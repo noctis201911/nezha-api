@@ -1,13 +1,23 @@
 #!/bin/bash
 set -uo pipefail
 APP=/www/wwwroot/api.nezha.am
+DATA=${DATA:-/www/wwwroot/api-deploy/shared}
 PHP=/usr/bin/php
 KEY=/root/.nezha/backup.key
 OUTDIR=/www/backup/database/nezha-enc
 KEEP=14
 FLOCK_BIN=${FLOCK_BIN:-flock}
+RCLONE_BIN=${RCLONE_BIN:-/usr/local/bin/rclone}
+MAIL_HELPER=${MAIL_HELPER:-/www/wwwroot/api-deploy/current/nzwatch_mail.py}
+R2_REMOTE=${R2_REMOTE:-r2:nezha-backup/nezha-enc}
+R2_BIND=${R2_BIND:-178.105.216.158}
+SENTINEL=${SENTINEL:-/root/nezha-backup/offsite_last_ok}
+PERR=${PERR:-/root/nezha-backup/r2push.err}
+ALERT_TO=${ALERT_TO:-noctis201911@gmail.com}
 TMP=''
 OUT=''
+FTMP=''
+FOUT=''
 COMMITTED=0
 LOCK="$OUTDIR/.nezha-encrypted-backup.lock"
 LOCK_FD_OPEN=0
@@ -19,6 +29,9 @@ cleanup(){
     unset MYSQL_PWD
     if [ -n "$TMP" ]; then
         rm -f -- "$TMP" >/dev/null 2>&1 || true
+    fi
+    if [ -n "$FTMP" ]; then
+        rm -f -- "$FTMP" >/dev/null 2>&1 || true
     fi
     if [ "$LOCK_ACQUIRED" -eq 1 ]; then
         "$FLOCK_BIN" -u 9 >/dev/null 2>&1 || true
@@ -40,6 +53,15 @@ fail(){
 
 on_signal(){
     fail "interrupted by $2" "$1"
+}
+
+# 复用 nzwatch 邮件链路; SMTP 凭证运行时从 $DATA/.env 读, 脚本文本不含密码
+nezha_alert(){
+    local subj="$1" body="$2" ef="$DATA/.env"
+    g(){ grep -E "^$1=" "$ef" | head -1 | cut -d= -f2- | sed -E 's/^"//; s/"$//'; }
+    NZ_HOST="$(g MAIL_HOST)" NZ_PORT="$(g MAIL_PORT)" NZ_USER="$(g MAIL_USERNAME)" \
+    NZ_PASS="$(g MAIL_PASSWORD)" NZ_FROM="$(g MAIL_FROM_ADDRESS)" NZ_TO="$ALERT_TO" \
+    NZ_SUBJ="$subj" NZ_BODY="$body" python3 "$MAIL_HELPER" >/dev/null 2>&1
 }
 
 prune_old_backups(){
@@ -90,6 +112,55 @@ prune_old_backups(){
     [ "$deleted" -eq "$delete_count" ]
 }
 
+# 文件备份件的滚动清理: 白名单同时认旧格式(无 token, 存量件)与新格式(带 token)
+prune_old_files_backups(){
+    local file base rest stamp token sorted i delete_count deleted
+    local -a managed=()
+
+    shopt -s nullglob
+    for file in "$OUTDIR"/nezha-files-*.tar.gz.enc; do
+        base=${file##*/}
+        rest=${base#nezha-files-}
+        if [[ "$rest" =~ ^[0-9]{14}\.tar\.gz\.enc$ ]]; then
+            managed+=("$file")
+            continue
+        fi
+
+        stamp=${rest%%-*}
+        if [ "$stamp" = "$rest" ]; then
+            continue
+        fi
+        token=${rest#*-}
+        token=${token%.tar.gz.enc}
+        if [[ "$stamp" =~ ^[0-9]{14}$ ]] && [[ "$token" =~ ^[A-Za-z0-9]{6}$ ]]; then
+            managed+=("$file")
+        fi
+    done
+    shopt -u nullglob
+
+    if [ "${#managed[@]}" -le "$KEEP" ]; then
+        return 0
+    fi
+    if ! sorted=$(printf '%s\n' "${managed[@]}" | sort -r); then
+        return 1
+    fi
+    if ! mapfile -t managed <<< "$sorted"; then
+        return 1
+    fi
+    delete_count=$((${#managed[@]} - KEEP))
+    deleted=0
+    for ((i = ${#managed[@]} - 1; i >= 0 && deleted < delete_count; i--)); do
+        if [ "${managed[$i]}" = "$FOUT" ]; then
+            continue
+        fi
+        if ! rm -f -- "${managed[$i]}"; then
+            return 1
+        fi
+        deleted=$((deleted + 1))
+    done
+    [ "$deleted" -eq "$delete_count" ]
+}
+
 remove_orphaned_temp_files(){
     local file base rest stamp token
 
@@ -106,7 +177,67 @@ remove_orphaned_temp_files(){
             fi
         fi
     done
+    for file in "$OUTDIR"/.nezha-files-*.tmp.*; do
+        base=${file##*/}
+        rest=${base#.nezha-files-}
+        stamp=${rest%%.tmp.*}
+        token=${rest##*.tmp.}
+        if [[ "$stamp" =~ ^[0-9]{14}$ ]] && [[ "$token" =~ ^[A-Za-z0-9]{6}$ ]]; then
+            if ! rm -f -- "$file"; then
+                shopt -u nullglob
+                return 1
+            fi
+        fi
+    done
     shopt -u nullglob
+}
+
+# 文件备份(上传文件 storage/app + .env), 与 DB 件同一把钥匙加密.
+# storage/app 含商品/餐厅图、banner、会话附件、本地生活UGC、offline_payment 支付凭证(不在DB、不在git)
+# .env 含 DB 密码/Firebase/Google Maps Key/邮件凭证等 secret —— 换新机重建必需
+# 1a 部署边界改造后 storage/.env 实体在 $DATA, 工作树是软链, 故从 $DATA 取实体
+# 失败语义: 记日志 + 继续(绝不因文件段失败丢弃已验证发布的 DB 件)
+run_files_backup(){
+    local size
+    local -a pst
+    local trc frc
+
+    if ! FTMP=$(mktemp "$OUTDIR/.nezha-files-${TS}.tmp.XXXXXX"); then
+        FTMP=''
+        printf '[%s] FILES BACKUP FAILED: cannot create temporary archive\n' "$(date)"
+        return 1
+    fi
+    FOUT="$OUTDIR/nezha-files-${TS}-${FTMP##*.tmp.}.tar.gz.enc"
+    if [ -e "$FOUT" ]; then
+        printf '[%s] FILES BACKUP FAILED: archive destination already exists\n' "$(date)"
+        rm -f -- "$FTMP"; FTMP=''; FOUT=''
+        return 1
+    fi
+
+    tar -czf - --warning=no-file-changed -C "$DATA" storage/app .env | openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:"$KEY" -out "$FTMP"
+    pst=("${PIPESTATUS[@]}"); trc=${pst[0]:-1}; frc=${pst[1]:-1}
+    if [ "$frc" -ne 0 ] || [ "$trc" -ge 2 ]; then
+        printf '[%s] FILES BACKUP FAILED tar=%s openssl=%s\n' "$(date)" "$trc" "$frc"
+        rm -f -- "$FTMP"; FTMP=''; FOUT=''
+        return 1
+    fi
+    if ! chmod 600 "$FTMP"; then
+        printf '[%s] FILES BACKUP FAILED: cannot secure temporary archive\n' "$(date)"
+        rm -f -- "$FTMP"; FTMP=''; FOUT=''
+        return 1
+    fi
+    if ! size=$(stat -c%s -- "$FTMP") || [[ ! "$size" =~ ^[0-9]+$ ]] || [ "$size" -le 0 ]; then
+        printf '[%s] FILES BACKUP FAILED: temporary archive is empty or unreadable\n' "$(date)"
+        rm -f -- "$FTMP"; FTMP=''; FOUT=''
+        return 1
+    fi
+    if ! mv -- "$FTMP" "$FOUT"; then
+        printf '[%s] FILES BACKUP FAILED: cannot publish archive atomically\n' "$(date)"
+        rm -f -- "$FTMP"; FTMP=''; FOUT=''
+        return 1
+    fi
+    FTMP=''
+    printf '[%s] files backup ok: %s (%s bytes)\n' "$(date)" "$FOUT" "$size"
 }
 
 trap cleanup EXIT
@@ -160,7 +291,8 @@ fi
 export MYSQL_PWD="$P"
 # The pipeline must inherit FD 9 so a parent-shell SIGKILL cannot release the
 # kernel lock while dump/compression/encryption children are still running.
-if ! (mysqldump --default-character-set=utf8mb4 --no-tablespaces --single-transaction --quick --skip-lock-tables --routines --triggers -h"$H" -P"$PORT" -u"$U" "$DB" | gzip | openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:"$KEY" -out "$TMP"); then
+# --master-data=2 写入 CHANGE MASTER 注释行, 是 README-RESTORE §E PITR 的锚点, 不可去。
+if ! (mysqldump --default-character-set=utf8mb4 --no-tablespaces --master-data=2 --single-transaction --quick --skip-lock-tables --routines --triggers -h"$H" -P"$PORT" -u"$U" "$DB" | gzip | openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:"$KEY" -out "$TMP"); then
     fail 'backup pipeline failed'
 fi
 unset MYSQL_PWD
@@ -181,6 +313,29 @@ COMMITTED=1
 if ! prune_old_backups; then
     fail 'cannot enforce backup retention policy'
 fi
+run_files_backup || true
+prune_old_files_backups || printf '[%s] FILES BACKUP FAILED: cannot enforce files retention policy\n' "$(date)"
+if ! printf '[%s] db backup ok: %s (%s bytes)\n' "$(date)" "$OUT" "$SIZE"; then
+    fail 'cannot report backup success'
+fi
+
+# ===== 异地推送 Cloudflare R2 (off-site) — 2026-06-21 加 =====
+# 把已加密的备份件原样上传到 R2(异地). 用 copy(只增不删: 防本地被清/勒索级联删远端);
+# 远端独立 prune 30 天. 强制 --bind IPv4(178.105.216.158) 匹配 R2 token IP 白名单(双栈默认走IPv6会被403).
+if "$RCLONE_BIN" --bind "$R2_BIND" copy "$OUTDIR" "$R2_REMOTE/" \
+      --transfers 2 --retries 3 --contimeout 30s --timeout 120s 2>"$PERR"; then
+    "$RCLONE_BIN" --bind "$R2_BIND" delete --min-age 30d "$R2_REMOTE/" >/dev/null 2>&1 || true
+    date +%s > "$SENTINEL"
+    printf '[%s] R2 offsite push ok -> %s\n' "$(date)" "$R2_REMOTE"
+else
+    printf '[%s] R2 OFFSITE PUSH FAILED (see %s)\n' "$(date)" "$PERR"
+    nezha_alert "🔴 哪吒异地备份推送失败 ($(hostname))" "$(date '+%F %T')  R2 异地备份推送失败。
+本地备份仍在 $OUTDIR(未受影响), 但 Cloudflare R2 异地副本未更新。
+排查: tail /root/nezha-backup/backup.log 和 $PERR
+若持续失败=异地副本停更, 丢机将丢失留存数据。"
+    fail 'R2 offsite push failed'
+fi
+
 if ! "$FLOCK_BIN" -u 9; then
     fail 'cannot release backup lock'
 fi
@@ -190,6 +345,3 @@ if ! exec 9>&-; then
 fi
 LOCK_FD_OPEN=0
 trap '' INT TERM
-if ! printf '[%s] backup ok: %s (%s bytes)\n' "$(date)" "$OUT" "$SIZE"; then
-    fail 'cannot report backup success'
-fi
