@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Api\V1;
 use App\Models\Coupon;
 use App\Models\Review;
 use App\Models\Restaurant;
+use App\Models\NezhaRestaurantContactEvent;
 use Illuminate\Http\Request;
 use App\CentralLogics\Helpers;
 use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
 use App\CentralLogics\RestaurantLogic;
+use App\CentralLogics\NezhaContacts;
 use Illuminate\Support\Facades\Validator;
 
 class RestaurantController extends Controller
@@ -130,6 +132,15 @@ class RestaurantController extends Controller
             $restaurant['category_ids'] = array_map('intval', $category_ids->pluck('categories')->toArray());
             $restaurant['nezha_category_order'] = array_values(array_map('intval', $nzCatOrder)); // 商家自定义分类先后; 空=前端用默认序(零影响)
 
+            // 哪吒[外卖TG化 Phase1·挂牌态] 顾客侧联系方式规范化: 裸 JSON [{method,value,label}]
+            //   → [{method,value,label,href,copy}], 与本地生活商家页共用同一 normalizer(deep-link 规则单点)。
+            // 🔴 只在「单店详情」这一条顾客路径上转换 —— admin/vendor/各列表仍读裸 JSON, 语义不变。
+            // ⚠️ 影响面别说小了: 本行对【所有】店的 details 响应生效。现网 19 家店该列全为 NULL,
+            //    故 payload 由 nezha_contacts:null 统一变成 [] —— 这是一次全量【形状变更】, 不是"只影响挂牌店"。
+            //    行为影响为零: 已 grep 确认前端 release 无任何消费者(web-deploy/current/src 零命中);
+            //    非 web 客户端未核, 将来若有 App 读该字段需回看这里。
+            $restaurant['nezha_contacts'] = NezhaContacts::normalize($restaurant['nezha_contacts'] ?? null);
+
             // 哪吒[2026-07-02 修看过的餐厅]: details/{id} 路由无 apiGuestCheck 中间件, $request->user 恒 null 致浏览从不入库(visit_count 全0);
             // 改用 auth('api')->user() 按需解析 Bearer token(游客无 token→null, 不触发中间件401, 浏览照常).
             $auth_user = auth('api')->user();
@@ -140,6 +151,55 @@ class RestaurantController extends Controller
         }
 
         return response()->json($restaurant, 200);
+    }
+
+    /**
+     * 哪吒[外卖TG化 Phase1·挂牌态] 联系意图埋点。
+     * POST /api/v1/restaurants/{id}/contact-intent  (公开·无 auth·throttle:nezha_res_contact)
+     *
+     * 度量顾客在挂牌店页点了哪个联系渠道、点前想问什么，仅落聚合事实到 nezha_restaurant_contact_events。
+     * 🔴 零主体标识：全程不读 $request->user()、不写 user_id/IP/UA/设备/platform。
+     * 🔴 永不阻塞：无论何种输入一律 204（脏值降级/静默丢弃），唯一非 204 = 429（throttle 中间件）。
+     *   - channel 不在白名单 → 204 零写入
+     *   - restaurant 不存在 → 204 零写入（不暴露存在性差异）
+     *   - question 不在白名单 或 渠道为 wechat/phone → 落行但 question=NULL（不拒）
+     *   - insert 异常 → try/catch 吞，仍 204
+     * 🔴 刻意不复用本地生活的 /local-life/merchants/{id}/contact-intent：主键空间不同，
+     *    混写会让本地生活运营看板出现不存在的商家（业主 0720 要求两边统计隔离）。
+     * L1-1 纯信息墙：埋点只是信息层，不含任何交易/下单/收款。
+     */
+    public function contact_intent(Request $request, $id)
+    {
+        $noContent = response()->noContent(); // 204
+
+        // channel 白名单与 NezhaContacts::METHODS 同源（前端 consumer、normalizer、埋点三处必须同值）
+        $channel = strtolower(trim((string) $request->input('channel', '')));
+        if (!in_array($channel, NezhaContacts::METHODS, true)) {
+            return $noContent;
+        }
+
+        if (!Restaurant::whereKey($id)->exists()) {
+            return $noContent;
+        }
+
+        // question 白名单（与前端快捷提问芯片 key 同步）；wechat/phone 恒 NULL；乱值降级 NULL（照常落行，不拒）
+        $question = strtolower(trim((string) $request->input('question', '')));
+        $allowedQ = ['hours', 'order', 'delivery', 'recommend'];
+        if (in_array($channel, ['wechat', 'phone'], true) || !in_array($question, $allowedQ, true)) {
+            $question = null;
+        }
+
+        try {
+            NezhaRestaurantContactEvent::create([
+                'restaurant_id' => (int) $id,
+                'channel'       => $channel,
+                'question'      => $question,
+            ]);
+        } catch (\Throwable $e) {
+            // 静默吞：埋点永不阻塞、永不 5xx
+        }
+
+        return $noContent;
     }
 
     public function get_searched_restaurants(Request $request)

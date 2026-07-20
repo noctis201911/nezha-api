@@ -425,6 +425,8 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
 
         Route::get('recommended', [RestaurantController::class, 'get_recommended_restaurants']);
         Route::get('visit-again', [RestaurantController::class, 'get_visited_restaurants'])->middleware('apiGuestCheck');
+        // 哪吒[外卖TG化 Phase1·挂牌态] 联系意图埋点(公开·无 auth·零主体标识·恒 204)
+        Route::post('{id}/contact-intent', [RestaurantController::class, 'contact_intent'])->middleware('throttle:nezha_res_contact')->where('id', '[0-9]+');
     });
 
     Route::group(['prefix' => 'banners'], function () {

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\CentralLogics\Helpers;
+use App\CentralLogics\NezhaContacts;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
@@ -88,50 +89,9 @@ class LocalLifeMerchant extends Model
      */
     public function normalizedContacts(): array
     {
-        $raw = is_array($this->contacts) ? $this->contacts : [];
-        $out = [];
-        foreach ($raw as $c) {
-            $method = strtolower(trim((string) ($c['method'] ?? '')));
-            $value  = trim((string) ($c['value'] ?? ''));
-            if ($value === '' || !in_array($method, ['wechat', 'phone', 'whatsapp', 'telegram'], true)) {
-                continue;
-            }
-            $label = trim((string) ($c['label'] ?? ''));
-            $href  = null;
-            $copy  = null;
-            switch ($method) {
-                case 'phone':
-                    // tel: 保留原始拨号串（可含 +），仅去空格
-                    $href = 'tel:' . preg_replace('/\s+/', '', $value);
-                    break;
-                case 'whatsapp':
-                    // wa.me 需纯数字（去 +、空格、连字符、括号）
-                    $digits = preg_replace('/\D+/', '', $value);
-                    $href = $digits !== '' ? 'https://wa.me/' . $digits : null;
-                    break;
-                case 'telegram':
-                    // t.me/<用户名>，容忍前导 @ 或整段链接
-                    $user = $value;
-                    if (preg_match('~t\.me/([^/?\s]+)~i', $value, $mm)) {
-                        $user = $mm[1];
-                    }
-                    $user = ltrim($user, '@');
-                    $href = $user !== '' ? 'https://t.me/' . $user : null;
-                    break;
-                case 'wechat':
-                    // 微信=复制号 + 二维码（前端弹），无 href
-                    $copy = $value;
-                    break;
-            }
-            $out[] = [
-                'method' => $method,
-                'value'  => $value,
-                'label'  => $label ?: null,
-                'href'   => $href,
-                'copy'   => $copy,
-            ];
-        }
-        return $out;
+        // 2026-07-20：实现抽到 NezhaContacts::normalize() 与外卖挂牌店共用（业主拍板改后端而非前端另写一套）。
+        // 抽出为纯搬运，行为零变更——9 家生产真实数据 + 16 组脏输入/边界用例对拍 0 差异。
+        return NezhaContacts::normalize($this->contacts);
     }
 
     /* ───────────── 店内视频外链卡（档1·L1-1 纯信息墙·外跳不嵌入） ───────────── */

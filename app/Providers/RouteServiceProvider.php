@@ -129,5 +129,14 @@ class RouteServiceProvider extends ServiceProvider
                 Limit::perDay(200)->by('ll_contact_ip_' . $request->ip()),
             ];
         });
+
+        // 哪吒[外卖TG化 Phase1 2026-07-20]: 挂牌店联系意图埋点限流。同 nezha_ll_contact 档，
+        // 但独立命名 + 独立 by 键 —— 与本地生活分开计数，一边被刷不拖累另一边(未命名 throttle 共用 key 坑)。
+        RateLimiter::for('nezha_res_contact', function (Request $request) {
+            return [
+                Limit::perMinute(20)->by($request->ip()),
+                Limit::perDay(200)->by('res_contact_ip_' . $request->ip()),
+            ];
+        });
     }
 }
