@@ -322,7 +322,9 @@ fi
 # ===== 异地推送 Cloudflare R2 (off-site) — 2026-06-21 加 =====
 # 把已加密的备份件原样上传到 R2(异地). 用 copy(只增不删: 防本地被清/勒索级联删远端);
 # 远端独立 prune 30 天. 强制 --bind IPv4(178.105.216.158) 匹配 R2 token IP 白名单(双栈默认走IPv6会被403).
-if "$RCLONE_BIN" --bind "$R2_BIND" copy "$OUTDIR" "$R2_REMOTE/" \
+# --exclude: 锁文件是加固版新引入的、$OUTDIR 内的 0 字节运行时产物, 不是备份件;
+# 它每轮 mtime 都变, 不排除就会天天重传一个空对象上 R2(业主 2026-07-20 批准加此排除)。
+if "$RCLONE_BIN" --bind "$R2_BIND" copy "$OUTDIR" "$R2_REMOTE/" --exclude "${LOCK##*/}" \
       --transfers 2 --retries 3 --contimeout 30s --timeout 120s 2>"$PERR"; then
     "$RCLONE_BIN" --bind "$R2_BIND" delete --min-age 30d "$R2_REMOTE/" >/dev/null 2>&1 || true
     date +%s > "$SENTINEL"

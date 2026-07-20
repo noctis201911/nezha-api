@@ -922,6 +922,9 @@ test_files_and_offsite_stages_complete_a_full_round(){
     [ -f "$calls" ] || fail 'offsite stage never invoked rclone'
     grep -Fq -- '--bind 178.105.216.158 copy' "$calls" || fail 'offsite copy did not bind the whitelisted IPv4 source address'
     grep -Fq -- 'delete --min-age 30d' "$calls" || fail 'offsite stage did not run the 30d remote prune'
+    # 锁文件是 $OUTDIR 内的运行时产物而非备份件, 必须被排除在异地副本之外
+    grep -Fq -- '--exclude .nezha-encrypted-backup.lock' "$calls" || fail 'offsite copy did not exclude the runtime lock file'
+    [ -f "$root/out/.nezha-encrypted-backup.lock" ] || fail 'test premise broken: the run did not create a lock file inside OUTDIR'
     sentinel="$root/offsite_last_ok"
     [ -s "$sentinel" ] || fail 'offsite sentinel was not refreshed'
     [[ "$(cat "$sentinel")" =~ ^[0-9]+$ ]] || fail 'offsite sentinel does not hold an epoch timestamp'
