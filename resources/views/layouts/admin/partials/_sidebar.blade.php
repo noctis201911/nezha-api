@@ -110,7 +110,6 @@ $__navGroups[] = [
                     ['label' => '风控设置', 'label_raw' => true, 'route' => route('admin.nezha-risk.settings'), 'active' => Request::is('admin/nezha-risk/settings')],
                 ] : [],
                 Helpers::module_permission_check('refund') ? [
-                    ['label' => '迟到付款证据台', 'label_raw' => true, 'route' => route('admin.nezha-refund.late-payment.index'), 'active' => Request::is('admin/nezha-refund/late-payment*')],
                     ['label' => '退款留痕/审核', 'label_raw' => true, 'route' => route('admin.nezha-refund.records'), 'active' => Request::is('admin/nezha-refund/records')],
                     // 哪吒M2-D4: 徽标=驾驶舱钱卡同源(NezhaAdminDashboard), 满足 DoD#1「侧栏=卡=列表」对账; 0→无徽标
                     ['label' => '逾期未退款', 'label_raw' => true, 'route' => route('admin.nezha-refund.overdue'), 'active' => Request::is('admin/nezha-refund/overdue'),

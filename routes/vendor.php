@@ -326,11 +326,6 @@ Route::group(['prefix' => 'withdraw-method', 'as' => 'wallet-method.', 'middlewa
         });
 
         Route::group(['prefix' => 'order', 'as' => 'order.' , 'middleware' => ['module:regular_order']], function () {
-            Route::get('late-payment', [\App\Http\Controllers\Vendor\MerchantDirectPaymentLateCaseController::class, 'index'])->name('late-payment.index');
-            Route::get('late-payment/{caseId}', [\App\Http\Controllers\Vendor\MerchantDirectPaymentLateCaseController::class, 'show'])->name('late-payment.show');
-            Route::put('late-payment/{caseId}/attribute', [\App\Http\Controllers\Vendor\MerchantDirectPaymentLateCaseController::class, 'attribute'])->name('late-payment.attribute');
-            Route::put('late-payment/{caseId}/terms', [\App\Http\Controllers\Vendor\MerchantDirectPaymentLateCaseController::class, 'terms'])->name('late-payment.terms');
-            Route::put('late-payment/{caseId}/submit-refund', [\App\Http\Controllers\Vendor\MerchantDirectPaymentLateCaseController::class, 'submitRefund'])->name('late-payment.submit-refund');
             Route::get('list/{status}', [OrderController::class, 'list'])->name('list');
             Route::put('status-update/{id}', [OrderController::class, 'status'])->name('status-update');
             // 哪吒 B方案: 商家填写 Yandex 配送追踪链接 -> 订单进入「配送中」, 顾客端可实时查看

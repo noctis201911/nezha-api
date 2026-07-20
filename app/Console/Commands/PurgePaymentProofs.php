@@ -6,7 +6,6 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use Carbon\Carbon;
 
 /**
@@ -81,34 +80,6 @@ class PurgePaymentProofs extends Command
                 'updated_at'    => now(),
             ]);
             $purged++;
-        }
-
-        // V2 Alipay screenshots are untrusted manual PII evidence. The refund
-        // case/audit facts remain for the financial retention period, while the
-        // image follows the same configurable proof-retention clock.
-        if (Schema::hasTable('nezha_refund_records')
-            && Schema::hasColumn('nezha_refund_records', 'source_domain')) {
-            $lateProofs = DB::table('nezha_refund_records')
-                ->where('source_domain', 'direct_payment_late_v2')
-                ->whereNotNull('refund_proof_image')
-                ->where('created_at', '<', $cutoff)
-                ->get(['id', 'order_id', 'refund_proof_image', 'created_at']);
-
-            foreach ($lateProofs as $proof) {
-                $path = (string) $proof->refund_proof_image;
-                if ($this->looksLikeStoredFile($path) && $this->deleteStoredFile($path, $dry)) {
-                    $files++;
-                }
-                if ($dry) {
-                    $this->line('  [DRY] 将清除迟付案件截图 refund_record#'.$proof->id.' (order '.$proof->order_id.')');
-                } else {
-                    DB::table('nezha_refund_records')->where('id', $proof->id)->update([
-                        'refund_proof_image' => null,
-                        'updated_at' => now(),
-                    ]);
-                }
-                $purged++;
-            }
         }
 
         $msg = ($dry ? '[DRY-RUN] 将清除 ' : '已清除 ') . $purged . ' 条凭证PII, '

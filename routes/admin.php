@@ -618,11 +618,6 @@ Route::middleware('module:provide_dm_earning')->group(function () {
 
         // 哪吒 退款机制② 退款留痕/审核
         Route::group(['prefix' => 'nezha-refund', 'as' => 'nezha-refund.', 'middleware' => ['module:refund']], function () {
-            Route::get('late-payment', [\App\Http\Controllers\Admin\MerchantDirectPaymentLateCaseController::class, 'index'])->name('late-payment.index');
-            Route::get('late-payment/{caseId}', [\App\Http\Controllers\Admin\MerchantDirectPaymentLateCaseController::class, 'show'])->name('late-payment.show');
-            Route::post('late-payment/{caseId}/attribute', [\App\Http\Controllers\Admin\MerchantDirectPaymentLateCaseController::class, 'attribute'])->name('late-payment.attribute');
-            Route::post('late-payment/{caseId}/close-no-payment', [\App\Http\Controllers\Admin\MerchantDirectPaymentLateCaseController::class, 'closeNoPayment'])->name('late-payment.close-no-payment');
-            Route::post('late-payment/{caseId}/retry-usdt', [\App\Http\Controllers\Admin\MerchantDirectPaymentLateCaseController::class, 'retryUsdt'])->name('late-payment.retry-usdt');
             Route::get('records', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'records'])->name('records');
             Route::post('submit-tx/{id}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'submitTx'])->name('submit-tx');
             Route::post('upload-proof/{id}', [\App\Http\Controllers\Admin\NezhaRefundController::class, 'uploadProof'])->name('upload-proof');
