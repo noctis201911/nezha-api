@@ -6,9 +6,17 @@ namespace App\CentralLogics;
  * 哪吒 公开联系方式规范化（本地生活商家 + 外卖挂牌店 共用单一实现）。
  *
  * 出处：原为 LocalLifeMerchant::normalizedContacts() 内联实现（2026-07-08 起线上）。
- * 2026-07-20 外卖 TG 化 Phase1 需要同一套 deep-link 规则，故逐字抽出为共享 helper——
- * 🔴 抽出时行为零变更；两处消费者共用此实现，避免 URL 规则在前后端/两业务线之间分叉
- *    （业主 0720 拍板：宁可动一次后端，也不要前端另写一套解析）。
+ * 2026-07-20 外卖 TG 化 Phase1 需要同一套 deep-link 规则，故抽出为共享 helper——
+ * 两处消费者共用此实现，避免 URL 规则在前后端/两业务线之间分叉
+ *（业主 0720 拍板：宁可动一次后端，也不要前端另写一套解析）。
+ *
+ * ⚠️ 抽出【不是】逐字搬运，有且只有一处行为差异（auditor GATE 二审指出、对拍复现）：
+ *    本实现多了 `if (!is_array($c)) continue;` 元素守卫。
+ *    - 旧实现遇到数组里混入 stdClass 元素会抛 Error（致命 500）；本实现跳过该元素、其余照常。
+ *    - 方向是变安全，且当前 Eloquent 'array' cast 走 json_decode($v, true) 只产出数组、
+ *      不产出 stdClass，故真实路径到不了这个分支。
+ *    - 其余全部输入（含 9 家生产真实商家数据 + 标量/空值/脏 method/@前缀/整段链接等边界）
+ *      两实现输出逐字节相同：32 用例对拍，仅 stdClass 一例分叉。
  *
  * 输入：原始 JSON 数组 [{method, value, label}]（本地生活 local_life_merchants.contacts
  *       / 外卖 restaurants.nezha_contacts，两者同构）。

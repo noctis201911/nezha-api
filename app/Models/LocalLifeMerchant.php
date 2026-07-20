@@ -90,7 +90,8 @@ class LocalLifeMerchant extends Model
     public function normalizedContacts(): array
     {
         // 2026-07-20：实现抽到 NezhaContacts::normalize() 与外卖挂牌店共用（业主拍板改后端而非前端另写一套）。
-        // 抽出为纯搬运，行为零变更——9 家生产真实数据 + 16 组脏输入/边界用例对拍 0 差异。
+        // 对本页行为不变：32 用例对拍（含本表 9 家生产真实数据）仅 stdClass 元素一例分叉，
+        // 而 'array' cast 走 json_decode(...,true) 不产出 stdClass，该分支到不了。详见 NezhaContacts 头注释。
         return NezhaContacts::normalize($this->contacts);
     }
 
