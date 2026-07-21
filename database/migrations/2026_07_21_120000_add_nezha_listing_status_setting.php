@@ -31,9 +31,15 @@ return new class extends Migration
         }
     }
 
+    /**
+     * 🔴 刻意不删键（部署前 GATE 复核指出）：删掉 nezha_listing_status 会让 NezhaListing::enabled()
+     * 降级为 false —— 那等同于关总闸，会让现网 9 家 status=1 的挂牌店立刻恢复站内接单而无人接单。
+     * 这跟「回滚一个新加的设置项」的直觉相反，所以这里做成不动数据、只留说明：
+     * 真要停用挂牌态，请到后台「商家 → 挂牌态管理」看清受影响家数后手动关闸；
+     * 真要清理这个键，请在确认无挂牌店（或已接受上述后果）后手动 DELETE。
+     */
     public function down(): void
     {
-        // 删键 = 总闸读不到 = 按关处理（NezhaListing::enabled() 降级 false），与 up 前语义一致。
-        DB::table('business_settings')->where('key', 'nezha_listing_status')->delete();
+        // no-op by design
     }
 };
