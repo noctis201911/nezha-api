@@ -39,12 +39,17 @@
                 <small class="text-muted d-block">
                     {{ translate('关闭后：下面所有店的挂牌态一律失效、回到未挂牌的样子。其中「未上架」的预建店本来就不进任何列表，关闸后连直链也打不开（顾客看到页面不存在）；「已上架」的店则恢复正常接单。') }}
                 </small>
+                @if($listed_live_count > 0)
+                    <small class="text-danger d-block font-weight-bold">
+                        {{ translate('注意：当前有') }} {{ $listed_live_count }} {{ translate('家【已上架】的挂牌店。关总闸 = 这些店立刻恢复站内接单——如果它们的后台没人接单，顾客的订单会没人处理。关之前先确认有人接。') }}
+                    </small>
+                @endif
                 <small class="text-muted d-block">
                     {{ translate('顾客侧有页面缓存，开关生效最长约 60 秒。') }}
                 </small>
             </div>
             <form action="{{ route('admin.nezha-listing.toggle-master') }}" method="post"
-                  onsubmit="return confirm('{{ $master_on ? translate('确定关闭挂牌态总闸？所有挂牌店将回到未挂牌状态，未上架的预建店直链会打不开。') : translate('确定开启挂牌态总闸？下面已开逐店开关的店会对顾客生效。') }}')">
+                  onsubmit="return confirm('{{ $master_on ? (translate('确定关闭挂牌态总闸？') . ($listed_live_count > 0 ? translate('当前有 ') . $listed_live_count . translate(' 家【已上架】的挂牌店会立刻恢复站内接单（后台若无人接单，顾客的单会没人处理）；') : '') . translate('未上架的预建店直链会打不开。')) : translate('确定开启挂牌态总闸？下面已开逐店开关的店会对顾客生效。') }}')">
                 @csrf
                 <input type="hidden" name="enable" value="{{ $master_on ? 0 : 1 }}">
                 <button type="submit" class="btn {{ $master_on ? 'btn-danger' : 'btn-primary' }}">
@@ -97,7 +102,7 @@
                                 <i class="tio-edit"></i> {{ translate('编辑联系方式') }}
                             </button>
                             <form action="{{ route('admin.nezha-listing.toggle-store', $r->id) }}" method="post" class="d-inline"
-                                  onsubmit="return confirm('{{ translate('确定关闭这家店的挂牌态？') }}')">
+                                  onsubmit="return confirm('{{ (int) $r->status === 1 ? translate('这家店已上架。关闭挂牌态后顾客会立刻能在站内下单——请先确认这家店后台真有人接单。确定关闭？') : translate('确定关闭这家店的挂牌态？关闭后未上架的它将无法通过直链访问。') }}')">
                                 @csrf
                                 <input type="hidden" name="enable" value="0">
                                 <button type="submit" class="btn btn-sm btn-danger">{{ translate('关闭挂牌') }}</button>

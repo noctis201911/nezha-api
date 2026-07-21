@@ -59,6 +59,9 @@ class NezhaListingController extends Controller
 
         return view('admin-views.nezha-listing.index', [
             'master_on'   => NezhaListing::enabled(),
+            // 🔴 关总闸的真实代价 = 这些【已上架】的挂牌店立刻恢复站内接单(其中不少是代建占位账号、
+            //    后台无人接单)。做成实时数字给运营看, 别让人凭「反正能回滚」的印象点下去。
+            'listed_live_count' => $listed->where('status', 1)->count(),
             'listed'      => $listed,
             'candidates'  => $candidates,
             'search'      => $search,
