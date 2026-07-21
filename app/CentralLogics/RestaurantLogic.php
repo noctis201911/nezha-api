@@ -441,8 +441,13 @@ class RestaurantLogic
             // 哪吒[外卖TG化 Phase1·挂牌态] 挂牌店保持 status=0 → 天然不进任何列表/搜索/附近/推荐,
             // 但直链详情必须可达。放行只落在「按 id/slug 读单店详情」这一条路径,
             // 🔴 不改 Restaurant::scopeActive —— 它被全站列表共用, 改它 = 挂牌店泄漏进列表。
+            // 哪吒[挂牌态·总闸 2026-07-21] 放行本身受总闸控制: 总闸关 => 不放行 => 回到功能上线前
+            // (status=0 的预建店直链再次不可达/前端 404)。判定单点见 CentralLogics\NezhaListing。
             ->where(function ($q) {
-                $q->active()->orWhere('restaurants.nezha_listing_only', 1);
+                $q->active();
+                if (NezhaListing::enabled()) {
+                    $q->orWhere('restaurants.nezha_listing_only', 1);
+                }
             })
             ->withcount('reviews_comments')
         ->when(is_numeric($restaurant_id),function ($qurey) use($restaurant_id){

@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
 use App\CentralLogics\RestaurantLogic;
 use App\CentralLogics\NezhaContacts;
+use App\CentralLogics\NezhaListing;
 use Illuminate\Support\Facades\Validator;
 
 class RestaurantController extends Controller
@@ -139,7 +140,12 @@ class RestaurantController extends Controller
             //    故 payload 由 nezha_contacts:null 统一变成 [] —— 这是一次全量【形状变更】, 不是"只影响挂牌店"。
             //    行为影响为零: 已 grep 确认前端 release 无任何消费者(web-deploy/current/src 零命中);
             //    非 web 客户端未核, 将来若有 App 读该字段需回看这里。
-            $restaurant['nezha_contacts'] = NezhaContacts::normalize($restaurant['nezha_contacts'] ?? null);
+            // 哪吒[挂牌态·总闸 2026-07-21] 总闸关(或非挂牌店) → 一律 []: 平台不代为公开商家联系方式,
+            //   与「关闸=回到功能上线前」一致。现网非挂牌店该列全为 NULL, normalize(null) 本就产出 [],
+            //   故 payload 形状不变(仍恒为数组)。
+            $restaurant['nezha_contacts'] = NezhaListing::isListingOnly($restaurant)
+                ? NezhaContacts::normalize($restaurant['nezha_contacts'] ?? null)
+                : [];
 
             // 哪吒[2026-07-02 修看过的餐厅]: details/{id} 路由无 apiGuestCheck 中间件, $request->user 恒 null 致浏览从不入库(visit_count 全0);
             // 改用 auth('api')->user() 按需解析 Bearer token(游客无 token→null, 不触发中间件401, 浏览照常).

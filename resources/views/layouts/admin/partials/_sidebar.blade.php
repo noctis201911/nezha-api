@@ -165,6 +165,8 @@ $__navGroups[] = [
                 ],
             ],
             ['label' => '商家入驻申请', 'label_raw' => true, 'route' => route('admin.merchant-lead.list'), 'icon' => 'tio-shop', 'active' => Request::is('admin/merchant-lead/*')],
+            // 哪吒[外卖TG化 Phase1·挂牌态] 总闸 + 逐店开关 + 联系方式录入
+            ['label' => '挂牌态管理', 'label_raw' => true, 'route' => route('admin.nezha-listing.index'), 'icon' => 'tio-bookmarks', 'active' => Request::is('admin/nezha-listing*'), 'gate' => Helpers::module_permission_check('restaurant')],
         ] : [],
         [
             ['label' => '商家反馈', 'label_raw' => true, 'route' => route('admin.vendor-feedback.index'), 'icon' => 'tio-comment-text-outlined', 'active' => Request::is('admin/vendor-feedback*'), 'gate' => Helpers::module_permission_check('nezha_cs')],

@@ -1013,6 +1013,9 @@ class Helpers
                 $item['nezha_busy_min'] = $nezhaExtra['busy_min'];
                 $item['nezha_busy_reason'] = $nezhaExtra['busy_reason'];
                 $item['nezha_pause_resume_at'] = $nezhaExtra['pause_resume_at'];
+                // 哪吒[挂牌态·总闸 2026-07-21] 列表面也回写有效值(总闸关时恒 false)。挂牌店多为 status=0
+                // 天然不进列表, 但 status=1 的店若被开了挂牌, 列表卡与详情页必须同口径。
+                $item['nezha_listing_only'] = NezhaListing::isListingOnly($item);
                 $item['cuisine'] = $item->getRelation('cuisine');
 
                 if ($item->opening_time) {
@@ -1092,7 +1095,12 @@ class Helpers
                 unset($data['closeing_time']);
             }
 
-            $data['foods'] = $data->foods()->active((bool) ($data->nezha_listing_only ?? false))->with(['newVariations', 'newVariationOptions'])->take(50)->get(["id", "image", "name", "price", "variations", "add_ons", "category_id", "restaurant_id", "veg", "status"]);
+            // 哪吒[挂牌态·总闸 2026-07-21] 有效挂牌态 = 总闸开 && 逐店开关开。回写进 payload:
+            // 前端(RestaurantDetails)只读这个字段决定是否隐藏全部下单入口, 故前端零改动即跟随总闸,
+            // 与下方后端 403 硬闸(OrderController::order_validation_check)读的是同一个有效值, 不会分叉。
+            // ⚠️ 这里改的是内存态属性; 本方法产出的模型只用于响应, 全链路无 save()(其余伪造字段同理)。
+            $data['nezha_listing_only'] = NezhaListing::isListingOnly($data);
+            $data['foods'] = $data->foods()->active((bool) $data['nezha_listing_only'])->with(['newVariations', 'newVariationOptions'])->take(50)->get(["id", "image", "name", "price", "variations", "add_ons", "category_id", "restaurant_id", "veg", "status"]);
             $restaurant_id = (string) $data->id;
             $data['coupons'] = Coupon::Where(function ($q) use ($restaurant_id) {
                 $q->Where('coupon_type', 'restaurant_wise')->whereJsonContains('data', [$restaurant_id])
@@ -1118,7 +1126,7 @@ class Helpers
 
             $positive_rating = RestaurantLogic::calculate_positive_rating($data['rating']);
             $data['positive_rating'] = (int) $positive_rating['rating'];
-            $data['price_starts_from'] = (float) $data->foods()->active((bool) ($data->nezha_listing_only ?? false))->min('price');
+            $data['price_starts_from'] = (float) $data->foods()->active((bool) $data['nezha_listing_only'])->min('price');
             $data['customer_order_date'] = (int) $data?->restaurant_config?->customer_order_date;
             $data['customer_date_order_sratus'] = (bool) $data?->restaurant_config?->customer_date_order_sratus;
             $data['instant_order'] = (bool) $data?->restaurant_config?->instant_order;

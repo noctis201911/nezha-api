@@ -189,6 +189,14 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('{id}', [\App\Http\Controllers\Admin\NezhaConsolidationRoundController::class, 'show'])->name('show');
         });
 
+        // 哪吒[外卖TG化 Phase1·挂牌态] 总闸 + 逐店挂牌开关 + 顾客侧联系方式录入
+        Route::group(['prefix' => 'nezha-listing', 'as' => 'nezha-listing.', 'middleware' => ['module:restaurant']], function () {
+            Route::get('/', [\App\Http\Controllers\Admin\NezhaListingController::class, 'index'])->name('index');
+            Route::post('toggle-master', [\App\Http\Controllers\Admin\NezhaListingController::class, 'toggleMaster'])->name('toggle-master');
+            Route::post('toggle-store/{restaurant}', [\App\Http\Controllers\Admin\NezhaListingController::class, 'toggleStore'])->name('toggle-store');
+            Route::post('update-contacts/{restaurant}', [\App\Http\Controllers\Admin\NezhaListingController::class, 'updateContacts'])->name('update-contacts');
+        });
+
         // 哪吒 方案C: 搜索需求(全量热门搜索 + 搜了没结果)
         Route::group(['prefix' => 'nezha-search-demand', 'as' => 'nezha-search-demand.'], function () {
             Route::get('/', [\App\Http\Controllers\Admin\NezhaSearchDemandController::class, 'index'])->name('index');

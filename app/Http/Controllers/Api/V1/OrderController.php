@@ -2596,8 +2596,12 @@ class OrderController extends Controller
             // 哪吒[外卖TG化 Phase1·挂牌态] 后端硬闸: 挂牌店只展示不接单(顾客经 TG 联系商家自行下单)。
             // 紧跟 !$restaurant、先于其余全部判定 —— 挂牌店无论营业/打烊/押金/挂起状态一律拒单。
             // 前端已整体不渲染下单入口, 此闸防「绕过前端直调 API」(前端藏 + 后端拒 = 双闸)。
-            // ?? false: 迁移未跑时列不存在 → 恒 false 不 fatal(降级安全)。
-            (bool) ($restaurant->nezha_listing_only ?? false) => [
+            // 哪吒[挂牌态·总闸 2026-07-21] 读 NezhaListing::isListingOnly() = 总闸开 && 逐店开关开,
+            // 与前端拿到的 nezha_listing_only(Helpers::restaurant_data_formatting 回写的同一有效值)同源。
+            // 🔴 这两处必须同源: 若此闸按挂牌拒单而前端按普通店渲染出加购/结算, 顾客就会卡进
+            //    「能加购、下单被拒、页面又没有 TG 联系入口」的死胡同。
+            // 列不存在/总闸读不到 → 恒 false 不 fatal(降级安全)。
+            \App\CentralLogics\NezhaListing::isListingOnly($restaurant) => [
                 'code' => 'restaurant',
                 'message' => translate('本店暂通过 Telegram 接单，请回到店铺页联系商家'),
                 'status' => 403

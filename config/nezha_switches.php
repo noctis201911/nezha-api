@@ -74,6 +74,13 @@ return [
             'ops_note' => "翻 1 后读不到新值: {$OPS_FORGET} + kill -USR2 \$(FPM master)。=0 时列表空/详情走空态不 404/入口条不渲染",
         ],
         [
+            'key' => 'nezha_listing_status', 'label' => '外卖挂牌态总闸(只展示不接单·TG 联系商家)', 'section' => 'A', 'level' => 'L3',
+            'expected' => null, 'value_type' => 'bool',
+            'prereq' => '2026-07-21 补的总闸(此前只有逐店列 restaurants.nezha_listing_only, 全关只能 revert+重部署)。开=逐店开关生效; 关=全部挂牌店回到功能上线前(status=0 预建店直链 404, status=1 的店恢复接单)。🔴 真实第三方商家挂牌前须先裁定 L1-6 姓名筛查射程(见 compliance CHANGELOG 2026-07-20/21)',
+            'settings_route' => 'admin.nezha-listing.index',
+            'ops_note' => 'NezhaListing::enabled() 直读 business_settings 且只在请求内 static 缓存 → 翻闸下一个请求即生效, 无需 cache:clear/USR2; 顾客侧 ISR 页面缓存最长约 60 秒。前端不读本键(读的是 details 响应里回写的有效 nezha_listing_only), 故前后端同源不会分叉。',
+        ],
+        [
             'key' => 'nezha_autooffline_status', 'label' => '商家长期不确认订单自动停接单', 'section' => 'A', 'level' => 'L2',
             'expected' => null, 'value_type' => 'bool',
             'prereq' => '上线激活: 滚动窗口内商家责任超时取消达 N 单且期间无成功接单(不在场)→自动停接单; 商家自助一键/运营后台恢复(无冷却自动恢复·业主 2026-07-11)。先亲测通知真送达 + 阈值确认',
