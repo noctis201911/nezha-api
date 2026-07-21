@@ -78,9 +78,12 @@ PM2_RC=$?
 [ "$PM2_RC" -ne 0 ] && add "www PM2 生产拓扑异常: $(printf '%s' "$PM2_HEALTH" | tr '\n' ';')" "pm2"
 
 # 6. 备份新鲜度: 最新加密数据库备份 >26h 未更新 → 备份可能静默失败(出事才发现没备份)
-BK=$(ls -1t /www/backup/database/nezha-enc/*.sql.gz.enc 2>/dev/null | head -1)
+#     glob 钉死 sql_ 前缀: 同目录还躺着人工 staging-*/production-* dump, 用 *.sql.gz.enc
+#     会被一次手工 dump 刷成假绿(自动轮早停了也看不出来)。sql_ 来自备份脚本的 DB 库名,
+#     库名若改则这里匹配不到, 走"未找到"告警(失败方向是响不是哑)。nzdaily.sh 第 6 段同款。
+BK=$(ls -1t /www/backup/database/nezha-enc/sql_*.sql.gz.enc 2>/dev/null | head -1)
 if [ -z "$BK" ]; then
-  add "未找到任何数据库备份文件 — 每日备份可能未在产出" "backup"
+  add "未找到任何数据库备份文件(sql_*.sql.gz.enc) — 每日备份可能未在产出" "backup"
 else
   BAGE=$(( ( $(date +%s) - $(stat -c %Y "$BK") ) / 3600 ))
   [ "$BAGE" -gt 26 ] && add "最新数据库备份已 ${BAGE}h 未更新 (>26h) — 每日备份可能静默失败" "backup"
