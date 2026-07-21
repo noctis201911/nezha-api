@@ -49,6 +49,8 @@
 - 商家入驻线索(`merchant_leads`,含联系人/电话/微信/地址 PII):随表静态加密;**到期清理已实施(2026-06-15)**——线索**结案后**(`status`=2已完成/3无效)超过保留期(默认 90 天,自结案起算,`business_settings.merchant_leads_retention_days` 可调)由计划任务 `nezha:purge-merchant-leads` 每日 03:50 抹除 contact_name/phone/wechat/address/note,**保留 行/store_name/category/status 供审计**;**进行中线索(0待跟进/1跟进中)绝不触碰**,避免误删尚未跟进的真实潜在商家(`--dry-run` 可预演)。
 - 链上交易记录:合规要求留存 ≥ 5 年(见 `AML-policy.md`)。
 - 商家 KYC 资料(`vendor_kyc_profiles`,含法人姓名/证件号/收款账户/联系方式 PII):随表静态加密(模型 `encrypted` cast + 表 `ENCRYPTION='Y'`);作为 AML/CDD 核验记录须**留存 ≥5 年**(见 `AML-policy.md`),**豁免 PII 自动清除**——三个 purge 任务(payment-proofs/locallife-pii/merchant-leads)均不涉及本表,代码无自动删 KYC 路径(2026-06-22 KYC 后台处置专项核实)。默认不存证件扫描件;`closed_at`(审核拒绝/结案时间)仅为留存锚点,当前无定时清除 actor(≥5年为下限)。
+- Telegram 登录身份映射(`user_external_identities`,存 Telegram 用户 ID,PII):**留存至账号删除或业主指令删除**;临时登录尝试行(`external_identity_login_attempts`,含 state/nonce/code_verifier 与 provider_payload 临时声明)由计划任务 `nezha:purge-external-identity-attempts` **每 15 分钟**清理(**仅 `expires_at` 过期行**;持久映射表刻意不在其射程内——它是防同一 provider subject 被改绑到另一顾客的归属台账)。两表均显式 `ENCRYPTION='Y'`(迁移内 fail-closed 校验 CREATE_OPTIONS,未确认加密即抛错)。本条为 **L1-7 留存例外的显式书面豁免**(2026-07-20 补记)。
+- 联系意图计次(`local_life_contact_events` 本地生活 / `nezha_restaurant_contact_events` 外卖挂牌店):**零主体标识**设计——表内**不含** user_id / IP / UA / 设备指纹 / platform(业主 2026-07-19 拍板·甲),只落 merchant_id(或 restaurant_id) + channel + question key + created_at 的聚合事实,**故不构成个人数据,L1-7 的加密+到期删除义务不 attach**(无 purge 时钟、无数据主体披露义务)。两表仍显式 `ENCRYPTION='Y'` 作统一姿态,防未来误存 PII。代价(设计已知):计次含同人重复点击,不能去重、不能算独立用户;真要去重须另开包升级并重走本节评估,**禁就地加主体标识列**。L1-1:埋点纯信息层,不含任何交易/下单/收款元素。
 - 账户数据:账户存续期间保留,注销后按政策清理。
 - 数据库备份:每日加密备份(AES-256),保留最近 14 份(**已实施 2026-06-14**)。
 
