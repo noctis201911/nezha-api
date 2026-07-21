@@ -185,9 +185,11 @@ class RestaurantController extends Controller
         // question 白名单（与前端 NezhaListingContactBar 的 ASK_QUESTIONS key 同步，改一处必改另一处，
         // 否则新 key 落不进白名单 → 静默记成 NULL → 报表看不出顾客到底问了什么）；
         // wechat/phone 恒 NULL；乱值降级 NULL（照常落行，不拒）
-        // 业主 0720 定稿四问：能下单吗 / 有优惠吗 / 多久送到 / 能付U吗
+        // 业主 0720 定稿四问：能下单吗 / 有优惠吗 / 多久送到 / 怎么付款
+        // (第 4 格原为「能付U吗」/key=usdt，业主 0720 裁决改中性文案——挂牌店付款全程在站外 TG，
+        //  平台的 OFAC 制裁筛查对该路径不生效，故平台不主动点名加密付款。详见前端同名注释。)
         $question = strtolower(trim((string) $request->input('question', '')));
-        $allowedQ = ['order', 'promo', 'eta', 'usdt'];
+        $allowedQ = ['order', 'promo', 'eta', 'pay'];
         if (in_array($channel, ['wechat', 'phone'], true) || !in_array($question, $allowedQ, true)) {
             $question = null;
         }
