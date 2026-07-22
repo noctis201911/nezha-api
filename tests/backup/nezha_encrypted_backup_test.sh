@@ -22,6 +22,10 @@ make_case(){
     local data="$TMP/$1/data" helper="$TMP/$1/nzwatch_mail.py"
 
     mkdir -p "$bin" "$app" "$out" "$data/storage/app"
+    # 运维还原点段($OPSNAP_PARENT/$OPSNAP_NAME)的取材来源: 造一份形态与生产一致的还原点
+    mkdir -p "$root/opsnap/backup/guides_db_20260722153226"
+    printf '{"rows":7}\n' > "$root/opsnap/backup/guides_db_20260722153226/manifest.json"
+    printf 'body-md-original\n' > "$root/opsnap/backup/guides_db_20260722153226/body_md-5.txt"
     printf 'test-key\n' > "$key"
     # 文件备份段的取材来源($DATA): storage/app 实体 + .env 实体
     printf 'uploaded-artifact\n' > "$data/storage/app/uploaded.bin"
@@ -209,6 +213,7 @@ STUB
         -e "s#^PHP=.*#PHP=$bin/php#" \
         -e "s#^KEY=.*#KEY=$key#" \
         -e "s#^OUTDIR=.*#OUTDIR=$out#" \
+        -e "s#^OPSNAP_PARENT=.*#OPSNAP_PARENT=$root/opsnap#" \
         -e "s#^RCLONE_BIN=.*#RCLONE_BIN=$bin/rclone#" \
         -e "s#^MAIL_HELPER=.*#MAIL_HELPER=$helper#" \
         -e "s#^SENTINEL=.*#SENTINEL=$root/offsite_last_ok#" \
@@ -216,7 +221,7 @@ STUB
         "$SOURCE" > "$script"
     chmod +x "$script"
 
-    if grep -Eq '/www/wwwroot|/www/backup|/root/\.nezha' "$script"; then
+    if grep -Eq '/www/wwwroot|/www/backup|/root/\.nezha|/root/nzimg' "$script"; then
         fail "$name sandbox script still contains a production path"
     fi
     # rclone/mail helper 走绝对路径,PATH stub 拦不住 —— 必须确认沙箱脚本已被钉走,
@@ -226,6 +231,7 @@ STUB
     fi
     grep -Fq "MAIL_HELPER=$helper" "$script" || fail "$name sandbox script still points at the production mail helper"
     grep -Fq "SENTINEL=$root/offsite_last_ok" "$script" || fail "$name sandbox script still points at the production offsite sentinel"
+    grep -Fq "OPSNAP_PARENT=$root/opsnap" "$script" || fail "$name sandbox script still points at the production restore-point directory"
 
     printf '%s\n' "$root"
 }
@@ -333,7 +339,7 @@ test_success_is_published_atomically_once(){
     [ "${#finals[@]}" -eq 1 ] || fail "expected exactly one final artifact, found ${#finals[@]}"
     final=${finals[0]}
     [ -s "$final" ] || fail 'final artifact is empty'
-    # 合流后一轮产两件(DB + files),openssl 收到两个输出目标; 第一个必须是 DB 临时件。
+    # 合流后一轮产三件(DB + files + opsnap),openssl 收到三个输出目标; 第一个必须是 DB 临时件。
     temp_target=$(head -1 "$out_log")
     grep -Fxq $'600\t'"$temp_target" "$chmod_log" || fail 'unique temporary artifact did not receive chmod 600 before publication'
     success_count=$(grep -Fc 'db backup ok:' "$output")
@@ -341,7 +347,7 @@ test_success_is_published_atomically_once(){
     ! grep -Fq 'SUPER_SECRET_BACKUP_PASSWORD' "$output" || fail 'database password leaked to output'
     ! grep -Fq 'SUPER_SECRET_BACKUP_PASSWORD' "$args" || fail 'database password leaked to mysqldump arguments'
     ! grep -Fq 'SUPER_SECRET_MAIL_PASSWORD' "$output" || fail 'mail credentials leaked to output'
-    [ "$(wc -l < "$out_log" | tr -d ' ')" -eq 2 ] || fail 'openssl did not receive exactly the database and files output targets'
+    [ "$(wc -l < "$out_log" | tr -d ' ')" -eq 3 ] || fail 'openssl did not receive exactly the database, files and opsnap output targets'
     echo '[backup-test] PASS atomic single publication'
 }
 
@@ -776,6 +782,121 @@ test_real_util_linux_flock_is_held_by_surviving_pipeline_after_parent_sigkill(){
     run_sigkill_lock_inheritance_case util-linux-flock-sigkill "$real_flock" 'real util-linux flock'
 }
 
+opsnap_artifacts(){
+    find "$1" -maxdepth 1 -type f -name 'nezha-opsnap-*.tar.gz.enc'
+}
+
+# 覆盖面本身: 运维还原点目录必须真的被打进一份加密归档件, 并落在 $OUTDIR(=异地推送的取材目录)。
+test_opsnap_stage_archives_the_restore_point_directory(){
+    local root args output archive listing
+
+    root=$(make_case opsnap-success)
+    args="$root/mysqldump.args"
+    output="$root/output.log"
+
+    NZ_MYSQLDUMP_ARGS="$args" NZ_DATE_TIMESTAMP=20990101010101 PATH="$root/bin:$PATH" \
+        bash "$root/nezha-encrypted-backup.sh" > "$output" 2>&1
+
+    mapfile -t listing < <(opsnap_artifacts "$root/out")
+    [ "${#listing[@]}" -eq 1 ] || fail "opsnap stage produced ${#listing[@]} archives, expected 1"
+    archive=${listing[0]}
+    [[ "${archive##*/}" =~ ^nezha-opsnap-[0-9]{14}-[A-Za-z0-9]{6}\.tar\.gz\.enc$ ]] || fail "opsnap archive name is not in the tokenised format: ${archive##*/}"
+    [ -s "$archive" ] || fail 'opsnap archive is empty'
+    [ "$(stat -c%a -- "$archive")" = '600' ] || fail 'opsnap archive was published without 600 permissions'
+
+    # 归档内容必须能原样还原出还原点目录(成员前缀 backup/ = 解到 $OPSNAP_PARENT 即还原)
+    tail -n +2 -- "$archive" | tar -tf - > "$root/opsnap.listing" 2>/dev/null || fail 'opsnap archive is not a readable tar payload'
+    grep -Fq 'backup/guides_db_20260722153226/manifest.json' "$root/opsnap.listing" || fail 'opsnap archive does not contain the restore-point manifest'
+    grep -Fq 'backup/guides_db_20260722153226/body_md-5.txt' "$root/opsnap.listing" || fail 'opsnap archive does not contain the restore-point payload'
+
+    # 落点必须是 $OUTDIR: 异地推送是 rclone copy "$OUTDIR", 不在这个目录里就等于没有异地副本
+    [ "$(dirname -- "$archive")" = "$root/out" ] || fail 'opsnap archive was not published into the offsite source directory'
+    grep -Fq -- "copy $root/out" "$root/rclone.calls" || fail 'offsite copy did not cover the directory holding the opsnap archive'
+    ! grep -Fq 'OPSNAP BACKUP FAILED' "$output" || fail 'opsnap stage logged a failure on the success path'
+    echo '[backup-test] PASS opsnap stage archives the restore-point directory'
+}
+
+# 还原点目录不存在是正常态(没有待保护的还原点), 必须是"跳过"而不是"失败", 更不能拖累别的段。
+test_opsnap_missing_source_is_skipped_not_failed(){
+    local root args output rc
+
+    root=$(make_case opsnap-missing)
+    args="$root/mysqldump.args"
+    output="$root/output.log"
+    rm -rf "$root/opsnap"
+
+    set +e
+    NZ_MYSQLDUMP_ARGS="$args" NZ_DATE_TIMESTAMP=20990101010101 PATH="$root/bin:$PATH" \
+        bash "$root/nezha-encrypted-backup.sh" > "$output" 2>&1
+    rc=$?
+    set -e
+
+    [ "$rc" -eq 0 ] || fail "missing restore-point directory aborted the round (exit $rc)"
+    grep -Fq 'opsnap backup skipped:' "$output" || fail 'missing restore-point directory was not logged as a skip'
+    ! grep -Fq 'FAILED' "$output" || fail 'missing restore-point directory was reported as a failure'
+    [ "$(opsnap_artifacts "$root/out" | wc -l | tr -d ' ')" -eq 0 ] || fail 'missing restore-point directory still produced an archive'
+    [ "$(find "$root/out" -maxdepth 1 -type f -name '*.sql.gz.enc' | wc -l | tr -d ' ')" -eq 1 ] || fail 'missing restore-point directory cost us the database artifact'
+    [ "$(files_artifacts "$root/out" | wc -l | tr -d ' ')" -eq 1 ] || fail 'missing restore-point directory cost us the files archive'
+    echo "[backup-test] PASS opsnap missing source is skipped, not failed rc=$rc"
+}
+
+# 上限闸: 有人往还原点目录里丢大件时必须留一行 FAILED 拒绝归档, 而不是闷声把备份窗口和 R2 撑爆。
+test_opsnap_oversize_source_is_refused_and_logged(){
+    local root args output rc
+
+    root=$(make_case opsnap-oversize)
+    args="$root/mysqldump.args"
+    output="$root/output.log"
+
+    set +e
+    NZ_MYSQLDUMP_ARGS="$args" OPSNAP_MAX_MB=0 NZ_DATE_TIMESTAMP=20990101010101 PATH="$root/bin:$PATH" \
+        bash "$root/nezha-encrypted-backup.sh" > "$output" 2>&1
+    rc=$?
+    set -e
+
+    [ "$rc" -eq 0 ] || fail "oversize restore-point directory aborted the round (exit $rc); it must log and continue"
+    grep -Fq 'OPSNAP BACKUP FAILED' "$output" || fail 'oversize restore-point directory was not logged in the grep-stable format'
+    grep -Fq 'over the 0MB cap' "$output" || fail 'oversize log line did not name the cap that refused it'
+    [ "$(opsnap_artifacts "$root/out" | wc -l | tr -d ' ')" -eq 0 ] || fail 'oversize restore-point directory was archived anyway'
+    [ "$(find "$root/out" -maxdepth 1 -type f -name '.nezha-opsnap-*.tmp.*' | wc -l | tr -d ' ')" -eq 0 ] || fail 'oversize refusal left a temporary archive behind'
+    [ "$(find "$root/out" -maxdepth 1 -type f -name '*.sql.gz.enc' | wc -l | tr -d ' ')" -eq 1 ] || fail 'oversize refusal discarded the database artifact'
+    grep -Fq 'db backup ok:' "$output" || fail 'oversize refusal suppressed the database success line'
+    grep -Fq 'R2 offsite push ok' "$output" || fail 'oversize refusal prevented the offsite push'
+    echo "[backup-test] PASS opsnap oversize source is refused and logged rc=$rc"
+}
+
+# 新前缀的轮转必须只吃自己的件: 既不能碰 DB 件/文件件/高频件, 也不能删人工留证件。
+test_opsnap_retention_prunes_only_whitelisted_excess(){
+    local root args output i stamp token managed_count
+
+    root=$(make_case opsnap-retention)
+    args="$root/mysqldump.args"
+    output="$root/output.log"
+
+    # 本前缀没有历史遗留的无 token 旧格式, 故 14 份存量 + 本轮 1 份 = 15 份才越过 OPSNAP_KEEP=14
+    for ((i = 1; i <= 14; i++)); do
+        printf -v stamp '202601010000%02d' "$i"
+        printf -v token 'B%05d' "$i"
+        printf 'managed-%s\n' "$i" > "$root/out/nezha-opsnap-${stamp}-${token}.tar.gz.enc"
+    done
+    printf 'external evidence\n' > "$root/out/nezha-opsnap-manual-evidence.tar.gz.enc"
+    printf 'daily files archive\n' > "$root/out/nezha-files-20260101000000-C00001.tar.gz.enc"
+    printf 'high frequency files archive\n' > "$root/out/nezha-filesfreq-20260101000000.tar.gz.enc"
+
+    NZ_MYSQLDUMP_ARGS="$args" NZ_DATE_TIMESTAMP=20990101010101 PATH="$root/bin:$PATH" \
+        bash "$root/nezha-encrypted-backup.sh" > "$output" 2>&1
+
+    managed_count=$(find "$root/out" -maxdepth 1 -type f -name 'nezha-opsnap-??????????????-??????.tar.gz.enc' | wc -l | tr -d ' ')
+    [ "$managed_count" -eq 14 ] || fail "opsnap retention left $managed_count managed archives, expected 14"
+    [ ! -f "$root/out/nezha-opsnap-20260101000001-B00001.tar.gz.enc" ] || fail 'opsnap retention did not prune the oldest managed archive'
+    [ -f "$root/out/nezha-opsnap-20260101000002-B00002.tar.gz.enc" ] || fail 'opsnap retention pruned more than the oldest managed archive'
+    [ -f "$root/out/nezha-opsnap-manual-evidence.tar.gz.enc" ] || fail 'opsnap retention deleted a non-whitelisted external archive'
+    [ -f "$root/out/nezha-files-20260101000000-C00001.tar.gz.enc" ] || fail 'opsnap retention deleted a daily files archive'
+    [ -f "$root/out/nezha-filesfreq-20260101000000.tar.gz.enc" ] || fail 'opsnap retention deleted a high-frequency files archive'
+    [ "$(find "$root/out" -maxdepth 1 -type f -name 'nezha-opsnap-20990101010101-??????.tar.gz.enc' | wc -l | tr -d ' ')" -eq 1 ] || fail 'opsnap retention deleted the archive produced by the current round'
+    echo '[backup-test] PASS opsnap retention prunes only whitelisted excess'
+}
+
 test_auto_detected_non_util_linux_flock_is_skipped(){
     local root output rc
     root=$(make_case auto-non-util-flock)
@@ -905,6 +1026,7 @@ test_files_and_offsite_stages_complete_a_full_round(){
     [ -s "$farchive" ] || fail 'files archive is empty'
     [ "$(stat -c%a -- "$farchive")" = '600' ] || fail 'files archive was published without 600 permissions'
     [ "$(find "$root/out" -maxdepth 1 -type f -name '*.sql.gz.enc' | wc -l | tr -d ' ')" -eq 1 ] || fail 'full round did not publish exactly one database artifact'
+    [ "$(opsnap_artifacts "$root/out" | wc -l | tr -d ' ')" -eq 1 ] || fail 'full round did not publish exactly one restore-point archive'
 
     # 归档实际内容必须同时含 storage/app 实体与 .env(换新机重建的两个必需项)。
     # 剥掉 openssl stub 的首行标记后用 tar -tf(自动识别): 沙箱 gzip stub 是直通不真压缩,
@@ -914,6 +1036,7 @@ test_files_and_offsite_stages_complete_a_full_round(){
     grep -Fxq '.env' "$root/archive.listing" || fail 'files archive does not contain the .env secret bundle'
 
     grep -Fq 'files backup ok:' "$output" || fail 'full round did not log the files success line'
+    grep -Fq 'opsnap backup ok:' "$output" || fail 'full round did not log the restore-point success line'
     grep -Fq 'db backup ok:' "$output" || fail 'full round did not log the database success line'
     grep -Fq 'R2 offsite push ok' "$output" || fail 'full round did not log the offsite success line'
     ! grep -Fq 'FAILED' "$output" || fail 'full round logged a failure line'
@@ -1040,4 +1163,8 @@ test_files_and_offsite_stages_complete_a_full_round
 test_files_failure_keeps_database_artifact_and_continues
 test_offsite_failure_alerts_and_exits_nonzero
 test_files_retention_prunes_only_whitelisted_excess
+test_opsnap_stage_archives_the_restore_point_directory
+test_opsnap_missing_source_is_skipped_not_failed
+test_opsnap_oversize_source_is_refused_and_logged
+test_opsnap_retention_prunes_only_whitelisted_excess
 echo '[backup-test] ALL PASS'

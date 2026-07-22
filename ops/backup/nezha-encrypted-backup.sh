@@ -6,6 +6,12 @@ PHP=/usr/bin/php
 KEY=/root/.nezha/backup.key
 OUTDIR=/www/backup/database/nezha-enc
 KEEP=14
+# 运维还原点目录($OPSNAP_PARENT/$OPSNAP_NAME): 改生产数据/图片前留的整行快照+逐张 SHA+还原器。
+# 它既不在 git、也不在 storage/app —— 2026-07-22 前不在任何备份覆盖面内, 盘一清还原路径就没了。
+OPSNAP_PARENT=${OPSNAP_PARENT:-/root/nzimg}
+OPSNAP_NAME=${OPSNAP_NAME:-backup}
+OPSNAP_KEEP=${OPSNAP_KEEP:-14}
+OPSNAP_MAX_MB=${OPSNAP_MAX_MB:-512}
 FLOCK_BIN=${FLOCK_BIN:-flock}
 RCLONE_BIN=${RCLONE_BIN:-/usr/local/bin/rclone}
 MAIL_HELPER=${MAIL_HELPER:-/www/wwwroot/api-deploy/current/nzwatch_mail.py}
@@ -18,6 +24,8 @@ TMP=''
 OUT=''
 FTMP=''
 FOUT=''
+OTMP=''
+OOUT=''
 COMMITTED=0
 LOCK="$OUTDIR/.nezha-encrypted-backup.lock"
 LOCK_FD_OPEN=0
@@ -32,6 +40,9 @@ cleanup(){
     fi
     if [ -n "$FTMP" ]; then
         rm -f -- "$FTMP" >/dev/null 2>&1 || true
+    fi
+    if [ -n "$OTMP" ]; then
+        rm -f -- "$OTMP" >/dev/null 2>&1 || true
     fi
     if [ "$LOCK_ACQUIRED" -eq 1 ]; then
         "$FLOCK_BIN" -u 9 >/dev/null 2>&1 || true
@@ -161,6 +172,51 @@ prune_old_files_backups(){
     [ "$deleted" -eq "$delete_count" ]
 }
 
+# 运维还原点归档件的滚动清理: 只认本前缀 nezha-opsnap-<14位时间戳>-<6位token>,
+# 与 DB 件($DB-*)/文件件(nezha-files-*)/高频件(nezha-filesfreq-*)的白名单互不相交。
+prune_old_opsnap_backups(){
+    local file base rest stamp token sorted i delete_count deleted
+    local -a managed=()
+
+    shopt -s nullglob
+    for file in "$OUTDIR"/nezha-opsnap-*.tar.gz.enc; do
+        base=${file##*/}
+        rest=${base#nezha-opsnap-}
+        stamp=${rest%%-*}
+        if [ "$stamp" = "$rest" ]; then
+            continue
+        fi
+        token=${rest#*-}
+        token=${token%.tar.gz.enc}
+        if [[ "$stamp" =~ ^[0-9]{14}$ ]] && [[ "$token" =~ ^[A-Za-z0-9]{6}$ ]]; then
+            managed+=("$file")
+        fi
+    done
+    shopt -u nullglob
+
+    if [ "${#managed[@]}" -le "$OPSNAP_KEEP" ]; then
+        return 0
+    fi
+    if ! sorted=$(printf '%s\n' "${managed[@]}" | sort -r); then
+        return 1
+    fi
+    if ! mapfile -t managed <<< "$sorted"; then
+        return 1
+    fi
+    delete_count=$((${#managed[@]} - OPSNAP_KEEP))
+    deleted=0
+    for ((i = ${#managed[@]} - 1; i >= 0 && deleted < delete_count; i--)); do
+        if [ "${managed[$i]}" = "$OOUT" ]; then
+            continue
+        fi
+        if ! rm -f -- "${managed[$i]}"; then
+            return 1
+        fi
+        deleted=$((deleted + 1))
+    done
+    [ "$deleted" -eq "$delete_count" ]
+}
+
 remove_orphaned_temp_files(){
     local file base rest stamp token
 
@@ -168,6 +224,18 @@ remove_orphaned_temp_files(){
     for file in "$OUTDIR"/."$DB"-*.tmp.*; do
         base=${file##*/}
         rest=${base#."$DB"-}
+        stamp=${rest%%.tmp.*}
+        token=${rest##*.tmp.}
+        if [[ "$stamp" =~ ^[0-9]{14}$ ]] && [[ "$token" =~ ^[A-Za-z0-9]{6}$ ]]; then
+            if ! rm -f -- "$file"; then
+                shopt -u nullglob
+                return 1
+            fi
+        fi
+    done
+    for file in "$OUTDIR"/.nezha-opsnap-*.tmp.*; do
+        base=${file##*/}
+        rest=${base#.nezha-opsnap-}
         stamp=${rest%%.tmp.*}
         token=${rest##*.tmp.}
         if [[ "$stamp" =~ ^[0-9]{14}$ ]] && [[ "$token" =~ ^[A-Za-z0-9]{6}$ ]]; then
@@ -238,6 +306,67 @@ run_files_backup(){
     fi
     FTMP=''
     printf '[%s] files backup ok: %s (%s bytes)\n' "$(date)" "$FOUT" "$size"
+}
+
+# 运维还原点归档: 把 $OPSNAP_PARENT/$OPSNAP_NAME 整目录加密成第三份归档件, 随本轮一起推 R2。
+# 目录不存在 = 跳过(不是错误: 没有待保护的还原点时它本就该是空的);
+# 超过 $OPSNAP_MAX_MB = 拒绝归档并留一行 FAILED(防有人往里丢大件, 把备份窗口和 R2 撑爆而没人知道);
+# 失败语义与 files 段一致: 记日志 + 继续, 绝不因它丢掉已发布的 DB 件。
+run_opsnap_backup(){
+    local src size mb
+    local -a pst
+    local trc frc
+
+    src="$OPSNAP_PARENT/$OPSNAP_NAME"
+    if [ ! -d "$src" ]; then
+        printf '[%s] opsnap backup skipped: %s does not exist\n' "$(date)" "$src"
+        return 0
+    fi
+    mb=$(du -sm -- "$src" 2>/dev/null | cut -f1)
+    if [[ ! "$mb" =~ ^[0-9]+$ ]]; then
+        printf '[%s] OPSNAP BACKUP FAILED: cannot measure %s\n' "$(date)" "$src"
+        return 1
+    fi
+    if [ "$mb" -gt "$OPSNAP_MAX_MB" ]; then
+        printf '[%s] OPSNAP BACKUP FAILED: %s is %sMB, over the %sMB cap; not archived\n' "$(date)" "$src" "$mb" "$OPSNAP_MAX_MB"
+        return 1
+    fi
+    if ! OTMP=$(mktemp "$OUTDIR/.nezha-opsnap-${TS}.tmp.XXXXXX"); then
+        OTMP=''
+        printf '[%s] OPSNAP BACKUP FAILED: cannot create temporary archive\n' "$(date)"
+        return 1
+    fi
+    OOUT="$OUTDIR/nezha-opsnap-${TS}-${OTMP##*.tmp.}.tar.gz.enc"
+    if [ -e "$OOUT" ]; then
+        printf '[%s] OPSNAP BACKUP FAILED: archive destination already exists\n' "$(date)"
+        rm -f -- "$OTMP"; OTMP=''; OOUT=''
+        return 1
+    fi
+
+    tar -czf - --warning=no-file-changed -C "$OPSNAP_PARENT" "$OPSNAP_NAME" | openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:"$KEY" -out "$OTMP"
+    pst=("${PIPESTATUS[@]}"); trc=${pst[0]:-1}; frc=${pst[1]:-1}
+    if [ "$frc" -ne 0 ] || [ "$trc" -ge 2 ]; then
+        printf '[%s] OPSNAP BACKUP FAILED tar=%s openssl=%s\n' "$(date)" "$trc" "$frc"
+        rm -f -- "$OTMP"; OTMP=''; OOUT=''
+        return 1
+    fi
+    if ! chmod 600 "$OTMP"; then
+        printf '[%s] OPSNAP BACKUP FAILED: cannot secure temporary archive\n' "$(date)"
+        rm -f -- "$OTMP"; OTMP=''; OOUT=''
+        return 1
+    fi
+    if ! size=$(stat -c%s -- "$OTMP") || [[ ! "$size" =~ ^[0-9]+$ ]] || [ "$size" -le 0 ]; then
+        printf '[%s] OPSNAP BACKUP FAILED: temporary archive is empty or unreadable\n' "$(date)"
+        rm -f -- "$OTMP"; OTMP=''; OOUT=''
+        return 1
+    fi
+    if ! mv -- "$OTMP" "$OOUT"; then
+        printf '[%s] OPSNAP BACKUP FAILED: cannot publish archive atomically\n' "$(date)"
+        rm -f -- "$OTMP"; OTMP=''; OOUT=''
+        return 1
+    fi
+    OTMP=''
+    printf '[%s] opsnap backup ok: %s (%s bytes)\n' "$(date)" "$OOUT" "$size"
 }
 
 trap cleanup EXIT
@@ -315,6 +444,9 @@ if ! prune_old_backups; then
 fi
 run_files_backup || true
 prune_old_files_backups || printf '[%s] FILES BACKUP FAILED: cannot enforce files retention policy\n' "$(date)"
+# 放在 'db backup ok' 之前: nzdaily.sh 只 tail -2 backup.log, 插在后面会把 db 那行挤出日报视野。
+run_opsnap_backup || true
+prune_old_opsnap_backups || printf '[%s] OPSNAP BACKUP FAILED: cannot enforce opsnap retention policy\n' "$(date)"
 if ! printf '[%s] db backup ok: %s (%s bytes)\n' "$(date)" "$OUT" "$SIZE"; then
     fail 'cannot report backup success'
 fi
