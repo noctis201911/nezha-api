@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\Cache;
 use App\Models\SubscriptionTransaction;
+use App\Support\PublicHtmlSanitizer;
 use Illuminate\Support\Facades\Session;
 use App\Traits\ActivationClass;
 
@@ -453,7 +454,7 @@ class HomeController extends Controller
     public static function get_settings($name)
     {
         $data = DataSetting::where(['key' => $name])->first()?->value;
-        return $data;
+        return PublicHtmlSanitizer::cleanSetting($name, $data);
     }
 
 
@@ -484,7 +485,7 @@ class HomeController extends Controller
         }else{
             $data = $data ? $data->value: '';
         }
-        return $data;
+        return PublicHtmlSanitizer::cleanSetting($name, $data);
     }
 
     public function maintenanceMode(){
