@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Models\DataSetting;
+use App\Support\PublicHtmlSanitizer;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 
@@ -61,6 +62,6 @@ class HomeController extends Controller
         }else{
             $data = $data ? $data->value: '';
         }
-        return $data;
+        return PublicHtmlSanitizer::cleanSetting($name, $data);
     }
 }

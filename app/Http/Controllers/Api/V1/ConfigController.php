@@ -33,6 +33,7 @@ use Illuminate\Support\Facades\Cache;
 use App\Models\ReactPromotionalBanner;
 use App\Models\ReactTestimonial;
 use App\Models\Shift;
+use App\Support\PublicHtmlSanitizer;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use MatanYadaev\EloquentSpatial\Objects\Point;
@@ -498,7 +499,7 @@ class ConfigController extends Controller
             return $data;
         });
 
-        return $data;
+        return PublicHtmlSanitizer::cleanSetting($name, $data);
     }
 
     public function get_zone(Request $request)
