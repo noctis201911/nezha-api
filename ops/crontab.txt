@@ -1,6 +1,8 @@
 # =====================================================================
 # 哪吒服务器 root crontab 快照（导出自 `crontab -l`，仅作文档/重建参考）
 # 服务器: 178.105.216.158
+# 最后同步: 2026-07-22 —— 上一版只有 4 条、真实有 11 条，且 [3] 路径已过期。
+#           照旧版重建会缺: binlog 异地备份 / 文件异地备份 / TLS 证书续期 / 全部监控。
 # 恢复方法: 审阅后用 `crontab -e` 手工录入需要的行（不要整文件覆盖，
 #           因为第 1 条是宝塔面板托管、换机时由宝塔自己重建）。
 # =====================================================================
@@ -13,7 +15,39 @@
 */3 * * * * /usr/local/bin/proxy-watchdog.sh
 
 # [3] Laravel 计划任务调度器：每分钟跑一次（驱动后端所有 schedule，如凭证90天自动删等）。
-* * * * * cd /www/wwwroot/api.nezha.am && /usr/bin/php artisan schedule:run >> /dev/null 2>&1
+#     🔴 2026-07-22 更正：随 release 部署改造，已改为从 api-deploy/current 跑、且以 www 身份执行。
+#        旧快照写的是 `cd /www/wwwroot/api.nezha.am && /usr/bin/php ...`（共享工作树 + root），
+#        照旧版重建会跑错树、属主也错。
+* * * * * cd /www/wwwroot/api-deploy/current && sudo -u www -H /usr/bin/php artisan schedule:run >> /dev/null 2>&1
 
 # [4] 每日加密数据库备份：04:17 跑 nezha-encrypted-backup.sh（脚本快照见 ops/backup/）。
 17 4 * * * /root/nezha-backup/nezha-encrypted-backup.sh >> /root/nezha-backup/backup.log 2>&1
+
+# ---------------------------------------------------------------------
+# 以下 7 条为 2026-07-22 补录 —— 此前快照全部遗漏。
+# ---------------------------------------------------------------------
+
+# [5] 服务器监控巡检：每 5 分钟（脚本随 release 出货，从 current 跑）。
+*/5 * * * * /www/wwwroot/api-deploy/current/nzwatch.sh >> /tmp/nzwatch.log 2>&1
+
+# [6] 🔴 binlog 异地备份：每 5 分钟。PITR 的 RPO 就靠它，漏了它=只剩每日全量。
+#     注: 脚本路径指向共享工作树，非 release。
+*/5 * * * * bash /www/wwwroot/api.nezha.am/nzbinlog_offsite.sh >> /tmp/nzbinlog_offsite_cron.log 2>&1
+
+# [7] 🔴 上传文件异地备份：每 6 小时。同样指向共享工作树，非 release。
+0 */6 * * * bash /www/wwwroot/api.nezha.am/nzfiles_offsite.sh >> /tmp/nzfiles_offsite_cron.log 2>&1
+
+# [8] 🔴 TLS 证书自动续期（acme.sh）：每日 18:55。漏了它=证书到期后全站不可访问。
+55 18 * * * "/root/.acme.sh"/acme.sh --cron --home "/root/.acme.sh" > /dev/null
+
+# [9] 运营日报邮件：每日 08:30（从 current 跑）。
+30 8 * * * bash /www/wwwroot/api-deploy/current/nzdaily_mail.sh >> /tmp/nzdaily_cron.log 2>&1
+
+# [10] staging 相关定时脚本：每 10 分钟。脚本 /www/wwwroot/nzstaging-nice.sh
+#      ⚠️ 该脚本不在任一 repo 内，且其具体用途本次未查证。
+*/10 * * * * /bin/bash /www/wwwroot/nzstaging-nice.sh >/dev/null 2>&1
+
+# [11] P8 防火墙漂移哨兵：每 15 分钟，只告警不改 ufw。
+#      脚本 nzcf-guard-cron.sh + nzcf-guard.sh 已于 2026-07-22 纳入本 repo 根目录
+#      （此前它们只存在于共享工作树、不在 git、不在任何 release、仓库备份覆盖不到）。
+*/15 * * * * bash /www/wwwroot/api.nezha.am/nzcf-guard-cron.sh
