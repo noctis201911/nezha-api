@@ -16,6 +16,7 @@ use App\Models\RestaurantConfig;
 use App\Models\RestaurantSubscription;
 use App\Models\Setting;
 use App\Models\Translation;
+use App\Support\PublicHtmlSanitizer;
 use App\Traits\Processor;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\Request;
@@ -1273,6 +1274,12 @@ class BusinessSettingsController extends Controller
 
     private function update_data($request, $key_data)
     {
+        $defaultIndex = array_search('default', $request->lang, true);
+        $defaultIndex = $defaultIndex === false ? 0 : $defaultIndex;
+        $defaultValue = PublicHtmlSanitizer::cleanSetting(
+            $key_data,
+            $request->{$key_data}[$defaultIndex]
+        );
         $data = DataSetting::firstOrNew(
             [
                 'key' => $key_data,
@@ -1280,11 +1287,15 @@ class BusinessSettingsController extends Controller
             ],
         );
 
-        $data->value = $request->{$key_data}[array_search('default', $request->lang)];
+        $data->value = $defaultValue;
         $data->save();
         $default_lang = str_replace('_', '-', app()->getLocale());
         foreach ($request->lang as $index => $key) {
-            if ($default_lang == $key && ! ($request->{$key_data}[$index])) {
+            $translatedValue = PublicHtmlSanitizer::cleanSetting(
+                $key_data,
+                $request->{$key_data}[$index]
+            );
+            if ($default_lang == $key && ! $translatedValue) {
                 if ($key != 'default') {
                     Translation::updateOrInsert(
                         [
@@ -1297,7 +1308,7 @@ class BusinessSettingsController extends Controller
                     );
                 }
             } else {
-                if ($request->{$key_data}[$index] && $key != 'default') {
+                if ($translatedValue && $key != 'default') {
                     Translation::updateOrInsert(
                         [
                             'translationable_type' => 'App\Models\DataSetting',
@@ -1305,7 +1316,7 @@ class BusinessSettingsController extends Controller
                             'locale' => $key,
                             'key' => $key_data,
                         ],
-                        ['value' => $request->{$key_data}[$index]]
+                        ['value' => $translatedValue]
                     );
                 }
             }
