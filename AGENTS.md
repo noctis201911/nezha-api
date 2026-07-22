@@ -18,13 +18,20 @@
 - 脚本用 **flock 串行化**，并核对排队前后的 current、fetch 后的 `origin/main` 与完整目标 SHA；等待期间 current 改变或构建期间 ref 漂移会拒绝切换。失败不切换、健康门自动回滚。
 - **任何窗口都可自行构建，不需要等谁手动把关**——用户不一定在电脑前。
 - 🔴**2026-07-22 实读更正（本节原「残余风险」条已作废）**：`nzdeploy-web.sh:128` 与 `nzdeploy-api.sh:165` 都是 `git archive <目标SHA> | tar -x`——release 从 **git 对象库**按精确 SHA 出货，**别窗未提交的 WIP 物理上进不了 release**。「构建带别人半成品上线」这个风险自 2026-06-22 切 release 起已归零，**不必为它等人、不必避让**。
-- 🔴**唯一残留的共享树耦合是依赖目录，且有明确触发条件**：部署器优先从**上一个 release** 复制 `node_modules`（`nzdeploy-web.sh:135`），**只有当本次部署的 `package-lock.json` 与线上不一致时**，才回退到**共享工作树**取（`:138`）。所以依赖没变的常规部署根本不碰共享树；**只有依赖变更的部署**才需确认共享树 `node_modules` 干净（服务器加改依赖本就有 `[DEP-OK]` 墙拦，两者对齐）。后端更干净：`nzdeploy-api.sh:181` 的 vendor 从上一个 release 硬链，任何情况都不碰共享树。
+- 🔴**唯一残留的共享树耦合是依赖目录，且有明确触发条件**：部署器优先从**上一个 release** 复制 `node_modules`（`nzdeploy-web.sh:135`），**只有当本次部署的 `package-lock.json` 与线上不一致时**，才回退到**共享工作树**取（`:138`）。所以依赖没变的常规部署根本不碰共享树；**只有依赖变更的部署**才需确认共享树 `node_modules` 干净（Claude 窗口另有本机 `[DEP-OK]` 墙拦服务器加改依赖；**Codex 等其它窗口无此墙**，靠本条自觉）。后端更干净：`nzdeploy-api.sh:181` 的 vendor 从上一个 release 硬链，任何情况都不碰共享树。
 
 ## 1. 一窗一提交（不留 WIP）
 每改完一处、**Playwright 验证通过后立刻 commit**：精确 `git add <自己的文件>`（**严禁 `-a` / `-am`**，会打包别人的改动），写清描述后 commit + push。
 **绝不让自己的半成品在工作树里过夜**——🔴 理由 2026-07-22 已更正：不是「会被构建推上线」（`git archive` 按 SHA 出货，已不可能），而是**别窗会卷走你的改动**（整文件 get/put 覆盖、共享 `.git/index` 串味、别窗 plain commit 回退）。丢的是**你的活**，不是线上。
 
 > 🛡️ **推荐用 `/www/wwwroot/nzcommit.sh`（私有 index 提交，架构债 Step3-B）**：`node nz.js run "bash /www/wwwroot/nzcommit.sh <repo> -b <base64中文消息> <文件...>"`（英文 msg 可 -m）。它把暂存放进**每进程私有 index**（从 HEAD 起、只 add 你列的文件），**别窗的 `git commit` 卷不走你 add 的文件**（共享 .git/index 串味，2026-06-21 真出过事）；提交后自动 `reset HEAD -- <文件>` 把共享 index 拉平、防别窗 plain commit 回退你的文件。不 push，提交后照常 `git -C <repo> push`。opt-in，没用此脚本的窗口=现状无回归。
+
+## 1.1 🔴 main 必须时刻可部署〔2026-07-22 定·同日判例〕
+进 `origin/main` 的每一个提交，必须处于「任何窗口、任何时刻拿去部署都安全」的状态：
+- 功能/视觉改动 → 要么总闸默认关（dormant，翻闸另走验收），要么已过对应验收（前端=业主截图点头；高风险=GATE）。
+- 达不到 → 留在自己分支（`nz/*`/`codex/*`）；要新坐标就 rebase origin/main，**别拿合 main 当占位**。
+- 判例：2026-07-22 动效批7 波A `3868c0e` 未过 GATE 却占住 origin/main HEAD 与公共 staging，被迫全局 revert（`3eeb047`）+ 拆门收场。
+- 本条同时化解「谁部署谁背书别人 N 个提交」的顾虑：release 出的是整棵 main（`git archive <SHA>`），main 上没有不可部署的东西，捎带别人的提交才是安全的；§0.5 的自动升产授权也隐含依赖本条。
 
 ## 1.5 🔴 共享工作树的定位：只读坐标系，不是编辑台〔2026-07-22 定〕
 `/www/wwwroot/nezha.am` 与 `/www/wwwroot/api.nezha.am` **不只是「大家的编辑台」**——它们同时是 release 部署读取的 `.git` 对象源、`storage` 等软链的挂载点、若干常驻进程的运行目录、以及部分 cron 脚本的所在地。在上面直接改源码，代价**不是**「上线事故」（`git archive` 已挡住），而是**互相卷走改动**与**坐标系失真**。
@@ -56,6 +63,8 @@
 ## 3. 先认领再动手
 动某文件/页面前，到末尾「认领区」加一行（改完即 commit+push 这一行；登记前先 `git pull`）。其它窗口动手前先扫这区，撞了先避让或找人协调，干完划掉自己那行。
 
+**占公共运行态也要认领〔0722〕**：翻全局开关 / `cache:clear` / 重启 fpm / 占公共 staging（3002）之前，先在认领区登记一行（干什么＋预计多久），完事恢复原值并划掉——别窗的验证可能正跑在你要动的运行态上，你一动，它的绿灯就成了假绿。
+
 ## 4. 跨全站改动要打招呼
 改 theme / navbar / `_app` / 全局样式 / `nzbuild.sh` / `next.config.js` 这类**牵一发动全身**的东西，先在认领区显著标注——它几乎和所有页面冲突，别人没法躲。
 
@@ -70,6 +79,7 @@
 > - `- [ ]` / `- [x] <窗口名>` = **认领**：我要动 / 已动了什么。干完划掉。
 > - `- ⚙️发现 <日期>` = **发现**：我看到一个**不属于我这次任务**的问题。**只写一行，不要求发现者去修**，给业主和后续窗口看。
 >   由来：2026-07-22 —— AGENTS.md「构建守门」整节死了 30 天没被报过，不是没人看见，是**看见了也没地方放**：认领区只收「我做了什么」，聊天里说的话窗口一关就没了。**看到就写，一行也算。**
+> - **瘦身纪律〔0722〕**：本区只留最近 14 天与所有未完成 `[ ]` / `⚙️发现`；更老的已完成 `[x]` 整行移入 `AGENTS_ARCHIVE.md`（搬运净删 >15 行会触 commit-msg 墙，带 `[force-revert]` 属预期）。首次搬运待做。
 
 <!-- 格式： - [ ] 窗口X 正在改 <文件/页面>（YYYY-MM-DD HH:MM） -->
 - [x] Codex(渗透测试阻断项修复·2026-07-22) ✅已完成并合入 main `5fa1bd3e68acbdbb24b43eee6dfeec5462926861`；API staging 从原基线仅回移 4 个安全提交，release `20260722-111337-7a75899` / SHA `7a75899cfea5bc13885fd4e030af7cfefd4a2d83`，旧 release `20260720-155910-dbd6aee` 保留为回滚点。已退役公开图片代理；六类公开富文本增加写入/输出双层 HTMLPurifier 白名单；Guzzle 7.15.1 / PSR-7 2.13.0。清洗/路由测试 3 passed/1 warning、17 assertions，仓库守卫 20/20、PHP lint、Composer audit 通过；staging config=200、`/image-proxy`=404、政策页 DOM 无 iframe/事件属性/`javascript:`，0 Pending migration。未写数据库或数据，production 未部署。（2026-07-22）
@@ -359,3 +369,5 @@ dashboard
 - ⚙️发现 2026-07-22 `ops/crontab.txt` 的 [6] binlog 异地备份、[7] 文件异地备份两条，脚本路径指向**共享工作树** `/www/wwwroot/api.nezha.am/` 而非 release。共享树若被清理或重置，这两个 RPO 关键任务会**静默失效**（cron 不会报错）。
 - ⚙️发现 2026-07-22 `/www/wwwroot/codex-usdt-production-backport-api-20260714-1830` 里有个 `php -S 127.0.0.1:3317` 自 07-15 起跑了 7 天。未查它还有没有 nginx 入口，**未停**。
 - ⚙️发现 2026-07-22 全服 **31 棵 worktree 无人回收**（合计 14.3G）。其中 4 棵的提交已抢救成 `rescue/*`，但**一棵都没删**，回收需业主拍板。⚠️严格判据下只有 1 棵可安全回收（139M）——**worktree 不是磁盘问题**，大头是 `web-deploy/releases`(6.6G) 与孤儿 `web-staging-deploy`(5.5G)。
+- ⚙️发现 2026-07-22 根级回滚/备份 json 家底（含 `_merchant_2fa_schedule_backup_prod_*.json` 这类**生产数据逆操作凭据**）自 0722 起被 .gitignore 隐身：`git status` 不再显示、只活在共享树、无保留策略、仓库备份覆盖不到（副作用是好的：`git clean -f` 不删 ignored 文件）。建议归置 `/root/nezha-backup/` 或定保留期；动之前逐个确认对应任务已闭环。
+- [x] Fable(复核窗·2026-07-22) 本窗记录复核＋业主逐项授权后落地：①新增 §1.1「main 必须时刻可部署」（判例=同日波A revert `3868c0e`→`3eeb047`）②§3 补「占公共运行态也要认领」③认领区瘦身纪律＋`AGENTS_ARCHIVE.md` 存根（**首次搬运未做**，留后续窗口）④[DEP-OK] 表述修正（该墙只约束 Claude 窗口，Codex 无）⑤FE：改写被证伪的 pm2 ⚙️ 条目（pm2 为 per-user；生产一直在 www 的 pm2 下）⑥已执行 `pm2 delete nezha-web-staging`＋`save`（`next dev -p 3001` 指向已删路径→MODULE_NOT_FOUND 无限重启、错误日志 14.4MB；删后实测 fork 3 秒零重生、:3000/:3002 无恙；恢复=`pm2 start` 指回有效目录）⑦新增 ⚙️ 两条（www pm2 无 logrotate／回滚 json 隐身）。周二 triage 任务提示词同步补 pm2 per-user 查法＋认领区健康度。未碰业务代码、未部署、未翻业务开关。
