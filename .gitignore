@@ -42,3 +42,11 @@ reset-pwd.php
 *.swo
 .DS_Store
 Thumbs.db
+
+# === 2026-07-22: 恢复 git status 信号 (残渣淹没别窗 WIP, 导致构建前扫一眼失效) ===
+# 根级 _ 前缀 = 历史任务的一次性 seed/rollback/backup 脚本与快照
+# (已验证: git ls-files | grep -c '^_' == 0, 无 tracked 文件被误伤; 需入库时 git add -f)
+/_*
+# .bakN.时间戳 变体 —— 既有 *.bak / *.bak.* 漏掉了 .bak2. .bak41. .bakdel. 等形态
+*.bak*
+.phpunit.result.cache
