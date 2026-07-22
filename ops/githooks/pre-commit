@@ -1,0 +1,31 @@
+#!/bin/sh
+# 哪吒[php -l 墙] pre-commit hook (仅后端 api.nezha.am)
+# 对本次提交 staged 的 .php 跑语法检查(查的是 index/暂存内容, 不是工作树, 故 nzcommit 私有 index 也适用)。
+# 有语法错即拒绝提交, 把"我改的PHP没问题"这句硬断言换成墙自己 php -l 一遍。
+# 与 commit-msg『防覆盖墙』共存(不同事件)。应急绕过(自负风险): git commit --no-verify
+ROOT="$(git rev-parse --show-toplevel)" || exit 1
+cd "$ROOT" || exit 1
+command -v php >/dev/null 2>&1 || exit 0   # 无 php 不拦, 不误伤
+
+fail=""
+for f in $(git diff --cached --name-only --diff-filter=ACM -- '*.php'); do
+  tmp="$(mktemp /tmp/nzlint.XXXXXX)" || continue
+  git show ":$f" > "$tmp" 2>/dev/null
+  out="$(php -l "$tmp" 2>&1)"
+  rc=$?
+  rm -f "$tmp"
+  if [ "$rc" -ne 0 ]; then
+    msg="$(printf '%s' "$out" | grep -iE 'error|parse' | head -2)"
+    fail="${fail}  - ${f}
+      ${msg}
+"
+  fi
+done
+
+if [ -n "$fail" ]; then
+  printf '%s\n' "[php -l 墙] 拒绝提交: 以下 staged PHP 文件有语法错误:"
+  printf '%s' "$fail"
+  printf '%s\n' "修复后再提交。应急绕过(自负风险): git commit --no-verify"
+  exit 1
+fi
+exit 0

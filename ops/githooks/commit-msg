@@ -1,0 +1,46 @@
+#!/bin/sh
+# 哪吒[防覆盖墙] commit-msg hook
+# 拦"疑似用旧备份/旧快照回退 origin/main 的提交"(相对 origin/main 净删 > 阈值)。
+# 根因: 多窗口共享工作树, 某窗 cp 旧 .bak 盖盘上文件再提交, 会悄悄退掉别窗已 push 的新代码(2026-06-21 customerKb 被退案)。
+# best-effort: 比的是"本地" origin/main ref(未 fetch 会偏旧); catastrophic 路径 push/deploy 自己会 fetch。
+# 放行: commit message 含 [force-revert](确认是有意大删除) 或 git commit --no-verify。
+MSGFILE="$1"
+THRESH=15
+ROOT="$(git rev-parse --show-toplevel)" || exit 1
+cd "$ROOT" || exit 1
+
+# 有令牌直接放行
+if [ -n "$MSGFILE" ] && grep -qF '[force-revert]' "$MSGFILE"; then
+  exit 0
+fi
+# 无本地 origin/main ref → 无从比对, 跳过(不误拦)
+git rev-parse --verify -q origin/main >/dev/null 2>&1 || exit 0
+
+flagged=""
+# 仅看 新增/改动/复制 的文件(整文件删除属另一种意图, 不在此墙)
+for f in $(git diff --cached --name-only --diff-filter=ACM); do
+  # 2026-07-22 修: 原来数 diff 正文行 '^-[^-]'/'^+[^+]', 会把"内容本身以 - / + 开头"的行
+  # (markdown 列表、YAML 列表)整片漏数 → AGENTS.md 认领区被整片删也 net=0 放行(0722 实测)。
+  # 改用 --numstat, 由 git 直接给准确增删行数。
+  ns=$(git diff --cached --numstat origin/main -- "$f" 2>/dev/null | head -1)
+  [ -z "$ns" ] && continue
+  add=$(printf '%s\n' "$ns" | cut -f1)
+  rem=$(printf '%s\n' "$ns" | cut -f2)
+  # 二进制文件 numstat 出 "-", 无从比对, 跳过
+  case "$add$rem" in *-*) continue ;; esac
+  net=$((rem - add))
+  if [ "$net" -gt "$THRESH" ]; then
+    flagged="${flagged}  - $f (相对 origin/main 净删 ${net} 行)
+"
+  fi
+done
+
+if [ -n "$flagged" ]; then
+  printf '%s\n' "[防覆盖墙] 拦下: 本次提交相对 origin/main 净删大量行, 疑似用旧备份/旧快照覆盖、退掉他窗已 push 的代码:"
+  printf '%s' "$flagged"
+  printf '%s\n' "请先核对每个文件: git diff origin/main -- <文件>"
+  printf '%s\n' "确认确是【有意】大删除 → 在 commit message 末尾加 [force-revert] 重新提交。"
+  printf '%s\n' "应急绕过(自负风险): git commit --no-verify"
+  exit 1
+fi
+exit 0
