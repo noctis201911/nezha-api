@@ -1,6 +1,5 @@
 <?php
 
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\PaytmController;
 use App\Http\Controllers\LiqPayController;
@@ -267,55 +266,6 @@ Route::group(['prefix' => 'deliveryman', 'as' => 'deliveryman.'], function () {
     Route::get('apply', [DeliveryManController::class, 'create'])->name('create');
     Route::post('apply', [DeliveryManController::class, 'store'])->name('store');
 });
-
-Route::get('/image-proxy', function () {
-    $url = request('url');
-    if (!$url) {
-        abort(400, 'Missing url parameter');
-    }
-
-    // 哪吒安全(2026-07-11 N-01): 免登录图片代理加 SSRF 护栏——防被当跳板打内网/云元数据(169.254)/环回并回吐响应体。
-    //   仅放行 http(s) + host 解析出的所有 IP 均不落 私网/保留/环回/link-local 段; 加超时与响应体积上限 + 限速。
-    //   已知残余: DNS 重绑定(校验后 Http::get 再解析)未根除——image-proxy 现无前端/后端调用, 后续可收紧或直接下线。
-    $parts = parse_url($url);
-    if ($parts === false || empty($parts['scheme']) || empty($parts['host'])
-        || !in_array(strtolower($parts['scheme']), ['http', 'https'], true)) {
-        abort(400, 'Invalid url');
-    }
-    $ips = [];
-    if (filter_var($parts['host'], FILTER_VALIDATE_IP)) {
-        $ips[] = $parts['host'];
-    } else {
-        foreach ((array) @dns_get_record($parts['host'], DNS_A + DNS_AAAA) as $rec) {
-            if (!empty($rec['ip'])) { $ips[] = $rec['ip']; }
-            if (!empty($rec['ipv6'])) { $ips[] = $rec['ipv6']; }
-        }
-        foreach ((array) (@gethostbynamel($parts['host']) ?: []) as $ip4) {
-            $ips[] = $ip4;
-        }
-    }
-    if (empty($ips)) {
-        abort(400, 'Host resolution failed');
-    }
-    foreach ($ips as $ip) {
-        if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
-            abort(403, 'Blocked target');
-        }
-    }
-
-    $response = Http::timeout(8)->withHeaders([
-        'User-Agent' => 'Laravel-Image-Proxy'
-    ])->get($url);
-
-    $body = $response->body();
-    if (strlen($body) > 8 * 1024 * 1024) {
-        abort(413, 'Image too large');
-    }
-
-    return response($body, $response->status())
-        ->header('Content-Type', $response->header('Content-Type'))
-        ->header('Access-Control-Allow-Origin', '*');
-})->middleware('throttle:30,1');
 
 /*
 |--------------------------------------------------------------------------
