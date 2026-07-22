@@ -119,6 +119,13 @@ echo "[7] git 墙 (ops/githooks 正本 vs 已装 hooks)"
 for R in ${NZDAILY_GITHOOK_REPOS:-/www/wwwroot/nezha.am /www/wwwroot/api.nezha.am}; do
   N=$(basename "$R")
   if [ -r "$R/ops/githooks/install.sh" ]; then
+    # 2026-07-22 GATE 审计第5条: 本段由 root cron 每天执行, 而 $R 是共享工作树(可变),
+    #   等于给能写工作树的任何主体一条每日 root 执行通道。nzdaily.sh 自身跑在不可变 release 里,
+    #   故在此加守卫: 工作树副本相对 HEAD 一旦被改动就拒绝执行, 只报警不运行。
+    if ! git -C "$R" diff --quiet HEAD -- ops/githooks/install.sh 2>/dev/null; then
+      red "${N} ops/githooks/install.sh 相对 HEAD 已被改动 — 拒绝以 root 执行工作树副本(疑被篡改), 请人工比对后再跑"
+      continue
+    fi
     GOUT=$(bash "$R/ops/githooks/install.sh" --check 2>&1); GRC=$?
     printf '%s\n' "$GOUT" | grep -E '\[(一致|漂移)\]|未安装' | sed "s|^ *|    ${N}: |"
     [ "$GRC" -ne 0 ] && red "${N} git 墙漂移/缺失 — 防覆盖墙/php-l墙/L1红线墙可能已失守, 重装: bash ${R}/ops/githooks/install.sh"
