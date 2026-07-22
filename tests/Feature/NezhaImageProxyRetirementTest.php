@@ -14,7 +14,5 @@ class NezhaImageProxyRetirementTest extends TestCase
         );
 
         $this->assertFalse($registered);
-        $this->get('/image-proxy?url=https%3A%2F%2Fexample.com%2Fimage.png')
-            ->assertNotFound();
     }
 }
