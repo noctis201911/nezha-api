@@ -26,6 +26,26 @@
 
 > 🛡️ **推荐用 `/www/wwwroot/nzcommit.sh`（私有 index 提交，架构债 Step3-B）**：`node nz.js run "bash /www/wwwroot/nzcommit.sh <repo> -b <base64中文消息> <文件...>"`（英文 msg 可 -m）。它把暂存放进**每进程私有 index**（从 HEAD 起、只 add 你列的文件），**别窗的 `git commit` 卷不走你 add 的文件**（共享 .git/index 串味，2026-06-21 真出过事）；提交后自动 `reset HEAD -- <文件>` 把共享 index 拉平、防别窗 plain commit 回退你的文件。不 push，提交后照常 `git -C <repo> push`。opt-in，没用此脚本的窗口=现状无回归。
 
+## 1.5 🔴 共享工作树的定位：只读坐标系，不是编辑台〔2026-07-22 定〕
+`/www/wwwroot/nezha.am` 与 `/www/wwwroot/api.nezha.am` **不只是「大家的编辑台」**——它们同时是 release 部署读取的 `.git` 对象源、`storage` 等软链的挂载点、若干常驻进程的运行目录、以及部分 cron 脚本的所在地。在上面直接改源码，代价**不是**「上线事故」（`git archive` 已挡住），而是**互相卷走改动**与**坐标系失真**。
+
+- **动手前从最新 `origin/main` 建隔离 worktree**：
+  `git -C <repo> worktree add /root/nzwt/<任务名> -b nz/<任务名> origin/main`
+  在里面改、测、commit，再 `git push origin HEAD:main`（或先推自己分支）。
+- **共享树只用来**：读 git 历史与对象、跑部署器、看认领区。
+- 🔴**别拿共享树当「线上现在什么样」的坐标系**：2026-07-22 实测它落后 `origin/main`——后端 5 个提交、前端 13 个提交（今日已追平，但它会再漂）。要判断线上，读 `*-deploy/current/.nz-deploy-sha`。
+
+### 🔴 建了 worktree 就登记，干完就回收
+建 worktree 时在末尾「认领区」那一行写清**路径**。不登记的代价不是撞车，是**静默丢活**：
+
+> 2026-07-22 盘点：全服 **31 棵 worktree**，其中 **4 棵里的 24 个提交 + 17 个未提交改动没有任何远端副本**，最久的放置 9 天无人认领。已全部抢救成远端 `rescue/*` 分支，但下一次不一定有人来查。
+
+**回收前下面两条必须都空**，否则不许 `git worktree remove`：
+1. `git -C <worktree> status --short` —— 有没有未提交的活
+2. `git -C <worktree> branch -r --contains HEAD` —— **空 = 全服只此一份，删了就永久没了**（比 `origin/main..HEAD` 更准：它查的是所有远端 ref，不只 main）
+
+⚠️**别为了腾磁盘删 worktree**：31 棵合计 14.3G，但严格判据下只有 1 棵可安全回收（139M）。真正的大头是 `web-deploy/releases`(6.6G) 与已无 nginx 引用的 `web-staging-deploy`(5.5G)。
+
 ## 2. 构建前扫一眼（🔴2026-07-22 重写：该扫的东西整个变了）
 - 🔴**别窗未提交的代码改动一律不用管**——`git archive` 按 SHA 出货，进不了 release。看到别窗 WIP **不必等、不必避让**。（这是本节旧版最主要的错误指引，曾让不相干的并行任务互相排队，现作废。）
 - 🔴**要扫的只有依赖目录，且只在依赖变更时**：只有本次部署的 `package-lock.json` 与线上不一致时，部署器才从共享工作树取 `node_modules`（`nzdeploy-web.sh:138`）。依赖没变的常规部署不碰共享树，无需扫。
@@ -112,7 +132,7 @@
    确是【有意】大删除 → 在 commit message 末尾加 `[force-revert]` 重提；应急 `git commit --no-verify`(自负风险)。
    注: 墙比的是本地 origin/main ref(未 fetch 会偏旧)，是提交期 best-effort；catastrophic 路径 push/deploy 自己会 fetch。
 
-这两道只堵"提交卫生"。两窗同时物理改同一文件盖盘仍靠【认领区】。完整 worktree 隔离(路线A)暂缓，待并发变密集再升级。
+这两道只堵"提交卫生"。两窗同时物理改同一文件盖盘仍靠【认领区】。🔴2026-07-22 更新：原「完整 worktree 隔离(路线A)暂缓，待并发变密集再升级」已作废——并发确实变密集了（实测 31 棵 worktree、9 个 pm2 外裸起的 next-server），**worktree 隔离已定为默认开工姿势，见 §1.5**。
 - [x] Claude(窗口SEC-CS-PERMISSION) ✅已完成上线(提交7edc2cb·deploy release 7edc2cb): nezha-cs 后台拆独立权限位 module:nezha_cs(原整组搭 module:order=仅 order 权限员工即可进 AI 客服后台·改总开关影响真实顾客·看顾客客服评价含PII) — routes/admin.php 路由组 + _sidebar「AI在线客服」菜单 guard 由 module_permission_check('chat') 对齐到 'nezha_cs' + custom-role create/edit.blade 补 nezha_cs checkbox(复用既有 translate('AI在线客服') 零新增未译key)。DeepSeek key 脱敏审查=无需改动(nezha_cs_ai_api_key 后台从不渲染明文, NezhaCsController 仅取 (bool)hasKey 作"是否已配置"提示, saveSettings 不写该key, blade 无输入框, 仅服务端 NezhaCsAssistant 读取)。验证: route:list 4条全挂 nezha_cs + 权限门三态(order-only deny / nezha_cs allow / 超管 role_id=1 bypass) + 3 blade 编译 + create 页完整渲染含 checkbox + 部署版复核。私有index仅提交本窗4文件; _sidebar 只入 mine-only blob, 未带别窗风控UI-1侧栏WIP(其WIP仍在工作树完好)。（2026-06-23）
 - [x] Claude(窗口UI-1-ADMIN-SIDEBAR) ✅已完成(本次提交): 后台侧栏 _sidebar.blade.php 风控中心权限位对齐到8cb8b83拆分的新位——组壳判 risk||risk_settings||refund||kyc(原判order)+各子项各自判对应位(queue/logs→risk·settings→risk_settings·refund records/overdue→refund·kyc→kyc); 佣金充值管理 account→deposit + 交易管理小标题组条件补 deposit。不碰路由权限逻辑(已在8cb8b83)。验证: 超管渲染/admin=200且7链接全在(无回归) + 构造 refund-only/risk-only/order-only 角色跑 module_permission_check 证分位过滤正确(order-only现全0=旧错位已修)。未碰他窗WIP(ADMIN_GUIDE/en messages.php)（2026-06-23）
 - 🔔 知会【UI-1 侧栏权限对齐窗口】(SEC-CS-PERMISSION 留, 2026-06-23): 我已 deploy origin/main 到 7edc2cb, 生产 _sidebar 风控中心块=HEAD原版(order-gated, 你的 risk/risk_settings/refund/kyc 分项 guard UI-1 改动仍是工作树未提交WIP, 从未上线=无回归)。你的 _sidebar WIP 我没碰(用 mine-only blob 只入了我那一行 nezha_cs)。你提交时会自然带上我已在 HEAD 的 nezha-cs guard 行(兼容), 提交前照例 git diff HEAD 核对即可。
@@ -322,3 +342,10 @@ dashboard
 - [x] Claude(2FA排雷窗·0720) production+staging 遗留 2FA 排期已按 `scheduleLegacyGrace` 逆操作清除（production `vendors` 19 行 `required_at→NULL` + `grace_pending→1`；staging 实测 0 行；`vendor_employees` 两库 0 行）。备份在后端 repo 根 `_merchant_2fa_schedule_backup_{prod,staging}_20260720T122704Z.json`（未 git add）。🔴 `e8468ae` 及更早「强制 2FA」版本不得作为回滚目标（0719 裁决；数据已清，旧版排期命令可再武装）；该 SHA 已不在 current/previous 槽位，但 release 目录仍在，人工回滚仍可达——保护来自数据已清，不是来自槽位。
 - [x] Claude(挂牌态总闸+后台入口·2026-07-21) ✅已上线(e4b733e5 · release 20260721-203754-e4b733e · 健康门 config/zone/login=200): 新增 NezhaListing(总闸 nezha_listing_status + 有效挂牌态单点) + Admin/NezhaListingController + admin-views/nezha-listing + 迁移 + 契约测试; 原 6 处 nezha_listing_only 直读点全部收口(RestaurantLogic/Helpers×2/ProductLogic/Api·OrderController 403 闸/Api·RestaurantController 联系方式)。前端零改动。上线方式=部署前预置总闸 1 → 部署前后 12 店快照逐字相同(行为 diff=0)。🔴 部署前 GATE 复核揪出: 现网挂牌店实为 10 家(9 家 status=1 真实商家·KYC 0 行), 合规记录已如实更正, L1-6 射程裁定另开任务。未碰他窗 WIP。（2026-07-21）
 - [x] Claude(收尾窗·0721) 共享工作树已对齐 origin/main（旧岔线保留在 `rescue/wt-0720-be`，零丢失可切回）；提交仍一律走隔离 worktree。对齐时逐个点名覆盖了 3 个陈旧文件（AGENTS.md / deploy/nzdeploy-api.sh / vendor-views order `_detail_modes.blade.php`——均经 `git diff origin/main` 证实是被 origin/main 取代的旧版，未用 `reset --hard`/`clean -f`）。🔴 另：工作树根一个**未跟踪**的 `nzdemo-rollback.sh`（旧编排版，与 origin/main 里的同名新版 PLAN/REHEARSE/GO 硬化版**内容不同**）挡住 checkout，已改名保全为 `nzdemo-rollback.sh.bak.202607212016`，**未删除**；现在根目录那份 `nzdemo-rollback.sh` 是 origin/main 的新版（依赖 `nzdemo-cleanup.php`，已确认存在）。若你的流程依赖旧版行为，去 .bak 那份取。
+
+- [x] Claude(并发撞车面整改窗·2026-07-22) ✅已完成并 push（未部署、未翻任何开关、未改真实 crontab、未删任何 worktree/文件）：
+  ① **两仓 AGENTS.md 修正 4 处随 2026-06-22 切 release 而作废的构建守门条款**（文件头/§0/§1/§2）：两端 release 都是 `git archive <SHA> | tar -x`（`nzdeploy-web.sh:128`/`nzdeploy-api.sh:165`），**别窗未提交 WIP 物理上进不了 release**，「构建带别人半成品→全站 500」已不可能，看到别窗 WIP 不必等不必避让；`[drift]` 段与 `nzdriftcheck.sh` 同期作废（后者文件头前提「构建从工作树出货」已不成立）；唯一残留的共享树耦合是**只有改了 `package-lock.json` 的部署**才回退取共享树 `node_modules`（`:138`，常规部署从上个 release 复制）。同时新增 **§1.5**（共享树定位 + worktree 登记/回收纪律），并翻掉 BE 旧裁决「worktree 隔离路线A暂缓」。
+  ② **两仓 .gitignore 收残渣**：`git status` 未跟踪项 BE **90→14**、FE **8→5**（只 ignore 根级一次性 seed/rollback/backup 与 `.bakN.` 变体；**回滚凭据类 json 原地保留未删**；`storage` 软链等承重件未碰）。此前 90 行噪音让「构建前扫一眼别窗 WIP」这个动作事实上做不了。
+  ③ **两仓共享工作树 rebase 追平 origin/main**（此前 BE 落后 5、FE 落后 13）。
+  ④ 🔴 **P0 抢救**：4 棵 worktree 的 **24 个提交 + 17 个未提交改动此前无任何远端副本**（`branch -r --contains HEAD` 全空），已推成 `rescue/usdt-prod-api-0714-20260722`(+`-wip-`)、`rescue/usdt-prod-web-0714-20260722`(+`-wip-`)、`rescue/soldmask-20260722`、`rescue/hide-unavail-usdt-0714-20260722`。WIP 走**临时 index + `commit-tree`** 快照，未改动这些 worktree 的工作树/index/HEAD；已验证快照含 2 个未跟踪源文件与 1 个未跟踪测试。唯一副作用：BE `pre-push` 钩子会真跑 phpunit，在 `codex-usdt-production-api-20260714-1725` 留了个可再生的 `.phpunit.result.cache`。**这些 worktree 一棵都没删，回收仍需业主拍板。**
+  ⑤ **`nzcf-guard.sh` / `nzcf-guard-cron.sh` 原地入库**（每 15 分钟的 P8 防火墙漂移哨兵，此前只存在于共享工作树、不在 git / 不在任何 release / 仓库备份覆盖不到；已验证脚本不含密钥，邮箱密码是运行时从 `.env` 读）。按 `ops/README.md`「ops/ 是快照不是活动文件」的约定**未移动脚本、未改真实 crontab**；`ops/crontab.txt` 灾备快照补全 **4→11 条**并修 [3] 过期路径（旧版会照共享工作树+root 重建 schedule:run，且缺 binlog 异地备份/文件异地备份/TLS 续期/全部监控），已与 `crontab -l` 逐行比对一致。
