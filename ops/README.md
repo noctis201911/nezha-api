@@ -43,6 +43,11 @@
 
 > 前端反代主体（catch-all `location ^~ /` → 127.0.0.1:3000）在宝塔的 proxy 配置里
 > （`/www/server/panel/vhost/nginx/proxy/nezha.am/*.conf`），由宝塔反代向导生成，不在本 repo。
+> 该 proxy 文件的 `location` 及其中的静态文件 `if` 块已经声明其它 `add_header`，按 Nginx
+> 继承规则会遮蔽 server/extension 级的同类配置。因此线上必须在这两个上下文同时重声明
+> `Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;`。宝塔重建反代后要
+> 重新核对；每次修改先备份活动文件，执行 `nginx -t && nginx -s reload`，并验证 308、200、404
+> 响应均携带该头。
 
 ### 重建一站 nginx 的通用步骤
 ```bash
