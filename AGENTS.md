@@ -65,6 +65,12 @@
 
 ---
 ## 认领区（动手前登记，干完划掉）
+
+> **本区收两种条目，别混：**
+> - `- [ ]` / `- [x] <窗口名>` = **认领**：我要动 / 已动了什么。干完划掉。
+> - `- ⚙️发现 <日期>` = **发现**：我看到一个**不属于我这次任务**的问题。**只写一行，不要求发现者去修**，给业主和后续窗口看。
+>   由来：2026-07-22 —— AGENTS.md「构建守门」整节死了 30 天没被报过，不是没人看见，是**看见了也没地方放**：认领区只收「我做了什么」，聊天里说的话窗口一关就没了。**看到就写，一行也算。**
+
 <!-- 格式： - [ ] 窗口X 正在改 <文件/页面>（YYYY-MM-DD HH:MM） -->
 - [ ] Codex(渗透测试阻断项修复·2026-07-22) 正在改 `routes/web.php`、`bootstrap/app.php`、六类公开富文本的写入/输出链、HTML 清洗器/测试与 `composer.*`：退役图片代理、修复存储型 XSS、升级 Guzzle；仅 staging，不碰 production/migration/数据。（2026-07-22）
 - [x] Claude(商家2FA恢复码改造窗·0720) ✅已实施·🔴未部署（待业主拍板）：①砍除商家恢复码整套（生成/展示/重新生成/登录页降级入口，Web+App 双端）②新增商家自助关闭入口 `merchant.2fa.disable`（当前密码 + 当前TOTP，吊销全部会话与App token、审计事件 disabled_by_merchant，当前浏览器会话即时重建不踢人）③超管应急重置 `nezha:merchant-2fa-recover` 由双超管硬性审批改为单超管必填 + `--second-approver` 可选（生产仅 1 个 role_id=1，原命令从未可执行）。改动：NezhaMerchantTwoFactor / MerchantTwoFactorController / Api VendorLoginController / RecoverMerchantTwoFactor / auth/merchant-two-factor.blade / routes/web.php + 5 个测试文件 + 契约文档 + compliance CHANGELOG + MERCHANT_GUIDE。验证：2FA 套件 28/28 通过（1 skipped = 需一次性 MySQL5.7 的并发用例）、全量 415 tests 仅 5 个 error 且在未改动的 origin/main 基线上同样复现（属新单提醒 v3.3 的 fixture 缺 timeout_notify_telegram 列，非本次引入）、blade 三态进程内渲染通过、恢复码引用全仓零残留。存量 19 家商家 0 启用 0 事件，零数据迁移。已过 nezha-auditor GATE：CONTINUE-WITH-CORRECTIONS，两条必改均已修（① compliance CHANGELOG 定级由 🟡 改为 🔴 L1-7 邻，与同子系统三条先例齐平；② 契约中「self-disable 并发至多成功一次」的措辞改为区分「已证明/待证明」，并在 Release gates 下显式列出未完成项）。🔴 未覆盖：MySQL 5.7 并发用例未真跑（服务器无 docker/无 5.7 实例，env-gated 跳过）、staging 与真机走查未做、enabled 态页面因生产 0 家启用而无法用真实状态到达。在隔离 worktree /root/nzwt/2fa-recovery 提交，未碰他窗 WIP。（2026-07-20）
@@ -349,3 +355,7 @@ dashboard
   ③ **两仓共享工作树 rebase 追平 origin/main**（此前 BE 落后 5、FE 落后 13）。
   ④ 🔴 **P0 抢救**：4 棵 worktree 的 **24 个提交 + 17 个未提交改动此前无任何远端副本**（`branch -r --contains HEAD` 全空），已推成 `rescue/usdt-prod-api-0714-20260722`(+`-wip-`)、`rescue/usdt-prod-web-0714-20260722`(+`-wip-`)、`rescue/soldmask-20260722`、`rescue/hide-unavail-usdt-0714-20260722`。WIP 走**临时 index + `commit-tree`** 快照，未改动这些 worktree 的工作树/index/HEAD；已验证快照含 2 个未跟踪源文件与 1 个未跟踪测试。唯一副作用：BE `pre-push` 钩子会真跑 phpunit，在 `codex-usdt-production-api-20260714-1725` 留了个可再生的 `.phpunit.result.cache`。**这些 worktree 一棵都没删，回收仍需业主拍板。**
   ⑤ **`nzcf-guard.sh` / `nzcf-guard-cron.sh` 原地入库**（每 15 分钟的 P8 防火墙漂移哨兵，此前只存在于共享工作树、不在 git / 不在任何 release / 仓库备份覆盖不到；已验证脚本不含密钥，邮箱密码是运行时从 `.env` 读）。按 `ops/README.md`「ops/ 是快照不是活动文件」的约定**未移动脚本、未改真实 crontab**；`ops/crontab.txt` 灾备快照补全 **4→11 条**并修 [3] 过期路径（旧版会照共享工作树+root 重建 schedule:run，且缺 binlog 异地备份/文件异地备份/TLS 续期/全部监控），已与 `crontab -l` 逐行比对一致。
+
+- ⚙️发现 2026-07-22 `ops/crontab.txt` 的 [6] binlog 异地备份、[7] 文件异地备份两条，脚本路径指向**共享工作树** `/www/wwwroot/api.nezha.am/` 而非 release。共享树若被清理或重置，这两个 RPO 关键任务会**静默失效**（cron 不会报错）。
+- ⚙️发现 2026-07-22 `/www/wwwroot/codex-usdt-production-backport-api-20260714-1830` 里有个 `php -S 127.0.0.1:3317` 自 07-15 起跑了 7 天。未查它还有没有 nginx 入口，**未停**。
+- ⚙️发现 2026-07-22 全服 **31 棵 worktree 无人回收**（合计 14.3G）。其中 4 棵的提交已抢救成 `rescue/*`，但**一棵都没删**，回收需业主拍板。⚠️严格判据下只有 1 棵可安全回收（139M）——**worktree 不是磁盘问题**，大头是 `web-deploy/releases`(6.6G) 与孤儿 `web-staging-deploy`(5.5G)。
