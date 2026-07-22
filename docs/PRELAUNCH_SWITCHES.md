@@ -69,7 +69,6 @@
 
 | 开关 key | 现值 | 卡在哪 / 何时才能开 | 等级 |
 |---|---|---|---|
-| `TELEGRAM_OIDC_ENABLED` + `TELEGRAM_OIDC_ALLOW_NEW_ACCOUNTS`（**env 开关，不在 business_settings**） | **未设置**（config 默认 false；生产 `api-deploy/shared/.env` 里 `TELEGRAM*` 键 0 命中，2026-07-22 实测） | 顾客 Telegram 登录（OIDC，标准授权码 + PKCE，`oauth.telegram.org`；后端 dormant，总闸关时 H5 不渲染入口）。**最低法律条件只剩一组待补事实**：确定真实运营者的法定名称、登记信息、地址和联系入口，并将其与 Telegram 接收字段、账号登录目的、德国处理、拒绝后果及数据权利，以中、亚文同步发布到隐私政策和授权前入口；不得发布占位符。德国属于亚美尼亚主管机关充分保护国家名单，该托管链路无需事前跨境许可；没有亚美尼亚语母语复核人也不是法定生效阻断。其余是技术启用条件而非新增法律门：①业主从 @BotFather 取得并自行保管凭据，登记生产 origin 与精确 callback；②staging 用真 Telegram 账号完成往返；③是否开启 `ALLOW_NEW_ACCOUNTS` 单独作产品决定。改 `.env` 后须 `config:clear` 并重启 php-fpm；禁 `config:cache`。步骤单见桌面 `TG登录_生产凭据申请步骤单_20260722.md`。 | L3（实现）· L1-7 相邻（披露） |
 | `nezha_consolidation_rounds_status` | **0** | 集运期次撮合**总闸**（阶段 B 骨架 dormant）。真开=①staging 整链 QA（建期次→报名→状态机 draft→open→closed/canceled→脱敏导出）②业主批准③开城后有实际拼柜需求。开=vendor 端显 open 期次卡+报名流+成团进度；关=vendor 端期次/报名整体零透出（admin 端始终可用·运营先建期次）。🔴 **翻本闸只是必要条件**：集运仅面向经营达标的深度合作商家，**每店资格另由 `restaurants.nezha_consolidation_eligible` 控（默认全关）**，须在 admin「平台集运申报 → 需求汇总」页逐家点「开通」；**只翻闸不开资格 = 商家端仍全 404（这不是 bug）**。开期通知同样只发已开通资格的商家。提示卡与 v1 问卷面向全体、不受资格限制（摸底用）。平台只组织撮合、公示货代报价·付款商家直付货代·不碰钱。见 `fable-brief/PLAN_consolidation_roadmap.md §3-B`。 | L3 |
 | `nezha_payment_address_change_approval_ttl_min` | 1440 | 地址变更申请等待商家/复核的有效期，默认 24 小时，可调 30–10080 分钟；它只使未完成申请超时并对用户显示“已驳回（超时）”，底层保留 system/expired 审计。它不是资金地址冷静期，也不延长任何已签发凭据。 | L1-1 邻参数 |
 | `schedule_order`（全局·StackFood 平台级 business_settings） | **1（`/config schedule_order=true`）** | **当前已开；它只是预约前置，不是预约功能签收** | 预约功能隐藏前置。2026-07-14 production 只读核对已为 1，因此 `nezha_preorder_status=1` 不再是“总闸开但依赖关”的静默死链；仍须 exact-main 隔离全链、商家操作与产品 owner 签收。影响面仅 opt-in 预约店（每店列=1）；不得把当前值冒充已批准值。 | L2 |
@@ -118,6 +117,9 @@
 `nezha_feedback_digest_status=1`(反馈日报) · `nezha_cs_ai_status=1`(AI客服) · `nezha_cs_merchant_relay_status=1` · `nezha_cs_vendor_tg_relay_status=1`(商家↔顾客 TG) · `nezha_search_log_status=1`(搜索需求探针) · `order_delivery_verification=1` · `nezha_busy_mode_status=1`(商家忙碌模式/定时挂起)。
 
 **`nezha_busy_mode_status`（2026-07-08 go-live）**：一次性功能总闸（非日常操作·无后台 UI）。开=商家「今天·作业台」店态胶囊出三档（营业/忙碌·选原因+出餐分钟/暂停·选时长或不定时），顾客端餐厅页顶部显 🔥暖黄「高峰期繁忙·出餐约需X分钟」(仍可下单) 或 ☕暖灰「店家小憩中·约X分钟后恢复接单」(倒计时)。日常商家翻自己店的忙碌/暂停**不动此闸、无缓存坑**。🔴 **只有翻这个总闸本身**才须 `php artisan cache:clear` + `/etc/init.d/php-fpm-82 restart`（单 `Cache::forget`+graceful reload **不够**·实测 FPM worker 仍读旧值恒返回关）。
+
+
+**`TELEGRAM_OIDC_ENABLED` + `TELEGRAM_OIDC_ALLOW_NEW_ACCOUNTS`（2026-07-22 go-live）**：顾客 Telegram 登录（OIDC）。**env 开关，不在 `business_settings`** —— 改 `/www/wwwroot/api-deploy/shared/.env`（在 `shared/` 下，部署不覆盖）。现值均为 `true`：登录已开 + 陌生人可经 TG 直接注册。改完通常下个请求即生效（本项目 config 未缓存）；不生效再 `php artisan config:clear` + `systemctl restart php-fpm-82`。🔴 **禁 `php artisan config:cache`**（会把 .env 冻结进缓存）。应急关闭：`ENABLED=false` → 按钮立即消失、已进入的返 503、不建号不报错。只停新注册、保留已有用户登录：`ALLOW_NEW_ACCOUNTS=false`。BotFather 侧配置在 **Login Widget 页**（非 Bot Settings→Domain）的 `Redirect URIs` 与 `Trusted Origins` 两个列表，与 staging 共用 bot `@NezhaCustomerLoginBot`、各自两条互不影响。备份：`.env.bak.202607221644`（配置前）、`.env.bak.allownew.202607221726`（改 true 前）。合规记录见 `docs/compliance/CHANGELOG.md` 2026-07-22 条。
 
 ---
 

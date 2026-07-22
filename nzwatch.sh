@@ -124,6 +124,21 @@ else
   [ "$DAGE" -gt 26 ] && add "备份脚本已漂移 ${DAGE}h: cron 现役版与仓库版不一致 — 仓库是 SSOT, 发布方式见 README" "backup-drift"
 fi
 
+# 6e. 运维还原点归档新鲜度: 改生产数据/图片前留的还原点(整行快照+逐张 SHA+还原器)必须也在备份里。
+#     2026-07-22 事故形态: 顾客攻略 14 张图压缩 + 直接改 nezha_guides.body_md, 还原点只躺在 /root/nzimg/backup,
+#     不在 git、不在 storage/app、不在任何异地副本 —— 那块盘一清, 这次生产写入就再也回不去了。
+#     只在目录存在时才要求新鲜: 目录被有意清空 = 没有待保护的还原点, 不该常年告警。
+OPSNAP_SRC="/root/nzimg/backup"
+if [ -d "$OPSNAP_SRC" ]; then
+  OBK=$(ls -1t /www/backup/database/nezha-enc/nezha-opsnap-*.tar.gz.enc 2>/dev/null | head -1)
+  if [ -z "$OBK" ]; then
+    add "运维还原点目录 $OPSNAP_SRC 存在但没有任何加密归档(nezha-opsnap-*) — 改生产数据前留的还原点不在备份覆盖面内" "backup-opsnap"
+  else
+    OPAGE=$(( ( $(date +%s) - $(stat -c %Y "$OBK") ) / 3600 ))
+    [ "$OPAGE" -gt 26 ] && add "最新运维还原点归档已 ${OPAGE}h 未更新 (>26h) — 还原点可能已脱离备份覆盖面" "backup-opsnap"
+  fi
+fi
+
 # 7. SSL 源站证书剩余天数 <14天 → 自动续期可能失败,提前预警(绕CF直查本机源站证书)
 for SD in nezha.am api.nezha.am; do
   CEND=$(echo | timeout 10 openssl s_client -servername "$SD" -connect 127.0.0.1:443 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)

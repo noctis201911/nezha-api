@@ -76,6 +76,28 @@ nginx -t && nginx -s reload
 流程：从 Laravel config 读 DB 连接 → `mysqldump`（single-transaction）→ `gzip` →
 `openssl aes-256-cbc -pbkdf2` 加密 → 写 `/www/backup/database/nezha-enc/`，保留最近 14 份。
 
+一轮产 **三份**加密件，都写进 `/www/backup/database/nezha-enc/`，再由同一轮的
+`rclone copy` 整目录推 Cloudflare R2（异地保留 30 天）：
+
+| 前缀 | 内容 | 本地保留 |
+|---|---|---|
+| `<库名>-<时间戳>-<token>.sql.gz.enc` | 全库 mysqldump（含 PITR 位点） | 14 份 |
+| `nezha-files-<时间戳>-<token>.tar.gz.enc` | `storage/app` + `.env` | 14 份 |
+| `nezha-opsnap-<时间戳>-<token>.tar.gz.enc` | **运维还原点目录** `/root/nzimg/backup` | 14 份 |
+
+> 🔴 **运维还原点目录 = 改生产数据/图片前留的快照**（整行 JSON + 原文 + 逐张 SHA-256 + 还原器）。
+> 由来：2026-07-22 压缩攻略配图并直接写生产 `nezha_guides.body_md`，还原点只躺在 `/root/nzimg/backup`——
+> 不在 git、不在 `storage/app`、不在任何异地副本，那块盘一清这次写入就再也回不去了。
+> **以后所有"改生产数据前的还原点"都放这个目录，就自动进异地备份**；放别处＝不在覆盖面内。
+> 三个参数在脚本头部：`OPSNAP_PARENT` / `OPSNAP_NAME` / `OPSNAP_KEEP` / `OPSNAP_MAX_MB`。
+> 目录不存在＝跳过（不是错误）；超过 `OPSNAP_MAX_MB`（默认 512MB）＝拒绝归档并在 `backup.log`
+> 留一行 `OPSNAP BACKUP FAILED`，防有人往里丢大件把备份窗口和 R2 撑爆。
+> 看门狗 `nzwatch.sh` 第 6e 段：目录存在但归档缺失或 >26h 未更新即邮件告警。
+>
+> 还原：`openssl enc -d -aes-256-cbc -pbkdf2 -pass file:/root/.nezha/backup.key -in nezha-opsnap-<...>.tar.gz.enc | tar -xzf - -C /root/nzimg`
+> （成员前缀是 `backup/`，解到 `/root/nzimg` 即原样还原出 `/root/nzimg/backup/...`；
+> 想先看内容把 `-xzf` 换成 `-tzf`）。攻略正文的实际回写走 `ops/_guides_body_md_restore.php`。
+
 > 🔑 **加密密钥不在脚本、也不在 repo**：`/root/.nezha/backup.key`（服务器本地，务必备份到密码管理器，丢了备份无法解密）。
 > 解密示例：`openssl enc -d -aes-256-cbc -pbkdf2 -pass file:/root/.nezha/backup.key -in <文件>.sql.gz.enc | gunzip > out.sql`
 
