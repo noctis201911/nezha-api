@@ -113,7 +113,21 @@ df -h / | tail -1 | awk '{printf "    已用 %s  可用 %s  挂载 %s\n",$5,$4,$
 DU=$(df -P / | tail -1 | awk '{print $5+0}')
 [ "${DU:-0}" -gt 85 ] && red "根分区磁盘已用 ${DU}% (>85%)"
 
-# ── ⑦ 汇总 ───────────────────────────────────────────────────────────
+# ── ⑦ git 墙在不在 (两仓 .git/hooks 与入库正本 ops/githooks 对账) ──────
+# hook 不入库、不随 clone 走: 新 clone / .git 重建 / 有人手改, 墙会静默消失而提交侧一路绿灯。
+echo "[7] git 墙 (ops/githooks 正本 vs 已装 hooks)"
+for R in ${NZDAILY_GITHOOK_REPOS:-/www/wwwroot/nezha.am /www/wwwroot/api.nezha.am}; do
+  N=$(basename "$R")
+  if [ -r "$R/ops/githooks/install.sh" ]; then
+    GOUT=$(bash "$R/ops/githooks/install.sh" --check 2>&1); GRC=$?
+    printf '%s\n' "$GOUT" | grep -E '\[(一致|漂移)\]|未安装' | sed "s|^ *|    ${N}: |"
+    [ "$GRC" -ne 0 ] && red "${N} git 墙漂移/缺失 — 防覆盖墙/php-l墙/L1红线墙可能已失守, 重装: bash ${R}/ops/githooks/install.sh"
+  else
+    yel "${N} 读不到 ops/githooks/install.sh — git 墙无从对账"
+  fi
+done
+
+# ── ⑧ 汇总 ───────────────────────────────────────────────────────────
 echo "==================== SUMMARY ===================="
 if [ -n "$ISSUES_R" ]; then
   echo "${RED}🔴 有需处理项:${OFF}"; printf '%s' "$ISSUES_R"

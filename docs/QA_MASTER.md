@@ -55,7 +55,7 @@
 
 ### T0 每日晨检（≤10 分钟，可整段交给任意窗口）
 1. `bash /www/wwwroot/api.nezha.am/nzhealth.sh` —— 负载/跑飞进程/内存/磁盘/fpm/源站延迟/COD 门。
-2. `bash /www/wwwroot/api.nezha.am/nzdaily.sh` —— 昨日请求量+5xx/499、queue:failed、备份+R2 末行、laravel 新增 ERROR、pm2 重启增量、磁盘。
+2. `bash /www/wwwroot/api.nezha.am/nzdaily.sh` —— 昨日请求量+5xx/499、queue:failed、备份+R2 末行、laravel 新增 ERROR、pm2 重启增量、磁盘、git 墙对账（两仓 `ops/githooks` 入库正本 vs 已装 `.git/hooks`，漂移/缺失=🔴）。
 3. HetrixTools 告警邮箱扫一眼（站外拨测 4 探针：/home、商家登录页、/api/v1/config、餐厅列表非空；补 nzwatch 自身盲区）。
 4. 后台业务队列清零检查（人工点开）：需动作订单（超时未接/未出餐）· 待退款+逾期（风控中心）· 争议单（开关开后）· 充值审核 admin/nezha-topup（开后）· 举报商家 · 差评预警 · 商家反馈 · KYC 待审。
 5. 全绿 → 一行报告；任何 🔴 → 走 T3 路由，先取证再动手。
