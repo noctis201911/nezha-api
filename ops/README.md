@@ -80,3 +80,28 @@ nginx -t && nginx -s reload
 > 解密示例：`openssl enc -d -aes-256-cbc -pbkdf2 -pass file:/root/.nezha/backup.key -in <文件>.sql.gz.enc | gunzip > out.sql`
 
 重建：把脚本 `cp` 回 `/root/nezha-backup/`，`chmod +x`，确保 `/root/.nezha/backup.key` 存在（从密码管理器恢复或新建一把并重新全量备份），再加回 crontab 第 4 条。
+
+## 4. 攻略正文 `?v=` 写入的还原器（`ops/_guides_body_md_restore.php`）
+
+2026-07-22 攻略配图压缩上产时，给 `nezha_guides.body_md` 里 14 处 `/static/guides/*.jpg`
+追加了缓存串 `?v=20260722g`（不加就会被 CF 缓存 30 天发旧图，且**不报错**）。本脚本是那次写入的还原路径。
+
+四道保险：① 库名硬断言 ② 事务 + `lockForUpdate` 行锁 ③ **前置条件守卫**——剥掉 token 后必须与备份
+`body_md` 逐字节相等，否则判定有第三方写入、整体 ABORT 一行不改 ④ 回写后整行 SHA-256 必须 == 备份原值，
+否则 rollback。与 `_demo_announcement_rollback.php` 同形状（都是"只在当前值仍是我写的那个值时才允许动"）。
+
+```bash
+cd /www/wwwroot/api-deploy/current
+php ops/_guides_body_md_restore.php verify  <备份目录>              # 只读对账
+php ops/_guides_body_md_restore.php restore <备份目录> --i-mean-it  # 真还原
+php ops/_guides_body_md_restore.php rehearse       <备份目录>       # 临时表正向演练
+php ops/_guides_body_md_restore.php rehearse-guard <备份目录>       # 临时表反向演练(证明守卫会响)
+```
+
+上线前跑过正反双演练（载体＝MySQL `TEMPORARY TABLE`，会话级、其它连接不可见、生产表全程只读）：
+正向 7/7 行整行 SHA-256 精确回到原值；反向（混入第三方改动）守卫按预期拦下且回滚后零改动。
+
+> 🔴 **脚本在库里，备份数据不在**：`<备份目录>`（7 行整行 json + `body_md` 原文 + SHA-256）含生产正文，
+> **不入 git**。当前只存在于服务器 `/root/nzimg/backup/guides_db_20260722153226`，
+> **不在仓库备份轮转、也不在异地备份覆盖面内** —— 那块盘一清，还原就只剩脚本没有数据。
+> 待业主定：纳入现有 R2 轮转，还是另置。
