@@ -19,7 +19,7 @@ class TelegramLoginService
     public function __construct(
         private readonly TelegramOidcClient $oidc,
         private readonly GoogleTokenVerifier $googleVerifier,
-        private readonly CustomerAccessTokenIssuer $tokenIssuer,
+        private readonly CustomerLoginFinalizer $loginFinalizer,
     ) {}
 
     public function isAvailable(): bool
@@ -350,7 +350,7 @@ class TelegramLoginService
 
     private function finishLogin(ExternalIdentityLoginAttempt $attempt, User $user): array
     {
-        $token = $this->tokenIssuer->issue($user);
+        $token = $this->loginFinalizer->issue($user, self::PROVIDER);
         $attempt->forceFill([
             'status' => 'consumed',
             'consumed_at' => now(),

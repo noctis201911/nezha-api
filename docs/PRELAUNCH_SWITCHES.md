@@ -7,6 +7,19 @@
 
 ---
 
+## 0. 顾客统一认证新增门（2026-07-22 代码候选，尚未部署）
+
+| 开关 key | 候选默认 | 上线动作 | 说明 / 位置 | 等级 |
+|---|---:|---|---|---|
+| `email_auth_mail_status` | 0 | 登录-only canary 前才可改 1 | 邮箱 challenge 邮件总闸；先验发件域、模板和真实收件。 | L1-7 邻 |
+| `email_auth_login_status` | 0 | migration + staging 全态通过后才可改 1 | 统一邮箱 OTP 登录入口；验证码前不枚举账号。 | 账号 / 身份 |
+| `email_auth_registration_status` | 0 | **保持 0**，另行签收后开放 | 新邮箱账号创建；前置含条款版本、V5 删除门、注册全态验收。 | 账号 / 法律 |
+| `google_auth_registration_status` | 0 | **保持 0** | 仅为安全预留；当前没有 Google 新账号合规完成页，开启也不得创建账号。 | 账号 / 第三方 |
+
+旧注册由代码配置 `customer_auth.legacy_signup_enabled=false` fail-closed，不是后台运营开关；不得为恢复旧 signup 页面而开启。完整顺序与停点见 `docs/CUSTOMER_UNIFIED_AUTH.md`。
+
+---
+
 ## A. 🟢 上线前【要打开】的（现在关着，上线应开）
 
 | 开关 key | 现值 | 上线动作 | 说明 / 位置 | 等级 |

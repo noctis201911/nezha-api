@@ -26,9 +26,13 @@ use Modules\Gateways\Traits\SmsGateway;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rules\Password;
 use MatanYadaev\EloquentSpatial\Objects\Point;
+use App\Services\Auth\EmailCanonicalizer;
+use InvalidArgumentException;
 
 class CustomerController extends Controller
 {
+    public function __construct(private readonly EmailCanonicalizer $emailCanonicalizer) {}
+
     public function address_list(Request $request)
     {
         $limit = $request['limit'] ?? 10;
@@ -197,6 +201,29 @@ class CustomerController extends Controller
 
 
 
+        try {
+            $canonicalEmail = $this->emailCanonicalizer->canonicalize((string) $request->email);
+        } catch (InvalidArgumentException) {
+            return response()->json(['errors' => [[
+                'code' => 'email',
+                'message' => translate('messages.invalid_email_address'),
+            ]]], 403);
+        }
+
+        if (User::query()
+            ->where('email_canonical', $canonicalEmail)
+            ->where('id', '<>', $request?->user()?->id)
+            ->exists()) {
+            return response()->json(['errors' => [[
+                'code' => 'email',
+                'message' => translate('The email has already been taken.'),
+            ]]], 403);
+        }
+
+        // Keep all of the legacy profile verification comparisons and writes
+        // on the same canonical value used by the unique owner check.
+        $request->merge(['email' => $canonicalEmail]);
+
         $message = translate('messages.profile_successfully_updated');
 
         if ($request->button_type == 'change_password') {
@@ -252,6 +279,7 @@ class CustomerController extends Controller
             $message = translate('messages.Phone_successfully_verified');
         }
 
+        $emailVerifiedThisRequest = false;
         if ($request->verification_on == 'email' && $request->otp) {
             $verification_data = $this->check_email_otp($request);
             if ($verification_data['is_success'] == false) {
@@ -259,12 +287,13 @@ class CustomerController extends Controller
             }
             $user->is_email_verified = 1;
             $user->save();
+            $emailVerifiedThisRequest = true;
 
             $message = translate('messages.Email_successfully_verified');
 
         }
 
-        $this->update_user_data($user, $request);
+        $this->update_user_data($user, $request, $canonicalEmail, $emailVerifiedThisRequest);
 
 
         return response()->json(['message' => $message], 200);
@@ -348,6 +377,7 @@ class CustomerController extends Controller
         DB::table('users')->where('id', $request?->user()?->id)->update([
             'notification_preferences' => json_encode($prefs),
         ]);
+
 
         return response()->json(['message' => translate('messages.updated_successfully'), 'data' => $prefs], 200);
     }
@@ -478,7 +508,7 @@ class CustomerController extends Controller
         }
         return ['is_success' => true, 'message' => translate('OTP_successfully_send_to_mail'), 'code' => 200];
     }
-    private function update_user_data($user, $request)
+    private function update_user_data($user, $request, string $canonicalEmail, bool $emailVerifiedThisRequest)
     {
         if ($request->has('image')) {
             $imageName = Helpers::update(dir: 'profile/', old_image: $user?->image, format: 'png', image: $request->file('image'));
@@ -504,7 +534,17 @@ class CustomerController extends Controller
         $user->image = $imageName;
         $user->password = $pass;
         $user->phone = $request->phone;
-        $user->email = $request->email;
+        $previousCanonical = $user->email_canonical;
+        $emailChanged = ! is_string($previousCanonical)
+            ? mb_strtolower(trim((string) $user->email)) !== $canonicalEmail
+            : ! hash_equals($previousCanonical, $canonicalEmail);
+        $user->email = $canonicalEmail;
+        if ($emailChanged || $emailVerifiedThisRequest) {
+            $user->email_canonical = $emailVerifiedThisRequest ? $canonicalEmail : null;
+            $user->email_verified_at = $emailVerifiedThisRequest ? now() : null;
+            $user->email_verification_method = $emailVerifiedThisRequest ? 'profile_email_otp' : null;
+            $user->is_email_verified = $emailVerifiedThisRequest ? 1 : 0;
+        }
         $user->save();
 
         if ($user->userinfo) {
@@ -537,10 +577,11 @@ class CustomerController extends Controller
     private function check_email_otp($request)
     {
         $email_verification = EmailVerifications::where(['email' => $request['email'], 'token' => $request['otp']])->first();
-        if ($email_verification) {
+        if ($email_verification && $email_verification->updated_at?->gte(now()->subMinutes(10))) {
             $email_verification->delete();
             return ['is_success' => true, 'verification_medium' => 'email', 'message' => translate('Otp_verification_successful'), 'code' => 200];
         }
+        $email_verification?->delete();
 
         // $max_otp_hit = 5;
         // $max_otp_hit_time = 60; // seconds

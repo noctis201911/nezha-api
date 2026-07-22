@@ -171,6 +171,10 @@ class ConfigController extends Controller
             'facebook_login_status',
             'apple_login_status',
             'email_verification_status',
+            'email_auth_login_status',
+            'email_auth_registration_status',
+            'email_auth_mail_status',
+            'google_auth_registration_status',
             'firebase_otp_verification',
             'phone_verification_status',
             'subscription_deadline_warning_days',
@@ -348,6 +352,7 @@ class ConfigController extends Controller
             'app_url_ios' => $settings['app_url_ios'],
             'customer_verification' => (bool)$settings['customer_verification'],
             'schedule_order' => (bool)$settings['schedule_order'],
+
             'order_delivery_verification' => (bool)$settings['order_delivery_verification'],
             'cash_on_delivery' => (bool)($cod['status'] == 1 ? true : false),
             'digital_payment' => (bool)($digital_payment['status'] == 1 ? true : false),
@@ -456,6 +461,12 @@ class ConfigController extends Controller
                 'apple_login_status' => (int)(isset($settings['apple_login_status']) ? $settings['apple_login_status'] : 0),
                 'email_verification_status' => (int)(isset($settings['email_verification_status']) ? $settings['email_verification_status'] : 0),
                 'phone_verification_status' => (int)(isset($settings['phone_verification_status']) ? $settings['phone_verification_status'] : 0),
+                'email_auth_login_status' => (int) ($settings['email_auth_login_status'] ?? 0),
+                'email_auth_registration_status' => (int) ($settings['email_auth_registration_status'] ?? 0),
+                'email_auth_mail_status' => (int) ($settings['email_auth_mail_status'] ?? 0),
+                'google_auth_registration_status' => (int) ($settings['google_auth_registration_status'] ?? 0),
+                'customer_auth_terms_version' => config('customer_auth.terms_version'),
+                'customer_auth_privacy_version' => config('customer_auth.privacy_version'),
             ],
 
             'subscription_business_model' => (int)(Helpers::subscription_check()),
@@ -698,6 +709,7 @@ class ConfigController extends Controller
         if (!$response->successful()
             || !is_array($payload)
             || !in_array($payload['status'] ?? null, ['OK', 'ZERO_RESULTS'], true)) {
+
             return $this->googleMapsUpstreamErrorResponse();
         }
 
@@ -1048,6 +1060,7 @@ class ConfigController extends Controller
                     $data['step2_image_storage'] ?? 'public'
                 ),
             ],
+
             'step3' => [
                 'title' => $data['step3_title'] ?? null,
                 'sub_title' => $data['step3_sub_title'] ?? null,

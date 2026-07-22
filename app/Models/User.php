@@ -26,6 +26,8 @@ class User extends Authenticatable
         'l_name',
         'phone',
         'email',
+        'email_canonical',
+        'email_verification_method',
         'password',
         'login_medium',
         'ref_code',
@@ -52,6 +54,7 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'is_email_verified' => 'integer',
         'is_phone_verified' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',

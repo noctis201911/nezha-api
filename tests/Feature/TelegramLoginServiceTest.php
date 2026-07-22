@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Exceptions\TelegramLoginException;
 use App\Models\User;
-use App\Services\Auth\CustomerAccessTokenIssuer;
+use App\Services\Auth\CustomerLoginFinalizer;
 use App\Services\Auth\GoogleTokenVerifier;
 use App\Services\Auth\TelegramLoginService;
 use App\Services\Auth\TelegramOidcClient;
@@ -21,7 +21,7 @@ class TelegramLoginServiceTest extends TestCase
 
     private GoogleTokenVerifier $google;
 
-    private CustomerAccessTokenIssuer $tokenIssuer;
+    private CustomerLoginFinalizer $loginFinalizer;
 
     private TelegramLoginService $service;
 
@@ -38,19 +38,19 @@ class TelegramLoginServiceTest extends TestCase
 
         $this->oidc = Mockery::mock(TelegramOidcClient::class);
         $this->google = Mockery::mock(GoogleTokenVerifier::class);
-        $this->tokenIssuer = Mockery::mock(CustomerAccessTokenIssuer::class);
+        $this->loginFinalizer = Mockery::mock(CustomerLoginFinalizer::class);
         $this->oidc->shouldReceive('assertConfigured')->zeroOrMoreTimes();
         $this->oidc->shouldReceive('authorizationUrl')
             ->zeroOrMoreTimes()
             ->andReturnUsing(fn ($state) => 'https://oauth.telegram.test/auth?state='.urlencode($state));
-        $this->tokenIssuer->shouldReceive('issue')
+        $this->loginFinalizer->shouldReceive('issue')
             ->zeroOrMoreTimes()
             ->andReturnUsing(fn (User $user) => 'token-for-user-'.$user->id);
 
         $this->service = new TelegramLoginService(
             $this->oidc,
             $this->google,
-            $this->tokenIssuer,
+            $this->loginFinalizer,
         );
     }
 

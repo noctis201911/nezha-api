@@ -27,106 +27,116 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
+use App\Services\Auth\CustomerAuthFeatureFlags;
+use App\Services\Auth\CustomerLoginFinalizer;
+use App\Services\Auth\GoogleLoginService;
 
 
 class CustomerAuthController extends Controller
 {
+    public function __construct(
+        private readonly CustomerAuthFeatureFlags $authFlags,
+        private readonly CustomerLoginFinalizer $loginFinalizer,
+        private readonly GoogleLoginService $googleLogin,
+    ) {}
+
     public function verify_phone_or_email(Request $request)
     {
+        if (! $this->authFlags->legacySignupEnabled()) {
+            return $this->authUnavailable(
+                'registration_unavailable',
+                'This legacy verification flow is unavailable.',
+            );
+        }
+
         $validator = Validator::make($request->all(), [
-            'otp'=>'required',
+            'otp' => 'required',
             'verification_type' => 'required|in:phone,email',
             'phone' => 'required_if:verification_type,phone|min:9|max:14',
             'email' => 'required_if:verification_type,email|email',
-            'login_type' => 'required|in:manual,otp'
+            'login_type' => 'required|in:manual,otp',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        if($request->phone){
+        if ($request->phone) {
             $user = User::where('phone', $request->phone)->first();
         }
-        if($request->email){
+        if ($request->email) {
             $user = User::where('email', $request->email)->first();
         }
         $temporaryToken = null;
 
-        if($user && $request->login_type== 'manual')
-        {
-            if($request->verification_type == 'phone' && $user->is_phone_verified)
-            {
+        if ($user && $request->login_type == 'manual') {
+            if ($request->verification_type == 'phone' && $user->is_phone_verified) {
                 return response()->json([
-                    'message' => translate('messages.phone_number_is_already_verified')
+                    'message' => translate('messages.phone_number_is_already_verified'),
                 ], 200);
 
             }
-            if($request->verification_type == 'email' && $user->is_email_verified)
-            {
+            if ($request->verification_type == 'email' && $user->is_email_verified) {
                 return response()->json([
-                    'message' => translate('messages.email_number_is_already_verified')
+                    'message' => translate('messages.email_number_is_already_verified'),
                 ], 200);
 
             }
 
-            if(env('APP_MODE')=='test')
-            {
-                if($request['otp']=="123456")
-                {
-                    if($request->verification_type == 'email'){
+            if (env('APP_MODE') == 'test') {
+                if ($request['otp'] == '123456') {
+                    if ($request->verification_type == 'email') {
                         $user->is_email_verified = 1;
-                    }elseif ($request->verification_type == 'phone'){
+                    } elseif ($request->verification_type == 'phone') {
                         $user->is_phone_verified = 1;
                     }
                     $user->save();
                     $is_personal_info = 0;
 
-                    if($user->f_name){
+                    if ($user->f_name) {
                         $is_personal_info = 1;
                     }
 
                     $user_email = null;
-                    if($user->email){
+                    if ($user->email) {
                         $user_email = $user->email;
                     }
                     if (auth()->loginUsingId($user->id)) {
-                        $token = auth()->user()->createToken('RestaurantCustomerAuth')->accessToken;
-                        if(isset($request['guest_id'])){
+                        $token = $this->loginFinalizer->issue(auth()->user(), (string) $request->login_type);
+                        if (isset($request['guest_id'])) {
                             $this->check_guest_cart($user, $request['guest_id']);
                         }
                     }
 
-                    return response()->json(['token' => isset($token)?$token:$temporaryToken, 'is_phone_verified'=>1, 'is_email_verified'=>1, 'is_personal_info' => $is_personal_info, 'is_exist_user' =>null, 'login_type' => $request->login_type, 'email' => $user_email], 200);
+                    return response()->json(['token' => isset($token) ? $token : $temporaryToken, 'is_phone_verified' => 1, 'is_email_verified' => 1, 'is_personal_info' => $is_personal_info, 'is_exist_user' => null, 'login_type' => $request->login_type, 'email' => $user_email], 200);
                 }
+
                 return response()->json([
-                    'message' => translate('OTP does not match')
+                    'message' => translate('OTP does not match'),
                 ], 404);
             }
 
-            if($request->verification_type == 'email'){
+            if ($request->verification_type == 'email') {
                 $data = DB::table('email_verifications')->where([
                     'email' => $request['email'],
                     'token' => $request['otp'],
                 ])->first();
-            }elseif ($request->verification_type == 'phone'){
+            } elseif ($request->verification_type == 'phone') {
                 $data = DB::table('phone_verifications')->where([
                     'phone' => $request['phone'],
                     'token' => $request['otp'],
                 ])->first();
             }
 
-
-            if($data)
-            {
-                if($request->verification_type == 'email'){
+            if ($data) {
+                if ($request->verification_type == 'email') {
                     DB::table('email_verifications')->where([
                         'email' => $request['email'],
                         'token' => $request['otp'],
                     ])->delete();
 
                     $user->is_email_verified = 1;
-                }elseif ($request->verification_type == 'phone'){
+                } elseif ($request->verification_type == 'phone') {
                     DB::table('phone_verifications')->where([
                         'phone' => $request['phone'],
                         'token' => $request['otp'],
@@ -138,22 +148,22 @@ class CustomerAuthController extends Controller
                 $user->save();
                 $is_personal_info = 0;
 
-                if($user->f_name){
+                if ($user->f_name) {
                     $is_personal_info = 1;
                 }
                 $user_email = null;
-                if($user->email){
+                if ($user->email) {
                     $user_email = $user->email;
                 }
                 if ($is_personal_info == 1 && auth()->loginUsingId($user->id)) {
-                    $token = auth()->user()->createToken('RestaurantCustomerAuth')->accessToken;
-                    if(isset($request['guest_id'])){
+                    $token = $this->loginFinalizer->issue(auth()->user(), (string) $request->login_type);
+                    if (isset($request['guest_id'])) {
                         $this->check_guest_cart($user, $request['guest_id']);
                     }
                 }
-                return response()->json(['token' => isset($token)?$token:$temporaryToken, 'is_phone_verified'=>1, 'is_email_verified'=>1, 'is_personal_info' => $is_personal_info, 'is_exist_user' =>null, 'login_type' => $request->login_type, 'email' => $user_email], 200);
-            }
-            else{
+
+                return response()->json(['token' => isset($token) ? $token : $temporaryToken, 'is_phone_verified' => 1, 'is_email_verified' => 1, 'is_personal_info' => $is_personal_info, 'is_exist_user' => null, 'login_type' => $request->login_type, 'email' => $user_email], 200);
+            } else {
                 if ($request->verification_type == 'phone') {
                     $max_otp_hit = 5;
 
@@ -168,10 +178,11 @@ class CustomerAuthController extends Controller
 
                             $errors = [];
                             array_push($errors, ['code' => 'otp_block_time',
-                                'message' => translate('messages.please_try_again_after_') . CarbonInterval::seconds($time)->cascade()->forHumans()
+                                'message' => translate('messages.please_try_again_after_').CarbonInterval::seconds($time)->cascade()->forHumans(),
                             ]);
+
                             return response()->json([
-                                'errors' => $errors
+                                'errors' => $errors,
                             ], 405);
                         }
 
@@ -197,12 +208,12 @@ class CustomerAuthController extends Controller
                                 ]);
                             $errors = [];
                             array_push($errors, ['code' => 'otp_temp_blocked', 'message' => translate('messages.Too_many_attemps')]);
+
                             return response()->json([
-                                'errors' => $errors
+                                'errors' => $errors,
                             ], 405);
                         }
                     }
-
 
                     DB::table('phone_verifications')->updateOrInsert(['phone' => $request['phone']],
                         [
@@ -211,48 +222,50 @@ class CustomerAuthController extends Controller
                             'temp_block_time' => null,
                         ]);
                 }
+
                 return response()->json([
-                    'message' => translate('OTP does not match')
+                    'message' => translate('OTP does not match'),
                 ], 404);
             }
         }
-        if($request->login_type== 'otp'){
+        if ($request->login_type == 'otp') {
             $data = DB::table('phone_verifications')->where([
                 'phone' => $request['phone'],
                 'token' => $request['otp'],
             ])->first();
 
-            if($data){
-                if($user && $user->is_phone_verified == 0){
+            if ($data) {
+                if ($user && $user->is_phone_verified == 0) {
                     $is_exist_user = $this->exist_user($user);
                     $user_email = null;
-                    if($user->email){
+                    if ($user->email) {
                         $user_email = $user->email;
                     }
-                    return response()->json(['token' => $temporaryToken, 'is_phone_verified'=>1, 'is_email_verified'=>1, 'is_personal_info' => 1, 'is_exist_user' =>$is_exist_user, 'login_type' => 'otp', 'email' => $user_email], 200);
-                }elseif ($user && $user->is_phone_verified == 1){
+
+                    return response()->json(['token' => $temporaryToken, 'is_phone_verified' => 1, 'is_email_verified' => 1, 'is_personal_info' => 1, 'is_exist_user' => $is_exist_user, 'login_type' => 'otp', 'email' => $user_email], 200);
+                } elseif ($user && $user->is_phone_verified == 1) {
                     DB::table('phone_verifications')->where([
                         'phone' => $request['phone'],
                         'token' => $request['otp'],
                     ])->delete();
                     $is_personal_info = 0;
-                    if($user->f_name){
+                    if ($user->f_name) {
                         $is_personal_info = 1;
                     }
                     $user_email = null;
-                    if($user->email){
+                    if ($user->email) {
                         $user_email = $user->email;
                     }
                     if ($is_personal_info == 1 && auth()->loginUsingId($user->id)) {
-                        $token = auth()->user()->createToken('RestaurantCustomerAuth')->accessToken;
-                        if(isset($request['guest_id'])){
+                        $token = $this->loginFinalizer->issue(auth()->user(), (string) $request->login_type);
+                        if (isset($request['guest_id'])) {
                             $this->check_guest_cart($user, $request['guest_id']);
                         }
                     }
-                    return response()->json(['token' => isset($token)?$token:$temporaryToken, 'is_phone_verified'=>1, 'is_email_verified'=>1, 'is_personal_info' => $is_personal_info, 'is_exist_user' =>null, 'login_type' => $request->login_type, 'email' => $user_email], 200);
-                }
-                else{
-                    $user = new User();
+
+                    return response()->json(['token' => isset($token) ? $token : $temporaryToken, 'is_phone_verified' => 1, 'is_email_verified' => 1, 'is_personal_info' => $is_personal_info, 'is_exist_user' => null, 'login_type' => $request->login_type, 'email' => $user_email], 200);
+                } else {
+                    $user = new User;
                     $user->phone = $request['phone'];
                     $user->password = bcrypt($request['phone']);
                     $user->is_phone_verified = 1;
@@ -263,40 +276,56 @@ class CustomerAuthController extends Controller
 
                     $is_personal_info = 0;
                     $user_email = null;
-                    if($user->email){
+                    if ($user->email) {
                         $user_email = $user->email;
                     }
 
-                    return response()->json(['token' => $temporaryToken, 'is_phone_verified'=>1, 'is_email_verified'=>1, 'is_personal_info' => $is_personal_info, 'is_exist_user' => null, 'login_type' => 'otp', 'email' => $user_email], 200);
+                    return response()->json(['token' => $temporaryToken, 'is_phone_verified' => 1, 'is_email_verified' => 1, 'is_personal_info' => $is_personal_info, 'is_exist_user' => null, 'login_type' => 'otp', 'email' => $user_email], 200);
                 }
-            }else{
+            } else {
                 return response()->json([
-                    'message' => translate('OTP does not match')
+                    'message' => translate('OTP does not match'),
                 ], 404);
             }
         }
+
         return response()->json([
-            'message' => translate('messages.not_found')
+            'message' => translate('messages.not_found'),
         ], 404);
 
     }
 
     public function firebase_auth_verify(Request $request)
     {
+        $otpEnabled = (int) (BusinessSetting::query()
+            ->where('key', 'otp_login_status')
+
+            ->value('value') ?? 0) === 1;
+        if (! $otpEnabled) {
+            return $this->authUnavailable('otp_login_unavailable', 'OTP login is unavailable.');
+        }
+
         $validator = Validator::make($request->all(), [
             'session_info' => 'required',
             'phone' => 'required',
             'otp' => 'required',
-            'login_type' => 'required|in:manual,otp'
+            'login_type' => 'required|in:manual,otp',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        $webApiKey = BusinessSetting::where('key', 'firebase_web_api_key')->first()?->value??'';
+        if ($request->login_type === 'manual' && ! $this->authFlags->legacySignupEnabled()) {
+            return $this->authUnavailable(
+                'registration_unavailable',
+                'This legacy account-verification flow is unavailable.',
+            );
+        }
 
-        $response = Http::post('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPhoneNumber?key='. $webApiKey, [
+        $webApiKey = BusinessSetting::where('key', 'firebase_web_api_key')->first()?->value ?? '';
+
+        $response = Http::post('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPhoneNumber?key='.$webApiKey, [
             'sessionInfo' => $request->session_info,
             'phoneNumber' => $request->phone,
             'code' => $request->otp,
@@ -306,7 +335,8 @@ class CustomerAuthController extends Controller
 
         if (isset($responseData['error'])) {
             $errors = [];
-            $errors[] = ['code' => "403", 'message' => $responseData['error']['message']];
+            $errors[] = ['code' => '403', 'message' => $responseData['error']['message']];
+
             return response()->json(['errors' => $errors], 403);
         }
 
@@ -314,94 +344,70 @@ class CustomerAuthController extends Controller
 
         $temporaryToken = null;
 
-        if (isset($user) && $request->login_type== 'manual'){
+        if (isset($user) && $request->login_type == 'manual') {
 
             if ($user->is_phone_verified) {
                 return response()->json([
-                    'message' => translate('messages.phone_number_is_already_verified')
+                    'message' => translate('messages.phone_number_is_already_verified'),
                 ], 200);
             }
             $user->is_phone_verified = 1;
             $user->save();
             $is_personal_info = 0;
 
-            if($user->f_name){
+            if ($user->f_name) {
                 $is_personal_info = 1;
             }
             $user_email = null;
-            if($user->email){
+            if ($user->email) {
                 $user_email = $user->email;
             }
             if ($is_personal_info == 1 && auth()->loginUsingId($user->id)) {
-                $token = auth()->user()->createToken('RestaurantCustomerAuth')->accessToken;
-                if(isset($request['guest_id'])){
+                $token = $this->loginFinalizer->issue(auth()->user(), (string) $request->login_type);
+                if (isset($request['guest_id'])) {
                     $this->check_guest_cart($user, $request['guest_id']);
                 }
             }
 
-            return response()->json(['token' => isset($token)?$token:$temporaryToken, 'is_phone_verified'=>1, 'is_email_verified'=>1, 'is_personal_info' => $is_personal_info, 'is_exist_user' =>null, 'login_type' => $request->login_type, 'email' => $user_email], 200);
+            return response()->json(['token' => isset($token) ? $token : $temporaryToken, 'is_phone_verified' => 1, 'is_email_verified' => 1, 'is_personal_info' => $is_personal_info, 'is_exist_user' => null, 'login_type' => $request->login_type, 'email' => $user_email], 200);
 
         }
 
-        if($request->login_type== 'otp'){
-            DB::table('phone_verifications')->updateOrInsert(['phone' => $request['phone']],
-                [
-                    'token' => $request->otp,
-                    'otp_hit_count' => 0,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-
-            if($user && $user->is_phone_verified == 0){
-                $is_exist_user = $this->exist_user($user);
-                $user_email = null;
-                if($user->email){
-                    $user_email = $user->email;
-                }
-                return response()->json(['token' => $temporaryToken, 'is_phone_verified'=>1, 'is_email_verified'=>1, 'is_personal_info' => 1, 'is_exist_user' =>$is_exist_user, 'login_type' => 'otp', 'email' => $user_email], 200);
-            }elseif ($user && $user->is_phone_verified == 1){
-                DB::table('phone_verifications')->where([
-                    'phone' => $request['phone'],
-                    'token' => $request['otp'],
-                ])->delete();
-                $is_personal_info = 0;
-                if($user->f_name){
-                    $is_personal_info = 1;
-                }
-                $user_email = null;
-                if($user->email){
-                    $user_email = $user->email;
-                }
-                if ($is_personal_info == 1 && auth()->loginUsingId($user->id)) {
-                    $token = auth()->user()->createToken('RestaurantCustomerAuth')->accessToken;
-                    if(isset($request['guest_id'])){
-                        $this->check_guest_cart($user, $request['guest_id']);
-                    }
-                }
-                return response()->json(['token' => isset($token)?$token:$temporaryToken, 'is_phone_verified'=>1, 'is_email_verified'=>1, 'is_personal_info' => $is_personal_info, 'is_exist_user' =>null, 'login_type' => $request->login_type, 'email' => $user_email], 200);
-            }else{
-                $user = new User();
-                $user->phone = $request['phone'];
-                $user->password = bcrypt($request['phone']);
-                $user->is_phone_verified = 1;
-                $user->login_medium = 'otp';
-                $user->save();
-
-                $this->refer_code_check($user);
-
-                $is_personal_info = 0;
-                $user_email = null;
-                if($user->email){
-                    $user_email = $user->email;
-                }
-                return response()->json(['token' => $temporaryToken, 'is_phone_verified'=>1, 'is_email_verified'=>1, 'is_personal_info' => $is_personal_info, 'is_exist_user' => null, 'login_type' => 'otp', 'email' => $user_email], 200);
+        if ($request->login_type == 'otp') {
+            if (! $user) {
+                return $this->authUnavailable(
+                    'registration_unavailable',
+                    'Phone verification cannot create a new account.',
+                );
             }
+            if ((int) $user->is_phone_verified !== 1) {
+                return $this->authUnavailable(
+                    'legacy_link_required',
+                    'This legacy account requires recovery before it can be used.',
+                );
+            }
+
+            $token = $this->loginFinalizer->issue($user, 'otp');
+            if (isset($request['guest_id'])) {
+                $this->check_guest_cart($user, $request['guest_id']);
+            }
+
+            return response()->json([
+                'token' => $token,
+                'is_phone_verified' => 1,
+                'is_email_verified' => (int) $user->is_email_verified,
+                'is_personal_info' => $user->f_name ? 1 : 0,
+                'is_exist_user' => null,
+                'login_type' => 'otp',
+                'email' => $user->email,
+            ], 200);
         }
 
         return response()->json([
-            'message' => translate('messages.not_found')
+            'message' => translate('messages.not_found'),
         ], 404);
     }
+
     public function guest_request(Request $request)
     {
         $guest = new Guest();
@@ -428,13 +434,20 @@ class CustomerAuthController extends Controller
     }
     public function register(Request $request)
     {
+        if (! $this->authFlags->legacySignupEnabled()) {
+            return $this->authUnavailable(
+                'registration_unavailable',
+                'Registration is temporarily unavailable. Please use the unified sign-in flow.',
+            );
+        }
+
         // 哪吒[防脚本注册 2026-07-01]: 顾客注册 reCAPTCHA v3 校验(复用 web 同一把 key, 后台 recaptcha 开启时生效)。
         // 软策略防误伤真实用户: token 缺失->放行(靠 throttle:signup 限流兜底, 不锁死装拦截/隐私插件用户);
         // token 在但 Google 判无效/低分(<0.5)->拒; Google 不可达->fail-open 放行(防 Google 抽风锁死注册)。
         $nz_recaptcha = \App\CentralLogics\Helpers::get_business_settings('recaptcha');
         if (isset($nz_recaptcha) && ($nz_recaptcha['status'] ?? 0) == 1) {
             $nz_token = $request->input('g-recaptcha-response');
-            if (!empty($nz_token)) {
+            if (! empty($nz_token)) {
                 try {
                     $nz_gr = \Illuminate\Support\Facades\Http::asForm()->timeout(8)->post('https://www.google.com/recaptcha/api/siteverify', [
                         'secret' => $nz_recaptcha['secret_key'] ?? '',
@@ -446,7 +459,7 @@ class CustomerAuthController extends Controller
                         $nz_score = (float) ($nz_body['score'] ?? 0);
                         $nz_ok = (($nz_body['success'] ?? false) === true) && ($nz_score >= 0.5);
                         \Illuminate\Support\Facades\Log::info('nz_signup_recaptcha', ['ok' => $nz_ok, 'score' => $nz_score, 'ip' => $request->ip()]);
-                        if (!$nz_ok) {
+                        if (! $nz_ok) {
                             return response()->json(['errors' => [['code' => 'recaptcha', 'message' => translate('Verification failed, please try again.')]]], 403);
                         }
                     }
@@ -472,26 +485,26 @@ class CustomerAuthController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
-        $ref_by= null ;
-        //Save point to refeer
-        if($request->ref_code) {
-            $ref_status = BusinessSetting::where('key','ref_earning_status')->first()?->value;
+        $ref_by = null;
+        // Save point to refeer
+        if ($request->ref_code) {
+            $ref_status = BusinessSetting::where('key', 'ref_earning_status')->first()?->value;
             if ($ref_status != '1') {
-                return response()->json(['errors'=>Helpers::error_formater('ref_code', translate('messages.referer_disable'))], 403);
+                return response()->json(['errors' => Helpers::error_formater('ref_code', translate('messages.referer_disable'))], 403);
             }
 
             $referar_user = User::where('ref_code', '=', $request->ref_code)->first();
-            if (!$referar_user || !$referar_user->status) {
-                return response()->json(['errors'=>Helpers::error_formater('ref_code',translate('messages.referer_code_not_found'))], 405);
+            if (! $referar_user || ! $referar_user->status) {
+                return response()->json(['errors' => Helpers::error_formater('ref_code', translate('messages.referer_code_not_found'))], 405);
             }
 
-            if(WalletTransaction::where('reference', $request->phone)->first()) {
-                return response()->json(['errors'=>Helpers::error_formater('phone',translate('Referrer code already used'))], 203);
+            if (WalletTransaction::where('reference', $request->phone)->first()) {
+                return response()->json(['errors' => Helpers::error_formater('phone', translate('Referrer code already used'))], 203);
             }
 
-             $this->sentPushNotificationToReferrer($referar_user);
+            $this->sentPushNotificationToReferrer($referar_user);
 
-            $ref_by= $referar_user->id;
+            $ref_by = $referar_user->id;
         }
 
         $name = $request->name;
@@ -504,125 +517,123 @@ class CustomerAuthController extends Controller
             'l_name' => $lastName,
             'email' => $request->email,
             'phone' => $request->phone,
-            'ref_by' =>   $ref_by,
-            'password' => bcrypt($request->password)
+            'ref_by' => $ref_by,
+            'password' => bcrypt($request->password),
         ]);
         $user->ref_code = Helpers::generate_referer_code($user);
         $user->save();
 
-        $token = $user->createToken('RestaurantCustomerAuth')->accessToken;
+        $token = $this->loginFinalizer->issue($user, 'manual');
 
-        $login_settings = array_column(BusinessSetting::whereIn('key',['manual_login_status','otp_login_status','social_login_status','google_login_status','facebook_login_status','apple_login_status','email_verification_status','phone_verification_status'
-        ])->get(['key','value'])->toArray(), 'value', 'key');
-        $firebase_otp_verification = BusinessSetting::where('key', 'firebase_otp_verification')->first()?->value??0;
+        $login_settings = array_column(BusinessSetting::whereIn('key', ['manual_login_status', 'otp_login_status', 'social_login_status', 'google_login_status', 'facebook_login_status', 'apple_login_status', 'email_verification_status', 'phone_verification_status',
+        ])->get(['key', 'value'])->toArray(), 'value', 'key');
+        $firebase_otp_verification = BusinessSetting::where('key', 'firebase_otp_verification')->first()?->value ?? 0;
         $phone = 1;
         $mail = 1;
-            if(isset($login_settings['phone_verification_status']) && $login_settings['phone_verification_status'] == 1){
-                $phone =0;
-                if(!$firebase_otp_verification){
-                    $otp_interval_time= 60; //seconds
-                    $verification_data= DB::table('phone_verifications')->where('phone', $request['phone'])->first();
+        if (isset($login_settings['phone_verification_status']) && $login_settings['phone_verification_status'] == 1) {
+            $phone = 0;
+            if (! $firebase_otp_verification) {
+                $otp_interval_time = 60; // seconds
+                $verification_data = DB::table('phone_verifications')->where('phone', $request['phone'])->first();
 
-                    if(isset($verification_data) &&  Carbon::parse($verification_data->updated_at)->DiffInSeconds() < $otp_interval_time){
-                        $time= $otp_interval_time - Carbon::parse($verification_data->updated_at)->DiffInSeconds();
-                        $errors = [];
-                        array_push($errors, ['code' => 'otp', 'message' =>  translate('messages.please_try_again_after_').$time.' '.translate('messages.seconds')]);
-                        return response()->json([
-                            'errors' => $errors
-                        ], 405);
-                    }
+                if (isset($verification_data) && Carbon::parse($verification_data->updated_at)->DiffInSeconds() < $otp_interval_time) {
+                    $time = $otp_interval_time - Carbon::parse($verification_data->updated_at)->DiffInSeconds();
+                    $errors = [];
+                    array_push($errors, ['code' => 'otp', 'message' => translate('messages.please_try_again_after_').$time.' '.translate('messages.seconds')]);
 
-                    $otp = rand(100000, 999999);
-                    if(env('APP_MODE') == 'test'){
-                        $otp = '123456';
-                    }
-                    DB::table('phone_verifications')->updateOrInsert(['phone' => $request['phone']],
-                        [
-                            'token' => $otp,
-                            'otp_hit_count' => 0,
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ]);
-
-
-
-                    $published_status = 0;
-                    $payment_published_status = config('get_payment_publish_status');
-                    if (isset($payment_published_status[0]['is_published'])) {
-                        $published_status = $payment_published_status[0]['is_published'];
-                    }
-
-                    if($published_status == 1){
-                        $response = SmsGateway::send($request['phone'],$otp);
-                    }else{
-                        $response = SMS_module::send($request['phone'],$otp);
-                    }
-
-                    $token = null;
-               if(env('APP_MODE') != 'test' && $response !== 'success') {
-                   $errors = [];
-                   array_push($errors, ['code' => 'otp', 'message' => translate('messages.failed_to_send_sms')]);
-                   return response()->json([
-                       'errors' => $errors
-                   ], 405);
-               }
+                    return response()->json([
+                        'errors' => $errors,
+                    ], 405);
                 }
 
-            }elseif (isset($login_settings['email_verification_status']) && $login_settings['email_verification_status'] == 1){
-                $mail =0;
                 $otp = rand(100000, 999999);
-                if(env('APP_MODE') == 'test'){
+                if (env('APP_MODE') == 'test') {
                     $otp = '123456';
                 }
-                DB::table('email_verifications')->updateOrInsert(['email' => $request['email']],
+                DB::table('phone_verifications')->updateOrInsert(['phone' => $request['phone']],
                     [
                         'token' => $otp,
+                        'otp_hit_count' => 0,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
 
-                try {
-                    $mailResponse= null;
-                    $mail_status = Helpers::get_mail_status('registration_otp_mail_status_user');
-
-                    if( config('mail.status') && $mail_status == '1') {
-                        Mail::to($request['email'])->send(new EmailVerification($otp,$request->name));
-                        $mailResponse='success';
-                    }
-                }catch(\Exception $ex){
-                    info($ex->getMessage());
-                    $mailResponse=null;
+                $published_status = 0;
+                $payment_published_status = config('get_payment_publish_status');
+                if (isset($payment_published_status[0]['is_published'])) {
+                    $published_status = $payment_published_status[0]['is_published'];
                 }
+
+                if ($published_status == 1) {
+                    $response = SmsGateway::send($request['phone'], $otp);
+                } else {
+                    $response = SMS_module::send($request['phone'], $otp);
+                }
+
                 $token = null;
-                if(env('APP_MODE') != 'test' && $mailResponse !== 'success') {
+                if (env('APP_MODE') != 'test' && $response !== 'success') {
                     $errors = [];
-                    array_push($errors, ['code' => 'otp', 'message' => translate('messages.failed_to_send_mail')]);
+                    array_push($errors, ['code' => 'otp', 'message' => translate('messages.failed_to_send_sms')]);
+
                     return response()->json([
-                        'errors' => $errors
+                        'errors' => $errors,
                     ], 405);
                 }
             }
 
+        } elseif (isset($login_settings['email_verification_status']) && $login_settings['email_verification_status'] == 1) {
+            $mail = 0;
+            $otp = rand(100000, 999999);
+            if (env('APP_MODE') == 'test') {
+                $otp = '123456';
+            }
+            DB::table('email_verifications')->updateOrInsert(['email' => $request['email']],
+                [
+                    'token' => $otp,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
 
-        try
-        {
-            $notification_status= Helpers::getNotificationStatusData('customer','customer_registration');
+            try {
+                $mailResponse = null;
+                $mail_status = Helpers::get_mail_status('registration_otp_mail_status_user');
 
-            if($notification_status?->mail_status == 'active' && config('mail.status') && $request->email && Helpers::get_mail_status('registration_mail_status_user') == '1') {
-                Mail::to($request->email)->send(new CustomerRegistration($request->name));
+                if (config('mail.status') && $mail_status == '1') {
+
+                    Mail::to($request['email'])->send(new EmailVerification($otp, $request->name));
+                    $mailResponse = 'success';
+                }
+            } catch (\Exception $ex) {
+                info($ex->getMessage());
+                $mailResponse = null;
+            }
+            $token = null;
+            if (env('APP_MODE') != 'test' && $mailResponse !== 'success') {
+                $errors = [];
+                array_push($errors, ['code' => 'otp', 'message' => translate('messages.failed_to_send_mail')]);
+
+                return response()->json([
+                    'errors' => $errors,
+                ], 405);
             }
         }
-        catch(\Exception $ex)
-        {
+
+        try {
+            $notification_status = Helpers::getNotificationStatusData('customer', 'customer_registration');
+
+            if ($notification_status?->mail_status == 'active' && config('mail.status') && $request->email && Helpers::get_mail_status('registration_mail_status_user') == '1') {
+                Mail::to($request->email)->send(new CustomerRegistration($request->name));
+            }
+        } catch (\Exception $ex) {
             info($ex->getMessage());
         }
 
         $user_email = null;
-        if($user->email){
+        if ($user->email) {
             $user_email = $user->email;
         }
 
-        return response()->json(['token' => $token, 'is_phone_verified'=>$phone, 'is_email_verified'=>$mail, 'is_personal_info' => 1, 'is_exist_user' =>null, 'login_type' => 'manual', 'email' => $user_email], 200);
+        return response()->json(['token' => $token, 'is_phone_verified' => $phone, 'is_email_verified' => $mail, 'is_personal_info' => 1, 'is_exist_user' => null, 'login_type' => 'manual', 'email' => $user_email], 200);
     }
 
     public function login(Request $request)
@@ -635,14 +646,18 @@ class CustomerAuthController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        $login_settings = array_column(BusinessSetting::whereIn('key',['manual_login_status','otp_login_status','social_login_status','google_login_status','facebook_login_status','apple_login_status','email_verification_status','phone_verification_status'
-        ])->get(['key','value'])->toArray(), 'value', 'key');
+        $login_settings = array_column(BusinessSetting::whereIn('key', ['manual_login_status', 'otp_login_status', 'social_login_status', 'google_login_status', 'facebook_login_status', 'apple_login_status', 'email_verification_status', 'phone_verification_status',
+        ])->get(['key', 'value'])->toArray(), 'value', 'key');
 
-        if($request->login_type == 'manual'){
+        if ($request->login_type == 'manual') {
+            if ((int) ($login_settings['manual_login_status'] ?? 0) !== 1) {
+                return $this->authUnavailable('manual_login_unavailable', 'Password login is unavailable.');
+            }
+
             $validator = Validator::make($request->all(), [
                 'email_or_phone' => 'required',
                 'password' => 'required|min:6',
-                'field_type' => 'required|in:phone,email'
+                'field_type' => 'required|in:phone,email',
             ]);
 
             if ($validator->fails()) {
@@ -659,7 +674,10 @@ class CustomerAuthController extends Controller
             return $this->manual_login($request_data);
         }
 
-        if($request->login_type == 'otp'){
+        if ($request->login_type == 'otp') {
+            if ((int) ($login_settings['otp_login_status'] ?? 0) !== 1) {
+                return $this->authUnavailable('otp_login_unavailable', 'OTP login is unavailable.');
+            }
 
             $validator = Validator::make($request->all(), [
                 'phone' => 'required',
@@ -669,21 +687,21 @@ class CustomerAuthController extends Controller
                 return response()->json(['errors' => Helpers::error_processor($validator)], 403);
             }
 
+            if (isset($request['verified']) && $request['verified']) {
 
-            if(isset($request['verified']) && $request['verified']){
-
-                if (!$request->otp) {
+                if (! $request->otp) {
                     $errors = [];
                     array_push($errors, ['code' => 'otp', 'message' => translate('messages.otp_id_required')]);
+
                     return response()->json([
-                        'errors' => $errors
+                        'errors' => $errors,
                     ], 403);
                 }
                 $request_data = [
                     'phone' => $request->phone,
                     'guest_id' => $request->guest_id,
-                    'otp' =>$request->otp,
-                    'verified' => $request['verified']??'default'
+                    'otp' => $request->otp,
+                    'verified' => $request['verified'] ?? 'default',
                 ];
 
                 return $this->otp_login($request_data);
@@ -696,7 +714,10 @@ class CustomerAuthController extends Controller
             return $this->send_otp($request_data);
         }
 
-        if($request->login_type == 'social'){
+        if ($request->login_type == 'social') {
+            if ((int) ($login_settings['social_login_status'] ?? 0) !== 1) {
+                return $this->authUnavailable('social_login_unavailable', 'Social login is unavailable.');
+            }
 
             $validator = Validator::make($request->all(), [
                 'token' => 'required',
@@ -709,41 +730,47 @@ class CustomerAuthController extends Controller
                 return response()->json(['errors' => Helpers::error_processor($validator)], 403);
             }
 
+            if ($request['medium'] === 'google') {
+                if ((int) ($login_settings['google_login_status'] ?? 0) !== 1) {
+                    return $this->authUnavailable('google_login_unavailable', 'Google login is unavailable.');
+                }
+                if ((int) $request->access_token === 1) {
+                    return $this->authUnavailable(
+                        'google_credential_required',
+                        'Please use the Google identity sign-in button.',
+                    );
+                }
+
+                return response()->json(
+                    $this->googleLogin->authenticateCredential((string) $request['token'])
+                );
+            }
+            if ($request['medium'] === 'facebook'
+                && (int) ($login_settings['facebook_login_status'] ?? 0) !== 1) {
+                return $this->authUnavailable('facebook_login_unavailable', 'Facebook login is unavailable.');
+            }
+            if ($request['medium'] === 'apple'
+                && (int) ($login_settings['apple_login_status'] ?? 0) !== 1) {
+                return $this->authUnavailable('apple_login_unavailable', 'Apple login is unavailable.');
+            }
+
             $client = new Client(['connect_timeout' => 5, 'timeout' => 8]); // 超时保护:防Google/FB验证接口卡死致登录无限挂起
             $token = $request['token'];
             $email = $request['email'];
             $unique_id = $request['unique_id'];
             try {
-                if ($request['medium'] == 'google') {
-                    if($request->access_token  == 1){
-                        $res = $client->request('GET',  'https://www.googleapis.com/oauth2/v3/userinfo?access_token=' . $token);
-                        $data = json_decode($res->getBody()->getContents(), true);
-                        // access_token 不含 aud, 另查 tokeninfo 拿受众
-                        $audRes = $client->request('GET', 'https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=' . $token);
-                        $audData = json_decode($audRes->getBody()->getContents(), true);
-                        $token_aud = $audData['aud'] ?? $audData['azp'] ?? null;
-                    } else{
-                        $res = $client->request('GET', 'https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=' . $token);
-                        $data = json_decode($res->getBody()->getContents(), true);
-                        $token_aud = $data['aud'] ?? null;
-                    }
-                    // 🔴 必须校验 aud == 我们的 client_id: 防别站签发的 Google token 冒用本接口换号(对齐 google_redirect_login)
-                    $expected_aud = '786035188808-o9imoj11p6kvhf2ujgd9uunqub1s3d2l.apps.googleusercontent.com';
-                    if ($token_aud !== $expected_aud) {
-                        return response()->json(['error' => translate('messages.email_does_not_match')], 403);
-                    }
-                } elseif ($request['medium'] == 'facebook') {
-                    $res = $client->request('GET', 'https://graph.facebook.com/' . $unique_id . '?access_token=' . $token . '&&fields=name,email');
+                if ($request['medium'] == 'facebook') {
+                    $res = $client->request('GET', 'https://graph.facebook.com/'.$unique_id.'?access_token='.$token.'&&fields=name,email');
                     $data = json_decode($res->getBody()->getContents(), true);
                 } elseif ($request['medium'] == 'apple') {
-                    if($request->has('verified')){
+                    if ($request->has('verified')) {
                         $user = EmailVerifications::where('token', $unique_id)->first();
                         $data = [
-                            'email' => $user->email
+                            'email' => $user->email,
                         ];
-                    }else{
-                        $apple_login=\App\Models\BusinessSetting::where(['key'=>'apple_login'])->first();
-                        if($apple_login){
+                    } else {
+                        $apple_login = \App\Models\BusinessSetting::where(['key' => 'apple_login'])->first();
+                        if ($apple_login) {
                             $apple_login = json_decode($apple_login->value)[0];
                         }
                         $teamId = $apple_login->team_id;
@@ -761,7 +788,7 @@ class CustomerAuthController extends Controller
                             'aud' => $aud,
                             'sub' => $sub,
                         ], $keyContent, 'ES256', $keyId);
-                        $redirect_uri = $apple_login->redirect_url??'www.example.com/apple-callback';
+                        $redirect_uri = $apple_login->redirect_url ?? 'www.example.com/apple-callback';
                         $res = Http::asForm()->post('https://appleid.apple.com/auth/token', [
                             'grant_type' => 'authorization_code',
                             'code' => $unique_id,
@@ -770,21 +797,20 @@ class CustomerAuthController extends Controller
                             'client_secret' => $token,
                         ]);
 
-
                         $claims = explode('.', $res['id_token'])[1];
-                        $data = json_decode(base64_decode($claims),true);
+                        $data = json_decode(base64_decode($claims), true);
                     }
 
                 }
             } catch (\Exception $e) {
-                return response()->json(['error' => 'wrong credential.','message'=>$e->getMessage()],403);
+                return response()->json(['error' => 'wrong credential.', 'message' => $e->getMessage()], 403);
             }
-            if(!isset($claims)){
+            if (! isset($claims)) {
 
-                if (strcmp($email, $data['email']) != 0 && (!isset($data['id']) && !isset($data['kid']))) {
-                    return response()->json(['error' => translate('messages.email_does_not_match')],403);
+                if (strcmp($email, $data['email']) != 0 && (! isset($data['id']) && ! isset($data['kid']))) {
+                    return response()->json(['error' => translate('messages.email_does_not_match')], 403);
                 }
-            }else{
+            } else {
                 $email = $data['email'];
             }
 
@@ -793,30 +819,31 @@ class CustomerAuthController extends Controller
                 'email' => $email,
                 'unique_id' => $unique_id,
                 'medium' => $request['medium'],
-                'verified' => $request['verified']??'default',
-                'guest_id' => $request['guest_id']
+                'verified' => $request['verified'] ?? 'default',
+                'guest_id' => $request['guest_id'],
             ];
 
             return $this->social_login($data, $request_data);
         }
 
-
         $errors = [];
         array_push($errors, ['code' => 'auth-001', 'message' => translate('messages.User_Not_Found!!!')]);
+
         return response()->json([
-            'errors' => $errors
+            'errors' => $errors,
         ], 401);
 
     }
 
-    private function manual_login($request_data){
+    private function manual_login($request_data)
+    {
 
-        if($request_data['field_type'] == 'email'){
+        if ($request_data['field_type'] == 'email') {
             $data = [
                 'email' => $request_data['email_or_phone'],
                 'password' => $request_data['password'],
             ];
-        }elseif ($request_data['field_type'] == 'phone'){
+        } elseif ($request_data['field_type'] == 'phone') {
             $data = [
                 'phone' => $request_data['email_or_phone'],
                 'password' => $request_data['password'],
@@ -824,24 +851,24 @@ class CustomerAuthController extends Controller
         }
 
         if (auth()->attempt($data)) {
-            $token = auth()->user()->createToken('RestaurantCustomerAuth')->accessToken;
-            if(!auth()->user()->status)
-            {
+            if (! auth()->user()->status) {
                 $errors = [];
                 array_push($errors, ['code' => 'auth-003', 'message' => translate('messages.your_account_is_blocked')]);
+
                 return response()->json([
-                    'errors' => $errors
+                    'errors' => $errors,
                 ], 403);
             }
             $user = auth()->user();
+            $token = $this->loginFinalizer->issue($user, 'manual');
 
             $this->refer_code_check($user);
-            if(isset($request_data['guest_id'])){
+            if (isset($request_data['guest_id'])) {
                 $this->check_guest_cart($user, $request_data['guest_id']);
             }
 
             $is_personal_info = 0;
-            if($user->f_name){
+            if ($user->f_name) {
                 $is_personal_info = 1;
             }
 
@@ -849,44 +876,52 @@ class CustomerAuthController extends Controller
             $user->save();
 
             $user_email = null;
-            if($user->email){
+            if ($user->email) {
                 $user_email = $user->email;
             }
 
-            return response()->json(['token' => $token, 'is_phone_verified'=> 1, 'is_email_verified'=> 1, 'is_personal_info' => $is_personal_info, 'is_exist_user' => null, 'login_type' => 'manual', 'email' => $user_email], 200);
+            return response()->json(['token' => $token, 'is_phone_verified' => 1, 'is_email_verified' => 1, 'is_personal_info' => $is_personal_info, 'is_exist_user' => null, 'login_type' => 'manual', 'email' => $user_email], 200);
         } else {
             $errors = [];
             array_push($errors, ['code' => 'auth-001', 'message' => translate('User_credential_does_not_match')]);
+
             return response()->json([
-                'errors' => $errors
+                'errors' => $errors,
             ], 401);
         }
     }
-    private function otp_login($request_data){
+
+    private function otp_login($request_data)
+    {
         $data = DB::table('phone_verifications')->where([
             'phone' => $request_data['phone'],
             'token' => $request_data['otp'],
         ])->first();
 
-        if($data){
-            if($request_data['verified'] == 'no'){
-                $user = User::where('phone', $request_data['phone'])->first();
-                $user->phone = null;
-                $user->save();
-
-                $user = new User();
-                $user->phone = $request_data['phone'];
-                $user->password = bcrypt($request_data['phone']);
-                $user->save();
-            }
+        if ($data) {
             $user = User::where('phone', $request_data['phone'])->first();
 
-            if(!$user->status)
-            {
+
+            if (! $user || (int) $user->is_phone_verified !== 1) {
+                DB::table('phone_verifications')->where([
+                    'phone' => $request_data['phone'],
+                    'token' => $request_data['otp'],
+                ])->delete();
+
+                return $this->authUnavailable(
+                    $user ? 'legacy_link_required' : 'registration_unavailable',
+                    $user
+                        ? 'This legacy account requires recovery before it can be used.'
+                        : 'Phone verification cannot create a new account.',
+                );
+            }
+
+            if (! $user->status) {
                 $errors = [];
                 array_push($errors, ['code' => 'auth-003', 'message' => translate('messages.your_account_is_blocked')]);
+
                 return response()->json([
-                    'errors' => $errors
+                    'errors' => $errors,
                 ], 403);
             }
 
@@ -897,7 +932,7 @@ class CustomerAuthController extends Controller
             $user->save();
 
             $is_personal_info = 0;
-            if($user->f_name){
+            if ($user->f_name) {
                 $is_personal_info = 1;
             }
 
@@ -906,28 +941,25 @@ class CustomerAuthController extends Controller
                 'token' => $request_data['otp'],
             ])->delete();
 
-            $token = null;
-            if ($is_personal_info == 1 && auth()->loginUsingId($user->id)) {
-                $token = auth()->user()->createToken('RestaurantCustomerAuth')->accessToken;
-                if(isset($request_data['guest_id'])){
-                    $this->check_guest_cart($user, $request_data['guest_id']);
-                }
+            $token = $this->loginFinalizer->issue($user, 'otp');
+            if (isset($request_data['guest_id'])) {
+                $this->check_guest_cart($user, $request_data['guest_id']);
             }
 
             $user_email = null;
-            if($user->email){
+            if ($user->email) {
                 $user_email = $user->email;
             }
 
-            return response()->json(['token' => $token, 'is_phone_verified'=>1, 'is_email_verified'=>1, 'is_personal_info' => $is_personal_info, 'is_exist_user' => null, 'login_type' => 'otp', 'email' => $user_email], 200);
+            return response()->json(['token' => $token, 'is_phone_verified' => 1, 'is_email_verified' => (int) $user->is_email_verified, 'is_personal_info' => $is_personal_info, 'is_exist_user' => null, 'login_type' => 'otp', 'email' => $user_email], 200);
         }
 
         return response()->json([
-            'message' => translate('OTP does not match')
+            'message' => translate('OTP does not match'),
         ], 404);
 
-
     }
+
     /**
      * Nezha: Google 整页跳转登录(ux_mode:redirect)第一步——校验 id_token + 一次性短码暂存登录结果。
      * 替代弹窗模式(iOS Safari 把弹窗开成无 opener 新标签, 2FA 后 postMessage 回传不到原窗 -> origin 400)。
@@ -943,46 +975,17 @@ class CustomerAuthController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        $client = new Client(['connect_timeout' => 5, 'timeout' => 8]);
         try {
-            $res = $client->request('GET', 'https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=' . $request->credential);
-            $data = json_decode($res->getBody()->getContents(), true);
+            $payload = $this->googleLogin->authenticateCredential((string) $request->credential);
+        } catch (\App\Exceptions\CustomerLoginException $error) {
+            throw $error;
         } catch (\Throwable $e) {
             return response()->json(['errors' => [['code' => 'credential', 'message' => 'Invalid Google credential']]], 403);
         }
 
-        // 🔴 必须校验 aud == 我们的 client_id: 防别的应用签发的 id_token 冒用本接口登录
-        // (现有弹窗 login 没查 aud, redirect 流是直接拿浏览器传来的 credential, 必须查)
-        $expected_aud = '786035188808-o9imoj11p6kvhf2ujgd9uunqub1s3d2l.apps.googleusercontent.com';
-        if (!isset($data['aud']) || $data['aud'] !== $expected_aud) {
-            return response()->json(['errors' => [['code' => 'credential', 'message' => 'Token audience mismatch']]], 403);
-        }
-        if (empty($data['email']) || empty($data['sub'])) {
-            return response()->json(['errors' => [['code' => 'credential', 'message' => 'Incomplete Google profile']]], 403);
-        }
-
-        $request_data = [
-            'token' => $request->credential,
-            'email' => $data['email'],
-            'unique_id' => $data['sub'],
-            'medium' => 'google',
-            'verified' => 'default',
-            'guest_id' => $request->guest_id,
-        ];
-
-        $resp = $this->social_login($data, $request_data);
-        $payload = $resp->getData(true);
-
-        // 自动合并: 命中既有未验证邮箱账号(is_exist_user)时, 因 Google 已验证该邮箱所有权, 直接登入既有账号并发 token。
-        // redirect 模式浏览器不持有 credential, 无法像弹窗那样让用户二次确认; 此自动合并安全语义已经用户批准。
-        if (isset($payload['is_exist_user']) && $payload['is_exist_user'] !== null && empty($payload['token'])) {
-            $request_data['verified'] = 'yes';
-            $resp = $this->social_login($data, $request_data);
-            $payload = $resp->getData(true);
-        }
-
         $code = Str::random(48);
-        Cache::put('gauth_' . $code, $payload, 60); // 60 秒短码, 单次使用(social_exchange 取出即删)
+        Cache::put('gauth_'.$code, $payload, 60); // 60 秒短码, 单次使用(social_exchange 取出即删)
+
         return response()->json(['code' => $code], 200);
     }
 
@@ -1007,10 +1010,37 @@ class CustomerAuthController extends Controller
         return response()->json($payload, 200);
     }
 
-    private function social_login($data, $request_data){
+    private function social_login($data, $request_data)
+    {
 
         $user = User::where('email', $data['email'])->first();
         $is_exist_user = null;
+
+        if ($request_data['medium'] === 'google') {
+            if (! filter_var($data['email_verified'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+                return $this->authUnavailable(
+                    'google_email_unverified',
+                    'Google did not confirm this email address.',
+                );
+            }
+
+            if ($user && (int) $user->is_email_verified !== 1 && $user->email_verified_at === null) {
+                return response()->json([
+                    'status' => 'legacy_link_required',
+                    'errors' => [[
+                        'code' => 'legacy_link_required',
+                        'message' => 'Use the existing password or contact support to recover this account.',
+                    ]],
+                ], 409);
+            }
+
+            if (! $user && ! $this->authFlags->googleRegistrationEnabled()) {
+                return $this->authUnavailable(
+                    'registration_unavailable',
+                    'New account registration is not available yet.',
+                );
+            }
+        }
 
         // Nezha security (#2): remember if this email already belonged to a PRE-EXISTING account
         // whose email was never verified. Such a password may have been set by someone who
@@ -1018,10 +1048,27 @@ class CustomerAuthController extends Controller
         $preexistId = $user?->id;
         $preexistUnverified = $user && (int) $user->is_email_verified === 0;
 
-        if($user && $request_data['verified'] == 'default' && $user->is_email_verified == 0){
+        if ($user && $preexistUnverified && ! $this->authFlags->legacySignupEnabled()) {
+            return response()->json([
+                'status' => 'legacy_link_required',
+                'errors' => [[
+                    'code' => 'legacy_link_required',
+                    'message' => 'Use the existing password or contact support to recover this account.',
+                ]],
+            ], 409);
+        }
+
+        if (! $user && ! $this->authFlags->legacySignupEnabled()) {
+            return $this->authUnavailable(
+                'registration_unavailable',
+                'New account registration is not available yet.',
+            );
+        }
+
+        if ($user && $request_data['verified'] == 'default' && $user->is_email_verified == 0) {
             $is_exist_user = $this->exist_user($user);
             $temporaryToken = null;
-            if($request_data['medium'] == 'apple'){
+            if ($request_data['medium'] == 'apple') {
                 DB::table('email_verifications')->updateOrInsert(['email' => $data['email']],
                     [
                         'token' => $request_data['unique_id'],
@@ -1030,49 +1077,50 @@ class CustomerAuthController extends Controller
                     ]);
             }
             $user_email = null;
-            if($user->email){
+            if ($user->email) {
                 $user_email = $user->email;
             }
-            return response()->json(['token' => $temporaryToken, 'is_phone_verified'=>1, 'is_email_verified'=>1, 'is_personal_info' => 1, 'is_exist_user' =>$is_exist_user, 'login_type' => 'social', 'email' => $user_email], 200);
+
+            return response()->json(['token' => $temporaryToken, 'is_phone_verified' => 1, 'is_email_verified' => 1, 'is_personal_info' => 1, 'is_exist_user' => $is_exist_user, 'login_type' => 'social', 'email' => $user_email], 200);
         }
 
-        if(($user && $request_data['verified'] == 'no') || (!$user && $request_data['verified'] == 'default')){
+        if (($user && $request_data['verified'] == 'no') || (! $user && $request_data['verified'] == 'default')) {
 
-            if(strcmp($request_data['email'], $data['email']) === 0){
-                if($request_data['medium'] != 'apple'){
-                    if(!isset($data['id']) && !isset($data['kid']) &&  !isset($data['sub']) ){
-                        return response()->json(['error' => 'wrong credential.'],403);
+            if (strcmp($request_data['email'], $data['email']) === 0) {
+                if ($request_data['medium'] != 'apple') {
+                    if (! isset($data['id']) && ! isset($data['kid']) && ! isset($data['sub'])) {
+                        return response()->json(['error' => 'wrong credential.'], 403);
                     }
-                    $pk = isset($data['id'])?$data['id']:(  isset($data['kid']) ?  $data['kid'] : $data['sub'] );
+                    $pk = isset($data['id']) ? $data['id'] : (isset($data['kid']) ? $data['kid'] : $data['sub']);
                 }
                 try {
-                    if(($user && $request_data['verified'] == 'no')){
+                    if (($user && $request_data['verified'] == 'no')) {
                         $user->email = null;
                         $user->save();
                     }
 
-                    $user = new User();
+                    $user = new User;
                     $user->email = $data['email'];
                     $user->login_medium = $request_data['medium'];
                     $user->temp_token = $request_data['unique_id'];
                     // Nezha: fill name from social provider so is_personal_info=1 -> token issued -> skip name/phone form
-                    if(isset($data['given_name'])){
+                    if (isset($data['given_name'])) {
                         $user->f_name = $data['given_name'];
                         $user->l_name = $data['family_name'] ?? '';
-                    }elseif(isset($data['name'])){
+                    } elseif (isset($data['name'])) {
                         $user->f_name = $data['name'];
                     }
-                    if($request_data['medium'] != 'apple'){
+                    if ($request_data['medium'] != 'apple') {
                         $user->social_id = $pk;
                     }
                     $user->save();
                 } catch (\Throwable $e) {
-                    return response()->json(['error' => 'wrong credential.','message'=>$e->getMessage()],403);
+                    return response()->json(['error' => 'wrong credential.', 'message' => $e->getMessage()], 403);
                 }
             }
         }
 
-        if($request_data['medium'] == 'apple'){
+        if ($request_data['medium'] == 'apple') {
             DB::table('email_verifications')->where([
                 'email' => $data['email'],
                 'token' => $request_data['unique_id'],
@@ -1080,16 +1128,15 @@ class CustomerAuthController extends Controller
         }
 
         if (auth()->loginUsingId($user->id)) {
-            if(!auth()->user()->status)
-            {
+            if (! auth()->user()->status) {
                 $errors = [];
                 array_push($errors, ['code' => 'auth-003', 'message' => translate('messages.your_account_is_blocked')]);
+
                 return response()->json([
-                    'errors' => $errors
+                    'errors' => $errors,
                 ], 403);
             }
             $this->refer_code_check($user);
-
 
             $user->login_medium = $request_data['medium'];
             $user->is_email_verified = 1;
@@ -1099,44 +1146,46 @@ class CustomerAuthController extends Controller
             // login into a pre-existing, never-verified account, invalidate any password it carried -
             // a pre-registrant could have set it without owning this email. The real owner logs in via
             // the social provider, or uses "forgot password" (email is now verified) to set a new one.
-            if ($preexistUnverified && $user->id === $preexistId && !empty($user->password)) {
+            if ($request_data['medium'] !== 'google' && $preexistUnverified && $user->id === $preexistId && ! empty($user->password)) {
                 $user->password = bcrypt(Str::random(40));
                 $user->save();
             }
 
             // Nezha: backfill name for social users missing f_name (covers half-created rows from earlier attempts)
-            if(!$user->f_name){
-                if(isset($data['given_name'])){
+            if (! $user->f_name) {
+                if (isset($data['given_name'])) {
                     $user->f_name = $data['given_name'];
                     $user->l_name = $data['family_name'] ?? '';
                     $user->save();
-                }elseif(isset($data['name'])){
+                } elseif (isset($data['name'])) {
                     $user->f_name = $data['name'];
                     $user->save();
                 }
             }
             $is_personal_info = 0;
-            if($user->f_name){
+            if ($user->f_name) {
                 $is_personal_info = 1;
             }
 
             $token = null;
             if ($is_personal_info == 1 && auth()->loginUsingId($user->id)) {
-                $token = auth()->user()->createToken('RestaurantCustomerAuth')->accessToken;
-                if(isset($request_data['guest_id'])){
+                $token = $this->loginFinalizer->issue(auth()->user(), (string) $request_data['medium']);
+                if (isset($request_data['guest_id'])) {
                     $this->check_guest_cart($user, $request_data['guest_id']);
                 }
             }
             $user_email = null;
-            if($user->email){
+            if ($user->email) {
                 $user_email = $user->email;
             }
-            return response()->json(['token' => $token, 'is_phone_verified'=>1, 'is_email_verified'=>1, 'is_personal_info' => $is_personal_info, 'is_exist_user' =>$is_exist_user, 'login_type' => 'social', 'email' => $user_email], 200);
+
+            return response()->json(['token' => $token, 'is_phone_verified' => 1, 'is_email_verified' => 1, 'is_personal_info' => $is_personal_info, 'is_exist_user' => $is_exist_user, 'login_type' => 'social', 'email' => $user_email], 200);
         } else {
             $errors = [];
             array_push($errors, ['code' => 'auth-001', 'message' => 'Unauthorized.']);
+
             return response()->json([
-                'errors' => $errors
+                'errors' => $errors,
             ], 401);
         }
     }
@@ -1198,6 +1247,7 @@ class CustomerAuthController extends Controller
     private function refer_code_check($user){
         if($user->ref_code == null && isset($user->id)){
             $ref_code = Helpers::generate_referer_code($user);
+
             DB::table('users')->where('id', $user->id)->update(['ref_code' => $ref_code]);
         }
         return true;
@@ -1240,6 +1290,13 @@ class CustomerAuthController extends Controller
 
     public function update_info(Request $request)
     {
+        if (! $this->authFlags->legacySignupEnabled()) {
+            return $this->authUnavailable(
+                'registration_unavailable',
+                'This legacy account-completion flow is unavailable.',
+            );
+        }
+
         $rules = [
             'name' => 'required',
             'login_type' => 'required|in:otp,social',
@@ -1261,25 +1318,25 @@ class CustomerAuthController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        $ref_by= null ;
-        //Save point to refeer
-        if($request->ref_code) {
-            $ref_status = BusinessSetting::where('key','ref_earning_status')->first()?->value;
+        $ref_by = null;
+        // Save point to refeer
+        if ($request->ref_code) {
+            $ref_status = BusinessSetting::where('key', 'ref_earning_status')->first()?->value;
             if ($ref_status != '1') {
-                return response()->json(['errors'=>Helpers::error_formater('ref_code', translate('messages.referer_disable'))], 403);
+                return response()->json(['errors' => Helpers::error_formater('ref_code', translate('messages.referer_disable'))], 403);
             }
 
             $referar_user = User::where('ref_code', '=', $request->ref_code)->first();
-            if (!$referar_user || !$referar_user->status) {
-                return response()->json(['errors'=>Helpers::error_formater('ref_code',translate('messages.referer_code_not_found'))], 405);
+            if (! $referar_user || ! $referar_user->status) {
+                return response()->json(['errors' => Helpers::error_formater('ref_code', translate('messages.referer_code_not_found'))], 405);
             }
 
-            if(WalletTransaction::where('reference', $request->phone)->first()) {
-                return response()->json(['errors'=>Helpers::error_formater('phone',translate('Referrer code already used'))], 203);
+            if (WalletTransaction::where('reference', $request->phone)->first()) {
+                return response()->json(['errors' => Helpers::error_formater('phone', translate('Referrer code already used'))], 203);
             }
 
             $this->sentPushNotificationToReferrer($referar_user);
-            $ref_by= $referar_user->id;
+            $ref_by = $referar_user->id;
         }
 
         $name = $request->name;
@@ -1287,36 +1344,37 @@ class CustomerAuthController extends Controller
         $firstName = $nameParts[0];
         $lastName = $nameParts[1] ?? '';
 
-        if($request->login_type == 'otp'){
+        if ($request->login_type == 'otp') {
             $user = User::where(['phone' => $request->phone])->first();
-        }else{
+        } else {
             $user = User::where(['email' => $request->email])->first();
         }
-        if(!$user){
+        if (! $user) {
             return response()->json([
-                'message' => translate('messages.user_not_found')
+                'message' => translate('messages.user_not_found'),
             ], 404);
         }
         $user->f_name = $firstName;
         $user->l_name = $lastName;
-        $user->email = $request->email??$user->email;
-        $user->phone = $request->phone??$user->phone;
+        $user->email = $request->email ?? $user->email;
+        $user->phone = $request->phone ?? $user->phone;
         $user->ref_by = $ref_by;
         $user->save();
         $token = null;
         if (auth()->loginUsingId($user->id)) {
-            $token = auth()->user()->createToken('RestaurantCustomerAuth')->accessToken;
+            $token = $this->loginFinalizer->issue(auth()->user(), (string) $request->login_type);
 
-            if(isset($request['guest_id'])){
+            if (isset($request['guest_id'])) {
                 $this->check_guest_cart($user, $request['guest_id']);
             }
         }
 
         $user_email = null;
-        if($user->email){
+        if ($user->email) {
             $user_email = $user->email;
         }
-        return response()->json(['token' => $token, 'is_phone_verified'=>1, 'is_email_verified'=>1, 'is_personal_info' => 1, 'is_exist_user' => null, 'login_type' => $request->login_type, 'email' => $user_email], 200);
+
+        return response()->json(['token' => $token, 'is_phone_verified' => 1, 'is_email_verified' => 1, 'is_personal_info' => 1, 'is_exist_user' => null, 'login_type' => $request->login_type, 'email' => $user_email], 200);
     }
 
     private function send_otp($request_data){
@@ -1350,6 +1408,17 @@ class CustomerAuthController extends Controller
                 Helpers::insertDataOnNotificationTable($data , 'user', $referar_user->id);
             }
         return true;
+    }
+
+    private function authUnavailable(string $code, string $message)
+    {
+        return response()->json([
+            'status' => $code,
+            'errors' => [[
+                'code' => $code,
+                'message' => $message,
+            ]],
+        ], 403);
     }
 
 }

@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\MerchantLeadController;
 use App\Http\Controllers\Api\V1\LocalLifeController;
 use App\Http\Controllers\Api\V1\GuideController;
 use App\Http\Controllers\Api\V1\Auth\CustomerAuthController;
+use App\Http\Controllers\Api\V1\Auth\CustomerEmailAuthController;
 use App\Http\Controllers\Api\V1\Auth\DeliveryManLoginController;
 use App\Http\Controllers\Api\V1\Auth\DMPasswordResetController;
 use App\Http\Controllers\Api\V1\Auth\PasswordResetController;
@@ -109,6 +110,17 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         // Nezha: Google 整页跳转登录(ux_mode:redirect) — redirect-login 校验 id_token 返回一次性短码, social/exchange 凭短码换 token
         Route::post('google/redirect-login', [CustomerAuthController::class, 'google_redirect_login']);
         Route::post('social/exchange', [CustomerAuthController::class, 'social_exchange']);
+
+        Route::prefix('email')->group(function () {
+            Route::post('start', [CustomerEmailAuthController::class, 'start'])
+                ->middleware('throttle:10,1');
+            Route::post('verify', [CustomerEmailAuthController::class, 'verify'])
+                ->middleware('throttle:20,1');
+            Route::post('legacy-password', [CustomerEmailAuthController::class, 'proveLegacyPassword'])
+                ->middleware('throttle:5,1');
+            Route::post('complete', [CustomerEmailAuthController::class, 'complete'])
+                ->middleware('throttle:10,1');
+        });
 
         // Customer H5 only: Telegram OIDC uses a dedicated login bot/client.
         // Normal Google login above is unchanged; phone collisions require exact old-account proof.
