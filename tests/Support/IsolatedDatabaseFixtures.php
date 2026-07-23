@@ -468,6 +468,18 @@ final class IsolatedDatabaseFixtures
             });
         }
 
+        if (! $schema->hasTable('nezha_order_tg_cards')) {
+            $schema->create('nezha_order_tg_cards', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('order_id')->unique();
+                $table->string('chat_id');
+                $table->string('message_id');
+                $table->string('last_state')->default('new');
+                $table->string('last_action_by_tg_uid')->nullable();
+                $table->timestamps();
+            });
+        }
+
         if (! $schema->hasTable('nezha_auto_offline_events')) {
             $schema->create('nezha_auto_offline_events', function (Blueprint $table): void {
                 $table->id();

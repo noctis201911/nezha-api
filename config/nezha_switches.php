@@ -300,6 +300,12 @@ return [
             'settings_route' => null, 'ops_note' => "无专用后台开关 UI(DB flag)。{$OPS_FORGET}。=0 整条 sweep 直接 return(dormant 零真实影响)·商家端设置面板独立于本总闸",
         ],
         [
+            'key' => 'nezha_order_tg_card_status', 'label' => '商家 TG 零 PII 新单卡片', 'section' => 'D', 'level' => 'L1-1邻',
+            'l1_clause' => $L1['L1-1'] . '(邻区·纯通知零顾客PII·不碰钱/状态)', 'expected' => 0, 'value_type' => 'bool',
+            'prereq' => 'P2.1 代码 dormant·真开=id12 已绑定 telegram_chat_id+业主批准+nezha:tg-card-demo 真机卡片截图点头。开=新单 TG 由旧纯文本换成零顾客 PII 卡片并保存 message_id；无按钮/链接/inline_keyboard。见 fable-brief/HANDOFF_waimai_tg_p21_zeropii_card.md',
+            'settings_route' => null, 'ops_note' => "无专用后台 UI(DB flag)。{$OPS_FORGET}。=0 完全走原纯文本告警；翻闸/回滚后须 cache clear + FPM reload 才即时生效",
+        ],
+        [
             'key' => 'nezha_timeout_escalate_owner_min', 'label' => '业主超时升级阈值(分钟)', 'section' => 'D', 'level' => 'L2',
             'expected' => null, 'value_type' => 'param', 'default' => 5,
             'prereq' => '参数非布尔·后台可调(默认 5)。仅在 nezha_timeout_escalate_status 开时生效——业主 TG 升级挪到 T+5(不复用 remind/email_merchant·§0.5④)·20min 自动取消前留 ~15min 挽回窗。见 fable-brief/PLAN_merchant_order_alert_reliability.md §5-8/§9-2',

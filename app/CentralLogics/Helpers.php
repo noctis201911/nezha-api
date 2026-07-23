@@ -2535,6 +2535,10 @@ class Helpers
             if (!\Illuminate\Support\Facades\Cache::add($alertKey, 1, now()->addDay())) {
                 return;
             }
+            if ((int) self::get_business_settings('nezha_order_tg_card_status') === 1
+                && \App\CentralLogics\NezhaOrderTgCard::sendAndPersist($order, (string) $chatId)) {
+                return; // 卡片已达=本单告警完成；失败则原文本路径照旧。
+            }
             $typeMap = ['delivery' => '配送', 'take_away' => '自取', 'dine_in' => '堂食'];
             $otype = $typeMap[$order->order_type] ?? $order->order_type;
             $itemStr = '';
