@@ -10,9 +10,7 @@ class CustomerAccountDeletionCompletedMail extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public readonly string $completedAt)
-    {
-    }
+    public function __construct(public readonly string $completedAt) {}
 
     public function build(): self
     {
