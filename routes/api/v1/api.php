@@ -2,12 +2,10 @@
 
 use App\Http\Controllers\Api\V1\AddonCategoryController;
 use App\Http\Controllers\Api\V1\AdvertisementController;
-use App\Http\Controllers\Api\V1\MerchantLeadController;
-use App\Http\Controllers\Api\V1\LocalLifeController;
-use App\Http\Controllers\Api\V1\GuideController;
 use App\Http\Controllers\Api\V1\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\V1\Auth\DeliveryManLoginController;
 use App\Http\Controllers\Api\V1\Auth\DMPasswordResetController;
+use App\Http\Controllers\Api\V1\Auth\EmailAuthController;
 use App\Http\Controllers\Api\V1\Auth\PasswordResetController;
 use App\Http\Controllers\Api\V1\Auth\TelegramAuthController;
 use App\Http\Controllers\Api\V1\Auth\VendorLoginController;
@@ -25,16 +23,19 @@ use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\DeliverymanController;
 use App\Http\Controllers\Api\V1\DeliverymanEarningReportController;
 use App\Http\Controllers\Api\V1\DeliveryManReviewController;
+use App\Http\Controllers\Api\V1\GuideController;
 use App\Http\Controllers\Api\V1\HomeController;
+use App\Http\Controllers\Api\V1\LocalLifeController;
 use App\Http\Controllers\Api\V1\LoyaltyPointController;
+use App\Http\Controllers\Api\V1\MerchantLeadController;
 use App\Http\Controllers\Api\V1\NewsletterController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\OrderController;
+use App\Http\Controllers\Api\V1\OrderSubscriptionController;
 use App\Http\Controllers\Api\V1\PaymentAddressCredentialController;
+use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\RefundAddressCredentialController;
 use App\Http\Controllers\Api\V1\RefundReconfirmationController;
-use App\Http\Controllers\Api\V1\OrderSubscriptionController;
-use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\RestaurantController;
 use App\Http\Controllers\Api\V1\SupportMailTicketController;
 use App\Http\Controllers\Api\V1\Vendor\AddOnController;
@@ -98,6 +99,12 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         Route::post('login', [CustomerAuthController::class, 'login'])->name('login');
         Route::post('verify-phone', [CustomerAuthController::class, 'verify_phone_or_email']);
         Route::post('update-info', [CustomerAuthController::class, 'update_info']);
+        Route::post('email/start', [EmailAuthController::class, 'start'])
+            ->name('email.start')
+            ->middleware('throttle:nezha_email_start');
+        Route::post('email/verify', [EmailAuthController::class, 'verify'])
+            ->name('email.verify')
+            ->middleware('throttle:nezha_email_verify');
 
         Route::post('forgot-password', [PasswordResetController::class, 'resetPasswordRequest'])->name('forgot-password');
         Route::post('verify-token', [PasswordResetController::class, 'verifyToken']);
@@ -115,15 +122,15 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         // Customer H5 only: Telegram OIDC uses a dedicated login bot/client.
         // Normal Google login above is unchanged; phone collisions require exact old-account proof.
         Route::post('telegram/start', [TelegramAuthController::class, 'start'])
-            ->middleware('throttle:10,1');
+            ->middleware('throttle:nezha_tg_start');
         Route::get('telegram/callback', [TelegramAuthController::class, 'callback'])
-            ->middleware('throttle:30,1');
+            ->middleware('throttle:nezha_tg_callback');
         Route::post('telegram/exchange', [TelegramAuthController::class, 'exchange'])
-            ->middleware('throttle:20,1');
+            ->middleware('throttle:nezha_tg_exchange');
         Route::post('telegram/link/password', [TelegramAuthController::class, 'linkWithPassword'])
-            ->middleware('throttle:5,1');
+            ->middleware('throttle:nezha_tg_link_password');
         Route::post('telegram/link/google', [TelegramAuthController::class, 'linkWithGoogle'])
-            ->middleware('throttle:10,1');
+            ->middleware('throttle:nezha_tg_link_google');
 
         Route::group(['prefix' => 'delivery-man', 'as' => 'delivery-man.', 'middleware' => 'actch:deliveryman_app'], function () {
             Route::post('login', [DeliveryManLoginController::class, 'login'])->name('login');

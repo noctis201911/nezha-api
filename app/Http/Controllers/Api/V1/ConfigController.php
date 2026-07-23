@@ -456,6 +456,8 @@ class ConfigController extends Controller
                 'apple_login_status' => (int)(isset($settings['apple_login_status']) ? $settings['apple_login_status'] : 0),
                 'email_verification_status' => (int)(isset($settings['email_verification_status']) ? $settings['email_verification_status'] : 0),
                 'phone_verification_status' => (int)(isset($settings['phone_verification_status']) ? $settings['phone_verification_status'] : 0),
+                'email_auth_login_status' => app(\App\Services\Auth\EmailLoginService::class)->isAvailable() ? 1 : 0,
+                'email_auth_registration_status' => app(\App\Services\Auth\EmailLoginService::class)->registrationAvailable() ? 1 : 0,
             ],
 
             'subscription_business_model' => (int)(Helpers::subscription_check()),

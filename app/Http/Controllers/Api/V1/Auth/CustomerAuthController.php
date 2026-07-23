@@ -428,6 +428,18 @@ class CustomerAuthController extends Controller
     }
     public function register(Request $request)
     {
+        // Email ownership must be proven before account creation. Keep this
+        // guard independent from mail availability so an outage cannot reopen
+        // the legacy create-first registration bypass.
+        if ((bool) config('nezha_email_auth.enabled', false)) {
+            return response()->json([
+                'errors' => [[
+                    'code' => 'email_verification_required',
+                    'message' => 'Verify your email before creating an account.',
+                ]],
+            ], 409);
+        }
+
         // 哪吒[防脚本注册 2026-07-01]: 顾客注册 reCAPTCHA v3 校验(复用 web 同一把 key, 后台 recaptcha 开启时生效)。
         // 软策略防误伤真实用户: token 缺失->放行(靠 throttle:signup 限流兜底, 不锁死装拦截/隐私插件用户);
         // token 在但 Google 判无效/低分(<0.5)->拒; Google 不可达->fail-open 放行(防 Google 抽风锁死注册)。
