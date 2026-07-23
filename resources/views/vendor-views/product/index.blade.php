@@ -314,7 +314,7 @@
          }
 
         const $submitButton = $(this).find('button[type="submit"]');
-        $submitButton.attr('disabled', true).text('Submitting...');
+        $submitButton.attr('disabled', true).text("提交中…");
 
         var formData = new FormData(this);
         $.ajaxSetup({
