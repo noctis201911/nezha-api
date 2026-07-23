@@ -38,26 +38,14 @@ final class PublicHtmlSanitizer
         $config->set('Cache.DefinitionImpl', null);
         $config->set(
             'HTML.Allowed',
-            'p[style],br,strong,b,em,i,u,ul,ol,li,h1,h2,h3,h4,h5,h6,blockquote,a[href|title],div,span[style],hr'
+            'p[style],h3,strong,ul,li'
         );
         $config->set('CSS.AllowedProperties', [
             'color',
             'font-size',
-            'font-weight',
-            'line-height',
             'margin',
-            'margin-bottom',
-            'margin-left',
-            'margin-right',
-            'margin-top',
-            'text-align',
         ]);
-        $config->set('URI.AllowedSchemes', [
-            'http' => true,
-            'https' => true,
-            'mailto' => true,
-            'tel' => true,
-        ]);
+        $config->set('URI.AllowedSchemes', []);
 
         self::$purifier = new HTMLPurifier($config);
 
