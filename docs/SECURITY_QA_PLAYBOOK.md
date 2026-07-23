@@ -35,6 +35,7 @@
 - **对照法**:同一 Controller 里有的方法带了 `user_id` 有的没带 = 八成漏了(本项目 `delete_address` 带、`update_address` 没带就是这么发现的)。
 **要的证据**:`文件:行号` + 那句缺归属的查询。
 **本项目已修**:`offline_payment`/`update_offline_payment_info`(H1)、`update_address`(M2)、`cart update/remove`(M3) — commit `fbc01d5`。
+**2026-07-23 补**:`cart/add-multiple` 未鉴权跨账户删过期购物车(purgeExpiredCarts 硬编码 is_guest=0 + apiGuestCheck 放行匿名 body guest_id → 完全匿名 body 带 guest_id=<任意注册用户id> 即越权清他人 is_guest=0 的>24h过期车) — 入口 `if(!$request->user) return 401` fail-closed 修复 + 生产 PoC 坐实(release `4e64e7d9`)。同轮加 F-2:APIGuestMiddleware 埋点 `[apiGuestCheck] token-present-but-null`(坏/过期/被撤销 token 静默降级游客的观测·只记不拦·path/ip 无 token 明文·跑数天拿基线再定是否收紧)。
 **已确认安全**:vendor/dm 订单接口用 `whereHas('restaurant.vendor', id=$vendor->id)` 正确圈定。
 **仍要警惕**:任何**新加的"按 id 操作"接口**默认都假设它漏了归属校验,直到证明带了。
 
