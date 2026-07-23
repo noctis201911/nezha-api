@@ -18,12 +18,12 @@
 | # | 不变量 | 所在 | 为什么是红线 |
 |---|---|---|---|
 | L1-1 | **平台全程不碰资金**:顾客的钱直付商家本人账户,平台不归集、不代收代付 | OrderLogic 直付分支、收款面板 | 平台归集再分发 = 二清(无证经营支付结算),违法 |
-| L1-2 | **退款只允许原路退回**:原支付方式/原卡/原钱包/原USDT地址,金额≤原订单,**禁止退到任何第三方账户** | ✅已实施②:Admin/OrderController 退款分支 + NezhaRefundControl::lock_route/check_limits + OrderLogic::refund_order;USDT原路反查锁定、法币政策+凭证、金额强制≤原单;留痕 nezha_refund_records。开关 nezha_refund_control_status(默认关) | 退到第三方 = 洗钱通道,帮信罪风险 |
-| L1-3 | **USDT 只可退回原始付款钱包地址**,系统不提供"USDT兑人民币/提现到中国账户"任何入口;USDT余额仅境外使用 | ✅已实施②:NezhaRefundControl 退款目标=原始tx反查的from地址(锁死,后台无自由填地址入口),退款tx链上校验金额+地址;无任何换汇/提现入口 | 跨境换汇/提现 = 非法经营、外汇违规 |
-| L1-4 | **链上交易记录留存 ≥ 5 年**(tx hash/来源地址/币种/金额/订单号) | ✅已实施②:nezha_refund_records 表(原始/退款 tx hash、锁定地址、链、金额、校验结果、订单号),免于PII自动清除 | 反洗钱法定留存义务 |
+| L1-2 | **退款只允许原路退回**:法币退回原付款账户；USDT 退回该登录顾客在付款前为本单确认绑定、并与订单/支付方法/网络一起原子消费的不可变退款地址，金额≤订单可退范围；**禁止商家、运营或请求参数临时填写第三方地址** | ✅ v2 实施：`NezhaRefundControl::lock_route($order)` 只读 `nezha_customer_refund_address_credentials` 的已消费快照；`tx.from` 仅作付款来源制裁筛查/审计。无快照、地址争议、金额证据缺失或依赖异常一律 `refund_destination_hold`，任何模式均零 `from` fallback。顾客退款时须以原登录方式完成短时、单次、订单绑定的新鲜认证，才开放商家退款动作 | 退到第三方 = 洗钱通道,帮信罪风险 |
+| L1-3 | **USDT 只可退回付款前绑定的本单退款地址**；该地址仅为 `customer_attested`，不得称“本人/钱包已验证”；系统不提供“USDT兑人民币/提现到中国账户”任何入口 | ✅ v2 实施：付款凭据与退款地址凭据同事务消费，订单固化 `route_policy_version`；退款哈希必填，只有同地址、同网络、同 USDT 合约、精确原子金额和终局性全部核验为 `verified` 才能进入 `merchant_refunded`。`enforce/drain/closed` 均不得恢复 `tx.from`；法律闸未批准时只能 `drain/closed`，不接新 USDT | 跨境换汇/提现 = 非法经营、外汇违规；虚称地址控制权会制造错误合规事实 |
+| L1-4 | **链上交易与退款路由证据留存 ≥ 5 年**（付款/退款 tx hash、付款来源地址、顾客绑定退款地址及指纹、币种/合约/网络、原子金额、策略版本、订单号、新鲜认证结果） | ✅ v2 实施：`nezha_customer_refund_address_credentials` 保存已消费订单级证据，`nezha_refund_records` 保存执行快照和链上核验结果；已消费证据不进入未消费凭据短期清理，migration/down 拒绝删除已存在证据 | 反洗钱法定留存义务 |
 | L1-5 | **二清打款腿已拔除,不可恢复**:RestaurantDisbursement 已禁用,直付订单不记 total_earning | RestaurantDisbursementController、OrderLogic | 恢复 = 退回二清结构 |
 | L1-6 | **制裁名单筛查命中即拒收**:付款来源地址命中 OFAC SDN/黑名单 → 拒绝并记录 | ✅已实施②:USDT「确认收款」时反查付款 tx 的 from 地址(复用 NezhaRefundControl 链上设施)→ 比对 nezha_sanction_addresses(OFAC SDN 数字货币地址)→ 命中即拒收(deny + 抛 SanctionScreenException, 订单不放行出餐)+ 写 nezha_risk_records(rule=sanction)。名单由 `nezha:sync-sanction-list` 每日 04:30 自动刷新(失败保留旧名单)。开关 nezha_sanction_screen_status(默认 1 开)。NezhaSanctionScreen。〔2026-06-22 阶段1扩展〕同一红线已扩到**商家入驻 KYC 姓名筛查**: 录入/自注册时对法人(legal_name)+受益人(beneficial_owner_name)比对 OFAC SDN **人名**名单(nezha_sanction_names, NezhaKycScreen::screen_name)→ 规范化精确=hit(写风控 action=reject/status=auto)、token 近似=possible(转人工风控队列 action=review/status=pending)。开关 nezha_kyc_sanction_screen_status(默认1开)。局限: 仅精确+词重叠、漏音译变体, 属入驻初筛非完备制裁合规(详见 CHANGELOG 2026-06-22)。 | 与受制裁主体交易 = 重大法律风险 |
-| L1-7 | **PII 与支付凭证加密存储 + 到期删除**:用户地址/联系方式/支付截图加密,支付截图默认保留期到期自动删 | ✅已实施③:MySQL表空间加密(全表)+支付凭证90天自动删+每日加密备份;keyring=`/www/server/mysql-keyring/`。〔2026-06-22 KYC 留存例外〕**商家 KYC 资料**(vendor_kyc_profiles: 法人姓名/证件号/收款账户/联系方式)为 AML/CDD 核验记录——模型层 encrypted cast + 表 ENCRYPTION='Y'(加密符 L1-7), 但作为反洗钱法定记录须**留存 ≥5 年、明确豁免 PII 自动清除**(同 L1-4 的 nezha_refund_records); 全库三个 purge 任务均不碰该表(2026-06-22 KYC 专项已核实, 代码亦无自动删 KYC 路径); 默认不上传证件扫描件以降 PII 负债; closed_at 仅为留存倒计时锚点, 当前无定时任务消费(≥5年是下限, 不自动删)。 | 数据保护法(PDPA/GDPR)义务 |
+| L1-7 | **PII 与支付凭证加密存储 + 到期删除**:用户地址/联系方式/支付截图加密,支付截图默认保留期到期自动删 | ✅已实施③:MySQL表空间加密(全表)+支付凭证90天自动删+每日加密备份;keyring=`/www/server/mysql-keyring/`。USDT 退款地址凭据表显式 `ENCRYPTION='Y'`，地址、付款哈希和来源地址同时使用应用层 encrypted cast；明文检索只用不可逆 fingerprint。已消费退款地址/链上证据因 L1-4 至少五年留存而豁免短期 PII 清理，未消费凭据仅过期挂起，物理清理等待法律留存口径。〔2026-06-22 KYC 留存例外〕**商家 KYC 资料**(vendor_kyc_profiles: 法人姓名/证件号/收款账户/联系方式)为 AML/CDD 核验记录——模型层 encrypted cast + 表 ENCRYPTION='Y'(加密符 L1-7), 但作为反洗钱法定记录须**留存 ≥5 年、明确豁免 PII 自动清除**(同 L1-4 的 nezha_refund_records); 全库三个 purge 任务均不碰该表(2026-06-22 KYC 专项已核实, 代码亦无自动删 KYC 路径); 默认不上传证件扫描件以降 PII 负债; closed_at 仅为留存倒计时锚点, 当前无定时任务消费(≥5年是下限, 不自动删)。 | 数据保护法(PDPA/GDPR)义务 |
 | L1-8 | **押金持有 + 商家退出结算退还**(待·组④⑤设计中):①押金**法币-only**、平台不持任何加密资产(不收 USDT);②退还只退回**缴纳主体本人 KYC 核验账户**、非第三方,退前核对 legal_name==bank_account 户名==缴纳凭证付款人;③**退款给商家前制裁核验未命中**(审批放款时用【当前】OFAC SDN 名单**实时 RE-run screen_names**、**不读入驻旧 screen_status 列**——名单每日刷新、旧列会空转;命中=拒+转人工 AML,疑似/未决=fail-closed 转人工,呼应 L1-6);④三账户合并结算时**未结佣金/罚款只从 deposit_balance 抵**,ad_balance/guarantee_balance 各自独立全额退给商家、不跨账户挪用(守 ad 资金隔离);⑤押金流水/结算记录留存 ≥5 年、免 PII 清除(同 L1-4) | ✅ step4-4/step5 已实装(未部署·dormant): NezhaOffboard::rescreenSanctions(§D1 实时 re-screen·fail-closed)+approve() 4 门(status/冷静期/re-screen/holder_verified)+暴露层(商家申请·超管审批);开关 nezha_offboard_status 默认 0(服务端强制)。正本 `docs/PLAN_merchant_offboard.md` §4/§8 · `docs/DESIGN_merchant_offboard.md`。〔2026-07-03 追加**中途退回押金(营业中·A3 S3-B)**: `NezhaGuaranteeRefund`(运营核算制·G0-G6 逐门·CJK-safe 户名核对+身份指纹 kyc_apply_fp·钱包行锁+C4 快照·每笔制裁复筛不分金额·用 is_deposit_credit_frozen 覆盖 owing·uq_active_refund 结构墙); 开关 `nezha_topup_refund_status` 默认 0 dormant; /debate 三路红队+26/0 逐门反例硬化, 存 `docs/topup_refund_debate_archive.md`〕 | 持有并退还商家资金:退第三方=洗钱通道;向受制裁主体付款=重大法律风险;平台持币=触外汇/支付牌照 + 突破"平台不碰钱"基石 |
 | L1-9 | **平台不出资促销(账务定性)**:店铺折扣/多级满减=商家自掏,记账 100% 归 vendor(discount_on_product_by=vendor·expenseCreate created_by=vendor·amount_admin=0),平台不记补贴、不减净利;佣金按商家实收(减后额)计,平台因让利"少收"D×佣金率=让利分摊非平台支出 | ✅已实施(2026-07-02):OrderController place_order(满减命中→vendor) + OrderLogic create_transaction(vendor 分支 amount_admin=0·已删 admin discount_on_product 拆分行);多级满减灰度关不影响·现有 POS 商家折扣即时生效 | 把商家自掏促销记成平台补贴/admin 出资=虚构"平台贴钱", 与 L1-1"平台不碰钱不补贴"对外陈述冲突, 误导监管/银行/商家对账(账务定性红线) |
 
@@ -37,7 +37,7 @@
 
 - 原订单永久保持 `canceled`，不得因迟到付款复活或继续履约；顾客仍需商品时重新下单。
 - 平台只记录和协调案件，资金始终由顾客直付商家、由商家自行退回顾客，平台不代收、代退或归集。
-- USDT 自托管钱包按原付款来源地址退；若原付款来自交易所，商家直接联系顾客取得退款地址，不增加平台强制地址所有权认证或顾客站内确认闸。该地址只能记为“顾客提供”，不得伪称平台已证明归属。
+- 本节原“自托管退 `tx.from` / 交易所事后自由取址”设计已被通用 L1-2/L1-3 v2 裁决取代：V2 如重新落地，也必须复用付款前绑定的订单级退款快照与退款时新鲜认证；无快照即挂起，不得联系顾客后由商家或运营自由填址，更不得回退 `tx.from`。
 - 实收多于应付时仍正常退款；具体净退款额与手续费由商家和顾客自行协商，平台不规定默认手续费，也不强制站内确认。系统若记录该金额，只能标记为双方线下协商后的商家申报值。
 - USDT 只有在严格核对链上成功状态、终局性、对应网络 USDT 合约、案件退款地址和协商后的原子整数净退款额后才能关闭退款案件。
 - 支付宝由商家确认已退款后关闭；该结论只能标记为 `merchant_declared`，不得标记为 `provider_verified`。顾客称未收到时可另行向平台发起申诉，原订单仍不复活。
@@ -45,6 +45,8 @@
 - 普通退款与 V2 迟付共用物理表 `nezha_refund_records`，但按域隔离：Funds 普通退款继续以 `event_key=order:{id}:refund` 保证 exactly-once；V2 只写 `source_domain=direct_payment_late_v2` + 每订单唯一 `case_key`，并保持 `event_key=NULL`。因此同一订单最多各有一条普通退款和一条 V2 迟付案件。迁移固定先 `150000`（Funds）后 `180000`（V2）；一旦有 V2 数据，只允许前向兼容演进，不执行 `down()` 回退。
 
 当前候选实现已接入独立迟付案件控制器、现行退款 owner 的追加字段与事件表 migration、严格 USDT provider 适配器、商家/后台证据台及顾客 H5；新开关 `nezha_direct_payment_late_v2_status` migration 默认写入 `0`。候选尚未部署、未开启、未接入生产流量，测试只使用隔离数据库与 provider fake；进入运行态前仍须完成实现审计、精确发布动作包、staging 无资金 canary 与回滚验证。
+
+> **L1-6 退款目标补充（2026-07-23）**：USDT 退款执行前还必须用当前本地制裁名单筛查付款前锁定的退款地址。命中名单或出现开关关闭、名单未同步/过期/空表、地址类型未知、查询异常等任何未决态，一律 `refund_destination_hold`，不得执行退款；名单最大允许陈旧时间由 `nezha_refund_sanction_max_sync_age_hours` 控制，默认 48 小时。此规则只决定是否放行商家自行退款，平台仍不持币、不代退。
 
 ## 🟡 L2 业务参数 (可调,留痕告知)
 
@@ -55,6 +57,9 @@
 | 人工放行宽限期 | 60 分钟 | 后台风控设置页 |
 | USDT 独立阈值 | 单笔110437֏(≈$300)/单日800000֏ | 后台风控设置页 |
 | **退款护栏总开关 nezha_refund_control_status** | 1(开) | 后台「风控设置→退款控制」;**独立于下单风控**;开启属"真实影响开关",需测试单验证+告知用户后再开 |
+| **USDT 退款地址绑定模式 nezha_usdt_refund_binding_mode** | drain（发布默认） | `enforce`=仅在法律闸 approved 时接新 USDT，并强制双凭据；`drain`=停止新 USDT、已有合格快照继续退款；`closed`=停止新 USDT，既有记录只读审计并按故障挂起。三态都禁止 `tx.from` fallback |
+| **USDT 退款法律闸 nezha_usdt_refund_legal_gate** | pending（发布默认） | 只有正式 Q1/Q2 放行并由获授权超管改为 `approved` 后，`enforce` 才能接新 USDT；`pending` 时即使误设 enforce，服务端仍拒新 USDT |
+| 退款新鲜认证/终局/名单新鲜度参数 | 300 秒 / BSC 12 块 / TRON 20 块 / OFAC 同步龄 48 小时 | `nezha_refund_reconfirm_ttl_seconds`、`nezha_refund_bsc_finality_blocks`、`nezha_refund_tron_finality_blocks`、`nezha_refund_sanction_max_sync_age_hours`；后台风控设置，改动留痕 |
 | 退款限额(单笔/单日累计/单日笔数/窗口) | 单笔400000֏/单日800000֏/10笔/3天 | 后台「风控设置→退款控制」,不改代码 |
 | USDT退款链上自动校验 nezha_refund_usdt_verify_status | 1(开) | 后台;关则仅锁定+人工核 |
 | **制裁筛查总开关 nezha_sanction_screen_status** | 1(开) | 后台「风控设置→制裁名单筛查」;关则不筛查 USDT 来源地址 = **L1-6 不生效**,关闭须告知用户;名单源 URL nezha_sanction_source_url 同处可调 |

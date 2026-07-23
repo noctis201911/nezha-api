@@ -29,10 +29,28 @@ class NezhaRefundRecord extends Model
      * MERCHANT_LIFECYCLE: 商家流全生命周期, 生成幂等守卫用(存在其一即不重建, 防重开已关闭/争议记录)。
      */
     const STATUS_NEEDS_ACTION      = ['pending_merchant_refund'];
-    const STATUS_UNRESOLVED        = ['pending_merchant_refund', 'disputed'];
+    const STATUS_UNRESOLVED        = [
+        'awaiting_customer_reconfirm',
+        'refund_destination_hold',
+        'pending_merchant_refund',
+        'disputed',
+    ];
     const STATUS_RESOLVED          = ['merchant_refunded', 'closed_no_payment'];
-    const STATUS_MERCHANT_LIFECYCLE = ['pending_merchant_refund', 'disputed', 'merchant_refunded', 'closed_no_payment'];
-    const STATUS_CUSTOMER_VISIBLE  = ['pending_merchant_refund', 'disputed', 'merchant_refunded'];
+    const STATUS_MERCHANT_LIFECYCLE = [
+        'awaiting_customer_reconfirm',
+        'refund_destination_hold',
+        'pending_merchant_refund',
+        'disputed',
+        'merchant_refunded',
+        'closed_no_payment',
+    ];
+    const STATUS_CUSTOMER_VISIBLE  = [
+        'awaiting_customer_reconfirm',
+        'refund_destination_hold',
+        'pending_merchant_refund',
+        'disputed',
+        'merchant_refunded',
+    ];
 
     /**
      * 逾期计时口径(单一真相源): 争议维持裁决(R3)后 overdue_anchor_at=裁决时刻, 逾期从此刻重算;
@@ -46,8 +64,10 @@ class NezhaRefundRecord extends Model
     protected $casts = [
         'order_id'             => 'integer',
         'refund_id'            => 'integer',
+        'refund_address_credential_id' => 'integer',
         'restaurant_id'        => 'integer',
         'user_id'              => 'integer',
+        'asset_decimals'       => 'integer',
         'order_amount'         => 'float',
         'refund_amount'        => 'float',
         'chain_verify_detail'  => 'array',
@@ -57,6 +77,9 @@ class NezhaRefundRecord extends Model
         'merchant_refunded_at' => 'datetime',
         'reviewed_at'          => 'datetime',
         'overdue_anchor_at'    => 'datetime',
+        'reconfirm_expires_at' => 'datetime',
+        'reconfirmed_at'       => 'datetime',
+        'reconfirm_consumed_at'=> 'datetime',
     ];
 
     /**
@@ -65,9 +88,40 @@ class NezhaRefundRecord extends Model
     public function customerProjection(): array
     {
         return [
+            'refund_record_id'     => (int) $this->id,
             'status'               => $this->status,
             'refund_amount'        => $this->refund_amount,
             'channel'              => $this->payment_channel,
+            'network'              => $this->asset_network ?: $this->chain,
+            'refund_address'       => $this->locked_to_address,
+            'verification_status'  => $this->verification_status,
+            'destination_source'   => $this->destination_source,
+            'destination_verification_method' => $this->destination_verification_method,
+            'route_policy_version' => $this->route_policy_version,
+            'refund_asset'         => $this->refund_asset
+                ?: ($this->payment_channel === 'usdt' ? 'USDT' : null),
+            'refund_asset_contract'=> $this->asset_contract,
+            'refund_asset_decimals'=> $this->asset_decimals,
+            'refund_asset_amount_atomic' => $this->refund_asset_amount_atomic !== null
+                ? (string) $this->refund_asset_amount_atomic
+                : null,
+            'refund_asset_amount'  => $this->refund_asset_amount_atomic !== null
+                && $this->asset_decimals !== null
+                    ? \App\CentralLogics\NezhaAtomicAmount::atomicToDecimal(
+                        (string) $this->refund_asset_amount_atomic,
+                        (int) $this->asset_decimals
+                    )
+                    : null,
+            'chain_verify_status'  => $this->chain_verify_status,
+            'refund_tx_hash'       => $this->refund_tx_hash,
+            'hold_reason'          => $this->hold_reason,
+            'refund_amount_order_currency' => $this->refund_amount_order_currency !== null
+                ? (string) $this->refund_amount_order_currency
+                : null,
+            'order_currency'       => $this->order_currency_snapshot,
+            'refund_amount_policy' => $this->refund_amount_policy,
+            'reconfirmed_at'       => $this->reconfirmed_at?->toIso8601String(),
+            'reconfirm_auth_method'=> $this->reconfirm_auth_method,
             'refunded'             => $this->status === 'merchant_refunded',
             'customer_confirmed'   => (bool) $this->customer_confirmed,
             'confirmed_at'         => $this->customer_confirmed_at ? (string) $this->customer_confirmed_at : null,
@@ -109,9 +163,31 @@ class NezhaRefundRecord extends Model
                 return null;
             }
 
+            if ($record->payment_channel === 'usdt') {
+                $verifyStatus = $attributes['chain_verify_status']
+                    ?? $record->chain_verify_status;
+                $refundHash = $attributes['refund_tx_hash']
+                    ?? $record->refund_tx_hash;
+                if ($verifyStatus !== 'verified'
+                    || ! $refundHash
+                    || ! $record->reconfirmed_at
+                    || $record->refund_asset_amount_atomic === null
+                    || ! $record->locked_to_address) {
+                    return null;
+                }
+            }
+
             $record->status = 'merchant_refunded';
             $record->merchant_refunded_at = now();
-            foreach (['merchant_refund_note', 'refund_tx_hash', 'chain_verify_status'] as $field) {
+            foreach ([
+                'merchant_refund_note',
+                'refund_tx_hash',
+                'refund_tx_fingerprint',
+                'chain_verify_status',
+                'chain_verify_detail',
+                'hold_reason',
+                'risk_action',
+            ] as $field) {
                 if (array_key_exists($field, $attributes)) {
                     $record->{$field} = $attributes[$field];
                 }

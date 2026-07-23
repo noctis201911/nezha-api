@@ -23,6 +23,7 @@ class NezhaPaymentAddressCredential extends Model
         'consumed_at',
         'consumed_order_id',
         'submitted_tx_hash',
+        'submitted_tx_fingerprint',
         'revoked_at',
         'revoked_reason',
         'redacted_at',
@@ -32,6 +33,7 @@ class NezhaPaymentAddressCredential extends Model
         'secret_hash',
         'address_snapshot',
         'submitted_tx_hash',
+        'submitted_tx_fingerprint',
         'revoked_reason',
     ];
 

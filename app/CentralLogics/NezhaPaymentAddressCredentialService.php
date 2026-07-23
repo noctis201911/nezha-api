@@ -4,6 +4,7 @@ namespace App\CentralLogics;
 
 use App\Models\NezhaPaymentAddressCredential;
 use App\Models\OfflinePaymentMethod;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -204,27 +205,91 @@ class NezhaPaymentAddressCredentialService
         int $orderId,
         ?string $txHash
     ): NezhaPaymentAddressCredential {
-        return DB::transaction(function () use ($credential, $orderId, $txHash) {
-            $fresh = NezhaPaymentAddressCredential::whereKey($credential->id)->lockForUpdate()->first();
-            if (! $fresh) {
-                throw new \DomainException('credential_not_found');
-            }
-            if ($fresh->consumed_order_id !== null && (int) $fresh->consumed_order_id !== $orderId) {
-                throw new \DomainException('credential_already_consumed');
-            }
-            if ($fresh->consumed_order_id === null) {
-                self::assertActive($fresh);
+        try {
+            return DB::transaction(function () use ($credential, $orderId, $txHash) {
+                $fresh = NezhaPaymentAddressCredential::whereKey($credential->id)->lockForUpdate()->first();
+                if (! $fresh) {
+                    throw new \DomainException('credential_not_found');
+                }
+                if ($fresh->consumed_order_id !== null && (int) $fresh->consumed_order_id !== $orderId) {
+                    throw new \DomainException('credential_already_consumed');
+                }
+                if ($fresh->consumed_order_id === null) {
+                    self::assertActive($fresh);
+                }
+
+                $incomingHash = trim((string) $txHash);
+                $incomingFingerprint = self::transactionFingerprint($fresh->network, $incomingHash);
+                if ($incomingHash !== '' && $incomingFingerprint === null) {
+                    throw new \DomainException('payment_tx_hash_invalid');
+                }
+
+                $storedHash = trim((string) $fresh->submitted_tx_hash);
+                $storedFingerprint = trim((string) $fresh->submitted_tx_fingerprint);
+                if ($storedFingerprint === '' && $storedHash !== '') {
+                    $storedFingerprint = (string) self::transactionFingerprint($fresh->network, $storedHash);
+                    if ($storedFingerprint === '') {
+                        throw new \DomainException('payment_tx_hash_changed');
+                    }
+                }
+                if ($storedFingerprint !== ''
+                    && $incomingFingerprint !== null
+                    && ! hash_equals($storedFingerprint, $incomingFingerprint)) {
+                    throw new \DomainException('payment_tx_hash_changed');
+                }
+
+                $fingerprint = $storedFingerprint !== ''
+                    ? $storedFingerprint
+                    : $incomingFingerprint;
+                if ($fingerprint !== null
+                    && NezhaPaymentAddressCredential::where(
+                        'submitted_tx_fingerprint',
+                        $fingerprint
+                    )->whereKeyNot($fresh->id)->exists()) {
+                    throw new \DomainException('payment_tx_hash_reused');
+                }
+
+                $fresh->consumed_order_id = $orderId;
+                $fresh->consumed_at = $fresh->consumed_at ?: now();
+                if ($storedHash === '' && $incomingHash !== '') {
+                    $fresh->submitted_tx_hash = $incomingHash;
+                }
+                if ($storedFingerprint === '' && $incomingFingerprint !== null) {
+                    $fresh->submitted_tx_fingerprint = $incomingFingerprint;
+                }
+                $fresh->save();
+
+                return $fresh;
+            });
+        } catch (QueryException $exception) {
+            $message = strtolower($exception->getMessage());
+            if (str_contains($message, 'submitted_tx_fingerprint')
+                || str_contains($message, 'nz_payment_tx_fingerprint_uq')) {
+                throw new \DomainException('payment_tx_hash_reused', 0, $exception);
             }
 
-            $fresh->consumed_order_id = $orderId;
-            $fresh->consumed_at = $fresh->consumed_at ?: now();
-            if ($fresh->submitted_tx_hash === null && $txHash !== null && $txHash !== '') {
-                $fresh->submitted_tx_hash = $txHash;
-            }
-            $fresh->save();
+            throw $exception;
+        }
+    }
 
-            return $fresh;
-        });
+    public static function transactionFingerprint($network, ?string $txHash): ?string
+    {
+        $hash = strtolower(trim((string) $txHash));
+        if (! NezhaChainVerifier::isValidHashFormat($hash)) {
+            return null;
+        }
+        if (str_starts_with($hash, '0x')) {
+            $hash = substr($hash, 2);
+        }
+        $normalizedNetwork = NezhaUsdtAddress::normalizeNetwork($network);
+        if (! in_array($normalizedNetwork, [
+            NezhaUsdtAddress::TRC20,
+            NezhaUsdtAddress::BEP20,
+        ], true)) {
+            return null;
+        }
+
+        return hash('sha256', $normalizedNetwork.'|'.$hash);
     }
 
     public static function evidence(NezhaPaymentAddressCredential $credential): array

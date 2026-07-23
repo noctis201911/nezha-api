@@ -573,7 +573,7 @@ class NezhaPaymentAddressCredentialServiceTest extends TestCase
         $migration->down();
     }
 
-    public function test_consumption_rechecks_expiry_and_preserves_first_submitted_hash(): void
+    public function test_consumption_rechecks_expiry_and_rejects_a_changed_submitted_hash(): void
     {
         $this->seedBase('1');
         $issued = NezhaPaymentAddressCredentialService::issue(10, 20, 30);
@@ -596,11 +596,57 @@ class NezhaPaymentAddressCredentialServiceTest extends TestCase
             ->update(['expires_at' => now()->addMinute()]);
         $fresh = $resolved->fresh();
         NezhaPaymentAddressCredentialService::consume($fresh, 950, str_repeat('d', 64));
-        NezhaPaymentAddressCredentialService::consume($fresh->fresh(), 950, str_repeat('e', 64));
+        try {
+            NezhaPaymentAddressCredentialService::consume(
+                $fresh->fresh(),
+                950,
+                str_repeat('e', 64)
+            );
+            $this->fail('A consumed order must not replace its original transaction hash');
+        } catch (\DomainException $e) {
+            $this->assertSame('payment_tx_hash_changed', $e->getMessage());
+        }
 
         $this->assertSame(
             str_repeat('d', 64),
             $fresh->fresh()->submitted_tx_hash
+        );
+    }
+
+    public function test_a_transaction_hash_can_be_claimed_by_only_one_payment_credential(): void
+    {
+        $this->seedBase('1');
+        $first = NezhaPaymentAddressCredentialService::issue(10, 20, 30);
+        $second = NezhaPaymentAddressCredentialService::issue(11, 20, 30);
+        $firstResolved = NezhaPaymentAddressCredentialService::resolveForProof(
+            $first['token'],
+            10,
+            20,
+            30,
+            951
+        );
+        $secondResolved = NezhaPaymentAddressCredentialService::resolveForProof(
+            $second['token'],
+            11,
+            20,
+            30,
+            952
+        );
+        $hash = str_repeat('f', 64);
+
+        NezhaPaymentAddressCredentialService::consume($firstResolved, 951, $hash);
+
+        try {
+            NezhaPaymentAddressCredentialService::consume($secondResolved, 952, $hash);
+            $this->fail('A real transaction hash must not create two refund liabilities');
+        } catch (\DomainException $e) {
+            $this->assertSame('payment_tx_hash_reused', $e->getMessage());
+        }
+
+        $this->assertNull($secondResolved->fresh()->consumed_order_id);
+        $this->assertSame(
+            NezhaPaymentAddressCredentialService::transactionFingerprint('TRC20', $hash),
+            $firstResolved->fresh()->submitted_tx_fingerprint
         );
     }
 
@@ -697,6 +743,7 @@ class NezhaPaymentAddressCredentialServiceTest extends TestCase
             $table->timestamp('consumed_at')->nullable();
             $table->unsignedBigInteger('consumed_order_id')->nullable()->unique();
             $table->text('submitted_tx_hash')->nullable();
+            $table->char('submitted_tx_fingerprint', 64)->nullable()->unique();
             $table->timestamp('revoked_at')->nullable();
             $table->text('revoked_reason')->nullable();
             $table->timestamp('redacted_at')->nullable();

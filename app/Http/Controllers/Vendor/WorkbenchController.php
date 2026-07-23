@@ -488,16 +488,32 @@ class WorkbenchController extends Controller
                 'id'         => (int) $o->id,
                 'segment'    => $seg,                        // A=已确认收款·须退 / B=凭证在案·先核后退
                 'disputed'   => optional($rec)->status === 'disputed',
+                'refund_status' => optional($rec)->status,
                 'refund_amd' => Helpers::format_currency($amt),
                 'refund_cny' => $rateCny > 0 ? round($amt / $rateCny, 1) : null,
                 'refund_usd' => $rateUsd > 0 ? round($amt / $rateUsd, 2) : null,
                 'channel'    => self::refundChannelLabel($rec, $o),
+                'refund_address' => optional($rec)->locked_to_address,
+                'asset_network' => optional($rec)->asset_network,
+                'refund_asset_amount_atomic' => optional($rec)->refund_asset_amount_atomic !== null
+                    ? (string) optional($rec)->refund_asset_amount_atomic
+                    : null,
+                'route_policy_version' => optional($rec)->route_policy_version,
+                'chain_verify_status' => optional($rec)->chain_verify_status,
+                'executable' => optional($rec)->status === 'pending_merchant_refund'
+                    && ($rec?->payment_channel !== 'usdt' || $rec?->reconfirmed_at !== null),
                 'held_text'  => self::heldSince(optional($rec)->created_at),
-                'meta'       => $seg === 'B' ? '顾客有付款凭证在案，请核对您的收款账户' : null,
+                'meta'       => optional($rec)->status === 'awaiting_customer_reconfirm'
+                    ? '等待顾客完成原登录方式安全确认，请勿发送USDT'
+                    : (optional($rec)->status === 'refund_destination_hold'
+                        ? '退款目标挂起，请勿发送USDT'
+                        : ($seg === 'B' ? '顾客有付款凭证在案，请核对您的收款账户' : null)),
                 // 卡上不做一键标记; CTA = 去退款核对 → 进详情退款核对卡(原路强确认 L1 呈现原样保留)
                 'cta'        => [
                     'kind'  => 'link',
-                    'label' => optional($rec)->status === 'disputed' ? '查看争议' : '去退款核对',
+                    'label' => optional($rec)->status === 'disputed'
+                        ? '查看争议'
+                        : (optional($rec)->status === 'pending_merchant_refund' ? '去退款核对' : '查看退款状态'),
                     'route' => route('vendor.order.details', ['id' => $o->id]),
                 ],
             ];

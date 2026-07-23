@@ -1129,6 +1129,18 @@ class ConfigController extends Controller
     public function offline_payment_method_list()
     {
         $data = OfflinePaymentMethod::where('status', 1)->get();
+        $refundMode = \App\CentralLogics\NezhaCustomerRefundAddressCredentialService::mode();
+        $refundAccepting = \App\CentralLogics\NezhaCustomerRefundAddressCredentialService::
+            acceptingNewPayments();
+        $data->each(function ($method) use ($refundMode, $refundAccepting): void {
+            if (\App\CentralLogics\NezhaPaymentAddressCredentialService::networkForMethod($method) !== null) {
+                $method->setAttribute('nezha_refund_binding_mode', $refundMode);
+                $method->setAttribute(
+                    'nezha_payment_available',
+                    $refundAccepting
+                );
+            }
+        });
         $data = $data->count() > 0 ? $data : null;
         return response()->json($data, 200);
     }
