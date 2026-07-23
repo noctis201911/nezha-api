@@ -131,6 +131,8 @@
 
 
 
+        var count = 0;
+
         function add_new_option_button() {
             $('#empty-variation').hide();
                 count++;

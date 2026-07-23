@@ -287,7 +287,7 @@
 
                         <div class="form-meta">
                             @if ($isVendor)
-                                <span class="remember">For your security, merchant login is not kept across browser sessions.</span>
+                                <span class="remember">为保障账号安全，商家登录状态不会跨浏览器会话保留。</span>
                             @else
                                 <label class="remember" for="termsCheckbox">
                                     <input type="checkbox" id="termsCheckbox" name="remember" {{ ($remember ?? false) ? 'checked' : '' }}>

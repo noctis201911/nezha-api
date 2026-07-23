@@ -1,6 +1,6 @@
 @extends('layouts.vendor.app')
 
-@section('title', 'Update Food')
+@section('title',translate('messages.edit_food'))
 
 @push('css_or_js')
     <meta name="csrf-token" content="{{ csrf_token() }}">
