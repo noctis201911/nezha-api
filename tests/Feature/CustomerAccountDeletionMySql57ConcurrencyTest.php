@@ -124,6 +124,11 @@ class CustomerAccountDeletionMySql57ConcurrencyTest extends TestCase
         $this->assertSame(1, (int) $database->query(
             'SELECT COUNT(*) FROM customer_account_deletion_states WHERE user_id='.(int) $setup['race_user_id']
         )->fetchColumn());
+        $this->assertSame(1, (int) $database->query(
+            'SELECT COUNT(*) FROM customer_account_deletion_notices '
+            .'WHERE state_id IN (SELECT id FROM customer_account_deletion_states '
+            .'WHERE user_id='.(int) $setup['race_user_id'].')'
+        )->fetchColumn());
 
         $orderBarrier = $this->runtimeDirectory.'/barrier-order';
         $order = $this->startWorker(['order-hold', (string) $setup['order_user_id'], $orderBarrier]);

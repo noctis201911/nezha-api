@@ -1067,26 +1067,47 @@ class CustomerAccountDeletionService
             );
         }
 
-        CustomerAccountDeletionNotice::query()->updateOrCreate(
-            ['request_id' => $state->request_id],
-            [
-                'state_id' => $state->id,
-                'channel' => 'email',
-                'recipient_ciphertext' => Crypt::encryptString($email),
-                'locale' => $state->copy_locale ?: 'zh-CN',
-                'status' => 'waiting_execution',
-                'purge_completed_at' => null,
-                'send_due_at' => null,
-                'legal_due_at' => null,
-                'claimed_at' => null,
-                'owner_token' => null,
-                'attempt_count' => 0,
-                'next_retry_at' => null,
-                'sent_at' => null,
-                'recipient_cleared_at' => null,
-                'last_error_code' => null,
-            ]
-        );
+        $values = [
+            'state_id' => $state->id,
+            'channel' => 'email',
+            'recipient_ciphertext' => Crypt::encryptString($email),
+            'locale' => $state->copy_locale ?: 'zh-CN',
+            'status' => 'waiting_execution',
+            'purge_completed_at' => null,
+            'send_due_at' => null,
+            'legal_due_at' => null,
+            'claimed_at' => null,
+            'owner_token' => null,
+            'attempt_count' => 0,
+            'next_retry_at' => null,
+            'sent_at' => null,
+            'recipient_cleared_at' => null,
+            'last_error_code' => null,
+        ];
+
+        try {
+            CustomerAccountDeletionNotice::query()->create(
+                ['request_id' => $state->request_id] + $values
+            );
+
+            return;
+        } catch (QueryException $exception) {
+            if ((int) ($exception->errorInfo[1] ?? 0) !== 1062) {
+                throw $exception;
+            }
+        }
+
+        // updateOrCreate performs a non-locking read first. Under MySQL 5.7
+        // REPEATABLE READ, a concurrent first request can therefore be absent
+        // from this transaction's snapshot even after its insert commits.
+        // The unique-key insert above serializes that race; this locking current
+        // read then safely reuses the one outbox row.
+        CustomerAccountDeletionNotice::query()
+            ->where('request_id', $state->request_id)
+            ->lockForUpdate()
+            ->firstOrFail()
+            ->forceFill($values)
+            ->save();
     }
 
     private function cancelNotice(string $requestId): void
