@@ -6,6 +6,7 @@ use App\CentralLogics\Helpers;
 use App\CentralLogics\ProductLogic;
 use App\Exports\FoodListExport;
 use App\Http\Controllers\Controller;
+use App\Models\AddOn;
 use App\Models\Allergy;
 use App\Models\Category;
 use App\Models\Food;
@@ -28,6 +29,56 @@ use Rap2hpoutre\FastExcel\FastExcel;
 
 class FoodController extends Controller
 {
+    /**
+     * Platform navigation categories currently share parent_id=0 with food
+     * categories. Keep this UI-only exclusion in one place until category
+     * hierarchy data is repaired in a separately approved data change.
+     */
+    private const PLATFORM_CATEGORY_IDS = [1, 3, 4, 5, 6, 7];
+
+    private function normalizeProductForm(Request $request): void
+    {
+        $options = collect($request->input('options', []))
+            ->map(function (array $option): array {
+                if (($option['type'] ?? 'single') === 'single') {
+                    $option['min'] = 1;
+                    $option['max'] = 1;
+                } else {
+                    $option['min'] = max(0, (int) ($option['min'] ?? 0));
+                    $option['max'] = max(
+                        $option['min'],
+                        (int) ($option['max'] ?? count($option['values'] ?? []))
+                    );
+                }
+
+                return $option;
+            })
+            ->all();
+
+        $request->merge([
+            'options' => $options,
+            'discount' => $request->input('discount', 0),
+            'discount_type' => $request->input('discount_type', 'percent'),
+            'stock_type' => $request->input('stock_type', 'unlimited'),
+            'veg' => $request->input('veg', 0),
+        ]);
+    }
+
+    private function ensureEnglishFallback(Food $food): void
+    {
+        foreach (['name', 'description'] as $key) {
+            $value = $food->{$key};
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            $food->translations()->firstOrCreate(
+                ['locale' => 'en', 'key' => $key],
+                ['value' => $value]
+            );
+        }
+    }
+
     public function index()
     {
         if (! Helpers::get_restaurant_data()->food_section) {
@@ -35,12 +86,29 @@ class FoodController extends Controller
 
             return back();
         }
-        $categories = Category::where(['position' => 0])->get();
+        $categories = Category::where(['parent_id' => 0])
+            ->whereNotIn('id', self::PLATFORM_CATEGORY_IDS)
+            ->orderBy('name')
+            ->get();
+        $restaurantId = Helpers::get_restaurant_id();
+        $addons = AddOn::where('restaurant_id', $restaurantId)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+        $nutritions = Nutrition::orderBy('nutrition')->get(['nutrition']);
+        $allergies = Allergy::orderBy('allergy')->get(['allergy']);
         $taxData = Helpers::getTaxSystemType();
         $productWiseTax = $taxData['productWiseTax'];
         $taxVats = $taxData['taxVats'];
 
-        return view('vendor-views.product.index', compact('categories', 'productWiseTax', 'taxVats'));
+        return view('vendor-views.product.index', compact(
+            'categories',
+            'addons',
+            'nutritions',
+            'allergies',
+            'restaurantId',
+            'productWiseTax',
+            'taxVats'
+        ));
     }
 
     public function store(Request $request)
@@ -52,6 +120,8 @@ class FoodController extends Controller
                 ],
             ]);
         }
+
+        $this->normalizeProductForm($request);
 
         $validator = Validator::make($request->all(), [
             'name' => 'array',
@@ -148,16 +218,21 @@ class FoodController extends Controller
         }
         $food->category_id = $request->sub_category_id ?? $request->category_id;
         $food->category_ids = json_encode($category);
-        $food->description = $request->description[array_search('default', $request->lang)];
+        $defaultLanguageIndex = array_search('default', $request->lang, true);
+        $food->description = $request->description[$defaultLanguageIndex] ?? null;
 
         $food->choice_options = json_encode([]);
 
         $food->variations = json_encode([]);
         $food->price = $request->price;
-        $food->veg = $request->veg;
+        $food->veg = (int) $request->veg;
         $food->image = Helpers::upload(dir: 'product/', format: 'png', image: $request->file('image'));
-        $food->available_time_starts = $request->available_time_starts;
-        $food->available_time_ends = $request->available_time_ends;
+        $food->available_time_starts = $request->filled('available_time_starts')
+            ? $request->available_time_starts
+            : null;
+        $food->available_time_ends = $request->filled('available_time_ends')
+            ? $request->available_time_ends
+            : null;
         $food->discount = $request->discount ?? 0;
         $food->discount_type = $request->discount_type;
         $food->attributes = $request->has('attribute_id') ? json_encode($request->attribute_id) : json_encode([]);
@@ -167,6 +242,7 @@ class FoodController extends Controller
         $food->is_halal = $request->is_halal ?? 0;
         $food->item_stock = $request?->item_stock ?? 0;
         $food->stock_type = $request->stock_type;
+        $food->status = (int) $request->input('status', 1);
 
         $restaurant = Helpers::get_restaurant_data();
         if ($restaurant->restaurant_model == 'subscription') {
@@ -249,6 +325,7 @@ class FoodController extends Controller
 
         Helpers::add_or_update_translations(request: $request, key_data: 'name', name_field: 'name', model_name: 'Food', data_id: $food->id, data_value: $food->name);
         Helpers::add_or_update_translations(request: $request, key_data: 'description', name_field: 'description', model_name: 'Food', data_id: $food->id, data_value: $food->description);
+        $this->ensureEnglishFallback($food);
         if (addon_published_status('TaxModule')) {
             $SystemTaxVat = \Modules\TaxModule\Entities\SystemTaxSetup::where('is_active', 1)->where('is_default', 1)->first();
             if ($SystemTaxVat?->tax_type == 'product_wise') {
@@ -288,13 +365,33 @@ class FoodController extends Controller
 
         $product = Food::withoutGlobalScope('translate')->with('foodSeoData', 'newVariations', 'newVariationOptions')->findOrFail($id);
         $product_category = json_decode($product->category_ids);
-        $categories = Category::where(['parent_id' => 0])->get();
+        $categories = Category::where(['parent_id' => 0])
+            ->whereNotIn('id', self::PLATFORM_CATEGORY_IDS)
+            ->orderBy('name')
+            ->get();
+        $restaurantId = Helpers::get_restaurant_id();
+        $addons = AddOn::where('restaurant_id', $restaurantId)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+        $nutritions = Nutrition::orderBy('nutrition')->get(['nutrition']);
+        $allergies = Allergy::orderBy('allergy')->get(['allergy']);
         $taxData = Helpers::getTaxSystemType();
         $productWiseTax = $taxData['productWiseTax'];
         $taxVats = $taxData['taxVats'];
         $taxVatIds = $productWiseTax ? $product->taxVats()->pluck('tax_id')->toArray() : [];
 
-        return view('vendor-views.product.edit', compact('product', 'product_category', 'categories', 'productWiseTax', 'taxVats', 'taxVatIds'));
+        return view('vendor-views.product.edit', compact(
+            'product',
+            'product_category',
+            'categories',
+            'addons',
+            'nutritions',
+            'allergies',
+            'restaurantId',
+            'productWiseTax',
+            'taxVats',
+            'taxVatIds'
+        ));
     }
 
     public function status(Request $request)
@@ -459,6 +556,8 @@ class FoodController extends Controller
             ]);
         }
 
+        $this->normalizeProductForm($request);
+
         $validator = Validator::make($request->all(), [
             'name' => 'array',
             'name.0' => 'required',
@@ -559,7 +658,8 @@ class FoodController extends Controller
 
         $p->category_id = $request->sub_category_id ? $request->sub_category_id : $request->category_id;
         $p->category_ids = json_encode($category);
-        $p->description = $request->description[array_search('default', $request->lang)];
+        $defaultLanguageIndex = array_search('default', $request->lang, true);
+        $p->description = $request->description[$defaultLanguageIndex] ?? null;
         $p->choice_options = json_encode([]);
         $p->variations = json_encode([]);
         if ($request->remove_all_old_variations == 1) {
@@ -623,16 +723,21 @@ class FoodController extends Controller
         $p->stock_type = $request->stock_type;
 
         $p->price = $request->price;
-        $p->veg = $request->veg;
+        $p->veg = (int) $request->veg;
         $p->image = $request->has('image') ? Helpers::update(dir: 'product/', old_image: $p->image, format: 'png', image: $request->file('image')) : $p->image;
-        $p->available_time_starts = $request->available_time_starts;
-        $p->available_time_ends = $request->available_time_ends;
+        $p->available_time_starts = $request->filled('available_time_starts')
+            ? $request->available_time_starts
+            : null;
+        $p->available_time_ends = $request->filled('available_time_ends')
+            ? $request->available_time_ends
+            : null;
         $p->discount = $request->discount ?? 0;
         $p->discount_type = $request->discount_type;
         $p->attributes = $request->has('attribute_id') ? json_encode($request->attribute_id) : json_encode([]);
         $p->add_ons = $request->has('addon_ids') ? json_encode($request->addon_ids) : json_encode([]);
         $p->maximum_cart_quantity = $request->maximum_cart_quantity;
         $p->is_halal = $request->is_halal ?? 0;
+        $p->status = (int) $request->input('status', $p->status);
         $p->sell_count = 0;
 
         $p->save();
@@ -669,6 +774,7 @@ class FoodController extends Controller
 
         Helpers::add_or_update_translations(request: $request, key_data: 'name', name_field: 'name', model_name: 'Food', data_id: $p->id, data_value: $p->name);
         Helpers::add_or_update_translations(request: $request, key_data: 'description', name_field: 'description', model_name: 'Food', data_id: $p->id, data_value: $p->description);
+        $this->ensureEnglishFallback($p);
 
         return response()->json([], 200);
     }
