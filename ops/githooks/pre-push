@@ -9,7 +9,7 @@ if [ ! -f vendor/bin/phpunit ]; then
   exit 0
 fi
 echo "[pre-push] 跑 L1 红线 + IDOR 守卫 + 在场感知死指引墙测试..."
-php vendor/bin/phpunit tests/Feature/NezhaL1RedlineTest.php tests/Feature/NezhaIdorGuardTest.php tests/Feature/NezhaRiskChannelTest.php tests/Feature/NezhaCsGuidanceTest.php tests/Feature/NezhaTieredCouponParityTest.php
+php vendor/bin/phpunit tests/Feature/NezhaL1RedlineTest.php tests/Feature/NezhaIdorGuardTest.php tests/Feature/NezhaRiskChannelTest.php tests/Feature/NezhaCsGuidanceTest.php tests/Feature/NezhaTieredCouponParityTest.php tests/Unit/NezhaGetVarientDualFormatTest.php
 if [ $? -ne 0 ]; then
   echo "[pre-push] 红线/IDOR守卫未通过, 拒绝 push。修复后再推(应急: git push --no-verify, 自负L1风险)。"
   exit 1
