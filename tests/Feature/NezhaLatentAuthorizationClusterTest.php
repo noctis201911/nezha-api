@@ -104,6 +104,7 @@ class NezhaLatentAuthorizationClusterTest extends TestCase
             $table->string('password')->nullable();
             $table->string('auth_token')->nullable();
             $table->boolean('status')->default(true);
+            $table->unsignedInteger('auth_generation')->default(0);
             $table->boolean('two_factor_enabled')->default(false);
             $table->text('two_factor_secret')->nullable();
             $table->rememberToken();
@@ -288,6 +289,87 @@ class NezhaLatentAuthorizationClusterTest extends TestCase
         );
     }
 
+    public function test_vendor_can_download_owned_s3_and_legacy_public_proofs(): void
+    {
+        config(['filesystems.default' => 'local']);
+        Storage::fake('local');
+        Storage::disk('local')->put('order/vendor-a-s3-proof.png', 's3-proof');
+        Storage::disk('local')->put('public/order/vendor-a-legacy-proof.png', 'legacy-proof');
+
+        $vendorA = $this->vendorActor(10, 100);
+        $this->actingAs($vendorA, 'vendor');
+        $this->withSession([MerchantTwoFactorController::SESSION_GENERATION => 0]);
+        DB::table('orders')->insert([
+            [
+                'id' => 1002,
+                'restaurant_id' => 100,
+                'order_proof' => json_encode([['img' => 'vendor-a-s3-proof.png', 'storage' => 's3']]),
+            ],
+            [
+                'id' => 1003,
+                'restaurant_id' => 100,
+                'order_proof' => json_encode(['vendor-a-legacy-proof.png']),
+            ],
+        ]);
+
+        $this->get($this->vendorDownloadUrl(1002, 'order/vendor-a-s3-proof.png'))
+            ->assertOk();
+        $this->get($this->vendorDownloadUrl(1003, 'public/order/vendor-a-legacy-proof.png'))
+            ->assertOk();
+    }
+
+    public function test_vendor_employee_session_cannot_download_another_restaurants_proof(): void
+    {
+        [$employee, $role] = $this->seedRestrictedVendorEmployee(['dashboard']);
+        $this->actingAs($employee, 'vendor_employee');
+        $this->withSession([MerchantTwoFactorController::SESSION_GENERATION => 0]);
+        DB::table('orders')->insert([
+            'id' => 2002,
+            'restaurant_id' => 200,
+            'order_proof' => json_encode([['img' => 'vendor-b-employee-secret.png', 'storage' => 'public']]),
+        ]);
+
+        try {
+            $this->get($this->vendorDownloadUrl(
+                2002,
+                'public/order/vendor-b-employee-secret.png'
+            ))->assertNotFound();
+        } finally {
+            auth('vendor_employee')->logout();
+            $employee->delete();
+            $role->delete();
+            DB::table('restaurants')->where('id', 100)->delete();
+            DB::table('vendors')->where('id', 10)->delete();
+        }
+
+        $this->assertDatabaseMissing('vendor_employees', ['id' => $employee->id]);
+        $this->assertDatabaseMissing('employee_roles', ['id' => $role->id]);
+    }
+
+    public function test_owned_order_rejects_wrong_proof_storage_and_malformed_paths(): void
+    {
+        $vendorA = $this->vendorActor(10, 100);
+        $this->actingAs($vendorA, 'vendor');
+        $this->withSession([MerchantTwoFactorController::SESSION_GENERATION => 0]);
+        DB::table('orders')->insert([
+            'id' => 1004,
+            'restaurant_id' => 100,
+            'order_proof' => json_encode([['img' => 'exact-s3-proof.png', 'storage' => 's3']]),
+        ]);
+
+        foreach ([
+            'public/order/exact-s3-proof.png',
+            'order/not-the-proof.png',
+            'public/order/../exact-s3-proof.png',
+            'public/order/nested/exact-s3-proof.png',
+        ] as $path) {
+            $this->get($this->vendorDownloadUrl(1004, $path))->assertNotFound();
+        }
+
+        $this->get(route('vendor.file-manager.download', [1004, '***'], false))
+            ->assertNotFound();
+    }
+
     private function adminRouteModules(): array
     {
         return [
@@ -438,5 +520,13 @@ class NezhaLatentAuthorizationClusterTest extends TestCase
         );
 
         return Vendor::findOrFail($vendorId);
+    }
+
+    private function vendorDownloadUrl(int $orderId, string $path): string
+    {
+        return route('vendor.file-manager.download', [
+            $orderId,
+            base64_encode($path),
+        ], false);
     }
 }
