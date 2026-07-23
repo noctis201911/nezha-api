@@ -224,7 +224,7 @@ class NezhaL1RedlineTest extends TestCase
         $model = file_get_contents(app_path('Models/NezhaCustomerRefundAddressCredential.php'));
 
         $this->assertStringContainsString(
-            "\$table->unsignedBigInteger('consumed_order_id')->nullable()->unique()",
+            "\$table->unique('consumed_order_id', 'nz_refund_cred_order_uq')",
             $migration
         );
         $this->assertStringContainsString('nz_payment_tx_fingerprint_uq', $migration);

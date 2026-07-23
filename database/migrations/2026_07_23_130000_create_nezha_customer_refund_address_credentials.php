@@ -54,7 +54,8 @@ return new class extends Migration
                 $table->timestamp('issued_at');
                 $table->timestamp('expires_at')->index();
                 $table->timestamp('consumed_at')->nullable();
-                $table->unsignedBigInteger('consumed_order_id')->nullable()->unique();
+                $table->unsignedBigInteger('consumed_order_id')->nullable();
+                $table->unique('consumed_order_id', 'nz_refund_cred_order_uq');
 
                 // 付款时冻结的只读证据；不得由后续资料、请求参数或商家输入改写。
                 $table->text('payment_tx_hash')->nullable();
