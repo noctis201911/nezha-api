@@ -226,11 +226,16 @@ class Helpers
             $__nz_catMap = collect(); $__nz_addonMap = collect(); $__nz_taxMap = collect(); $__nz_eager = false;
             if ($__nz_items && $__nz_items->isNotEmpty() && $__nz_items->first() instanceof \Illuminate\Database\Eloquent\Model) {
                 $__nz_eager = true;
-                $__nz_items->loadMissing([
+                // 本函数是共用 helper: 除 Food 外还会收到 ItemCampaign(/campaigns/item 单品活动), 而 ItemCampaign 没有
+                // tags/newVariations/newVariationOptions/rating 这四个关系, 无差别 loadMissing 会抛
+                // RelationNotFoundException 把整条接口打挂。按目标模型实际拥有的关系过滤: 缺的跳过, 有的照旧预加载
+                // (不退回 N+1)。Food 十项全命中, 过滤后与原列表一字不差。
+                $__nz_first = $__nz_items->first();
+                $__nz_items->loadMissing(array_filter([
                     'restaurant.discount', 'restaurant.cuisine', 'restaurant.restaurant_config', 'restaurant.restaurant_sub',
                     'tags', 'nutritions', 'allergies', 'taxVats', 'newVariations', 'newVariationOptions',
                     'rating' => function ($q) { $q->where('status', 1); },
-                ]);
+                ], fn ($v, $k) => $__nz_first->isRelation(explode('.', is_int($k) ? $v : $k)[0]), ARRAY_FILTER_USE_BOTH));
                 $__nz_catIds = []; $__nz_addonIds = []; $__nz_taxIds = [];
                 foreach ($__nz_items as $__nz_it) {
                     foreach (json_decode($__nz_it?->category_ids) ?: [] as $__nz_c) { if (isset($__nz_c->id)) $__nz_catIds[] = $__nz_c->id; }
