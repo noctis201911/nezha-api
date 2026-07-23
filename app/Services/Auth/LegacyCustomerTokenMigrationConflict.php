@@ -4,6 +4,4 @@ namespace App\Services\Auth;
 
 use RuntimeException;
 
-class LegacyCustomerTokenMigrationConflict extends RuntimeException
-{
-}
+class LegacyCustomerTokenMigrationConflict extends RuntimeException {}

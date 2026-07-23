@@ -88,8 +88,7 @@ class CustomerBrowserSessionManager
     public function authenticate(
         Request $request,
         bool $requireTrustedBrowser = true,
-    ): ?CustomerBrowserSession
-    {
+    ): ?CustomerBrowserSession {
         if (! $this->enabled()) {
             return null;
         }
