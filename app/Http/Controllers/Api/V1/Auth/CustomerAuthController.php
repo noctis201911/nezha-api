@@ -789,7 +789,17 @@ class CustomerAuthController extends Controller
 
                 }
             } catch (\Exception $e) {
-                return response()->json(['error' => 'wrong credential.','message'=>$e->getMessage()],403);
+                // 哪吒[安全 2026-07-23]: 原始异常串不能回给客户端, 也不能进日志。
+                // Guzzle 把完整上游 URL 拼进 message, 其中 ?id_token=<JWT> 既含顾客邮箱(base64url,
+                // 正则洗不掉)又是活凭证; 而 laravel.log 是明文 o+r 无 purge(L1-7)。
+                // 只记我们自己控制的结构化字段。getCode() 在 Guzzle 异常下=HTTP 状态码,
+                // ConnectException(连不上上游)=0, 据此可区分"上游拒了"与"上游不可达"。
+                \Illuminate\Support\Facades\Log::warning('nz_social_token_exchange_failed', [
+                    'medium' => $request['medium'],
+                    'ex' => get_class($e),
+                    'code' => $e->getCode(),
+                ]);
+                return response()->json(['error' => 'wrong credential.','message'=>'出现错误，请重试'],403);
             }
             if(!isset($claims)){
 
@@ -1079,7 +1089,23 @@ class CustomerAuthController extends Controller
                     }
                     $user->save();
                 } catch (\Throwable $e) {
-                    return response()->json(['error' => 'wrong credential.','message'=>$e->getMessage()],403);
+                    // 哪吒[安全 2026-07-23]: users.email 唯一索引上线后, 并发注册撞车在此抛唯一约束冲突。
+                    // QueryException::formatMessage 用 Str::replaceArray 把 bindings 内联进 message
+                    // -> 顾客真名/temp_token/social_id/邮箱 + Host/Port/Database 全在里面(线上实测坐实),
+                    // 既不能回客户端也不能进明文日志(laravel.log 是明文 o+r 无 purge, L1-7)。
+                    // 只记结构化字段: getCode() 是 SQLSTATE('23000'), users 上有 email/phone/ref_code
+                    // 三个唯一索引, 光看它区分不出撞的是哪个 -> 另记 errorInfo[1](MySQL errno, 重复=1062)
+                    // 与 errorInfo[2] 里的索引名(只取索引名, 那串里同时含邮箱, 整条不能记)。
+                    // ⚠️ 本次只堵这一处: 同方法内 try 之外的 DB 调用若抛异常, 仍会走全局 handler
+                    //    把原始串(含邮箱)写进 laravel.log —— 既有问题, 本次未关闭。
+                    \Illuminate\Support\Facades\Log::warning('nz_social_login_user_save_failed', [
+                        'medium' => $request_data['medium'],
+                        'ex' => get_class($e),
+                        'code' => $e->getCode(),
+                        'errno' => $e->errorInfo[1] ?? null,
+                        'key' => preg_match("/for key '([^']+)'/", $e->errorInfo[2] ?? '', $m) ? $m[1] : null,
+                    ]);
+                    return response()->json(['error' => 'wrong credential.','message'=>'出现错误，请重试'],403);
                 }
             }
         }
