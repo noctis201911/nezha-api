@@ -4,10 +4,13 @@ use App\Http\Middleware\ActivationCheckMiddleware;
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\APIGuestMiddleware;
 use App\Http\Middleware\Authenticate;
+use App\Http\Middleware\AuthenticateCustomer;
+use App\Http\Middleware\ConfigureCustomerCors;
 // Core Laravel web middleware
 use App\Http\Middleware\DmTokenIsValid;
 use App\Http\Middleware\EncryptCookies;
 use App\Http\Middleware\InstallationMiddleware;
+use App\Http\Middleware\IssueCustomerBrowserSession;
 use App\Http\Middleware\Localization;
 use App\Http\Middleware\LocalizationMiddleware;
 use App\Http\Middleware\MaintenanceMode;
@@ -17,6 +20,8 @@ use App\Http\Middleware\PaymentAddressReviewerScopeMiddleware;
 use App\Http\Middleware\RateLimiterMiddleware;
 use App\Http\Middleware\ReactValid;
 use App\Http\Middleware\RedirectIfAuthenticated;
+use App\Http\Middleware\RequireTrustedCustomerLoginOrigin;
+use App\Http\Middleware\ResolveCustomerIfPresent;
 use App\Http\Middleware\Subscription;
 use App\Http\Middleware\VendorMiddleware;
 use App\Http\Middleware\VendorTokenIsValid;
@@ -40,6 +45,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
 
         $middleware->use([
+            ConfigureCustomerCors::class,
             \Illuminate\Http\Middleware\HandleCors::class,
         ]);
 
@@ -57,6 +63,8 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->group('api', [
+            AddQueuedCookiesToResponse::class,
+            IssueCustomerBrowserSession::class,
             \App\Http\Middleware\QueryCountGuard::class,
             SubstituteBindings::class,
         ]);
@@ -64,6 +72,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'auth' => Authenticate::class,
             'guest' => RedirectIfAuthenticated::class,
+            'customer.auth' => AuthenticateCustomer::class,
+            'customer.optional' => ResolveCustomerIfPresent::class,
+            'customer.login-origin' => RequireTrustedCustomerLoginOrigin::class,
 
             'admin' => AdminMiddleware::class,
             'vendor' => VendorMiddleware::class,

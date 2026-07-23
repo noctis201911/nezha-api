@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AddonCategoryController;
 use App\Http\Controllers\Api\V1\AdvertisementController;
 use App\Http\Controllers\Api\V1\Auth\CustomerAuthController;
+use App\Http\Controllers\Api\V1\Auth\CustomerBrowserSessionController;
 use App\Http\Controllers\Api\V1\Auth\DeliveryManLoginController;
 use App\Http\Controllers\Api\V1\Auth\DMPasswordResetController;
 use App\Http\Controllers\Api\V1\Auth\EmailAuthController;
@@ -80,7 +81,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     Route::get('zone/check', [ZoneController::class, 'zonesCheck']);
 
     Route::get('advertisement/list', [AdvertisementController::class, 'get_adds']);
-    Route::post('advertisement/click', [AdvertisementController::class, 'click'])->middleware('auth:api');
+    Route::post('advertisement/click', [AdvertisementController::class, 'click'])->middleware('customer.auth');
     Route::post('advertisement/impression', [AdvertisementController::class, 'impression']);
     Route::get('addon-category/list', [AddonCategoryController::class, 'getList']);
 
@@ -93,7 +94,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     Route::post('support/mail-ticket', [SupportMailTicketController::class, 'store'])->middleware('rateLimiter');
     Route::post('nezha/telegram-webhook', [\App\Http\Controllers\Api\V1\TelegramWebhookController::class, 'handle']); // 阶段D: TG入站(secret在控制器校验)
 
-    Route::group(['prefix' => 'auth', 'namespace' => 'Auth', 'middleware' => 'rateLimiter'], function () {
+    Route::group(['prefix' => 'auth', 'namespace' => 'Auth', 'middleware' => ['rateLimiter', 'customer.login-origin']], function () {
 
         Route::post('sign-up', [CustomerAuthController::class, 'register'])->name('register')->middleware('throttle:signup'); // 哪吒[防脚本注册 2026-07-01]: 每IP注册限流(5/分钟突发+30/小时), reCAPTCHA落地前interim; CGNAT共享IP需复评
         Route::post('login', [CustomerAuthController::class, 'login'])->name('login');
@@ -118,6 +119,18 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         // Nezha: Google 整页跳转登录(ux_mode:redirect) — redirect-login 校验 id_token 返回一次性短码, social/exchange 凭短码换 token
         Route::post('google/redirect-login', [CustomerAuthController::class, 'google_redirect_login']);
         Route::post('social/exchange', [CustomerAuthController::class, 'social_exchange']);
+        Route::get('session', [CustomerBrowserSessionController::class, 'show'])
+            ->withoutMiddleware('rateLimiter')
+            ->middleware(['customer.optional', 'throttle:120,1']);
+        Route::post('session/migrate', [CustomerBrowserSessionController::class, 'migrate'])
+            // This endpoint deliberately requires the legacy Passport token.
+            // A revoked Bearer must return 401 instead of falling through to
+            // an existing Cookie and producing an unrecoverable CSRF 419 loop.
+            ->withoutMiddleware('rateLimiter')
+            ->middleware(['auth:api', 'throttle:20,1']);
+        Route::post('session/confirm-migration', [CustomerBrowserSessionController::class, 'confirmMigration'])
+            ->withoutMiddleware('rateLimiter')
+            ->middleware(['customer.auth', 'throttle:30,1']);
 
         // Customer H5 only: Telegram OIDC uses a dedicated login bot/client.
         // Normal Google login above is unchanged; phone collisions require exact old-account proof.
@@ -172,7 +185,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     Route::group(['prefix' => 'delivery-man', 'middleware' => 'actch:deliveryman_app'], function () {
         Route::get('last-location', [DeliverymanController::class, 'get_last_location']);
 
-        Route::group(['prefix' => 'reviews', 'middleware' => ['auth:api']], function () {
+        Route::group(['prefix' => 'reviews', 'middleware' => ['customer.auth']], function () {
             Route::get('/{delivery_man_id}', [DeliveryManReviewController::class, 'get_reviews']);
             Route::get('rating/{delivery_man_id}', [DeliveryManReviewController::class, 'get_rating']);
             Route::post('/submit', [DeliveryManReviewController::class, 'submit_review']);
@@ -407,7 +420,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     Route::get('customer/order/nezha-delivery-windows', [OrderController::class, 'nezha_delivery_windows']);
     Route::get('customer/order/send-notification/{order_id}', [OrderController::class, 'order_notification'])->middleware('apiGuestCheck');
     // 哪吒[举报商家 2026-06-28]: 顾客举报餐厅(游客可举报, 走 apiGuestCheck)。
-    Route::post('customer/restaurant/{restaurant_id}/report', [\App\Http\Controllers\Api\V1\RestaurantReportController::class, 'store'])->middleware('auth:api');
+    Route::post('customer/restaurant/{restaurant_id}/report', [\App\Http\Controllers\Api\V1\RestaurantReportController::class, 'store'])->middleware('customer.auth');
 
     Route::group(['prefix' => 'products'], function () {
         Route::get('latest', [ProductController::class, 'get_latest_products']);
@@ -421,7 +434,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         Route::get('related-products/{food_id}', [ProductController::class, 'get_related_products']);
         Route::get('reviews/{food_id}', [ProductController::class, 'get_product_reviews']);
         Route::get('rating/{food_id}', [ProductController::class, 'get_product_rating']);
-        Route::post('reviews/submit', [ProductController::class, 'submit_product_review'])->middleware('auth:api');
+        Route::post('reviews/submit', [ProductController::class, 'submit_product_review'])->middleware('customer.auth');
         Route::get('food-or-restaurant-search', [ProductController::class, 'food_or_restaurant_search']);
         Route::get('recommended/most-reviewed', [ProductController::class, 'recommended_most_reviewed']);
     });
@@ -431,9 +444,10 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         Route::get('latest', [RestaurantController::class, 'get_latest_restaurants']);
         Route::get('popular', [RestaurantController::class, 'get_popular_restaurants']);
         Route::get('dine-in', [RestaurantController::class, 'get_dine_in_restaurants']);
-        Route::get('details/{id}', [RestaurantController::class, 'get_details']);  // visitor logs
+        Route::get('details/{id}', [RestaurantController::class, 'get_details'])
+            ->middleware('customer.optional');  // visitor logs
         Route::get('reviews', [RestaurantController::class, 'reviews']);
-        Route::post('reviews/{id}/report', [RestaurantController::class, 'report_review'])->middleware('auth:api');
+        Route::post('reviews/{id}/report', [RestaurantController::class, 'report_review'])->middleware('customer.auth');
         Route::get('search', [RestaurantController::class, 'get_searched_restaurants']);
         Route::get('recently-viewed-restaurants', [RestaurantController::class, 'recently_viewed_restaurants']);
         Route::get('get-coupon', [RestaurantController::class, 'get_coupons']);
@@ -464,11 +478,11 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     // 地址凭据闸关闭时游客也必须拿到明确的 compatibility code，前端才能保持现网旧路径。
     // 闸开启后的登录门在控制器内 fail-closed；未登录绝不签发地址凭据。
     Route::post('customer/payment/address-credential', [PaymentAddressCredentialController::class, 'store'])
-        ->middleware('rateLimiter');
+        ->middleware(['rateLimiter', 'customer.optional']);
     Route::post('customer/payment/refund-address-credential', [RefundAddressCredentialController::class, 'store'])
-        ->middleware('rateLimiter');
+        ->middleware(['rateLimiter', 'customer.optional']);
 
-    Route::group(['prefix' => 'customer', 'middleware' => 'auth:api'], function () {
+    Route::group(['prefix' => 'customer', 'middleware' => 'customer.auth'], function () {
         Route::get('notifications', [NotificationController::class, 'get_notifications']);
         Route::get('notifications/unread-count', [NotificationController::class, 'unread_count']);
         Route::post('notifications/mark-seen', [NotificationController::class, 'mark_seen']);
@@ -591,14 +605,15 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     });
 
     // 公开: 游客也能看公开券(list不需登录,控制器已兼容游客); apply 仍需登录
-    Route::get('coupon/list', [UserCouponController::class, 'list']);
-    Route::group(['prefix' => 'coupon', 'middleware' => 'auth:api'], function () {
+    Route::get('coupon/list', [UserCouponController::class, 'list'])
+        ->middleware('customer.optional');
+    Route::group(['prefix' => 'coupon', 'middleware' => 'customer.auth'], function () {
         Route::get('apply', [UserCouponController::class, 'apply']);
         Route::post('claim', [UserCouponController::class, 'claim']);
         Route::get('my-coupons', [UserCouponController::class, 'myCoupons']);
     });
 
-    Route::group(['prefix' => 'cashback', 'middleware' => 'auth:api'], function () {
+    Route::group(['prefix' => 'cashback', 'middleware' => 'customer.auth'], function () {
         Route::get('list', [CashBackController::class, 'list']);
         Route::get('getCashback', [CashBackController::class, 'getCashback']);
     });
@@ -615,7 +630,8 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     // 本地生活：公开只读（列表不返回 contact_info；详情对游客返回 contact_info=null）
     Route::group(['prefix' => 'local-life'], function () {
         Route::get('posts', [LocalLifeController::class, 'posts']);
-        Route::get('posts/{id}', [LocalLifeController::class, 'postDetail']);
+        Route::get('posts/{id}', [LocalLifeController::class, 'postDetail'])
+            ->middleware('customer.optional');
         Route::get('categories', [LocalLifeController::class, 'categories']);
         Route::get('merchants', [LocalLifeController::class, 'merchants']);
         Route::get('merchants/{id}', [LocalLifeController::class, 'merchantDetail']);
@@ -631,7 +647,7 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     });
 
     // 本地生活 UGC：发帖 / 我的发布（需登录；游客不能发，PII 仅本人可见）
-    Route::group(['prefix' => 'local-life', 'middleware' => 'auth:api'], function () {
+    Route::group(['prefix' => 'local-life', 'middleware' => 'customer.auth'], function () {
         Route::post('posts', [LocalLifeController::class, 'storePost']);
         Route::get('my-posts', [LocalLifeController::class, 'myPosts']);
         Route::post('posts/{id}/report', [LocalLifeController::class, 'reportPost']);

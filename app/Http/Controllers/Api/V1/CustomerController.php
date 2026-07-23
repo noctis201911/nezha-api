@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Services\Auth\CustomerBrowserSessionManager;
 use Carbon\Carbon;
 use App\Models\Food;
 use App\Models\User;
@@ -383,22 +384,30 @@ class CustomerController extends Controller
         return response()->json([], 200);
     }
 
-    public function logout(Request $request)
+    public function logout(
+        Request $request,
+        CustomerBrowserSessionManager $browserSessions,
+    )
     {
-        // 顾客主动登出: 吊销当前 Passport access token, 防被盗 token 在 1 年寿命内被继续冒用
+        // 双栈登出：Cookie 会话服务端吊销；legacy Bearer 仍按原契约吊销。
+        $browserSessions->revokeCurrent($request);
         $request?->user()?->token()?->revoke();
         return response()->json([], 200);
     }
 
 
-    public function remove_account(Request $request)
+    public function remove_account(
+        Request $request,
+        CustomerBrowserSessionManager $browserSessions,
+    )
     {
         $user = $request->user();
 
         if (Order::where('user_id', $user->id)->where('is_guest', 0)->whereIn('order_status', ['pending', 'accepted', 'confirmed', 'processing', 'handover', 'picked_up'])->count()) {
             return response()->json(['errors' => [['code' => 'on-going', 'message' => translate('messages.user_account_delete_warning')]]], 403);
         }
-        $request?->user()?->token()->revoke();
+        $browserSessions->revokeCurrent($request);
+        $request?->user()?->token()?->revoke();
         if ($user?->userinfo) {
             $user?->userinfo?->delete();
         }

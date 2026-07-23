@@ -2,11 +2,16 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\Auth\CustomerRequestAuthenticator;
 use Closure;
 use Illuminate\Http\Request;
 
 class APIGuestMiddleware
 {
+    public function __construct(
+        private readonly CustomerRequestAuthenticator $authenticator,
+    ) {}
+
     /**
      * Handle an incoming request.
      *
@@ -16,10 +21,11 @@ class APIGuestMiddleware
      */
     public function handle(Request $request, Closure $next)
     {
-        if($request->header('Authorization') && $request->header('Authorization') !== 'Bearer null' && app('auth')->guard('api')) {
-            $request->merge(['user'=>auth('api')->user()]);
+        $user = $this->authenticator->resolve($request);
+        if ($user) {
+            $request->merge(['user' => $user]);
             return $next($request);
-        }elseif($request->guest_id){
+        } elseif ($request->guest_id) {
             return $next($request);
         }
 
