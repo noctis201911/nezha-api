@@ -94,56 +94,58 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     Route::post('support/mail-ticket', [SupportMailTicketController::class, 'store'])->middleware('rateLimiter');
     Route::post('nezha/telegram-webhook', [\App\Http\Controllers\Api\V1\TelegramWebhookController::class, 'handle']); // 阶段D: TG入站(secret在控制器校验)
 
-    Route::group(['prefix' => 'auth', 'namespace' => 'Auth', 'middleware' => ['rateLimiter', 'customer.login-origin']], function () {
+    Route::group(['prefix' => 'auth', 'namespace' => 'Auth', 'middleware' => ['rateLimiter']], function () {
 
-        Route::post('sign-up', [CustomerAuthController::class, 'register'])->name('register')->middleware('throttle:signup'); // 哪吒[防脚本注册 2026-07-01]: 每IP注册限流(5/分钟突发+30/小时), reCAPTCHA落地前interim; CGNAT共享IP需复评
-        Route::post('login', [CustomerAuthController::class, 'login'])->name('login');
-        Route::post('verify-phone', [CustomerAuthController::class, 'verify_phone_or_email']);
-        Route::post('update-info', [CustomerAuthController::class, 'update_info']);
-        Route::post('email/start', [EmailAuthController::class, 'start'])
-            ->name('email.start')
-            ->middleware('throttle:nezha_email_start');
-        Route::post('email/verify', [EmailAuthController::class, 'verify'])
-            ->name('email.verify')
-            ->middleware('throttle:nezha_email_verify');
+        Route::group(['middleware' => 'customer.login-origin'], function () {
+            Route::post('sign-up', [CustomerAuthController::class, 'register'])->name('register')->middleware('throttle:signup'); // 哪吒[防脚本注册 2026-07-01]: 每IP注册限流(5/分钟突发+30/小时), reCAPTCHA落地前interim; CGNAT共享IP需复评
+            Route::post('login', [CustomerAuthController::class, 'login'])->name('login');
+            Route::post('verify-phone', [CustomerAuthController::class, 'verify_phone_or_email']);
+            Route::post('update-info', [CustomerAuthController::class, 'update_info']);
+            Route::post('email/start', [EmailAuthController::class, 'start'])
+                ->name('email.start')
+                ->middleware('throttle:nezha_email_start');
+            Route::post('email/verify', [EmailAuthController::class, 'verify'])
+                ->name('email.verify')
+                ->middleware('throttle:nezha_email_verify');
 
-        Route::post('forgot-password', [PasswordResetController::class, 'resetPasswordRequest'])->name('forgot-password');
-        Route::post('verify-token', [PasswordResetController::class, 'verifyToken']);
-        Route::put('reset-password', [PasswordResetController::class, 'resetPasswordSubmit'])->name('reset-password');
-        Route::put('firebase-reset-password', [PasswordResetController::class, 'firebase_auth_verify']);
+            Route::post('forgot-password', [PasswordResetController::class, 'resetPasswordRequest'])->name('forgot-password');
+            Route::post('verify-token', [PasswordResetController::class, 'verifyToken']);
+            Route::put('reset-password', [PasswordResetController::class, 'resetPasswordSubmit'])->name('reset-password');
+            Route::put('firebase-reset-password', [PasswordResetController::class, 'firebase_auth_verify']);
 
-        Route::post('guest/request', [CustomerAuthController::class, 'guest_request']);
+            Route::post('guest/request', [CustomerAuthController::class, 'guest_request']);
 
-        Route::post('firebase-verify-token', [CustomerAuthController::class, 'firebase_auth_verify']);
+            Route::post('firebase-verify-token', [CustomerAuthController::class, 'firebase_auth_verify']);
 
-        // Nezha: Google 整页跳转登录(ux_mode:redirect) — redirect-login 校验 id_token 返回一次性短码, social/exchange 凭短码换 token
-        Route::post('google/redirect-login', [CustomerAuthController::class, 'google_redirect_login']);
-        Route::post('social/exchange', [CustomerAuthController::class, 'social_exchange']);
-        Route::get('session', [CustomerBrowserSessionController::class, 'show'])
-            ->withoutMiddleware('rateLimiter')
-            ->middleware(['customer.optional', 'throttle:120,1']);
-        Route::post('session/migrate', [CustomerBrowserSessionController::class, 'migrate'])
-            // This endpoint deliberately requires the legacy Passport token.
-            // A revoked Bearer must return 401 instead of falling through to
-            // an existing Cookie and producing an unrecoverable CSRF 419 loop.
-            ->withoutMiddleware('rateLimiter')
-            ->middleware(['auth:api', 'throttle:20,1']);
-        Route::post('session/confirm-migration', [CustomerBrowserSessionController::class, 'confirmMigration'])
-            ->withoutMiddleware('rateLimiter')
-            ->middleware(['customer.auth', 'throttle:30,1']);
+            // Nezha: Google 整页跳转登录(ux_mode:redirect) — redirect-login 校验 id_token 返回一次性短码, social/exchange 凭短码换 token
+            Route::post('google/redirect-login', [CustomerAuthController::class, 'google_redirect_login']);
+            Route::post('social/exchange', [CustomerAuthController::class, 'social_exchange']);
+            Route::get('session', [CustomerBrowserSessionController::class, 'show'])
+                ->withoutMiddleware('rateLimiter')
+                ->middleware(['customer.optional', 'throttle:120,1']);
+            Route::post('session/migrate', [CustomerBrowserSessionController::class, 'migrate'])
+                // This endpoint deliberately requires the legacy Passport token.
+                // A revoked Bearer must return 401 instead of falling through to
+                // an existing Cookie and producing an unrecoverable CSRF 419 loop.
+                ->withoutMiddleware('rateLimiter')
+                ->middleware(['auth:api', 'throttle:20,1']);
+            Route::post('session/confirm-migration', [CustomerBrowserSessionController::class, 'confirmMigration'])
+                ->withoutMiddleware('rateLimiter')
+                ->middleware(['customer.auth', 'throttle:30,1']);
 
-        // Customer H5 only: Telegram OIDC uses a dedicated login bot/client.
-        // Normal Google login above is unchanged; phone collisions require exact old-account proof.
-        Route::post('telegram/start', [TelegramAuthController::class, 'start'])
-            ->middleware('throttle:nezha_tg_start');
-        Route::get('telegram/callback', [TelegramAuthController::class, 'callback'])
-            ->middleware('throttle:nezha_tg_callback');
-        Route::post('telegram/exchange', [TelegramAuthController::class, 'exchange'])
-            ->middleware('throttle:nezha_tg_exchange');
-        Route::post('telegram/link/password', [TelegramAuthController::class, 'linkWithPassword'])
-            ->middleware('throttle:nezha_tg_link_password');
-        Route::post('telegram/link/google', [TelegramAuthController::class, 'linkWithGoogle'])
-            ->middleware('throttle:nezha_tg_link_google');
+            // Customer H5 only: Telegram OIDC uses a dedicated login bot/client.
+            // Normal Google login above is unchanged; phone collisions require exact old-account proof.
+            Route::post('telegram/start', [TelegramAuthController::class, 'start'])
+                ->middleware('throttle:nezha_tg_start');
+            Route::get('telegram/callback', [TelegramAuthController::class, 'callback'])
+                ->middleware('throttle:nezha_tg_callback');
+            Route::post('telegram/exchange', [TelegramAuthController::class, 'exchange'])
+                ->middleware('throttle:nezha_tg_exchange');
+            Route::post('telegram/link/password', [TelegramAuthController::class, 'linkWithPassword'])
+                ->middleware('throttle:nezha_tg_link_password');
+            Route::post('telegram/link/google', [TelegramAuthController::class, 'linkWithGoogle'])
+                ->middleware('throttle:nezha_tg_link_google');
+        });
 
         Route::group(['prefix' => 'delivery-man', 'as' => 'delivery-man.', 'middleware' => 'actch:deliveryman_app'], function () {
             Route::post('login', [DeliveryManLoginController::class, 'login'])->name('login');

@@ -38,7 +38,7 @@ return [
             'NEZHA_CUSTOMER_BROWSER_COOKIE',
             '__Host-nezha_customer_session'
         ),
-        'same_site' => 'lax',
+        'same_site' => 'strict',
     ],
 
     'idle_days' => max(1, (int) env(

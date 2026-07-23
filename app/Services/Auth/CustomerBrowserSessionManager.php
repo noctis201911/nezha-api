@@ -85,7 +85,10 @@ class CustomerBrowserSessionManager
         );
     }
 
-    public function authenticate(Request $request): ?CustomerBrowserSession
+    public function authenticate(
+        Request $request,
+        bool $requireTrustedBrowser = true,
+    ): ?CustomerBrowserSession
     {
         if (! $this->enabled()) {
             return null;
@@ -93,6 +96,9 @@ class CustomerBrowserSessionManager
 
         $rawToken = $request->cookie($this->cookieName());
         if (! is_string($rawToken) || $rawToken === '') {
+            return null;
+        }
+        if ($requireTrustedBrowser && ! $this->requestCanReceiveCookie($request)) {
             return null;
         }
 
@@ -111,7 +117,10 @@ class CustomerBrowserSessionManager
             || $session->absolute_expires_at->lessThanOrEqualTo($now)
         ) {
             if ($session && ! $session->revoked_at) {
-                $session->forceFill(['revoked_at' => $now])->save();
+                $session->forceFill([
+                    'revoked_at' => $now,
+                    'legacy_access_token_id' => null,
+                ])->save();
             }
             $this->forgetCookie();
 
@@ -121,7 +130,10 @@ class CustomerBrowserSessionManager
         try {
             $csrfToken = Crypt::decryptString($session->csrf_token_encrypted);
         } catch (Throwable) {
-            $session->forceFill(['revoked_at' => $now])->save();
+            $session->forceFill([
+                'revoked_at' => $now,
+                'legacy_access_token_id' => null,
+            ])->save();
             $this->forgetCookie();
 
             return null;
@@ -188,9 +200,16 @@ class CustomerBrowserSessionManager
         // A transitional request can carry both a legacy Bearer and a Cookie.
         // Bearer precedence means the auth middleware has not resolved the
         // Cookie yet, but an explicit browser logout must revoke both.
-        $session = $this->current($request) ?? $this->authenticate($request);
+        $source = $request->attributes->get(self::REQUEST_SOURCE);
+        $session = $this->current($request) ?? $this->authenticate(
+            $request,
+            $source !== 'bearer',
+        );
         if ($session && ! $session->revoked_at) {
-            $session->forceFill(['revoked_at' => now()])->save();
+            $session->forceFill([
+                'revoked_at' => now(),
+                'legacy_access_token_id' => null,
+            ])->save();
         }
 
         $this->forgetCookie();
@@ -272,6 +291,33 @@ class CustomerBrowserSessionManager
         ): CustomerBrowserSession {
             User::query()->whereKey($user->getKey())->lockForUpdate()->firstOrFail();
 
+            if ($legacyAccessTokenId !== null) {
+                CustomerBrowserSession::query()
+                    ->where('legacy_access_token_id', $legacyAccessTokenId)
+                    ->where(function ($query) use ($now): void {
+                        $query->whereNotNull('revoked_at')
+                            ->orWhere('idle_expires_at', '<=', $now)
+                            ->orWhere('absolute_expires_at', '<=', $now);
+                    })
+                    ->update([
+                        'legacy_access_token_id' => null,
+                        'updated_at' => $now,
+                    ]);
+
+                $migrationInProgress = CustomerBrowserSession::query()
+                    ->where('legacy_access_token_id', $legacyAccessTokenId)
+                    ->whereNull('revoked_at')
+                    ->where('idle_expires_at', '>', $now)
+                    ->where('absolute_expires_at', '>', $now)
+                    ->exists();
+
+                if ($migrationInProgress) {
+                    throw new LegacyCustomerTokenMigrationConflict(
+                        'This legacy token already has an active migration.'
+                    );
+                }
+            }
+
             $activeIds = CustomerBrowserSession::query()
                 ->where('user_id', $user->getKey())
                 ->whereNull('revoked_at')
@@ -286,6 +332,7 @@ class CustomerBrowserSessionManager
                     ->whereIn('id', $idsToRevoke)
                     ->update([
                         'revoked_at' => $now,
+                        'legacy_access_token_id' => null,
                         'updated_at' => $now,
                     ]);
             }
@@ -323,7 +370,7 @@ class CustomerBrowserSessionManager
             false,
             (string) config(
                 'nezha_customer_browser_auth.cookie.same_site',
-                'lax'
+                'strict'
             ),
         ));
     }
@@ -343,7 +390,7 @@ class CustomerBrowserSessionManager
             false,
             (string) config(
                 'nezha_customer_browser_auth.cookie.same_site',
-                'lax'
+                'strict'
             ),
         ));
     }

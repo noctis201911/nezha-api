@@ -9,6 +9,9 @@ use App\Models\CustomerBrowserSession;
 use App\Models\User;
 use App\Services\Auth\CustomerAccessTokenIssuer;
 use App\Services\Auth\CustomerBrowserSessionManager;
+use App\Services\Auth\CustomerRequestAuthenticator;
+use App\Services\Auth\LegacyCustomerTokenMigrationConflict;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -39,6 +42,10 @@ class CustomerBrowserSessionTest extends TestCase
         config()->set('nezha_customer_browser_auth.absolute_days', 90);
         config()->set('nezha_customer_browser_auth.max_sessions_per_user', 5);
         config()->set('nezha_customer_browser_auth.touch_interval_minutes', 5);
+        config()->set(
+            'nezha_customer_browser_auth.allowed_origins',
+            ['https://nezha.am']
+        );
 
         $this->tokens = Mockery::mock(TokenRepository::class);
         $this->sessions = new CustomerBrowserSessionManager($this->tokens);
@@ -66,7 +73,7 @@ class CustomerBrowserSessionTest extends TestCase
         $this->assertNull($cookie->getDomain());
         $this->assertTrue($cookie->isSecure());
         $this->assertTrue($cookie->isHttpOnly());
-        $this->assertSame('lax', strtolower((string) $cookie->getSameSite()));
+        $this->assertSame('strict', strtolower((string) $cookie->getSameSite()));
         $this->assertNotSame(
             $cookie->getValue(),
             $issued['session']->token_hash
@@ -77,21 +84,21 @@ class CustomerBrowserSessionTest extends TestCase
         );
 
         Cookie::getFacadeRoot()->flushQueuedCookies();
-        $tabOne = Request::create(
+        $tabOne = $this->trustedCookieRequest(
             '/api/v1/customer/info',
             'GET',
-            [],
-            [$cookie->getName() => $cookie->getValue()]
+            $cookie->getName(),
+            $cookie->getValue(),
         );
         $this->bindRequest($tabOne);
         $this->assertNotNull($this->sessions->authenticate($tabOne));
         $csrfOne = $this->sessions->csrfToken($tabOne);
 
-        $tabTwo = Request::create(
+        $tabTwo = $this->trustedCookieRequest(
             '/api/v1/customer/info',
             'GET',
-            [],
-            [$cookie->getName() => $cookie->getValue()]
+            $cookie->getName(),
+            $cookie->getValue(),
         );
         $this->bindRequest($tabTwo);
         $this->assertNotNull($this->sessions->authenticate($tabTwo));
@@ -159,6 +166,36 @@ class CustomerBrowserSessionTest extends TestCase
         $this->assertNull($issued['session']->fresh()->legacy_access_token_id);
     }
 
+    public function test_same_legacy_token_has_only_one_active_migration(): void
+    {
+        Carbon::setTestNow('2026-07-23 12:00:00');
+        $user = $this->user();
+        $legacyToken = (new Token)->forceFill([
+            'id' => 'legacy-token-1',
+            'expires_at' => now()->addDays(12),
+        ]);
+
+        $this->bindRequest(Request::create(
+            '/api/v1/auth/session/migrate',
+            'POST'
+        ));
+        $first = $this->sessions->issueFromLegacyToken($user, $legacyToken);
+
+        try {
+            $this->sessions->issueFromLegacyToken($user, $legacyToken);
+            $this->fail('A second active migration should be rejected.');
+        } catch (LegacyCustomerTokenMigrationConflict) {
+            $this->assertSame(
+                1,
+                CustomerBrowserSession::query()
+                    ->where('legacy_access_token_id', 'legacy-token-1')
+                    ->whereNull('revoked_at')
+                    ->count()
+            );
+            $this->assertFalse((bool) $first['session']->revoked_at);
+        }
+    }
+
     public function test_expired_cookie_is_rejected_and_server_session_is_revoked(): void
     {
         Carbon::setTestNow('2026-07-23 12:00:00');
@@ -172,11 +209,11 @@ class CustomerBrowserSessionTest extends TestCase
         ])->save();
         Cookie::getFacadeRoot()->flushQueuedCookies();
 
-        $request = Request::create(
+        $request = $this->trustedCookieRequest(
             '/api/v1/customer/info',
             'GET',
-            [],
-            [$cookie->getName() => $cookie->getValue()]
+            $cookie->getName(),
+            $cookie->getValue(),
         );
         $this->bindRequest($request);
 
@@ -200,11 +237,15 @@ class CustomerBrowserSessionTest extends TestCase
 
         // Simulate a request whose auth middleware chose Bearer first, leaving
         // the simultaneously presented Cookie unresolved.
-        $logout = Request::create(
+        $logout = $this->trustedCookieRequest(
             '/api/v1/customer/logout',
             'POST',
-            [],
-            [$cookie->getName() => $cookie->getValue()]
+            $cookie->getName(),
+            $cookie->getValue(),
+        );
+        $logout->attributes->set(
+            CustomerBrowserSessionManager::REQUEST_SOURCE,
+            'bearer'
         );
         $this->bindRequest($logout);
         $this->sessions->revokeCurrent($logout);
@@ -248,6 +289,114 @@ class CustomerBrowserSessionTest extends TestCase
         $native = Request::create('/api/v1/auth/login', 'POST');
         $this->assertSame(200, $middleware->handle($native, $next)->getStatusCode());
         $this->assertFalse($this->sessions->requestCanReceiveCookie($native));
+    }
+
+    public function test_cookie_auth_requires_exact_origin_and_capability_header(): void
+    {
+        Carbon::setTestNow('2026-07-23 12:00:00');
+        $user = $this->user();
+        $this->bindRequest(Request::create('/api/v1/auth/login', 'POST'));
+        $issued = $this->sessions->issueForLogin($user);
+        $cookie = collect(Cookie::getQueuedCookies())->last();
+        Cookie::getFacadeRoot()->flushQueuedCookies();
+        $authenticator = new CustomerRequestAuthenticator($this->sessions);
+
+        foreach ([
+            ['origin' => 'https://attacker.example', 'capable' => true],
+            ['origin' => 'https://evil.nezha.am', 'capable' => true],
+            ['origin' => null, 'capable' => true],
+            ['origin' => 'https://nezha.am', 'capable' => false],
+        ] as $case) {
+            $request = Request::create(
+                '/api/v1/customer/update-zone',
+                'GET',
+                [],
+                [$cookie->getName() => $cookie->getValue()]
+            );
+            if ($case['origin']) {
+                $request->headers->set('Origin', $case['origin']);
+            }
+            if ($case['capable']) {
+                $request->headers->set('X-Nezha-Customer-Cookie', '1');
+            }
+            $this->bindRequest($request);
+
+            $this->assertNull($authenticator->resolve($request));
+        }
+
+        $this->assertSame(
+            $issued['session']->last_seen_at->toDateTimeString(),
+            $issued['session']->fresh()->last_seen_at->toDateTimeString()
+        );
+        $this->assertNull($issued['session']->fresh()->revoked_at);
+    }
+
+    public function test_cookie_unsafe_request_rejects_missing_or_wrong_csrf(): void
+    {
+        Carbon::setTestNow('2026-07-23 12:00:00');
+        $user = $this->user();
+        $this->bindRequest(Request::create('/api/v1/auth/login', 'POST'));
+        $issued = $this->sessions->issueForLogin($user);
+        $cookie = collect(Cookie::getQueuedCookies())->last();
+        Cookie::getFacadeRoot()->flushQueuedCookies();
+        $authenticator = new CustomerRequestAuthenticator($this->sessions);
+
+        foreach ([null, 'wrong-token'] as $provided) {
+            $request = $this->trustedCookieRequest(
+                '/api/v1/customer/update-profile',
+                'POST',
+                $cookie->getName(),
+                $cookie->getValue(),
+            );
+            if ($provided) {
+                $request->headers->set('X-CSRF-Token', $provided);
+            }
+            $this->bindRequest($request);
+
+            try {
+                $authenticator->resolve($request);
+                $this->fail('Missing or wrong CSRF should be rejected.');
+            } catch (HttpResponseException $exception) {
+                $this->assertSame(
+                    419,
+                    $exception->getResponse()->getStatusCode()
+                );
+            }
+        }
+
+        $valid = $this->trustedCookieRequest(
+            '/api/v1/customer/update-profile',
+            'POST',
+            $cookie->getName(),
+            $cookie->getValue(),
+        );
+        $valid->headers->set('X-CSRF-Token', $issued['csrf_token']);
+        $this->bindRequest($valid);
+        $this->assertSame($user->getKey(), $authenticator->resolve($valid)?->getKey());
+    }
+
+    public function test_customer_login_origin_does_not_wrap_vendor_or_delivery_man(): void
+    {
+        $routes = collect(app('router')->getRoutes());
+        $customer = $routes->first(
+            fn ($route) => $route->uri() === 'api/v1/auth/login'
+        );
+        $vendor = $routes->first(
+            fn ($route) => $route->uri() === 'api/v1/auth/vendor/login'
+        );
+        $deliveryMan = $routes->first(
+            fn ($route) => $route->uri() === 'api/v1/auth/delivery-man/login'
+        );
+
+        $this->assertNotNull($customer);
+        $this->assertNotNull($vendor);
+        $this->assertNotNull($deliveryMan);
+        $this->assertContains('customer.login-origin', $customer->middleware());
+        $this->assertNotContains('customer.login-origin', $vendor->middleware());
+        $this->assertNotContains(
+            'customer.login-origin',
+            $deliveryMan->middleware()
+        );
     }
 
     public function test_credentialed_cors_is_scoped_to_customer_h5_origins(): void
@@ -319,6 +468,24 @@ class CustomerBrowserSessionTest extends TestCase
     private function bindRequest(Request $request): void
     {
         $this->app->instance('request', $request);
+    }
+
+    private function trustedCookieRequest(
+        string $uri,
+        string $method,
+        string $cookieName,
+        string $cookieValue,
+    ): Request {
+        $request = Request::create(
+            $uri,
+            $method,
+            [],
+            [$cookieName => $cookieValue]
+        );
+        $request->headers->set('Origin', 'https://nezha.am');
+        $request->headers->set('X-Nezha-Customer-Cookie', '1');
+
+        return $request;
     }
 
     private function user(): User

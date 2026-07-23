@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Services\Auth\CustomerBrowserSessionManager;
+use App\Services\Auth\LegacyCustomerTokenMigrationConflict;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Laravel\Passport\Token;
@@ -64,10 +65,19 @@ class CustomerBrowserSessionController extends Controller
             return $this->show($request);
         }
 
-        $issued = $this->browserSessions->issueFromLegacyToken(
-            $request->user(),
-            $accessToken,
-        );
+        try {
+            $issued = $this->browserSessions->issueFromLegacyToken(
+                $request->user(),
+                $accessToken,
+            );
+        } catch (LegacyCustomerTokenMigrationConflict) {
+            return response()->json([
+                'errors' => [[
+                    'code' => 'customer_browser_migration_in_progress',
+                    'message' => 'This access token is already being migrated.',
+                ]],
+            ], 409);
+        }
 
         return $this->sessionResponse([
             'authenticated' => true,
