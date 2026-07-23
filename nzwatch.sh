@@ -139,6 +139,23 @@ if [ -d "$OPSNAP_SRC" ]; then
   fi
 fi
 
+# 6f. 恢复手册漂移对账: cron 现役正本(/root) 与仓库入库快照的正文必须同源。
+#     2026-07-22 立: 恢复手册是灾备最后一环, 两份各改各的 = 丢机时照错步骤解密/PITR。
+#     入库那份有 '#' 开头的文件头(注释块+一个空行分隔), 故比对时剥掉开头连续注释块及其后空行再算 md5。
+#     双边同一剥法即同口径(live 无头=剥法对它无操作); 发布窗口内短暂不一致正常, >26h 才告警。
+LIVE_DOC="/root/nezha-backup/README-RESTORE.txt"
+REPO_DOC="/www/wwwroot/api-deploy/current/ops/backup/README-RESTORE.txt"
+DOC_DRIFT_SEEN="/root/nezha-backup/.docdrift_first_seen"
+if [ ! -r "$LIVE_DOC" ] || [ ! -r "$REPO_DOC" ]; then
+  add "恢复手册漂移对账失败: cron 现役正本或仓库快照不可读" "restore-doc-drift"
+elif [ "$(awk 'BEGIN{b=1} b&&/^#/{next} b&&/^[[:space:]]*$/{next} {b=0} {print}' "$LIVE_DOC" | md5sum)" = "$(awk 'BEGIN{b=1} b&&/^#/{next} b&&/^[[:space:]]*$/{next} {b=0} {print}' "$REPO_DOC" | md5sum)" ]; then
+  rm -f "$DOC_DRIFT_SEEN"
+else
+  [ -f "$DOC_DRIFT_SEEN" ] || date +%s > "$DOC_DRIFT_SEEN"
+  DDAGE=$(( ( $(date +%s) - $(cat "$DOC_DRIFT_SEEN" 2>/dev/null || echo 0) ) / 3600 ))
+  [ "$DDAGE" -gt 26 ] && add "恢复手册已漂移 ${DDAGE}h: /root 正本与仓库快照正文不一致 — 仓库是 SSOT, 同步后重装" "restore-doc-drift"
+fi
+
 # 7. SSL 源站证书剩余天数 <14天 → 自动续期可能失败,提前预警(绕CF直查本机源站证书)
 for SD in nezha.am api.nezha.am; do
   CEND=$(echo | timeout 10 openssl s_client -servername "$SD" -connect 127.0.0.1:443 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
