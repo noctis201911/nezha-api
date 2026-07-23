@@ -19,7 +19,6 @@ class RouteServiceProvider extends ServiceProvider
      */
     protected $namespace = 'App\Http\Controllers';
 
-
     /**
      * The path to the "home" route for your application.
      *
@@ -102,13 +101,39 @@ class RouteServiceProvider extends ServiceProvider
             ];
         });
 
+        // Customer auth endpoints use route-specific keys. Anonymous numeric
+        // throttles share an IP signature across routes and can otherwise make
+        // a valid multi-step login rate-limit itself.
+        RateLimiter::for('nezha_email_start', fn (Request $request) => [
+            Limit::perMinute(10)->by('email-start:'.$request->ip()),
+        ]);
+        RateLimiter::for('nezha_email_verify', fn (Request $request) => [
+            Limit::perMinute(20)->by('email-verify:'.$request->ip()),
+        ]);
+        RateLimiter::for('nezha_tg_start', fn (Request $request) => [
+            Limit::perMinute(10)->by('tg-start:'.$request->ip()),
+        ]);
+        RateLimiter::for('nezha_tg_callback', fn (Request $request) => [
+            Limit::perMinute(30)->by('tg-callback:'.$request->ip()),
+        ]);
+        RateLimiter::for('nezha_tg_exchange', fn (Request $request) => [
+            Limit::perMinute(20)->by('tg-exchange:'.$request->ip()),
+        ]);
+        RateLimiter::for('nezha_tg_link_password', fn (Request $request) => [
+            Limit::perMinute(5)->by('tg-link-password:'.$request->ip()),
+        ]);
+        RateLimiter::for('nezha_tg_link_google', fn (Request $request) => [
+            Limit::perMinute(10)->by('tg-link-google:'.$request->ip()),
+        ]);
+
         // 哪吒[防滥用 2026-07-01]: 「没有收到餐」申诉端点限流。游客可发(guest_id可再生), 按 user_id 或 IP 键 + 硬性每IP日上限, 防批量诬告刷申诉。
         RateLimiter::for('nezha_appeal', function (Request $request) {
-            $key = optional($request->user())->id ? ('u' . $request->user()->id) : ('ip' . $request->ip());
+            $key = optional($request->user())->id ? ('u'.$request->user()->id) : ('ip'.$request->ip());
+
             return [
                 Limit::perMinute(3)->by($key),
                 Limit::perHour(10)->by($key),
-                Limit::perDay(20)->by('appeal_ip_' . $request->ip()),
+                Limit::perDay(20)->by('appeal_ip_'.$request->ip()),
             ];
         });
 
@@ -117,7 +142,7 @@ class RouteServiceProvider extends ServiceProvider
         RateLimiter::for('nezha_guides_helpful', function (Request $request) {
             return [
                 Limit::perMinute(20)->by($request->ip()),
-                Limit::perDay(200)->by('guides_helpful_ip_' . $request->ip()),
+                Limit::perDay(200)->by('guides_helpful_ip_'.$request->ip()),
             ];
         });
 
@@ -126,7 +151,7 @@ class RouteServiceProvider extends ServiceProvider
         RateLimiter::for('nezha_ll_contact', function (Request $request) {
             return [
                 Limit::perMinute(20)->by($request->ip()),
-                Limit::perDay(200)->by('ll_contact_ip_' . $request->ip()),
+                Limit::perDay(200)->by('ll_contact_ip_'.$request->ip()),
             ];
         });
 
@@ -135,7 +160,7 @@ class RouteServiceProvider extends ServiceProvider
         RateLimiter::for('nezha_res_contact', function (Request $request) {
             return [
                 Limit::perMinute(20)->by($request->ip()),
-                Limit::perDay(200)->by('res_contact_ip_' . $request->ip()),
+                Limit::perDay(200)->by('res_contact_ip_'.$request->ip()),
             ];
         });
     }
