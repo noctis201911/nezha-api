@@ -3650,6 +3650,46 @@ class Helpers
         return $data;
     }
 
+    /**
+     * 归一化客户端提交的 variation.values 为「已选 label 列表」。
+     * 兼容旧(移动端/StackFood) values => ['label' => [...选中label...]]
+     * 与新(哪吒 H5 redux 车) values => [ ['label'=>..,'optionPrice'=>..,'isSelected'=>bool], ... ]。
+     * 畸形/缺 label 项一律跳过; 价格仍由调用方按服务端 DB option 累加(不信客户端价)。
+     */
+    public static function nezha_selected_variation_labels($values): array
+    {
+        if (!is_array($values)) {
+            return [];
+        }
+        // 旧结构: values => ['label' => ['标准份', ...]]
+        if (array_key_exists('label', $values)) {
+            $labels = $values['label'];
+            if (is_array($labels)) {
+                return array_values(array_filter($labels, fn ($l) => is_scalar($l)));
+            }
+            return is_scalar($labels) ? [$labels] : [];
+        }
+        // 新结构: 任一项带 isSelected → 只取被选中; 无标记 → 列出即选中。
+        $has_flag = false;
+        foreach ($values as $v) {
+            if (is_array($v) && array_key_exists('isSelected', $v)) {
+                $has_flag = true;
+                break;
+            }
+        }
+        $labels = [];
+        foreach ($values as $v) {
+            if (!is_array($v) || !isset($v['label']) || !is_scalar($v['label'])) {
+                continue;
+            }
+            if ($has_flag && !filter_var($v['isSelected'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+                continue;
+            }
+            $labels[] = $v['label'];
+        }
+        return $labels;
+    }
+
     public static function get_varient(array $product_variations, array $variations)
     {
         $result = [];
@@ -3660,10 +3700,12 @@ class Helpers
                 if (isset($variation['values']) && isset($product_variation['values']) && $product_variation['name'] == $variation['name']) {
                     $result[$k] = $product_variation;
                     $result[$k]['values'] = [];
+                    // 兼容旧(values.label=[..])与新(values=[{label,optionPrice,isSelected},..])两种客户端结构; 归一为已选 label 列表
+                    $selected_labels = self::nezha_selected_variation_labels($variation['values']);
                     foreach ($product_variation['values'] as $key => $option) {
-                        if (in_array($option['label'], $variation['values']['label'])) {
+                        if (isset($option['label']) && in_array($option['label'], $selected_labels)) {
                             $result[$k]['values'][] = $option;
-                            $variation_price += $option['optionPrice'];
+                            $variation_price += data_get($option, 'optionPrice', 0);
                             $optionIds[] = data_get($option, 'option_id', null);
                         }
                     }
