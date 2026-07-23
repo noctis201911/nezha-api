@@ -324,7 +324,16 @@ class ProductController extends Controller
             $overallRating = ProductLogic::get_overall_rating(reviews:$product->reviews);
             return response()->json(floatval($overallRating[0]), 200);
         } catch (\Exception $e) {
-            return response()->json(['errors' => $e->getMessage()], 403);
+            // 哪吒[安全 2026-07-23]: 原始异常串不能回给客户端。
+            // 本端点 /api/v1/products/rating/{food_id} 路由无鉴权中间件(仅继承 localization/react), 游客可直接打。
+            // 线上实证: /rating/abc -> Food::find 返回 null -> $product->reviews 触发 PHP warning,
+            // 被 Laravel 转成 ErrorException(继承 Exception)落入本 catch, 原样吐回内部属性名;
+            // 若落 QueryException 则 Host/Port/Database 与内联 bindings 一并外泄。
+            \Illuminate\Support\Facades\Log::warning('nz_product_rating_failed', [
+                'ex' => get_class($e),
+                'code' => $e->getCode(),
+            ]);
+            return response()->json(['errors' => '出现错误，请重试'], 403);
         }
     }
 

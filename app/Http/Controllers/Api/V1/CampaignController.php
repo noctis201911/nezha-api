@@ -27,7 +27,13 @@ class CampaignController extends Controller
             $campaigns=Helpers::basic_campaign_data_formatting($campaigns, true);
             return response()->json($campaigns, 200);
         } catch (\Exception $e) {
-            return response()->json([$e->getMessage()], 200);
+            // 哪吒[安全 2026-07-23]: 原始异常串不回客户端。本端点无鉴权中间件, 游客可直接打;
+            // 落 ErrorException 泄内部属性名, 落 QueryException 连 Host/Port/Database 与内联 bindings 一并外泄。
+            \Illuminate\Support\Facades\Log::warning('nz_basic_campaigns_failed', [
+                'ex' => get_class($e),
+                'code' => $e->getCode(),
+            ]);
+            return response()->json(['出现错误，请重试'], 200);
         }
     }
     public function basic_campaign_details(Request $request){
@@ -61,7 +67,15 @@ class CampaignController extends Controller
 
             return response()->json($campaign, 200);
         } catch (\Exception $e) {
-            return response()->json([$e->getMessage()], 500);
+            // 哪吒[安全 2026-07-23]: 同 ProductController 判例, 原始异常串不回客户端。
+            // 本端点 /api/v1/campaigns/basic-campaign-details 无鉴权中间件, 游客可直接打。
+            // 线上实证: ?basic_campaign_id=zzz 查不到 -> 格式化函数读 null 属性 ->
+            // ErrorException 落入本 catch 原样外泄内部属性名。
+            \Illuminate\Support\Facades\Log::warning('nz_basic_campaign_details_failed', [
+                'ex' => get_class($e),
+                'code' => $e->getCode(),
+            ]);
+            return response()->json(['出现错误，请重试'], 500);
         }
     }
     public function get_item_campaigns(Request $request){
@@ -134,7 +148,17 @@ class CampaignController extends Controller
             $campaigns= Helpers::product_data_formatting($campaigns, true, false, app()->getLocale());
             return response()->json($campaigns, 200);
         } catch (\Exception $e) {
-            return response()->json([$e->getMessage()], 200);
+            // 哪吒[安全 2026-07-23]: 原始异常串不回客户端。本端点无鉴权中间件, 游客可直接打。
+            // 线上实证: 该端点当前恒抛 "Call to undefined relationship [tags] on model
+            // [App\Models\ItemCampaign]" 并被本 catch 吞成 HTTP 200 -> 泄内部模型类路径。
+            // 保持 HTTP 200 与数组结构不变: 前端首页「天天特价」按数组消费并 filter 掉非法项,
+            // 改状态码会触发 react-query onError 路径, 属行为变更, 不在本次安全修复范围内。
+            // 该端点自身的功能故障(loadMissing 对 ItemCampaign 取不存在的 tags 关系)由另一窗口修。
+            \Illuminate\Support\Facades\Log::warning('nz_item_campaigns_failed', [
+                'ex' => get_class($e),
+                'code' => $e->getCode(),
+            ]);
+            return response()->json(['出现错误，请重试'], 200);
         }
     }
 }

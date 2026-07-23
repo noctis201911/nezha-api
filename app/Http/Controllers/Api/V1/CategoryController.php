@@ -99,7 +99,13 @@ class CategoryController extends Controller
 
             return response()->json(Helpers::category_data_formatting($categories, true), 200);
         } catch (\Exception $e) {
-            return response()->json([$e->getMessage()]);
+            // 哪吒[安全 2026-07-23]: 原始异常串不回客户端。/api/v1/categories 无鉴权中间件, 游客可直接打。
+            // 保持原响应形状(数组, 无显式状态码即 200)不变。
+            \Illuminate\Support\Facades\Log::warning('nz_categories_failed', [
+                'ex' => get_class($e),
+                'code' => $e->getCode(),
+            ]);
+            return response()->json(['出现错误，请重试']);
         }
     }
 
@@ -114,7 +120,12 @@ class CategoryController extends Controller
             $categories = Category::where(['parent_id' => $categoryId,'status'=>1])->orderBy('priority','desc')->get();
             return response()->json(Helpers::category_data_formatting($categories, true), 200);
         } catch (\Exception $e) {
-            return response()->json([$e->getMessage()], 200);
+            // 哪吒[安全 2026-07-23]: 同上判例。/api/v1/categories/childes/{id} 无鉴权中间件, 游客可直接打。
+            \Illuminate\Support\Facades\Log::warning('nz_category_childes_failed', [
+                'ex' => get_class($e),
+                'code' => $e->getCode(),
+            ]);
+            return response()->json(['出现错误，请重试'], 200);
         }
     }
 
