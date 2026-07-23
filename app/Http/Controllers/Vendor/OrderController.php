@@ -1254,7 +1254,15 @@ class OrderController extends Controller
 
     public function download($file_name)
     {
-        return Storage::download(base64_decode($file_name));
+        // 哪吒 轴A/C 修复(NZSEC H-2): 原方法 Storage::download(base64_decode($file_name)) 无路径/归属校验,
+        // 任意登录商家/员工可 base64 任意路径读他店或系统文件. 商家端合法下载仅订单凭证图 public/order/*
+        // (见 resources/views/vendor-views/order/order-view.blade.php). 限定前缀 + 拒绝路径穿越/绝对路径.
+        $path = base64_decode($file_name, true);
+        if ($path === false || $path === '' || str_contains($path, '..') || str_starts_with($path, '/')
+            || !(str_starts_with($path, 'public/order/') || str_starts_with($path, 'order/'))) {
+            abort(404);
+        }
+        return Storage::download($path);
     }
 
     public function add_delivery_man($order_id, $delivery_man_id)

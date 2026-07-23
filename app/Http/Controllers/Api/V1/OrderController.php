@@ -2468,6 +2468,18 @@ class OrderController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
+
+        // 哪吒 轴A 修复(NZSEC M-1): 原方法仅按客户端 order_id 查 OrderDetail, 无归属校验 → 任意顾客枚举 order_id 越权读他人订单菜品构成.
+        // 补本控制器统一的 user_id+is_guest 归属圈定(对齐 get_running_orders/cancel_order 等); 非本人订单返回空 details(不泄露订单是否存在).
+        $user_id = $request->user ? $request->user->id : $request['guest_id'];
+        $nz_order_owned = Order::where(['id' => $request->order_id, 'user_id' => $user_id])
+            ->when(!$request->user, function ($query) { $query->where('is_guest', 1); })
+            ->when($request->user, function ($query) { $query->where('is_guest', 0); })
+            ->exists();
+        if (!$nz_order_owned) {
+            return response()->json(['details' => []], 200);
+        }
+
         $foodIds=[];
         $itemIds=[];
 

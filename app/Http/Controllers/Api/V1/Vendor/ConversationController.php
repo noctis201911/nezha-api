@@ -349,7 +349,14 @@ class ConversationController extends Controller
 
         $conversation = null;
         if($request->conversation_id){
-            $conversation = Conversation::with(['sender','receiver'])->find($request->conversation_id);
+            // 哪吒 轴A/F 修复(NZSEC H-1): 只允许取本商家参与的会话, 对齐同方法 admin_id/delivery_man_id/user_id 分支的 WhereConversation($vendor->id,...) 归属圈定;
+            // 原 find($conversation_id) 无归属校验, 任意商家可枚举 conversation_id 越权读全站会话全文+参与者 phone/email. 非参与者→null→下方返回空 messages.
+            $conversation = Conversation::with(['sender','receiver'])
+                ->where('id', $request->conversation_id)
+                ->where(function($q) use ($vendor) {
+                    $q->where('sender_id', $vendor->id)->orWhere('receiver_id', $vendor->id);
+                })
+                ->first();
         }else if($request->has('admin_id')){
             $conversation = Conversation::with(['sender','receiver','last_message'])->WhereConversation($vendor->id,0)->first();
         }else if($request->delivery_man_id){

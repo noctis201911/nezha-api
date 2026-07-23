@@ -50,7 +50,7 @@ class DeliveryManReviewController extends Controller
             'order_id' => 'required',
             'comment' => 'required',
             'rating' => 'required|integer|min:1|max:5',
-            'attachment.*' => 'nullable|max:2048',
+            'attachment.*' => 'nullable|image|mimes:png,jpg,jpeg,webp,gif|max:2048',
         ]);
 
         $dm = DeliveryMan::find($request->delivery_man_id);
