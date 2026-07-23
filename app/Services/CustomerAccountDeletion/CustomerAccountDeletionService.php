@@ -13,6 +13,7 @@ use App\Models\NezhaRefundRecord;
 use App\Models\Order;
 use App\Models\User;
 use Illuminate\Database\QueryException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -1091,10 +1092,8 @@ class CustomerAccountDeletionService
             );
 
             return;
-        } catch (QueryException $exception) {
-            if ((int) ($exception->errorInfo[1] ?? 0) !== 1062) {
-                throw $exception;
-            }
+        } catch (UniqueConstraintViolationException) {
+            // A concurrent or repeated request already owns this request_id.
         }
 
         // updateOrCreate performs a non-locking read first. Under MySQL 5.7
