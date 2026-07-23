@@ -335,16 +335,18 @@
                                     @if ($nzoDispute && $nzoDispute->merchant_statement)
                                         <div style="font-size:12px;color:var(--meta);margin-top:8px;">您的说明：{{ $nzoDispute->merchant_statement }}</div>
                                     @endif
+                                @elseif (!$nzoRR || $nzoRR->status !== 'pending_merchant_refund')
+                                    <div class="nzo-note" style="background:#fff7ed;color:#9a3412;border-color:#fed7aa;">⏸ 当前退款仍在顾客安全确认或系统挂起状态，请勿复制地址、跳转钱包或发送资金。</div>
                                 @else
                                     <form action="{{ route('vendor.order.mark-refunded', ['id' => $order['id']]) }}" method="post" onsubmit="return confirm('请确认：您已在自己的账户按原路退款给顾客？');">
                                         @csrf @method('PUT')
                                         <label class="nzo-ck"><input type="checkbox" required> 我已按原路向顾客完成退款</label>
-                                        <div style="font-size:11.5px;color:var(--faint);">实际退款金额</div>
-                                        <input class="nzo-ip" name="actual_refund_amount" value="{{ (int) $nzoRefundAmt }}">
+                                        <div style="font-size:11.5px;color:var(--faint);">冻结退款金额</div>
+                                        <div class="nzo-ip" aria-label="冻结退款金额">{{ $nzoRR && $nzoRR->payment_channel == 'usdt' && $nzoRR->refund_asset_amount_atomic !== null ? \App\CentralLogics\NezhaAtomicAmount::atomicToDecimal((string) $nzoRR->refund_asset_amount_atomic, (int) $nzoRR->asset_decimals).' USDT' : (int) $nzoRefundAmt }}</div>
                                         @if ($nzoRR && $nzoRR->payment_channel == 'usdt')
-                                            <input class="nzo-ip" name="merchant_refund_tx" placeholder="链上转账 tx hash（选填）">
+                                            <input class="nzo-ip" name="refund_tx_hash" required placeholder="公开链上退款 tx hash（必填）">
                                         @endif
-                                        <input class="nzo-ip" name="merchant_note" placeholder="备注（选填）">
+                                        <input class="nzo-ip" name="note" placeholder="备注（选填）">
                                         <button type="submit" class="nzo-btn nzo-btn-primary" style="width:100%;justify-content:center;margin-top:10px;"><i class="tio-checkmark-circle"></i> 确认已按原路退款</button>
                                     </form>
                                     @if ($nzoCanDispute)
@@ -510,14 +512,14 @@
 @if ($nzoRR && $nzoRR->status === 'pending_merchant_refund')
     <div class="modal fade" id="nzoMarkRefunded-{{ $order['id'] }}" tabindex="-1" role="dialog" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered" role="document"><div class="modal-content">
-            <form action="{{ route('vendor.order.mark-refunded', ['id' => $order['id']]) }}" method="post" onsubmit="return confirm('请确认：您已在自己的账户按原路退款给顾客？');">
+            <form action="{{ route('vendor.order.mark-refunded', ['id' => $order['id']]) }}" method="post" onsubmit="return confirm('请确认：人民币已退原付款人；USDT 已退本单冻结地址？');">
                 @csrf @method('PUT')
                 <div class="modal-header"><h5 class="modal-title">标记已退款</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div>
                 <div class="modal-body">
-                    <div class="nzo-warn" style="margin-bottom:14px;"><i class="tio-warning"></i> 请先在自己的账户按原路退款给顾客，再确认。</div>
-                    <div class="form-group"><label>实际退款金额</label><input type="text" name="actual_refund_amount" class="form-control" value="{{ (int) $nzoRefundAmt }}"></div>
-                    @if ($nzoRR->payment_channel == 'usdt')<div class="form-group"><label>链上转账 tx hash（选填）</label><input type="text" name="merchant_refund_tx" class="form-control"></div>@endif
-                    <div class="form-group mb-0"><label>备注（选填）</label><input type="text" name="merchant_note" class="form-control" placeholder="如：已退回原支付宝"></div>
+                    <div class="nzo-warn" style="margin-bottom:14px;"><i class="tio-warning"></i> 请先完成实际退款；USDT 只能退本单冻结地址和精确数量，再登记公开链上哈希。</div>
+                    <div class="form-group"><label>冻结退款金额</label><div class="form-control">{{ $nzoRR->payment_channel == 'usdt' && $nzoRR->refund_asset_amount_atomic !== null ? \App\CentralLogics\NezhaAtomicAmount::atomicToDecimal((string) $nzoRR->refund_asset_amount_atomic, (int) $nzoRR->asset_decimals).' USDT' : (int) $nzoRefundAmt }}</div></div>
+                    @if ($nzoRR->payment_channel == 'usdt')<div class="form-group"><label>公开链上退款 tx hash（必填）</label><input type="text" name="refund_tx_hash" required class="form-control"></div>@endif
+                    <div class="form-group mb-0"><label>备注（选填）</label><input type="text" name="note" class="form-control" placeholder="如：已按冻结目标退款"></div>
                 </div>
                 <div class="modal-footer"><button type="button" class="btn btn-light" data-dismiss="modal">取消</button><button type="submit" class="btn btn-success">确认已退款</button></div>
             </form>

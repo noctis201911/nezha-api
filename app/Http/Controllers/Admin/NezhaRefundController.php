@@ -35,7 +35,7 @@ class NezhaRefundController extends Controller
         return view('admin-views.nezha-refund.records', compact('records', 'status', 'pending_count'));
     }
 
-    /** USDT: 登记商家退款 tx hash → 链上校验(收款方==锁定地址 且 金额≥退款额) */
+    /** USDT: 与商家端共用统一 verifier；仅精确原子金额且终局成功才关闭退款。 */
     public function submitTx(Request $request, $id)
     {
         $rec = NezhaRefundRecord::findOrFail($id);
@@ -44,24 +44,36 @@ class NezhaRefundController extends Controller
             Toastr::warning(translate('请填写退款交易哈希'));
             return back();
         }
-        $chain = $rec->chain ?: NezhaRefundControl::detect_chain($hash);
-        $res = NezhaRefundControl::verify_refund_tx($hash, $chain, $rec->locked_to_address, (float) $rec->refund_amount);
-
-        $rec->refund_tx_hash      = $hash;
-        $rec->chain               = $chain;
-        $rec->chain_verify_status = $res['status'];
-        $rec->chain_verify_detail = $res['detail'];
-        $rec->save();
+        $result = NezhaRefundControl::verifyAndComplete(
+            $rec,
+            $hash,
+            null,
+            '运营提交并通过统一链上核验'
+        );
 
         $map = [
-            'verified' => '链上校验通过: 退款金额与原付款地址均匹配',
-            'failed'   => '链上校验未通过: 金额或收款地址与原付款不符, 请核对(禁止退第三方)',
-            'manual'   => '已登记退款哈希; 链上自动校验未完成, 待人工核对',
+            'verified' => '链上核验通过：已向顾客付款前绑定地址发送精确USDT数量',
+            'failed'   => '链上核验未通过：目标、网络、合约、原子金额或状态不匹配',
+            'manual'   => '链上查询暂不可用，退款仍保持待处理',
+            'verification_pending' => '链上确认数不足，退款仍保持待处理',
+            'manual_hold' => '退款执行已暂停，记录保持挂起',
         ];
-        $msg = $map[$res['status']] ?? '已登记';
-        if ($res['status'] === 'failed') {
+        $msg = $map[$result['status']] ?? '退款未关闭';
+        if ($result['status'] !== 'verified') {
             Toastr::warning(translate($msg));
         } else {
+            $completed = $result['record'];
+            \App\CentralLogics\NezhaRefundOverdue::lift_suspend_if_clear(
+                (int) $completed->restaurant_id
+            );
+            $order = $completed->order()->with(['customer', 'guest', 'restaurant'])->first();
+            if ($order) {
+                OrderLogic::notify_customer_direct_pay_refund_completed(
+                    $order,
+                    $completed,
+                    'admin'
+                );
+            }
             Toastr::success(translate($msg));
         }
 
@@ -184,6 +196,11 @@ class NezhaRefundController extends Controller
      */
     public function overdueResolve(Request $request, $id)
     {
+        $target = NezhaRefundRecord::find($id);
+        if ($target?->payment_channel === 'usdt') {
+            Toastr::warning('USDT退款不能人工越过交易哈希与链上核验，请在退款记录中提交公开链上哈希。');
+            return back();
+        }
         $rec = NezhaRefundRecord::transitionPendingToMerchantRefunded($id, [
             'merchant_refund_note' => '运营人工核实已退款: ' . ($request->input('note') ? mb_substr($request->input('note'), 0, 200) : '已确认商家原路退款'),
         ]);

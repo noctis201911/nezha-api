@@ -12,7 +12,7 @@
 
         <div class="alert alert-info" role="alert">
             <i class="tio-info"></i>
-            {{ translate('合规留痕: 每笔退款的原路锁定地址 / 限额命中 / 链上校验结果留存 ≥5年。USDT 退款请登记商家退款交易哈希做链上校验(收款方须==原付款地址, 金额须≥退款额); 超限退款在此审核放行或拒绝。') }}
+            {{ translate('合规留痕：每笔退款的冻结目标 / 限额命中 / 链上校验结果留存 ≥5年。USDT 退款只允许顾客付款前绑定的本单地址；登记公开链上交易哈希后，目标、网络、USDT 合约、精确原子金额和终局性必须全部匹配。') }}
         </div>
 
         <ul class="nav nav-tabs mb-3">
@@ -33,7 +33,7 @@
                             <th>{{ translate('订单 / 商家') }}</th>
                             <th>{{ translate('通道') }}</th>
                             <th>{{ translate('退款额 / 原单') }}</th>
-                            <th>{{ translate('原路锁定') }}</th>
+                            <th>{{ translate('退款目标快照') }}</th>
                             <th>{{ translate('链上校验') }}</th>
                             <th>{{ translate('状态') }}</th>
                             <th>{{ translate('操作') }}</th>
@@ -50,10 +50,13 @@
                                     @if ($r->locked_to_address)
                                         <br><small class="text-monospace" style="word-break:break-all;">→ {{ $r->locked_to_address }}</small>
                                     @endif
+                                    @if ($r->payment_channel === 'usdt' && $r->refund_asset_amount_atomic !== null)
+                                        <br><small>{{ $r->asset_network }} · {{ \App\CentralLogics\NezhaAtomicAmount::atomicToDecimal((string) $r->refund_asset_amount_atomic, (int) $r->asset_decimals) }} USDT · 顾客已确认</small>
+                                    @endif
                                 </td>
                                 <td>
                                     @php
-                                        $cvMap = ['verified' => 'badge-soft-success', 'failed' => 'badge-soft-danger', 'manual' => 'badge-soft-warning', 'unverified' => 'badge-soft-secondary', 'na' => 'badge-soft-light'];
+                                        $cvMap = ['verified' => 'badge-soft-success', 'failed' => 'badge-soft-danger', 'manual' => 'badge-soft-warning', 'manual_hold' => 'badge-soft-warning', 'verification_pending' => 'badge-soft-warning', 'unverified' => 'badge-soft-secondary', 'na' => 'badge-soft-light'];
                                         $cv = $cvMap[$r->chain_verify_status] ?? 'badge-soft-secondary';
                                     @endphp
                                     <span class="badge {{ $cv }}">{{ $r->chain_verify_status }}</span>
@@ -64,10 +67,10 @@
                                     @endif
                                 </td>
                                 <td style="min-width:270px;">
-                                    @if ($r->payment_channel == 'usdt' && in_array($r->chain_verify_status, ['unverified', 'manual', 'failed']))
+                                    @if ($r->payment_channel == 'usdt' && $r->status === 'pending_merchant_refund' && $r->reconfirmed_at && in_array($r->chain_verify_status, ['unverified', 'manual', 'verification_pending', 'failed']))
                                         <form action="{{ route('admin.nezha-refund.submit-tx', $r->id) }}" method="post" class="input-group input-group-sm mb-1">
                                             @csrf
-                                            <input type="text" name="refund_tx_hash" class="form-control" placeholder="{{ translate('商家退款交易哈希') }}" value="{{ $r->refund_tx_hash }}">
+                                            <input type="text" name="refund_tx_hash" required class="form-control" placeholder="{{ translate('公开链上退款交易哈希') }}" value="{{ $r->refund_tx_hash }}">
                                             <button class="btn btn-sm btn-primary">{{ translate('链上校验') }}</button>
                                         </form>
                                     @endif

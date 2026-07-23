@@ -34,7 +34,7 @@
 - **D delivered 扣佣**：标记 delivered → `order_transaction` 生成(admin_commission>0)、`deposit_balance` 恰好减佣金、`commission_deduction` 流水 balance_after 与钱包一致。幂等：`$order->transaction==null` 守门，重复标 delivered 不重复扣。证据：扣佣前后余额差 == admin_commission。
 - **E 退款对称**：已送达单退款 → `refund_reversal` 流水 + `deposit_balance` 恢复到扣佣前 + `admin total_commission_earning` 冲回；幂等：`refunded/failed` 单不可再退（controller 守门）。直付单退款**不**进顾客钱包（`!$isDirectPay`）。
 - **F 边界/异常**（已知隐患，见 §3）：扣穿成负 / 并发 lost-update / 无凭证行 fatal / 取消路径护栏。
-- **G 合规闭合**（与第4层重叠，本层只验账面）：直付单全程 `digital_received` 与 `total_earning` 不因该单变动（平台不碰钱 L1-1）；USDT 退款锁定原 from 地址（L1-2/3）；`nezha_refund_records` 留痕（L1-4 ≥5年）。
+- **G 合规闭合**（与第4层重叠，本层只验账面）：直付单全程 `digital_received` 与 `total_earning` 不因该单变动（平台不碰钱 L1-1）；同一付款 TxID 只能绑定一个订单且该订单的付款证据不可替换；USDT 退款只读顾客付款前绑定并随订单消费的不可变地址 A，`tx.from=B` 仅作来源证据，A≠B 时仍只有发往 A 的同链/同合约/精确原子金额/已终局交易可关闭（L1-2/3）；`nezha_customer_refund_address_credentials` 与 `nezha_refund_records` 留痕（L1-4 ≥5年）。
 - **H 对账闭合**：∑commission_deduction（按单）== ∑refund_reversal（已退单）对冲；无悬空（delivered 单都有 transaction、扣佣流水 balance_after 链式连续）。
 
 ## 3. 已知隐患台账（每次跑核对是否仍在/已修）

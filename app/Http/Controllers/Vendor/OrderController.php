@@ -389,8 +389,9 @@ class OrderController extends Controller
 
     /**
      * 哪吒 F-4 — 商家「标记已退款」直付单。
-     * 平台取消/退款直付单后生成 pending_merchant_refund 留痕; 商家在自己账户原路退还原付款人后,
-     * 在此标记已退款(可选填 USDT 退款 tx hash / 备注), 记录转 merchant_refunded。
+     * 平台取消/退款直付单后生成 pending_merchant_refund 留痕；人民币退原付款人，
+     * USDT 只退顾客付款前绑定的本单冻结地址；商家完成实际退款后，
+     * 在此标记已退款。USDT tx hash 必填并须先通过统一链上核验，才可转 merchant_refunded。
      *
      * 合规(L1-1): 平台全程不碰钱, 本动作仅更新留痕状态, 不触发任何资金记账。
      * 强校验(轴A 对象级鉴权): 只能标记【本店】且【pending_merchant_refund】的记录(防越权/防重复)。
@@ -476,22 +477,41 @@ class OrderController extends Controller
             ->where('status', 'pending_merchant_refund')
             ->latest('id')
             ->first();
-        $attributes = [
-            'merchant_refund_note' => $request->note ? mb_substr($request->note, 0, 255) : null,
-        ];
-        if ($pendingRecord?->payment_channel === 'usdt' && $request->refund_tx_hash) {
-            $attributes['refund_tx_hash'] = trim($request->refund_tx_hash);
-            if (in_array($pendingRecord->chain_verify_status, ['na', null], true)) {
-                $attributes['chain_verify_status'] = 'unverified';
+        $note = $request->note ? mb_substr($request->note, 0, 255) : null;
+        if ($pendingRecord?->payment_channel === 'usdt') {
+            $hash = trim((string) $request->input('refund_tx_hash'));
+            if ($hash === '') {
+                Toastr::error('请填写公开链上的USDT退款交易哈希');
+                return back();
             }
+            $verification = \App\CentralLogics\NezhaRefundControl::verifyAndComplete(
+                $pendingRecord,
+                $hash,
+                (int) Helpers::get_restaurant_id(),
+                $note
+            );
+            $record = $verification['record'];
+            if (! $record) {
+                $messages = [
+                    'refund_tx_hash_invalid' => '退款交易哈希格式不正确',
+                    'refund_tx_hash_reused' => '该交易哈希已用于另一笔退款',
+                    'refund_not_executable' => '顾客尚未完成安全确认，或退款快照不可执行',
+                    'refund_mode_closed' => 'USDT退款执行当前已暂停',
+                    'refund_state_changed' => '退款状态已变化，请刷新后重试',
+                ];
+                $reason = $verification['reason'] ?? '';
+                Toastr::error($messages[$reason] ?? '链上核验未通过或尚未终局，退款仍保持待处理');
+                return back();
+            }
+        } else {
+            $record = $pendingRecord
+                ? \App\Models\NezhaRefundRecord::transitionPendingToMerchantRefunded(
+                    $pendingRecord->id,
+                    ['merchant_refund_note' => $note],
+                    Helpers::get_restaurant_id()
+                )
+                : null;
         }
-        $record = $pendingRecord
-            ? \App\Models\NezhaRefundRecord::transitionPendingToMerchantRefunded(
-                $pendingRecord->id,
-                $attributes,
-                Helpers::get_restaurant_id()
-            )
-            : null;
         if (!$record) {
             Toastr::warning(translate('messages.Payment_status_updated'));
             return back();
@@ -500,13 +520,15 @@ class OrderController extends Controller
         // 哪吒: 商家标记已退款后, 若该店已无逾期未退款留痕, 自动解除退款逾期接单暂停(非资金)。
         \App\CentralLogics\NezhaRefundOverdue::lift_suspend_if_clear($record->restaurant_id);
 
-        // 商家标记后主动通知顾客，但文案只陈述“商家已标记退款”；平台并未自动核实资金到账。
+        // 人民币仅记录商家申报；USDT 到此处时已经过统一链上终局核验。
         OrderLogic::notify_customer_direct_pay_refund_completed($order, $record, 'merchant');
 
         // 哪吒[退款完成回平台]: 商家标记已退款后, 主动给平台超管发提醒(Telegram + 邮件), 让平台知道此单已闭环、可抽查。
         // 现状只在「待退款生成」时给 admin 发邮件, 完成侧是静默的; 补这条对称。L1-1: 仅通知不碰钱。
         try {
-            $chanText = $record->payment_channel === 'usdt' ? 'USDT 退回原地址' : ($record->payment_channel === 'rmb' ? '支付宝原路退回' : '原支付方式');
+            $chanText = $record->payment_channel === 'usdt'
+                ? 'USDT 退回顾客付款前绑定地址'
+                : ($record->payment_channel === 'rmb' ? '支付宝原路退回' : '原支付方式');
             $amt = \App\CentralLogics\Helpers::format_currency($record->refund_amount);
             $restName = $order->restaurant?->name ?? '-';
             try {

@@ -36,6 +36,12 @@ class NezhaRiskController extends Controller
         'nezha_refund_daily_count_limit'    => '5',
         'nezha_refund_window_days'          => '7',
         'nezha_refund_usdt_verify_status'   => '1',
+        'nezha_usdt_refund_binding_mode'    => 'drain',
+        'nezha_usdt_refund_legal_gate'      => 'pending',
+        'nezha_refund_reconfirm_ttl_seconds'=> '300',
+        'nezha_refund_bsc_finality_blocks'  => '12',
+        'nezha_refund_tron_finality_blocks' => '20',
+        'nezha_refund_sanction_max_sync_age_hours' => '48',
         'nezha_refund_bscscan_api_key'      => '',
         'nezha_refund_trongrid_api_key'     => '',
         // 制裁筛查 (机制② L1-6) — USDT 付款来源地址比对 OFAC SDN, 命中即拒收
@@ -88,8 +94,20 @@ class NezhaRiskController extends Controller
     /** 保存风控设置 (开关用下拉传 1/0, 阈值用数字; 未提交的字段保留原值) */
     public function updateSettings(Request $request)
     {
+        $request->validate([
+            'nezha_usdt_refund_binding_mode' => 'sometimes|required|in:enforce,drain,closed',
+            'nezha_usdt_refund_legal_gate' => 'sometimes|required|in:pending,approved,rejected',
+            'nezha_refund_reconfirm_ttl_seconds' => 'sometimes|required|integer|min:60|max:600',
+            'nezha_refund_bsc_finality_blocks' => 'sometimes|required|integer|min:1|max:200',
+            'nezha_refund_tron_finality_blocks' => 'sometimes|required|integer|min:1|max:500',
+            'nezha_refund_sanction_max_sync_age_hours' => 'sometimes|required|integer|min:1|max:168',
+        ]);
         // 安全(P0-b): 链上 API 密钥仅超级管理员可改; 非超管提交一律跳过(防掩码值覆盖真值)
         $nzIsSuper  = auth('admin')->check() && auth('admin')->user()->role_id == 1;
+        if (! $nzIsSuper && ($request->has('nezha_usdt_refund_binding_mode')
+            || $request->has('nezha_usdt_refund_legal_gate'))) {
+            abort(403, 'Only a super administrator may change USDT refund release gates.');
+        }
         $secretKeys = ['nezha_refund_bscscan_api_key', 'nezha_refund_trongrid_api_key'];
 
         // SEC-3 审计: 风控阈值=L2 业务参数(须留痕)。收集本次实际变更, 写一行审计。

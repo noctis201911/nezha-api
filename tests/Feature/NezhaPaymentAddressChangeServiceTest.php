@@ -870,6 +870,7 @@ class NezhaPaymentAddressChangeServiceTest extends TestCase
             $table->timestamp('consumed_at')->nullable();
             $table->unsignedBigInteger('consumed_order_id')->nullable()->unique();
             $table->text('submitted_tx_hash')->nullable();
+            $table->char('submitted_tx_fingerprint', 64)->nullable()->unique();
             $table->timestamp('revoked_at')->nullable();
             $table->text('revoked_reason')->nullable();
             $table->timestamps();

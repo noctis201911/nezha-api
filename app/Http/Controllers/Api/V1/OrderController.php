@@ -23,6 +23,8 @@ use App\Models\Subscription;
 use Illuminate\Http\Request;
 use App\CentralLogics\DeliveryOptionLogic;
 use App\CentralLogics\Helpers;
+use App\CentralLogics\NezhaAtomicAmount;
+use App\CentralLogics\NezhaCustomerRefundAddressCredentialService;
 use App\CentralLogics\NezhaPaymentAddressCredentialService;
 use App\Models\OrderReference;
 use App\Models\BusinessSetting;
@@ -2154,10 +2156,29 @@ class OrderController extends Controller
         }
 
         $addressCredential = null;
+        $refundAddressCredential = null;
         $addressCredentialTxHash = null;
+        $paymentFromAddress = null;
+        $paidAssetAmountAtomic = null;
         $isUsdtMethod = NezhaPaymentAddressCredentialService::networkForMethod($method) !== null;
-        if ($isUsdtMethod && NezhaPaymentAddressCredentialService::enabled()) {
-            // 凭据闸开启时禁止回退 live restaurants 地址；游客也不能取得可归属的版本凭据。
+        if ($isUsdtMethod) {
+            if (! NezhaCustomerRefundAddressCredentialService::acceptingNewPayments()) {
+                return response()->json([
+                    'errors' => [[
+                        'code' => 'refund_binding_not_accepting_new_payments',
+                        'message' => 'USDT 付款暂未开放，请选择其他付款方式',
+                    ]],
+                ], 409);
+            }
+            if (! NezhaPaymentAddressCredentialService::enabled()) {
+                return response()->json([
+                    'errors' => [[
+                        'code' => 'payment_address_credential_required',
+                        'message' => 'USDT 付款保护暂不可用，请选择其他付款方式',
+                    ]],
+                ], 409);
+            }
+            // USDT 新单必须同时拥有登录顾客的商家收款地址凭据和退款地址凭据。
             if (! $request->user) {
                 return response()->json([
                     'errors' => [[
@@ -2175,11 +2196,19 @@ class OrderController extends Controller
                     (int) $method->id,
                     (int) $order->id
                 );
+                $refundAddressCredential =
+                    NezhaCustomerRefundAddressCredentialService::resolveForProof(
+                        (string) $request->input('refund_address_credential_token', ''),
+                        (int) $request->user->id,
+                        (int) $order->restaurant_id,
+                        (int) $method->id,
+                        (int) $order->id
+                    );
             } catch (\DomainException $credentialError) {
                 return response()->json([
                     'errors' => [[
                         'code' => $credentialError->getMessage(),
-                        'message' => '付款地址凭据无效，请重新打开付款页面后再提交',
+                        'message' => '付款或退款地址凭据无效，请重新打开付款页面后再提交',
                     ]],
                 ], 403);
             }
@@ -2278,6 +2307,12 @@ class OrderController extends Controller
                             $addressCredential
                         );
                     }
+                    if ($refundAddressCredential) {
+                        $autoCheck['refund_address_credential'] =
+                            NezhaCustomerRefundAddressCredentialService::evidence(
+                                $refundAddressCredential
+                            );
+                    }
                     $hash = null;
                     foreach ($offline_payment_info as $k => $v) {
                         if (in_array($k, ['method_id', 'method_name'], true)) continue;
@@ -2311,6 +2346,17 @@ class OrderController extends Controller
                             $verify['reused'] = true;
                         }
                         $autoCheck['chain'] = $verify;
+                        if (($verify['status'] ?? null) === 'verified'
+                            && isset($verify['amount_atomic'])) {
+                            $paidAssetAmountAtomic = (string) $verify['amount_atomic'];
+                        }
+                        $paymentChain = (string) $addressCredential->network === 'BEP20'
+                            ? 'bsc'
+                            : 'trc20';
+                        $paymentFromAddress = \App\CentralLogics\NezhaRefundControl::reverse_lookup_from_address(
+                            $hash,
+                            $paymentChain
+                        );
                     } else {
                         $autoCheck['chain'] = ['status' => 'invalid_hash', 'reason' => '未填写有效交易哈希'];
                     }
@@ -2323,7 +2369,31 @@ class OrderController extends Controller
             DB::beginTransaction();
             $OfflinePayments->save();
             $order->save();
-            if ($addressCredential) {
+            if ($addressCredential && $refundAddressCredential) {
+                $refundAddressCredential =
+                    NezhaCustomerRefundAddressCredentialService::consumeWithPaymentCredential(
+                        $refundAddressCredential,
+                        $addressCredential,
+                        (int) $order->id,
+                        $addressCredentialTxHash,
+                        $paymentFromAddress,
+                        $paidAssetAmountAtomic,
+                        NezhaAtomicAmount::refundableAmdSnapshot($order),
+                        (string) ($order->currency ?? 'AMD')
+                    );
+                $addressCredential->refresh();
+                if (is_array($autoCheck)) {
+                    $autoCheck['address_credential'] = NezhaPaymentAddressCredentialService::evidence(
+                        $addressCredential
+                    );
+                    $autoCheck['refund_address_credential'] =
+                        NezhaCustomerRefundAddressCredentialService::evidence(
+                            $refundAddressCredential
+                        );
+                    $OfflinePayments->nezha_auto_check = $autoCheck;
+                    $OfflinePayments->save();
+                }
+            } elseif ($addressCredential) {
                 $addressCredential = NezhaPaymentAddressCredentialService::consume(
                     $addressCredential,
                     (int) $order->id,

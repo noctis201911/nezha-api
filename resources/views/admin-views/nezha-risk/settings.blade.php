@@ -87,13 +87,22 @@
 
             {{-- 退款控制 (机制②: 原路锁定 + 限额) --}}
             <div class="card mb-3">
-                <div class="card-header"><h5 class="card-title"><i class="tio-undo"></i> {{ translate('退款控制 (原路锁定 + 限额限笔)') }}</h5></div>
+                <div class="card-header"><h5 class="card-title"><i class="tio-undo"></i> {{ translate('退款控制（订单级退款目标 + 限额限笔）') }}</h5></div>
                 <div class="card-body">
                     <div class="alert alert-warning" role="alert">
                         <i class="tio-warning"></i>
-                        {{ translate('退款护栏总开关独立于上方交易风控。开启后: 退款金额强制 ≤ 原订单; USDT 退款锁定原付款地址(链上反查+校验); 法币退还原付款人; 超过限额的退款转审核队列, 不直接执行。开启属"真实影响"操作, 请先用测试订单验证再开。关闭时现网退款行为完全不变。') }}
+                        {{ translate('USDT 退款只可使用顾客付款前确认并随订单冻结的地址；tx.from 仅作来源证据，任何模式都不能回退为退款目标。顾客真正退款前还须以原登录方式完成新鲜认证。凭据等级仅为 customer_attested，不代表钱包控制权已验证。') }}
                     </div>
                     <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="input-label">{{ translate('USDT 退款绑定模式') }}</label>
+                            <select name="nezha_usdt_refund_binding_mode" class="form-control">
+                                <option value="enforce" {{ ($cfg['nezha_usdt_refund_binding_mode'] ?? 'drain') === 'enforce' ? 'selected' : '' }}>{{ translate('enforce（允许新USDT单并强制双凭据）') }}</option>
+                                <option value="drain" {{ ($cfg['nezha_usdt_refund_binding_mode'] ?? 'drain') === 'drain' ? 'selected' : '' }}>{{ translate('drain（停止新USDT单，继续处理既有快照）') }}</option>
+                                <option value="closed" {{ ($cfg['nezha_usdt_refund_binding_mode'] ?? 'drain') === 'closed' ? 'selected' : '' }}>{{ translate('closed（停止新单并暂停既有USDT退款执行）') }}</option>
+                            </select>
+                            <small class="text-muted">{{ translate('律师 Q1/Q2 后置期间 production 必须保持 drain。') }}</small>
+                        </div>
                         <div class="col-md-6">
                             <label class="input-label">{{ translate('退款护栏总开关') }}</label>
                             <select name="nezha_refund_control_status" class="form-control">
@@ -120,9 +129,35 @@
                         <div class="col-md-6">
                             <label class="input-label">{{ translate('USDT 退款链上自动校验') }}</label>
                             <select name="nezha_refund_usdt_verify_status" class="form-control">
-                                <option value="1" {{ ($cfg['nezha_refund_usdt_verify_status'] ?? '1') == '1' ? 'selected' : '' }}>{{ translate('启用 (校验退款tx金额+地址)') }}</option>
-                                <option value="0" {{ ($cfg['nezha_refund_usdt_verify_status'] ?? '1') == '0' ? 'selected' : '' }}>{{ translate('禁用 (仅锁定+人工核)') }}</option>
+                                <option value="1" {{ ($cfg['nezha_refund_usdt_verify_status'] ?? '1') == '1' ? 'selected' : '' }}>{{ translate('启用（网络/合约/目标/原子金额/终局性全校验）') }}</option>
+                                <option value="0" {{ ($cfg['nezha_refund_usdt_verify_status'] ?? '1') == '0' ? 'selected' : '' }}>{{ translate('禁用（所有USDT退款保持待处理，不能人工关闭）') }}</option>
                             </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="input-label">{{ translate('律师 Q1/Q2 门') }}</label>
+                            <select name="nezha_usdt_refund_legal_gate" class="form-control">
+                                <option value="pending" {{ ($cfg['nezha_usdt_refund_legal_gate'] ?? 'pending') === 'pending' ? 'selected' : '' }}>{{ translate('pending（未取得结论，不开放新单）') }}</option>
+                                <option value="approved" {{ ($cfg['nezha_usdt_refund_legal_gate'] ?? 'pending') === 'approved' ? 'selected' : '' }}>{{ translate('approved（已取得可定位的一手放行意见）') }}</option>
+                                <option value="rejected" {{ ($cfg['nezha_usdt_refund_legal_gate'] ?? 'pending') === 'rejected' ? 'selected' : '' }}>{{ translate('rejected（否决，保持关闸）') }}</option>
+                            </select>
+                            <small class="text-muted">{{ translate('只有 legal gate=approved 且 mode=enforce 才允许签发新退款地址凭据。') }}</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="input-label">{{ translate('新鲜认证挑战有效期（秒）') }}</label>
+                            <input type="number" min="60" max="600" name="nezha_refund_reconfirm_ttl_seconds" class="form-control" value="{{ $cfg['nezha_refund_reconfirm_ttl_seconds'] ?? 300 }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="input-label">{{ translate('BEP20 最低确认数') }}</label>
+                            <input type="number" min="1" max="200" name="nezha_refund_bsc_finality_blocks" class="form-control" value="{{ $cfg['nezha_refund_bsc_finality_blocks'] ?? 12 }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="input-label">{{ translate('TRC20 最低确认数') }}</label>
+                            <input type="number" min="1" max="500" name="nezha_refund_tron_finality_blocks" class="form-control" value="{{ $cfg['nezha_refund_tron_finality_blocks'] ?? 20 }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="input-label">{{ translate('退款目标名单最大同步龄（小时）') }}</label>
+                            <input type="number" min="1" max="168" name="nezha_refund_sanction_max_sync_age_hours" class="form-control" value="{{ $cfg['nezha_refund_sanction_max_sync_age_hours'] ?? 48 }}">
+                            <small class="text-muted">{{ translate('超过该时间、最近同步非成功或筛查关闭时，USDT 退款保持挂起。') }}</small>
                         </div>
                         <div class="col-md-6">
                             <label class="input-label">{{ translate('BscScan API Key (选填, 空则用公共RPC节点)') }}</label>
@@ -143,7 +178,7 @@
                             @endif
                         </div>
                     </div>
-                    <small class="text-muted">{{ translate('退款留痕(含原路锁定地址/链上校验结果)记入 nezha_refund_records, 合规留存 ≥5年。') }}</small>
+                    <small class="text-muted">{{ translate('退款留痕含订单级冻结地址、资产原子金额、新鲜认证和链上终局性结果；地址凭据与证据表均要求加密表空间。') }}</small>
                 </div>
             </div>
 
@@ -159,7 +194,7 @@
                 <div class="card-body">
                     <div class="alert alert-danger" role="alert">
                         <i class="tio-warning"></i>
-                        {{ translate('开启后: 顾客 USDT 付款被「确认收款」时, 系统反查该笔链上交易的付款来源地址, 比对 OFAC SDN 制裁名单。命中即自动拒收、不放行出餐, 并记入「风控日志」。这是合规红线(平台不得与受制裁主体交易), 默认开启。关闭将不再筛查 USDT 来源地址。') }}
+                        {{ translate('开启后：确认 USDT 收款时筛查付款来源；实际退款前还会筛查本单冻结目标。来源命中即拒收；退款目标命中、名单关闭、最近同步非成功/过期或查询异常时一律保持挂起。') }}
                     </div>
                     <div class="row g-3">
                         <div class="col-md-6">
