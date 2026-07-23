@@ -15,6 +15,7 @@ use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -46,6 +47,9 @@ class CustomerBrowserSessionTest extends TestCase
             'nezha_customer_browser_auth.allowed_origins',
             ['https://nezha.am']
         );
+        Auth::viaRequest('customer-browser-test', static fn () => null);
+        config()->set('auth.guards.api.driver', 'customer-browser-test');
+        Auth::forgetGuards();
 
         $this->tokens = Mockery::mock(TokenRepository::class);
         $this->sessions = new CustomerBrowserSessionManager($this->tokens);
