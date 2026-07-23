@@ -283,6 +283,11 @@ class CartController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
+        // 哪吒[轴A F-1 修复 2026-07-23]: 本端点注册用户专用(下方无条件用 $request->user->id), 而 apiGuestCheck 会放行任何带 body guest_id 的匿名请求。
+        // 入口 fail-closed: 无有效登录用户即 401, 防 purgeExpiredCarts($user_id, 0)(硬编码 is_guest=0) 被攻击者可控的 guest_id 越权清除他人注册购物车。
+        if (!$request->user) {
+            return response()->json(['errors' => [['code' => 'auth-001', 'message' => 'Unauthorized.']]], 401);
+        }
         $user_id = $request->user ? $request->user->id : $request['guest_id'];
         $this->purgeExpiredCarts($user_id, 0);
 
