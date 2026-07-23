@@ -137,8 +137,6 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
             // Normal Google login above is unchanged; phone collisions require exact old-account proof.
             Route::post('telegram/start', [TelegramAuthController::class, 'start'])
                 ->middleware('throttle:nezha_tg_start');
-            Route::get('telegram/callback', [TelegramAuthController::class, 'callback'])
-                ->middleware('throttle:nezha_tg_callback');
             Route::post('telegram/exchange', [TelegramAuthController::class, 'exchange'])
                 ->middleware('throttle:nezha_tg_exchange');
             Route::post('telegram/link/password', [TelegramAuthController::class, 'linkWithPassword'])
@@ -146,6 +144,11 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
             Route::post('telegram/link/google', [TelegramAuthController::class, 'linkWithGoogle'])
                 ->middleware('throttle:nezha_tg_link_google');
         });
+
+        // Telegram redirects here as a cross-site top-level GET. State, nonce, PKCE,
+        // one-time attempt validation and the dedicated limiter protect this callback.
+        Route::get('telegram/callback', [TelegramAuthController::class, 'callback'])
+            ->middleware('throttle:nezha_tg_callback');
 
         Route::group(['prefix' => 'delivery-man', 'as' => 'delivery-man.', 'middleware' => 'actch:deliveryman_app'], function () {
             Route::post('login', [DeliveryManLoginController::class, 'login'])->name('login');

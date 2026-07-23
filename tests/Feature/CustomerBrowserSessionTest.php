@@ -403,6 +403,48 @@ class CustomerBrowserSessionTest extends TestCase
         );
     }
 
+    public function test_cross_site_telegram_callback_bypasses_h5_origin_gate_but_keeps_callback_validation(): void
+    {
+        config()->set(
+            'telegram_login.frontend_uri',
+            'https://nezha.am/auth/telegram'
+        );
+
+        $routes = collect(app('router')->getRoutes());
+        $callback = $routes->first(
+            fn ($route) => $route->uri() === 'api/v1/auth/telegram/callback'
+        );
+        $start = $routes->first(
+            fn ($route) => $route->uri() === 'api/v1/auth/telegram/start'
+        );
+        $exchange = $routes->first(
+            fn ($route) => $route->uri() === 'api/v1/auth/telegram/exchange'
+        );
+
+        $this->assertNotNull($callback);
+        $this->assertNotNull($start);
+        $this->assertNotNull($exchange);
+        $this->assertNotContains(
+            'customer.login-origin',
+            $callback->middleware()
+        );
+        $this->assertContains(
+            'throttle:nezha_tg_callback',
+            $callback->middleware()
+        );
+        $this->assertContains('customer.login-origin', $start->middleware());
+        $this->assertContains('customer.login-origin', $exchange->middleware());
+
+        $response = $this->withHeaders([
+            'Accept' => 'text/html',
+            'Sec-Fetch-Site' => 'cross-site',
+        ])->get('/api/v1/auth/telegram/callback');
+
+        $response->assertRedirect(
+            'https://nezha.am/auth/telegram?error=invalid_request'
+        );
+    }
+
     public function test_credentialed_cors_is_scoped_to_customer_h5_origins(): void
     {
         config()->set(
