@@ -79,17 +79,17 @@ class NezhaL1RedlineTest extends TestCase
         );
     }
 
-    // ───────────────── L1-2 / L1-3 退款只原路退回 ─────────────────
+    // ───────────────── L1-2 / L1-3 顾客付款前绑定的订单级退款目标 ─────────────────
 
     /**
      * lock_route 只接受订单本身(签名仅 $order), 结构上无法被喂任意目标地址。
-     * 退款目标只能来自原始付款(USDT=原tx反查的from地址 / 法币=原付款人), 一律禁止第三方。
+     * USDT 目标只能来自付款前消费的顾客退款凭据；tx.from 仅作来源证据。
      */
     public function test_L1_2_3_refund_route_cannot_take_arbitrary_destination(): void
     {
         $ref = new ReflectionMethod(NezhaRefundControl::class, 'lock_route');
         $this->assertSame(1, $ref->getNumberOfParameters(),
-            'L1-2/3 违反: lock_route 新增了参数(疑似可传入退款目标地址)。退款目标只能由原始付款反查, 不可外部指定。');
+            'L1-2/3 违反: lock_route 新增了参数(疑似可传入退款目标地址)。退款目标只能由订单快照解析, 不可外部指定。');
 
         // 通道未知/默认订单 → note 必须明确"禁止退第三方", 且不返回任何外部可控目标地址。
         $order = new Order();
@@ -99,6 +99,168 @@ class NezhaL1RedlineTest extends TestCase
             'L1-2/3 违反: lock_route 未声明"禁止退第三方"。');
         $this->assertArrayNotHasKey('arbitrary_address', $route,
             'L1-2/3 违反: lock_route 返回了外部可控目标地址字段。');
+
+        $control = file_get_contents(app_path('CentralLogics/NezhaRefundControl.php'));
+        $this->assertStringContainsString(
+            'NezhaCustomerRefundAddressCredentialService::snapshotForOrder',
+            $control,
+            'L1-2/3 违反: lock_route 未读取付款前消费的退款地址凭据。'
+        );
+        $this->assertStringNotContainsString(
+            "'locked_to_address' => \$from",
+            $control,
+            'L1-2/3 违反: tx.from 被恢复为退款目标。'
+        );
+        $this->assertStringContainsString(
+            "'payment_from_address' => \$paymentFrom",
+            $control,
+            'L1-2/3 违反: tx.from 未被限制在来源证据字段。'
+        );
+    }
+
+    public function test_L1_2_3_payment_submission_consumes_both_address_credentials_atomically(): void
+    {
+        $source = file_get_contents(app_path('Http/Controllers/Api/V1/OrderController.php'));
+        $resolvePayment = strpos($source, 'NezhaPaymentAddressCredentialService::resolveForProof');
+        $resolveRefund = strpos(
+            $source,
+            'NezhaCustomerRefundAddressCredentialService::resolveForProof'
+        );
+        $transaction = strpos($source, 'DB::beginTransaction()', $resolveRefund ?: 0);
+        $consumePair = strpos(
+            $source,
+            'NezhaCustomerRefundAddressCredentialService::consumeWithPaymentCredential',
+            $transaction ?: 0
+        );
+        $commit = strpos($source, 'DB::commit()', $consumePair ?: 0);
+
+        $this->assertNotFalse($resolvePayment);
+        $this->assertNotFalse($resolveRefund);
+        $this->assertNotFalse($transaction);
+        $this->assertNotFalse($consumePair);
+        $this->assertNotFalse($commit);
+        $this->assertLessThan($transaction, $resolveRefund);
+        $this->assertLessThan($consumePair, $transaction);
+        $this->assertLessThan($commit, $consumePair);
+    }
+
+    public function test_L1_2_3_confirmation_requires_verified_payment_atomic_snapshot(): void
+    {
+        $logic = file_get_contents(app_path('CentralLogics/OrderLogic.php'));
+        $service = file_get_contents(
+            app_path('CentralLogics/NezhaCustomerRefundAddressCredentialService.php')
+        );
+
+        $this->assertStringContainsString(
+            'ensurePaymentEvidenceForConfirmation($order)',
+            $logic
+        );
+        $this->assertStringContainsString(
+            "'payment_chain_evidence_not_verified'",
+            $service
+        );
+        $this->assertStringContainsString(
+            'paid_asset_amount_atomic',
+            $service
+        );
+        $this->assertStringContainsString(
+            "NezhaRefundControl::verify_refund_tx",
+            $service
+        );
+    }
+
+    public function test_L1_2_3_refund_tx_must_match_destination_network_contract_and_atomic_amount(): void
+    {
+        $method = new ReflectionMethod(NezhaRefundControl::class, 'verify_refund_tx');
+        $parameters = collect($method->getParameters())->keyBy(fn ($parameter) => $parameter->getName());
+        $this->assertSame('string', (string) $parameters['expectAtomic']->getType());
+
+        $source = file_get_contents(app_path('CentralLogics/NezhaRefundControl.php'));
+        foreach ([
+            'amountMatches',
+            'expectContract',
+            'required_confirmations',
+            'verification_pending',
+            "NezhaUsdtAddress::equals",
+        ] as $guard) {
+            $this->assertStringContainsString($guard, $source);
+        }
+        $this->assertStringNotContainsString(
+            'float $expectAmount',
+            $source,
+            'L1-2/3 违反: 退款 verifier 恢复使用 float。'
+        );
+        $this->assertStringNotContainsString(
+            '$amount + 1e-9',
+            $source,
+            'L1-2/3 违反: 退款金额恢复浮点容差比较。'
+        );
+    }
+
+    public function test_L1_2_3_usdt_refund_hash_is_required_and_verified_before_transition(): void
+    {
+        $vendor = file_get_contents(app_path('Http/Controllers/Vendor/OrderController.php'));
+        $admin = file_get_contents(app_path('Http/Controllers/Admin/NezhaRefundController.php'));
+        $record = file_get_contents(app_path('Models/NezhaRefundRecord.php'));
+        $views = file_get_contents(resource_path('views/vendor-views/order/order-view.blade.php'))
+            .file_get_contents(resource_path('views/vendor-views/order/partials/_detail_modes.blade.php'));
+
+        $this->assertStringContainsString('NezhaRefundControl::verifyAndComplete', $vendor);
+        $this->assertStringContainsString('NezhaRefundControl::verifyAndComplete', $admin);
+        $this->assertStringContainsString("\$verifyStatus !== 'verified'", $record);
+        $this->assertStringContainsString('! $record->reconfirmed_at', $record);
+        $this->assertStringContainsString('name="refund_tx_hash"', $views);
+        $this->assertStringContainsString('required', $views);
+        foreach (['merchant_refund_tx', 'merchant_note', 'actual_refund_amount'] as $deadField) {
+            $this->assertStringNotContainsString($deadField, $views);
+        }
+    }
+
+    public function test_refund_binding_schema_has_required_integrity_and_encryption_guards(): void
+    {
+        $migration = file_get_contents(database_path(
+            'migrations/2026_07_23_130000_create_nezha_customer_refund_address_credentials.php'
+        ));
+        $model = file_get_contents(app_path('Models/NezhaCustomerRefundAddressCredential.php'));
+
+        $this->assertStringContainsString(
+            "\$table->unsignedBigInteger('consumed_order_id')->nullable()->unique()",
+            $migration
+        );
+        $this->assertStringContainsString('nz_payment_tx_fingerprint_uq', $migration);
+        $this->assertStringContainsString(
+            'payment_tx_hash_reused_or_changed',
+            file_get_contents(app_path(
+                'CentralLogics/NezhaCustomerRefundAddressCredentialService.php'
+            ))
+        );
+        $this->assertStringContainsString("ENCRYPTION='Y'", $migration);
+        $this->assertStringContainsString(
+            'Refusing to drop consumed or retained customer refund address evidence',
+            $migration
+        );
+        $this->assertStringContainsString("'address_snapshot' => 'encrypted'", $model);
+        $this->assertStringContainsString("'secret_hash'", $model);
+    }
+
+    public function test_L1_1_bound_refund_still_never_uses_platform_wallet(): void
+    {
+        $sources = [
+            file_get_contents(app_path('CentralLogics/NezhaCustomerRefundAddressCredentialService.php')),
+            file_get_contents(app_path('CentralLogics/NezhaRefundReconfirmationService.php')),
+            file_get_contents(app_path('CentralLogics/NezhaRefundControl.php')),
+        ];
+        $joined = implode("\n", $sources);
+
+        foreach ([
+            'wallet_transaction',
+            'add_fund',
+            'create_transaction',
+            'withdraw',
+            'auto_transfer',
+        ] as $forbidden) {
+            $this->assertStringNotContainsString($forbidden, strtolower($joined));
+        }
     }
 
     // ───────────────── L1-6 制裁名单命中即拒 ─────────────────
@@ -137,6 +299,23 @@ class NezhaL1RedlineTest extends TestCase
         $cleanAddr = 'T' . substr($alphabet, 1, 33);
         $this->assertNull(NezhaSanctionScreen::screen_address($cleanAddr),
             'L1-6 异常: 未入名单的地址被误命中(假阳性会误拒正常顾客)。');
+    }
+
+    /** 退款目标必须在执行前独立筛查；命中或名单未知态都只能 hold。 */
+    public function test_L1_6_refund_destination_screen_is_fail_closed(): void
+    {
+        $screen = file_get_contents(base_path('app/CentralLogics/NezhaSanctionScreen.php'));
+        $refund = file_get_contents(base_path('app/CentralLogics/NezhaRefundControl.php'));
+        $migration = file_get_contents(
+            base_path('database/migrations/2026_07_23_130000_create_nezha_customer_refund_address_credentials.php')
+        );
+
+        $this->assertStringContainsString('screen_refund_destination', $screen);
+        $this->assertStringContainsString('sanction_list_unavailable_or_stale', $screen);
+        $this->assertStringContainsString('NezhaSanctionScreen::screen_refund_destination($locked)', $refund);
+        $this->assertStringContainsString('refund_destination_sanction_match', $refund);
+        $this->assertStringContainsString('refund_destination_sanction_unresolved', $refund);
+        $this->assertStringContainsString('nezha_refund_sanction_max_sync_age_hours', $migration);
     }
 
     // ───────────────── L1-9 平台不出资促销(商家自掏折扣账务定性) ─────────────────

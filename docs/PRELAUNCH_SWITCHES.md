@@ -30,6 +30,11 @@
 | `nezha_risk_control_status` | 1 | 下单风控（单笔/单日/频次/大额） | L2 |
 | `nezha_refund_control_status` | 1 | 退款护栏（原路锁定+限额） | L1-2 |
 | `nezha_refund_usdt_verify_status` | 1 | USDT 退款链上核验 | L1-3 |
+| `nezha_usdt_refund_binding_mode` | **drain** | USDT 退款地址绑定三态闸：当前发布只允许 `drain`，停止新 USDT，但已有合格快照仍可按快照退款；`closed` 只读/挂起。只有律师 Q1/Q2 正式放行、`legal_gate=approved` 且另有开启授权时才能改 `enforce`。任何值都禁止 `tx.from` fallback | 🔴L1-2/L1-3 |
+| `nezha_usdt_refund_legal_gate` | **pending** | 法律否决闸。`pending` 时服务端拒绝新 USDT，即使 binding mode 被误设为 enforce；收到并归档正式 Q1/Q2 结论前必须保持 pending | 🔴L1-2/L1-3 |
+| `nezha_refund_reconfirm_ttl_seconds` | 300 | 顾客退款时原登录方式新鲜认证挑战，短时、单次、订单与退款快照绑定 | 🔴L1-2/L1-3 |
+| `nezha_refund_bsc_finality_blocks` / `nezha_refund_tron_finality_blocks` | 12 / 20 | USDT 退款链上完成的最低终局确认数；不足只可 `verification_pending`，不得完成 | 🔴L1-3 |
+| `nezha_refund_sanction_max_sync_age_hours` | 48 | 退款目标使用本地 OFAC 地址库前允许的最大同步龄；筛查关闭、最近同步非成功/过期、查询异常或命中均保持 `refund_destination_hold`，不得开放商家资金动作 | 🔴L1-6 |
 | `nezha_sanction_screen_status` | 1 | USDT 收款来源制裁筛查（命中即拒） | 🔴L1-6 |
 | `nezha_kyc_sanction_screen_status` | 1 | 商家入驻 KYC 人名制裁筛查 | 🔴L1-6 |
 | `nezha_timeout_status` | 1 | 订单超时自动处理（催/取消未付单/升级） | L1-1 邻 |

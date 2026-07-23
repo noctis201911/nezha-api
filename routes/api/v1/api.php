@@ -31,6 +31,8 @@ use App\Http\Controllers\Api\V1\NewsletterController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\PaymentAddressCredentialController;
+use App\Http\Controllers\Api\V1\RefundAddressCredentialController;
+use App\Http\Controllers\Api\V1\RefundReconfirmationController;
 use App\Http\Controllers\Api\V1\OrderSubscriptionController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\RestaurantController;
@@ -456,6 +458,8 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
     // 闸开启后的登录门在控制器内 fail-closed；未登录绝不签发地址凭据。
     Route::post('customer/payment/address-credential', [PaymentAddressCredentialController::class, 'store'])
         ->middleware('rateLimiter');
+    Route::post('customer/payment/refund-address-credential', [RefundAddressCredentialController::class, 'store'])
+        ->middleware('rateLimiter');
 
     Route::group(['prefix' => 'customer', 'middleware' => 'auth:api'], function () {
         Route::get('notifications', [NotificationController::class, 'get_notifications']);
@@ -466,6 +470,10 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         Route::post('update-profile', [CustomerController::class, 'update_profile']);
         Route::post('update-interest', [CustomerController::class, 'update_interest']);
         Route::put('cm-firebase-token', [CustomerController::class, 'update_cm_firebase_token']);
+        Route::post('refund/reconfirm-challenge', [RefundReconfirmationController::class, 'challenge'])
+            ->middleware('rateLimiter');
+        Route::post('refund/reconfirm', [RefundReconfirmationController::class, 'confirm'])
+            ->middleware('rateLimiter');
         Route::get('notification-preferences', [CustomerController::class, 'get_notification_preferences']);
         Route::put('notification-preferences', [CustomerController::class, 'update_notification_preferences']);
         Route::get('suggested-foods', [CustomerController::class, 'get_suggested_food']);

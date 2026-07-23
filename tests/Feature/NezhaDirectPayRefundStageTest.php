@@ -28,7 +28,12 @@ class NezhaDirectPayRefundStageTest extends TestCase
                 $table->timestamp('merchant_refunded_at')->nullable();
                 $table->string('merchant_refund_note')->nullable();
                 $table->string('refund_tx_hash', 120)->nullable();
+                $table->char('refund_tx_fingerprint', 64)->nullable()->unique();
                 $table->string('chain_verify_status', 20)->default('na');
+                $table->json('chain_verify_detail')->nullable();
+                $table->string('locked_to_address', 120)->nullable();
+                $table->decimal('refund_asset_amount_atomic', 65, 0)->nullable();
+                $table->timestamp('reconfirmed_at')->nullable();
                 $table->timestamps();
             });
             $this->createdTable = true;
@@ -45,7 +50,7 @@ class NezhaDirectPayRefundStageTest extends TestCase
 
     public function test_pending_stage_projects_as_not_refunded(): void
     {
-        $record = NezhaRefundRecord::create([
+        $record = NezhaRefundRecord::forceCreate([
             'order_id' => 501,
             'restaurant_id' => 10,
             'status' => 'pending_merchant_refund',
@@ -62,18 +67,16 @@ class NezhaDirectPayRefundStageTest extends TestCase
 
     public function test_only_first_pending_to_refunded_transition_wins(): void
     {
-        $pending = NezhaRefundRecord::create([
+        $pending = NezhaRefundRecord::forceCreate([
             'order_id' => 502,
             'restaurant_id' => 10,
             'status' => 'pending_merchant_refund',
-            'payment_channel' => 'usdt',
+            'payment_channel' => 'rmb',
             'refund_amount' => 25,
         ]);
 
         $first = NezhaRefundRecord::transitionPendingToMerchantRefunded($pending->id, [
             'merchant_refund_note' => 'merchant confirmed',
-            'refund_tx_hash' => 'safe-test-hash',
-            'chain_verify_status' => 'unverified',
         ], 10);
         $repeat = NezhaRefundRecord::transitionPendingToMerchantRefunded($pending->id, [], 10);
 
@@ -84,9 +87,40 @@ class NezhaDirectPayRefundStageTest extends TestCase
         $this->assertNull($repeat, 'A repeated action must not win the transition or become eligible to notify again.');
     }
 
+    public function test_usdt_cannot_transition_until_reconfirmed_and_chain_verified(): void
+    {
+        $pending = NezhaRefundRecord::forceCreate([
+            'order_id' => 506,
+            'restaurant_id' => 10,
+            'status' => 'pending_merchant_refund',
+            'payment_channel' => 'usdt',
+            'refund_amount' => 25,
+            'locked_to_address' => '0x1111111111111111111111111111111111111111',
+            'refund_asset_amount_atomic' => '25000000000000000000',
+        ]);
+
+        $blocked = NezhaRefundRecord::transitionPendingToMerchantRefunded($pending->id, [
+            'refund_tx_hash' => str_repeat('a', 64),
+            'chain_verify_status' => 'verified',
+        ], 10);
+        $this->assertNull($blocked);
+
+        $pending->reconfirmed_at = now();
+        $pending->save();
+        $completed = NezhaRefundRecord::transitionPendingToMerchantRefunded($pending->id, [
+            'refund_tx_hash' => str_repeat('a', 64),
+            'refund_tx_fingerprint' => hash('sha256', 'bsc|'.str_repeat('a', 64)),
+            'chain_verify_status' => 'verified',
+            'chain_verify_detail' => ['amount_atomic' => '25000000000000000000'],
+        ], 10);
+
+        $this->assertNotNull($completed);
+        $this->assertSame('merchant_refunded', $completed->status);
+    }
+
     public function test_tenant_mismatch_cannot_transition_record(): void
     {
-        $pending = NezhaRefundRecord::create([
+        $pending = NezhaRefundRecord::forceCreate([
             'order_id' => 503,
             'restaurant_id' => 10,
             'status' => 'pending_merchant_refund',
@@ -100,9 +134,9 @@ class NezhaDirectPayRefundStageTest extends TestCase
 
     public function test_latest_customer_projection_ignores_non_customer_audit_rows(): void
     {
-        NezhaRefundRecord::create(['order_id' => 504, 'status' => 'pending_merchant_refund']);
-        NezhaRefundRecord::create(['order_id' => 504, 'status' => 'recorded']);
-        NezhaRefundRecord::create(['order_id' => 505, 'status' => 'closed_no_payment']);
+        NezhaRefundRecord::forceCreate(['order_id' => 504, 'status' => 'pending_merchant_refund']);
+        NezhaRefundRecord::forceCreate(['order_id' => 504, 'status' => 'recorded']);
+        NezhaRefundRecord::forceCreate(['order_id' => 505, 'status' => 'closed_no_payment']);
 
         $records = NezhaRefundRecord::latestCustomerVisibleByOrderIds([504, 505]);
 

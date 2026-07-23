@@ -5,15 +5,19 @@ namespace App\CentralLogics;
 use App\Models\BusinessSetting;
 use App\Models\NezhaSanctionAddress;
 use App\Models\NezhaRiskRecord;
+use Carbon\Carbon;
 
 /**
- * 哪吒外卖 制裁筛查机制② 引擎 (L1-6: 付款来源地址命中 OFAC SDN/黑名单 → 拒收并记录).
+ * 哪吒外卖 制裁筛查机制② 引擎
+ * (L1-6: 付款来源地址命中 OFAC SDN/黑名单 → 拒收并记录；
+ * 退款目标命中或名单状态未决 → fail-closed hold).
  *
  * 职责:
  *   - enabled()        : 读独立总开关 nezha_sanction_screen_status (默认开).
  *   - normalize()      : 地址规范化 —— EVM 统一小写(吸收 EIP-55 checksum 大小写差异);
  *                        Tron base58 大小写敏感, 原样保留(不可 lowercase, 否则永不命中).
  *   - screen_address() : 单地址比对制裁表, 命中返回匹配记录, 否则 null.
+ *   - screen_refund_destination(): 退款目标执行门；命中或名单不可用/过期均不得放行.
  *   - screen_order()   : 对一笔订单的 USDT 付款 —— 复用 NezhaRefundControl 的链上设施反查
  *                        付款 tx 的 from 地址 → 比对 → 给出处置.
  *
@@ -91,6 +95,67 @@ class NezhaSanctionScreen
             'source'        => $hit->source,
             'sdn_uid'       => $hit->sdn_uid,
             'currency_type' => $hit->currency_type,
+        ];
+    }
+
+    /**
+     * 退款目标执行前的本地名单判定。与付款来源筛查不同，这里任何未知态
+     * 都必须 hold，不能因开关关闭、名单同步失败/过期或查询异常而放行资金动作。
+     */
+    public static function screen_refund_destination(string $address): array
+    {
+        $base = [
+            'status' => 'unresolved',
+            'screened_at' => now()->toIso8601String(),
+            'source' => 'OFAC_SDN',
+        ];
+        if (! self::enabled()) {
+            return $base + ['reason' => 'sanction_screen_disabled'];
+        }
+
+        $kind = self::kind($address);
+        if (! in_array($kind, ['evm', 'tron'], true)) {
+            return $base + ['reason' => 'unsupported_address_kind'];
+        }
+
+        $sync = json_decode((string) self::cfg('nezha_sanction_last_sync', ''), true);
+        $maxAgeHours = max(
+            1,
+            min(168, (int) self::cfg('nezha_refund_sanction_max_sync_age_hours', 48))
+        );
+        try {
+            $syncAt = isset($sync['at']) ? Carbon::parse($sync['at']) : null;
+        } catch (\Throwable $e) {
+            $syncAt = null;
+        }
+        if (($sync['status'] ?? null) !== 'ok'
+            || ! $syncAt
+            || $syncAt->lt(now()->subHours($maxAgeHours))
+            || (int) ($sync['total'] ?? 0) <= 0) {
+            return $base + ['reason' => 'sanction_list_unavailable_or_stale'];
+        }
+
+        try {
+            $hit = self::screen_address($address, $kind);
+        } catch (\Throwable $e) {
+            return $base + ['reason' => 'sanction_lookup_failed'];
+        }
+        if ($hit) {
+            return [
+                'status' => 'matched',
+                'screened_at' => $base['screened_at'],
+                'source' => $hit['source'] ?? 'OFAC_SDN',
+                'sdn_uid' => $hit['sdn_uid'] ?? null,
+                'currency_type' => $hit['currency_type'] ?? null,
+                'reason' => 'refund_destination_sanction_match',
+            ];
+        }
+
+        return [
+            'status' => 'cleared',
+            'screened_at' => $base['screened_at'],
+            'source' => 'OFAC_SDN',
+            'reason' => null,
         ];
     }
 

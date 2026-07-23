@@ -75,36 +75,58 @@ class NezhaChainVerifier
             if ($chain === 'bsc') { if (!preg_match('/^0x/i', $cleanHash)) $cleanHash = '0x' . $cleanHash; }
             else { $cleanHash = preg_replace('/^0x/i', '', $cleanHash); }
             // 🔁 复用退款/制裁同一套链上设施（TronGrid/BSC RPC + 已配 key），不重复造轮子。
-            $r = NezhaRefundControl::verify_refund_tx($cleanHash, $chain, $expectedTo, (float) $expectedUsdt);
+            $normalizedNetwork = NezhaUsdtAddress::normalizeNetwork($network);
+            $decimals = NezhaCustomerRefundAddressCredentialService::decimalsForNetwork($normalizedNetwork);
+            $contract = NezhaCustomerRefundAddressCredentialService::contractForNetwork($normalizedNetwork);
+            if ($decimals === null || $contract === null) {
+                return array_merge($base, [
+                    'status' => 'uncheckable',
+                    'reason' => '该链缺少USDT资产参数，无法核验',
+                ]);
+            }
+            $expectedDecimal = number_format((float) $expectedUsdt, $decimals, '.', '');
+            $expectedAtomic = NezhaAtomicAmount::decimalToAtomic($expectedDecimal, $decimals);
+            $r = NezhaRefundControl::verify_refund_tx(
+                $cleanHash,
+                $chain,
+                $expectedTo,
+                $expectedAtomic,
+                $contract,
+                $decimals,
+                'at_least'
+            );
             $st = $r['status'] ?? 'manual';
             $d = $r['detail'] ?? [];
 
             // API 不可达 / 链上自动校验关闭 → 不可核验（商家手动核对）
-            if ($st === 'manual') {
+            if (in_array($st, ['manual', 'verification_pending'], true)) {
                 return array_merge($base, ['status' => 'uncheckable', 'reason' => $d['reason'] ?? '链上查询暂时不可用，请商家在自己钱包核对到账']);
             }
 
-            // 读到 to/amount → 本类按容差自行判定（给商家更细的中文原因）
-            if (isset($d['to']) && isset($d['amount'])) {
+            // 读到链上原子金额 → 复用统一 verifier 的地址/合约/终局性结论。
+            if (isset($d['to'], $d['amount_atomic'])) {
                 $to = $d['to'];
-                $amount = (float) $d['amount'];
+                $amountAtomic = (string) $d['amount_atomic'];
+                $amount = (float) NezhaAtomicAmount::atomicToDecimal($amountAtomic, $decimals);
                 $toMatch = $expectedTo && (strcasecmp(trim($to), trim($expectedTo)) === 0);
-                $minNeeded = (float) $expectedUsdt * (1 - self::AMOUNT_TOLERANCE);
-                $amountEnough = $expectedUsdt > 0 ? ($amount + 1e-9 >= $minNeeded) : null;
+                $amountEnough = NezhaAtomicAmount::compare($amountAtomic, $expectedAtomic) >= 0;
 
                 $res = array_merge($base, [
                     'to_match' => $toMatch,
                     'amount' => round($amount, 6),
+                    'amount_atomic' => $amountAtomic,
+                    'asset_contract' => $contract,
+                    'asset_decimals' => $decimals,
                     'amount_enough' => $amountEnough,
-                    'confirmed' => true, // 链上 events/回执已确认才会返回转账明细
+                    'confirmed' => $st === 'verified',
                     'to_address' => $to,
                 ]);
 
-                if (!$toMatch) {
-                    return array_merge($res, ['status' => 'mismatch', 'reason' => '收款地址不是本店地址（链上收款方：'.self::mask($to).'），请核对']);
-                }
-                if ($amountEnough === false) {
-                    return array_merge($res, ['status' => 'mismatch', 'reason' => '链上到账金额 '.self::fmt($amount).' USDT 少于应付 '.$expectedUsdt.' USDT，请核对']);
+                if ($st !== 'verified') {
+                    return array_merge($res, [
+                        'status' => 'mismatch',
+                        'reason' => $d['reason'] ?? '链上目标、合约或金额与本单不匹配，请核对',
+                    ]);
                 }
                 return array_merge($res, ['status' => 'verified', 'reason' => '链上已核验：已到账 '.self::fmt($amount).' USDT 到本店地址']);
             }
