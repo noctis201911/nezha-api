@@ -302,8 +302,14 @@ return [
         [
             'key' => 'nezha_order_tg_card_status', 'label' => '商家 TG 零 PII 新单卡片', 'section' => 'D', 'level' => 'L1-1邻',
             'l1_clause' => $L1['L1-1'] . '(邻区·纯通知零顾客PII·不碰钱/状态)', 'expected' => 0, 'value_type' => 'bool',
-            'prereq' => 'P2.1 代码 dormant·真开=id12 已绑定 telegram_chat_id+业主批准+nezha:tg-card-demo 真机卡片截图点头。开=新单 TG 由旧纯文本换成零顾客 PII 卡片并保存 message_id；无按钮/链接/inline_keyboard。见 fable-brief/HANDOFF_waimai_tg_p21_zeropii_card.md',
+            'prereq' => 'P2.1 代码 dormant·真开=首验店为实际绑定店（现 id6 业主自测）+业主批准+nezha:tg-card-demo 真机卡片截图点头。开=新单 TG 由旧纯文本换成零顾客 PII 卡片并保存 message_id；动作按钮仍由独立闸控制。见 fable-brief/HANDOFF_waimai_tg_p21_zeropii_card.md',
             'settings_route' => null, 'ops_note' => "无专用后台 UI(DB flag)。{$OPS_FORGET}。=0 完全走原纯文本告警；翻闸/回滚后须 cache clear + FPM reload 才即时生效",
+        ],
+        [
+            'key' => 'nezha_order_tg_card_actions_status', 'label' => '商家 TG 卡片确认收款按钮', 'section' => 'D', 'level' => 'L1-6',
+            'l1_clause' => $L1['L1-6'], 'expected' => 0, 'value_type' => 'bool',
+            'prereq' => 'P2.2a 代码须先过越权/重复点击/终态/制裁脱敏/checked单单/一单一卡/redlines 全门 + 业主真机截图拍板。开=私聊卡片仅显示「确认收款」，选择备餐时间后复用 OrderLogic 核心；群绑定仍只读。见 docs/TG_CARD_ACTION_GUARD_MAP.md',
+            'settings_route' => null, 'ops_note' => "无专用后台 UI(DB flag)。{$OPS_FORGET}。=0 卡片无任何 inline_keyboard，callback 统一提示功能未开启；翻闸/回滚后须 cache clear + FPM reload",
         ],
         [
             'key' => 'nezha_timeout_escalate_owner_min', 'label' => '业主超时升级阈值(分钟)', 'section' => 'D', 'level' => 'L2',

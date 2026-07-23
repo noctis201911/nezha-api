@@ -40,6 +40,9 @@ final class IsolatedDatabaseFixtures
                 $table->id();
                 $table->unsignedBigInteger('order_id')->nullable()->index();
                 $table->text('payment_info')->nullable();
+                $table->string('status')->default('pending');
+                $table->string('note')->nullable();
+                $table->json('nezha_auto_check')->nullable();
                 $table->timestamps();
             });
         }
@@ -50,8 +53,11 @@ final class IsolatedDatabaseFixtures
                 $table->string('f_name')->nullable();
                 $table->string('l_name')->nullable();
                 $table->string('phone')->nullable();
+                $table->string('email')->nullable();
                 $table->string('ref_code')->nullable();
                 $table->string('image')->nullable();
+                $table->string('current_language_key')->default('en');
+                $table->string('cm_firebase_token')->nullable();
                 $table->timestamps();
             });
         }
@@ -320,8 +326,13 @@ final class IsolatedDatabaseFixtures
                 $table->unsignedBigInteger('subscription_id')->nullable()->index();
                 $table->decimal('restaurant_discount_amount', 24, 2)->default(0);
                 $table->string('order_status')->default('pending');
+                $table->string('payment_status')->default('unpaid');
                 $table->string('payment_method')->nullable();
                 $table->string('order_type')->default('delivery');
+                $table->decimal('order_amount', 24, 2)->default(0);
+                $table->unsignedSmallInteger('processing_time')->nullable();
+                $table->boolean('is_guest')->default(false);
+                $table->text('delivery_address')->nullable();
                 $table->boolean('checked')->default(false);
                 $table->boolean('scheduled')->default(false);
                 $table->timestamp('schedule_at')->nullable();
@@ -332,6 +343,16 @@ final class IsolatedDatabaseFixtures
                 $table->timestamp('picked_up')->nullable();
                 $table->timestamp('delivered')->nullable();
                 $table->timestamp('canceled')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('order_details')) {
+            $schema->create('order_details', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('order_id')->index();
+                $table->text('food_details')->nullable();
+                $table->unsignedInteger('quantity')->default(1);
                 $table->timestamps();
             });
         }
@@ -464,6 +485,91 @@ final class IsolatedDatabaseFixtures
                 $table->unsignedBigInteger('order_id')->nullable()->index();
                 $table->unsignedBigInteger('restaurant_id')->nullable()->index();
                 $table->string('detail', 255)->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('notification_messages')) {
+            $schema->create('notification_messages', function (Blueprint $table): void {
+                $table->id();
+                $table->string('key')->nullable();
+                $table->text('message')->nullable();
+                $table->string('user_type')->default('user');
+                $table->boolean('status')->default(true);
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('translations')) {
+            $schema->create('translations', function (Blueprint $table): void {
+                $table->id();
+                $table->string('translationable_type');
+                $table->unsignedBigInteger('translationable_id')->index();
+                $table->string('locale')->index();
+                $table->string('key')->nullable();
+                $table->text('value')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('notification_settings')) {
+            $schema->create('notification_settings', function (Blueprint $table): void {
+                $table->id();
+                $table->string('type');
+                $table->string('key');
+                $table->string('mail_status')->nullable();
+                $table->string('push_notification_status')->nullable();
+                $table->string('sms_status')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('user_notifications')) {
+            $schema->create('user_notifications', function (Blueprint $table): void {
+                $table->id();
+                $table->text('data')->nullable();
+                $table->boolean('status')->default(true);
+                $table->unsignedBigInteger('user_id')->nullable();
+                $table->unsignedBigInteger('vendor_id')->nullable();
+                $table->unsignedBigInteger('delivery_man_id')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('order_references')) {
+            $schema->create('order_references', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('order_id')->index();
+                $table->string('token_number')->nullable();
+                $table->string('table_number')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('nezha_customer_refund_address_credentials')) {
+            $schema->create('nezha_customer_refund_address_credentials', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('consumed_order_id')->nullable()->index();
+                $table->string('route_policy_version')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! $schema->hasTable('nezha_risk_records')) {
+            $schema->create('nezha_risk_records', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('order_id')->nullable()->index();
+                $table->unsignedBigInteger('user_id')->nullable();
+                $table->string('guest_id')->nullable();
+                $table->unsignedBigInteger('restaurant_id')->nullable()->index();
+                $table->string('payment_channel')->nullable();
+                $table->decimal('order_amount', 24, 2)->default(0);
+                $table->json('hit_rules')->nullable();
+                $table->string('action')->nullable();
+                $table->string('status')->nullable();
+                $table->json('snapshot')->nullable();
+                $table->text('disposal_result')->nullable();
+                $table->timestamp('reviewed_at')->nullable();
                 $table->timestamps();
             });
         }

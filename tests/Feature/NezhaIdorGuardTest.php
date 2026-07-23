@@ -195,4 +195,27 @@ class NezhaIdorGuardTest extends TestCase
             ."若已改用其它 fail-closed 方式(如移入 auth:api 组), 请更新本守卫的匹配逻辑。"
         );
     }
+
+    public function test_tg_card_action_scopes_order_to_bound_restaurant(): void
+    {
+        $src = file_get_contents(base_path('app/CentralLogics/NezhaOrderTgCardActions.php'));
+
+        $this->assertStringContainsString(
+            "Restaurant::where('telegram_chat_id', \$chatId)->first()",
+            $src,
+            'TG 卡片动作必须先由 callback chat 反查绑定餐厅。'
+        );
+        $this->assertMatchesRegularExpression(
+            '/Order::with\(\[\'offline_payments\', \'restaurant\'\]\).*?'
+            .'->where\(\'id\', \$orderId\).*?'
+            .'->where\(\'restaurant_id\', \$restaurant->id\)/s',
+            $src,
+            'TG 卡片动作必须用 order_id + 绑定 restaurant_id 复合作用域取单，禁止裸按订单号操作。'
+        );
+        $this->assertStringNotContainsString(
+            "'restaurant_id' =>",
+            file_get_contents(base_path('app/CentralLogics/NezhaOrderTgCard.php')),
+            'TG callback_data 禁止携带 restaurant_id。'
+        );
+    }
 }

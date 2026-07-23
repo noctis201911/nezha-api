@@ -56,7 +56,11 @@ class NezhaOrderTgCardZeroPiiTest extends TestCase
     {
         $config = require base_path('config/nezha_switches.php');
         $entry = collect($config['switches'])->firstWhere('key', 'nezha_order_tg_card_status');
+        $actions = collect($config['switches'])->firstWhere('key', 'nezha_order_tg_card_actions_status');
         $docs = (string) file_get_contents(base_path('docs/PRELAUNCH_SWITCHES.md'));
+        $migration = (string) file_get_contents(base_path(
+            'database/migrations/2026_07_23_180000_add_nezha_order_tg_card_actions_setting.php'
+        ));
 
         $this->assertIsArray($entry);
         $this->assertSame('D', $entry['section']);
@@ -65,5 +69,14 @@ class NezhaOrderTgCardZeroPiiTest extends TestCase
         $this->assertSame('bool', $entry['value_type']);
         $this->assertStringContainsString('邻区·纯通知零顾客PII·不碰钱/状态', $entry['l1_clause']);
         $this->assertStringContainsString('| `nezha_order_tg_card_status` | 0 |', $docs);
+
+        $this->assertIsArray($actions);
+        $this->assertSame('D', $actions['section']);
+        $this->assertSame('L1-6', $actions['level']);
+        $this->assertSame(0, $actions['expected']);
+        $this->assertSame('bool', $actions['value_type']);
+        $this->assertStringContainsString('| `nezha_order_tg_card_actions_status` | 0 |', $docs);
+        $this->assertStringContainsString("'key' => 'nezha_order_tg_card_actions_status'", $migration);
+        $this->assertStringContainsString("'value' => '0'", $migration);
     }
 }

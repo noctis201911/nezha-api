@@ -318,6 +318,29 @@ class NezhaL1RedlineTest extends TestCase
         $this->assertStringContainsString('nezha_refund_sanction_max_sync_age_hours', $migration);
     }
 
+    public function test_L1_6_tg_confirm_uses_existing_core_and_fixed_sanction_messages(): void
+    {
+        $src = file_get_contents(base_path('app/CentralLogics/NezhaOrderTgCardActions.php'));
+
+        $this->assertStringContainsString('OrderLogic::confirm_offline_payment(', $src);
+        $this->assertStringContainsString("'vendor',", $src);
+        $this->assertStringContainsString('$restaurant->vendor_id,', $src);
+        $this->assertStringContainsString('} catch (SanctionScreenException $e) {', $src);
+        $this->assertStringContainsString(
+            '该单付款来源命中制裁名单，已自动拒收，请勿出餐并联系平台',
+            $src
+        );
+        $this->assertStringContainsString(
+            '付款来源核验中，暂不能确认收款，请稍后重试',
+            $src
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/answerCallbackQuery\\([^;]*getMessage\\(\\)/s',
+            $src,
+            '制裁异常原文可能含 from/tx/sdn_uid，禁止发进 Telegram。'
+        );
+    }
+
     // ───────────────── L1-9 平台不出资促销(商家自掏折扣账务定性) ─────────────────
 
     /** 商家自掏折扣(满减/POS·discount_on_product_by=vendor) 不得把 折扣×佣金率 记 admin_expense; 否则报表虚显平台补贴+重复扣净利, 违反 L1-9 / L1-1"平台不出资"。结构守卫: 禁止恢复 amount_admin 的 admin 拆分。 */

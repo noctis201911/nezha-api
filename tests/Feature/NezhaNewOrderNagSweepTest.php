@@ -176,4 +176,13 @@ class NezhaNewOrderNagSweepTest extends TestCase
         Artisan::call('nezha:new-order-nag-sweep');
         $this->assertSame(0, $this->nagCount($oid), '商家未勾「待接单」类别不得催其 confirmed 单');
     }
+
+    public function test_nag_copy_points_only_payment_to_tg_card(): void
+    {
+        $src = file_get_contents(base_path('app/Console/Commands/NezhaNewOrderNagSweep.php'));
+
+        $this->assertStringContainsString('待接单，请在商家后台接单', $src);
+        $this->assertStringContainsString('待确认收款，请在 TG 卡片上点「💰 确认收款」或登录后台', $src);
+        $this->assertStringNotContainsString('TG 卡片上点「✅ 接单」', $src);
+    }
 }

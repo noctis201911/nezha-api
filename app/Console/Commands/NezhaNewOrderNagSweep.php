@@ -35,8 +35,8 @@ class NezhaNewOrderNagSweep extends Command
 
     /** 类别 → 停催文案 + 阶段时钟。 */
     private const CATEGORIES = [
-        'accept'  => ['phase' => NezhaOrderTimeout::PHASE_ACCEPT, 'action' => '待接单，请尽快登录商家后台接单'],
-        'payment' => ['phase' => NezhaOrderTimeout::PHASE_PROOF,  'action' => '待确认收款，请尽快登录后台核对付款凭证'],
+        'accept'  => ['phase' => NezhaOrderTimeout::PHASE_ACCEPT, 'action' => '待接单，请在商家后台接单'],
+        'payment' => ['phase' => NezhaOrderTimeout::PHASE_PROOF,  'action' => '待确认收款，请在 TG 卡片上点「💰 确认收款」或登录后台'],
     ];
 
     /** 手机 Telegram 催单固定间隔(秒)。网页 A 线可 10-120 自定义, 手机受调度节拍 + TG 限流所限固定 60s(业主 0718 定)。 */

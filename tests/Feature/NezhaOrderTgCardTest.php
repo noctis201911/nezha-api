@@ -17,7 +17,7 @@ class NezhaOrderTgCardTest extends TestCase
     use DatabaseTransactions;
 
     /** @var int[] */
-    private array $orderIds = [92001, 92002, 92003, 92004, 92005, 92006];
+    private array $orderIds = [92001, 92002, 92003, 92004, 92005, 92006, 92007, 92008, 92009];
 
     protected function setUp(): void
     {
@@ -25,6 +25,7 @@ class NezhaOrderTgCardTest extends TestCase
         Config::set('telegram_bot_token_conf', ['value' => 'TEST_TOKEN']);
         Config::set('nezha_notif_async_status_conf', ['value' => '1']);
         Config::set('nezha_notif_log_status_conf', ['value' => '1']);
+        Config::set('nezha_order_tg_card_actions_status_conf', ['value' => '0']);
         foreach ($this->orderIds as $orderId) {
             Cache::forget('tg_alert_'.$orderId);
         }
@@ -89,7 +90,7 @@ class NezhaOrderTgCardTest extends TestCase
             'order_id' => 92003,
             'chat_id' => '700003',
             'message_id' => '445566',
-            'last_state' => 'new',
+            'last_state' => 'pending',
             'last_action_by_tg_uid' => null,
         ]);
         $this->assertDatabaseHas('nezha_notification_log', [
@@ -116,6 +117,92 @@ class NezhaOrderTgCardTest extends TestCase
     public function test_connection_exception_falls_back_to_existing_text_job_without_card_row(): void
     {
         $this->assertCardFailureFallsBack(92006, Http::failedConnection());
+    }
+
+    public function test_action_switch_on_private_offline_order_renders_only_confirm_payment(): void
+    {
+        Config::set('nezha_order_tg_card_actions_status_conf', ['value' => '1']);
+        Http::fake([
+            'api.telegram.org/*' => Http::response(['ok' => true, 'result' => ['message_id' => 92007]], 200),
+        ]);
+
+        $this->assertTrue(
+            \App\CentralLogics\NezhaOrderTgCard::sendAndPersist(
+                $this->order(92007, '700007', 'offline_payment', 'pending'),
+                '700007'
+            )
+        );
+
+        Http::assertSent(function ($request): bool {
+            $markup = json_decode((string) ($request['reply_markup'] ?? ''), true);
+            $buttons = collect($markup['inline_keyboard'] ?? [])->flatten(1);
+            $callbackData = (string) ($buttons[0]['callback_data'] ?? '');
+            $decoded = json_decode($callbackData, true);
+
+            return count($buttons) === 1
+                && ($buttons[0]['text'] ?? null) === '💰 确认收款'
+                && strlen($callbackData) <= 64
+                && $decoded === ['v' => 1, 'a' => 'pay', 'o' => 92007]
+                && ! str_contains((string) ($request['reply_markup'] ?? ''), '拒单')
+                && ! str_contains((string) ($request['reply_markup'] ?? ''), '出餐');
+        });
+    }
+
+    public function test_action_keyboard_requires_payment_row_and_nonfinal_order(): void
+    {
+        $withoutPaymentRow = $this->order(92998, '700098', 'offline_payment');
+        $terminal = $this->order(92999, '700099', 'offline_payment', 'pending');
+        $terminal->order_status = 'canceled';
+
+        $this->assertNull(
+            \App\CentralLogics\NezhaOrderTgCard::keyboardFor($withoutPaymentRow, '700098', true)
+        );
+        $this->assertNull(
+            \App\CentralLogics\NezhaOrderTgCard::keyboardFor($terminal, '700099', true)
+        );
+    }
+
+    public function test_group_chat_never_gets_action_keyboard(): void
+    {
+        Config::set('nezha_order_tg_card_actions_status_conf', ['value' => '1']);
+        Http::fake([
+            'api.telegram.org/*' => Http::response(['ok' => true, 'result' => ['message_id' => 92008]], 200),
+        ]);
+
+        \App\CentralLogics\NezhaOrderTgCard::sendAndPersist(
+            $this->order(92008, '-100700008', 'offline_payment', 'pending'),
+            '-100700008'
+        );
+
+        Http::assertSent(fn ($request) => ! isset($request['reply_markup']));
+    }
+
+    public function test_persist_failure_does_not_fall_back_to_duplicate_old_text(): void
+    {
+        Config::set('nezha_order_tg_card_status_conf', ['value' => '1']);
+        Queue::fake();
+        Http::fake([
+            'api.telegram.org/*' => Http::response(['ok' => true, 'result' => ['message_id' => 92009]], 200),
+        ]);
+        DB::statement(
+            "CREATE TRIGGER nz_test_tg_card_persist_fail BEFORE INSERT ON nezha_order_tg_cards "
+            ."BEGIN SELECT RAISE(ABORT, 'forced persist failure'); END"
+        );
+
+        try {
+            Helpers::sendTelegramOrderAlert($this->order(92009, '700009'));
+        } finally {
+            DB::statement('DROP TRIGGER IF EXISTS nz_test_tg_card_persist_fail');
+        }
+
+        Http::assertSentCount(1);
+        Queue::assertNotPushed(SendTelegramMessageJob::class);
+        $this->assertDatabaseMissing('nezha_order_tg_cards', ['order_id' => 92009]);
+        $this->assertDatabaseHas('nezha_notification_log', [
+            'event_type' => 'order_card',
+            'outcome' => 'persist_failed',
+            'order_id' => 92009,
+        ]);
     }
 
     public function test_demo_uses_constructed_payload_and_never_persists_card_row(): void
@@ -164,7 +251,12 @@ class NezhaOrderTgCardTest extends TestCase
         ]);
     }
 
-    private function order(int $id, ?string $chatId): object
+    private function order(
+        int $id,
+        ?string $chatId,
+        string $paymentMethod = 'cash_on_delivery',
+        ?string $offlineStatus = null
+    ): object
     {
         return (object) [
             'id' => $id,
@@ -178,7 +270,8 @@ class NezhaOrderTgCardTest extends TestCase
             'order_status' => 'pending',
             'order_type' => 'delivery',
             'order_amount' => 8500,
-            'payment_method' => 'cash_on_delivery',
+            'payment_method' => $paymentMethod,
+            'offline_payments' => $offlineStatus === null ? null : (object) ['status' => $offlineStatus],
             'scheduled' => 0,
             'schedule_at' => null,
             'created_at' => '2026-07-23 11:15:00',

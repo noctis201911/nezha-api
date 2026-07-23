@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\CentralLogics\Helpers;
 use App\CentralLogics\NezhaCsAssistant;
 use App\CentralLogics\NezhaNotifyLog;
+use App\CentralLogics\NezhaOrderTgCardActions;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -34,6 +35,14 @@ class TelegramWebhookController extends Controller
         try {
             $msg = $request->input('message') ?? $request->input('edited_message');
             if (!is_array($msg)) {
+                $callbackQuery = $request->input('callback_query');
+                if (is_array($callbackQuery)) {
+                    NezhaOrderTgCardActions::handle(
+                        $callbackQuery,
+                        $request->filled('update_id') ? (int) $request->input('update_id') : null
+                    );
+                }
+
                 return response()->json(['ok' => true]);
             }
             $chatId = $msg['chat']['id'] ?? null;
