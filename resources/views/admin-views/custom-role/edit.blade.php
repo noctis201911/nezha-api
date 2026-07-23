@@ -222,8 +222,15 @@
                             <div class="col-md-3">
                                 <div class="form-group form-check">
                                     <input type="checkbox" name="modules[]" value="settings" class="form-check-input"
-                                           id="settings"  {{in_array('settings',(array)json_decode($role['modules']))?'checked':''}}>
+                                            id="settings"  {{in_array('settings',(array)json_decode($role['modules']))?'checked':''}}>
                                     <label class="form-check-label  text-dark" for="settings">{{translate('messages.business_settings')}}</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group form-check">
+                                    <input type="checkbox" name="modules[]" value="consolidation" class="form-check-input"
+                                            id="consolidation" {{in_array('consolidation',(array)json_decode($role['modules']))?'checked':''}}>
+                                    <label class="form-check-label text-dark" for="consolidation">{{translate('平台集运')}}</label>
                                 </div>
                             </div>
                             <div class="col-md-3">

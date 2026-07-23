@@ -131,8 +131,8 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
 
         // Route::resource('account-transaction', AccountTransactionController::class)->middleware('module:account');
 
-        Route::get('export-account-transaction', [AccountTransactionController::class, 'export_account_transaction'])->name('export-account-transaction');
-        Route::post('search-account-transaction', [AccountTransactionController::class, 'search_account_transaction'])->name('search-account-transaction');
+        Route::get('export-account-transaction', [AccountTransactionController::class, 'export_account_transaction'])->name('export-account-transaction')->middleware('module:account');
+        Route::post('search-account-transaction', [AccountTransactionController::class, 'search_account_transaction'])->name('search-account-transaction')->middleware('module:account');
 
         // 哪吒 B方案 组4: 商家预存佣金(充值/扣佣)管理
         Route::group(['prefix' => 'nezha-deposit', 'as' => 'nezha-deposit.', 'middleware' => ['module:deposit']], function () {
@@ -166,7 +166,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
 
         // Route::resource('provide-deliveryman-earnings', ProvideDMEarningController::class)->middleware('module:provide_dm_earning');
         // 哪吒 平台集运申报: 需求汇总
-        Route::group(['prefix' => 'nezha-consolidation', 'as' => 'nezha-consolidation.'], function () {
+        Route::group(['prefix' => 'nezha-consolidation', 'as' => 'nezha-consolidation.', 'middleware' => ['module:consolidation']], function () {
             Route::get('/', [NezhaConsolidationController::class, 'index'])->name('index');
             Route::get('export', [NezhaConsolidationController::class, 'export'])->name('export');
             // 集运资格切换(运营手动逐家开通)。放在裸 {id} 之前; POST 与 GET {id} 不冲突, 顺序仍按纪律排。
@@ -176,7 +176,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
 
         // 哪吒 平台集运 · 期次管理(包2·B): 创建/编辑期次 + 报名明细 + 脱敏导出。全 dormant, 平台不碰钱, 只展示 pricing。
         // 🔴 路由顺序: create/{id}/edit/{id}/export 必须排在裸 {id}(show) 之前, 否则 /create 被 {id} 捕获。
-        Route::group(['prefix' => 'nezha-consolidation-rounds', 'as' => 'nezha-consolidation-rounds.'], function () {
+        Route::group(['prefix' => 'nezha-consolidation-rounds', 'as' => 'nezha-consolidation-rounds.', 'middleware' => ['module:consolidation']], function () {
             Route::get('/', [\App\Http\Controllers\Admin\NezhaConsolidationRoundController::class, 'index'])->name('index');
             Route::get('create', [\App\Http\Controllers\Admin\NezhaConsolidationRoundController::class, 'create'])->name('create');
             Route::post('/', [\App\Http\Controllers\Admin\NezhaConsolidationRoundController::class, 'store'])->name('store');
@@ -216,10 +216,10 @@ Route::middleware('module:provide_dm_earning')->group(function () {
             Route::delete('provide-deliveryman-earnings/{id}', [ProvideDMEarningController::class, 'destroy'])->name('provide-deliveryman-earnings.destroy');
         });
 
-        Route::get('export-deliveryman-earnings', [ProvideDMEarningController::class, 'dm_earning_list_export'])->name('export-deliveryman-earning');
-        Route::post('deliveryman-earnings-search', [ProvideDMEarningController::class, 'search_deliveryman_earning'])->name('search-deliveryman-earning');
+        Route::get('export-deliveryman-earnings', [ProvideDMEarningController::class, 'dm_earning_list_export'])->name('export-deliveryman-earning')->middleware('module:provide_dm_earning');
+        Route::post('deliveryman-earnings-search', [ProvideDMEarningController::class, 'search_deliveryman_earning'])->name('search-deliveryman-earning')->middleware('module:provide_dm_earning');
 
-        Route::post('maintenance-mode', [SystemController::class, 'maintenance_mode'])->name('maintenance-mode');
+        Route::post('maintenance-mode', [SystemController::class, 'maintenance_mode'])->name('maintenance-mode')->middleware('module:settings');
 
         Route::group(['prefix' => 'dashboard-stats', 'as' => 'dashboard-stats.'], function () {
             Route::post('order', [DashboardController::class, 'order'])->name('order');
@@ -986,7 +986,7 @@ Route::middleware('module:provide_dm_earning')->group(function () {
 
         Route::group(['prefix' => 'delivery-man', 'as' => 'delivery-man.'], function () {
             Route::get('get-deliverymen', [DeliveryManController::class, 'get_deliverymen'])->name('get-deliverymen');
-            Route::get('get-account-data/{deliveryman}', [DeliveryManController::class, 'get_account_data'])->name('get_account_data');
+            Route::get('get-account-data/{deliveryman}', [DeliveryManController::class, 'get_account_data'])->name('get_account_data')->middleware('module:deliveryman');
             Route::group(['middleware' => ['module:deliveryman']], function () {
                 Route::get('add', [DeliveryManController::class, 'index'])->name('add');
                 Route::post('store', [DeliveryManController::class, 'store'])->name('store');
@@ -1153,7 +1153,7 @@ Route::middleware('module:provide_dm_earning')->group(function () {
             Route::get('top-customers-partial', [CustomerReportController::class, 'topCustomersPartial'])->name('top-customers-partial');
         });
 
-        Route::get('customer/select-list', [CustomerController::class, 'get_customers'])->name('customer.select-list');
+        Route::get('customer/select-list', [CustomerController::class, 'get_customers'])->name('customer.select-list')->middleware('module:customerList');
         Route::group(['prefix' => 'customer', 'as' => 'customer.', 'middleware' => ['module:customerList']], function () {
             Route::get('list', [CustomerController::class, 'customer_list'])->name('list');
             Route::get('view/{user_id}', [CustomerController::class, 'view'])->name('view');
@@ -1193,12 +1193,13 @@ Route::middleware('module:provide_dm_earning')->group(function () {
 
             Route::get('loyalty-point-report', [LoyaltyPointController::class, 'report'])->name('loyalty-point.report');
             Route::get('loyalty-point-export', [LoyaltyPointController::class, 'export'])->name('loyalty-point.export');
-            Route::post('update-settings', [CustomerController::class, 'update_settings'])->name('update-settings')->withoutMiddleware(['module:customerList']);
-
             Route::get('export', [CustomerController::class, 'export'])->name('export');
             Route::get('order-export', [CustomerController::class, 'customer_order_export'])->name('order-export');
 
         });
+        Route::post('customer/update-settings', [CustomerController::class, 'update_settings'])
+            ->name('customer.update-settings')
+            ->middleware('module:settings');
 
 
         Route::group(['prefix' => 'file-manager', 'as' => 'file-manager.', 'middleware' => ['module:settings']], function () {
@@ -1250,7 +1251,7 @@ Route::middleware('module:provide_dm_earning')->group(function () {
             Route::get('view', [BusinessSettingsController::class, 'viewSocialLogin'])->name('view');
             Route::post('update/{service}', [BusinessSettingsController::class, 'updateSocialLogin'])->name('update');
         });
-        Route::group(['prefix' => 'apple-login', 'as' => 'apple-login.'], function () {
+        Route::group(['prefix' => 'apple-login', 'as' => 'apple-login.', 'middleware' => ['module:system_settings']], function () {
             Route::post('update/{service}', [BusinessSettingsController::class, 'updateAppleLogin'])->name('update');
         });
 
@@ -1376,7 +1377,7 @@ Route::middleware('module:provide_dm_earning')->group(function () {
                 Route::delete('subscription/pause_log_delete/{subscription}', [OrderSubscriptionController::class, 'pause_log_delete'])->name('pause_log_delete');
             });
         });
-        Route::group(['prefix' => 'shift', 'as' => 'shift.'], function () {
+        Route::group(['prefix' => 'shift', 'as' => 'shift.', 'middleware' => ['module:deliveryman']], function () {
             Route::get('/', [ShiftController::class, 'list'])->name('list');
             Route::post('store', [ShiftController::class, 'store'])->name('store');
             Route::get('edit/{id}', [ShiftController::class, 'edit'])->name('edit');

@@ -12,7 +12,7 @@ use Tests\TestCase;
  * 本守卫只拦"修复代码被删/改回"这一种回归. 断言为修复原文精确子串, 故在含修复的代码上恒过.
  *
  *   H-1 Vendor/ConversationController::messages()  — conversation_id 分支按 $vendor->id 圈定参与者
- *   H-2 Vendor/OrderController::download()          — 路径白名单(public/order/) + 拒穿越
+ *   H-2 Vendor/OrderController::download()          — 路径白名单 + 当前餐厅订单凭证归属
  *   M-1 Api/V1/OrderController::getPendingReviews() — user_id/is_guest 归属门
  *   M-2 DeliveryManReviewController::submit_review() — attachment.* 含 mimes 白名单
  */
@@ -36,12 +36,14 @@ class NezhaNzsecSupplementalHardeningTest extends TestCase
         );
     }
 
-    /** H-2: download() 必须有 public/order/ 前缀白名单 + 拒绝路径穿越 */
+    /** H-2: download() 必须有路径白名单并按当前餐厅订单及凭证精确圈定 */
     public function test_h2_vendor_download_path_allowlist(): void
     {
         $code = $this->src('app/Http/Controllers/Vendor/OrderController.php');
         $this->assertStringContainsString("str_contains(\$path, '..')", $code, 'H-2 回归: download() 缺少 .. 穿越拦截');
         $this->assertStringContainsString("str_starts_with(\$path, 'public/order/')", $code, 'H-2 回归: download() 缺少 public/order/ 前缀白名单 (原任意路径读他店/系统文件已复活)');
+        $this->assertStringContainsString("where('restaurant_id', Helpers::get_restaurant_id())", $code, 'H-2 回归: download() 缺少当前餐厅订单归属门');
+        $this->assertStringContainsString('abort_unless($belongsToOrder, 404)', $code, 'H-2 回归: download() 未确认文件属于目标订单');
     }
 
     /** M-1: getPendingReviews 必须有 user_id + is_guest 归属门 */

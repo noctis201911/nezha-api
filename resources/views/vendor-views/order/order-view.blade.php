@@ -1374,7 +1374,7 @@
                                             @php($file = $storage == 's3' ? base64_encode('order/' . $img['img']) : base64_encode('public/order/' . $img['img']))
                                             <div class="modal-footer">
                                                 <a class="btn btn-primary"
-                                                    href="{{ route('vendor.file-manager.download', [$file, $storage]) }}"><i
+                                                    href="{{ route('vendor.file-manager.download', [$order->id, $file, $storage]) }}"><i
                                                         class="tio-download"></i>
                                                     {{ translate('messages.download') }}
                                                 </a>

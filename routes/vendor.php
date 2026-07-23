@@ -523,7 +523,7 @@ Route::group(['prefix' => 'withdraw-method', 'as' => 'wallet-method.', 'middlewa
         });
 
         Route::group(['prefix' => 'file-manager', 'as' => 'file-manager.'], function () {
-            Route::get('/download/{file_name}/{storage?}', [OrderController::class, 'download'])->name('download');
+            Route::get('/download/{order}/{file_name}/{storage?}', [OrderController::class, 'download'])->name('download');
         });
     });
 

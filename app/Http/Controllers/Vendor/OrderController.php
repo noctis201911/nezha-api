@@ -1252,16 +1252,42 @@ class OrderController extends Controller
         return back();
     }
 
-    public function download($file_name)
+    public function download($orderId, $file_name)
     {
         // 哪吒 轴A/C 修复(NZSEC H-2): 原方法 Storage::download(base64_decode($file_name)) 无路径/归属校验,
         // 任意登录商家/员工可 base64 任意路径读他店或系统文件. 商家端合法下载仅订单凭证图 public/order/*
-        // (见 resources/views/vendor-views/order/order-view.blade.php). 限定前缀 + 拒绝路径穿越/绝对路径.
+        // (见 resources/views/vendor-views/order/order-view.blade.php). 限定前缀 + 拒绝路径穿越/绝对路径,
+        // 并把订单、文件名和存储盘精确绑定到当前 session 的餐厅.
         $path = base64_decode($file_name, true);
         if ($path === false || $path === '' || str_contains($path, '..') || str_starts_with($path, '/')
             || !(str_starts_with($path, 'public/order/') || str_starts_with($path, 'order/'))) {
             abort(404);
         }
+
+        $expectedStorage = str_starts_with($path, 'order/') ? 's3' : 'public';
+        $prefix = $expectedStorage === 's3' ? 'order/' : 'public/order/';
+        $image = substr($path, strlen($prefix));
+        if ($image === '' || str_contains($image, '/') || str_contains($image, '\\')) {
+            abort(404);
+        }
+
+        $order = Order::where('restaurant_id', Helpers::get_restaurant_id())->find($orderId);
+        abort_if($order === null, 404);
+        $proof = json_decode($order->order_proof ?? '[]', true);
+        $belongsToOrder = collect(is_array($proof) ? $proof : [])->contains(
+            static function ($entry) use ($image, $expectedStorage): bool {
+                if (is_string($entry)) {
+                    return $expectedStorage === 'public' && hash_equals($entry, $image);
+                }
+                if (!is_array($entry) || !isset($entry['img'])) {
+                    return false;
+                }
+                return hash_equals((string) $entry['img'], $image)
+                    && ($entry['storage'] ?? 'public') === $expectedStorage;
+            }
+        );
+        abort_unless($belongsToOrder, 404);
+
         return Storage::download($path);
     }
 

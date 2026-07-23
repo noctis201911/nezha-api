@@ -222,6 +222,13 @@
                     </div>
                     <div class="check-item">
                         <div class="form-group form-check form--check">
+                            <input type="checkbox" name="modules[]" value="consolidation" class="form-check-input"
+                                    id="consolidation">
+                            <label class="form-check-label ml-2 ml-sm-3 text-dark" for="consolidation">{{translate('平台集运')}}</label>
+                        </div>
+                    </div>
+                    <div class="check-item">
+                        <div class="form-group form-check form--check">
                             <input type="checkbox" name="modules[]" value="risk" class="form-check-input"
                                     id="risk">
                             <label class="form-check-label ml-2 ml-sm-3  text-dark" for="risk">{{translate('风控中心')}}</label>

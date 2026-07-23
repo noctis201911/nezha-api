@@ -226,13 +226,13 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
 
         Route::get('notifications', [VendorController::class, 'get_notifications']);
         Route::get('profile', [VendorController::class, 'get_profile']);
-        Route::post('update-active-status', [VendorController::class, 'active_status']);
+        Route::post('update-active-status', [VendorController::class, 'active_status'])->middleware('vmodule:restaurant_config');
         Route::get('earning-info', [VendorController::class, 'get_earning_data']);
-        Route::put('update-profile', [VendorController::class, 'update_profile']);
+        Route::put('update-profile', [VendorController::class, 'update_profile'])->middleware('vmodule:bank_info');
         Route::get('current-orders', [VendorController::class, 'get_current_orders']);
         Route::get('completed-orders', [VendorController::class, 'get_completed_orders']);
         Route::get('all-orders', [VendorController::class, 'get_all_orders']);
-        Route::put('update-order-status', [VendorController::class, 'update_order_status']);
+        Route::put('update-order-status', [VendorController::class, 'update_order_status'])->middleware('vmodule:regular_order');
         Route::get('order-details', [VendorController::class, 'get_order_details']);
         Route::get('order', [VendorController::class, 'get_order']);
         Route::put('update-fcm-token', [VendorController::class, 'update_fcm_token']);
@@ -248,11 +248,11 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         Route::put('customer-address-update', [VendorOrderController::class, 'customerAddressUpdate']);
         Route::post('update-order', [VendorOrderController::class, 'updateOrder']);
 
-        Route::put('update-announcment', [VendorController::class, 'update_announcment']);
+        Route::put('update-announcment', [VendorController::class, 'update_announcment'])->middleware('vmodule:my_restaurant');
 
-        Route::post('make-collected-cash-payment', [VendorController::class, 'make_payment'])->name('make_payment');
+        Route::post('make-collected-cash-payment', [VendorController::class, 'make_payment'])->name('make_payment')->middleware('vmodule:my_wallet');
 
-        Route::post('make-wallet-adjustment', [VendorController::class, 'make_wallet_adjustment'])->name('make_wallet_adjustment');
+        Route::post('make-wallet-adjustment', [VendorController::class, 'make_wallet_adjustment'])->name('make_wallet_adjustment')->middleware('vmodule:my_wallet');
 
         Route::get('wallet-payment-list', [VendorController::class, 'wallet_payment_list'])->name('wallet_payment_list');
 
@@ -278,23 +278,29 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
             Route::delete('delete', [WithdrawMethodController::class, 'disbursement_withdrawal_method_delete']);
         });
 
-        Route::get('coupon-list', [CouponController::class, 'list']);
-        Route::get('coupon-view', [CouponController::class, 'view']);
-        Route::post('coupon-store', [CouponController::class, 'store'])->name('store');
-        Route::post('coupon-update', [CouponController::class, 'update']);
-        Route::post('coupon-status', [CouponController::class, 'status'])->name('status');
-        Route::post('coupon-delete', [CouponController::class, 'delete'])->name('delete');
-        Route::post('coupon-search', [CouponController::class, 'search'])->name('search');
-        Route::get('coupon/view-without-translate', [CouponController::class, 'view_without_translate']);
+        Route::middleware('vmodule:coupon')->group(function () {
+            Route::get('coupon-list', [CouponController::class, 'list']);
+            Route::get('coupon-view', [CouponController::class, 'view']);
+            Route::post('coupon-store', [CouponController::class, 'store'])->name('store');
+            Route::post('coupon-update', [CouponController::class, 'update']);
+            Route::post('coupon-status', [CouponController::class, 'status'])->name('status');
+            Route::post('coupon-delete', [CouponController::class, 'delete'])->name('delete');
+            Route::post('coupon-search', [CouponController::class, 'search'])->name('search');
+            Route::get('coupon/view-without-translate', [CouponController::class, 'view_without_translate']);
+        });
 
         Route::group(['prefix' => 'advertisement', 'as' => 'advertisement.'], function () {
-            Route::get('/', [VendorAdvertisementController::class, 'index']);
-            Route::get('details/{id}', [VendorAdvertisementController::class, 'show']);
-            Route::delete('delete/{id}', [VendorAdvertisementController::class, 'destroy']);
-            Route::post('store', [VendorAdvertisementController::class, 'store']);
-            Route::post('update/{id}', [VendorAdvertisementController::class, 'update']);
-            Route::put('/status', [VendorAdvertisementController::class, 'status'])->name('status');
-            Route::post('copy-add-post', [VendorAdvertisementController::class, 'copyAddPost']);
+            Route::middleware('vmodule:ads_list')->group(function () {
+                Route::get('/', [VendorAdvertisementController::class, 'index']);
+                Route::get('details/{id}', [VendorAdvertisementController::class, 'show']);
+                Route::delete('delete/{id}', [VendorAdvertisementController::class, 'destroy']);
+                Route::post('update/{id}', [VendorAdvertisementController::class, 'update']);
+                Route::put('/status', [VendorAdvertisementController::class, 'status'])->name('status');
+            });
+            Route::middleware('vmodule:new_ads')->group(function () {
+                Route::post('store', [VendorAdvertisementController::class, 'store']);
+                Route::post('copy-add-post', [VendorAdvertisementController::class, 'copyAddPost']);
+            });
 
         });
 

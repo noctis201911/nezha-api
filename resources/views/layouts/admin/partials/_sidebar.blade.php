@@ -136,8 +136,8 @@ $__navGroups[] = [
         ['label' => '商家退出结算', 'label_raw' => true, 'route' => route('admin.nezha-offboard.index'), 'icon' => 'tio-logout', 'active' => Request::is('admin/nezha-offboard*'), 'gate' => Helpers::module_permission_check('deposit')],
         ['label' => '充值申请', 'label_raw' => true, 'route' => route('admin.nezha-topup.index'), 'icon' => 'tio-add-circle', 'active' => Request::is('admin/nezha-topup*'), 'gate' => Helpers::module_permission_check('deposit')],
         ['label' => '押金退款', 'label_raw' => true, 'route' => route('admin.nezha-topup.refunds'), 'icon' => 'tio-undo', 'active' => Request::is('admin/nezha-topup/refunds*'), 'gate' => Helpers::module_permission_check('deposit')],
-        ['label' => '平台集运申报', 'label_raw' => true, 'route' => route('admin.nezha-consolidation.index'), 'icon' => 'tio-cube', 'active' => Request::is('admin/nezha-consolidation') || Request::is('admin/nezha-consolidation/*'), 'gate' => !$__exclusivePaymentAddressReviewer],
-        ['label' => '集运期次管理', 'label_raw' => true, 'route' => route('admin.nezha-consolidation-rounds.index'), 'icon' => 'tio-shopping-cart', 'active' => Request::is('admin/nezha-consolidation-rounds*'), 'gate' => !$__exclusivePaymentAddressReviewer],
+        ['label' => '平台集运申报', 'label_raw' => true, 'route' => route('admin.nezha-consolidation.index'), 'icon' => 'tio-cube', 'active' => Request::is('admin/nezha-consolidation') || Request::is('admin/nezha-consolidation/*'), 'gate' => Helpers::module_permission_check('consolidation')],
+        ['label' => '集运期次管理', 'label_raw' => true, 'route' => route('admin.nezha-consolidation-rounds.index'), 'icon' => 'tio-shopping-cart', 'active' => Request::is('admin/nezha-consolidation-rounds*'), 'gate' => Helpers::module_permission_check('consolidation')],
     ],
 ];
 
