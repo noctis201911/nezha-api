@@ -2431,7 +2431,25 @@ class OrderController extends Controller
                     \App\CentralLogics\Helpers::decreaseSellCount(order_details: $order->details);
                 }
             } catch (\Throwable $ex) { info('offline_payment rollback-cancel failed: '.$ex->getMessage()); }
-            return response()->json([ 'payment' => $e->getMessage()], 403);
+            // 哪吒[安全 2026-07-23]: 原始异常串不回客户端。本端点挂 apiGuestCheck, 而该中间件
+            // 从不校验 token 有效性(带任意伪造 Bearer 即可进到本控制器), 等同未认证可达。
+            // 分流依据 —— DomainException 的 message 是本仓库两个凭据服务写死的领域码
+            // (credential_already_consumed / payment_tx_hash_invalid 等), 无 PII, 且本方法
+            // 2210 行的 catch (\DomainException) 已是同一判例, 保持原样回客户端;
+            // 其余异常(QueryException 会把 Host/Port/Database 与内联 bindings —— 此处含订单号、
+            // 顾客 id、交易哈希 —— 一并吐出; PHP warning 会转成 ErrorException 落到这里)
+            // 一律只回硬编码中文。
+            // 注: 链上校验(NezhaChainVerifier)整段包在自己的 catch (\Throwable) 里; 推送链
+            // sendNotificationToHttp / mintFcmAccessTokenWithTimeout 亦自带 catch (\Throwable)。
+            // pushHttpSyncSend 只捕 \Exception, 但其内若抛 \Error 会绕过本处 catch(\Exception)
+            // 直奔全局 handler, 不经本分支; 无论走哪条, 都无 Guzzle 完整 URL / FCM 密钥外泄路径。
+            $nzIsDomain = $e instanceof \DomainException;
+            \Illuminate\Support\Facades\Log::warning('nz_offline_payment_failed', [
+                'ex' => get_class($e),
+                'code' => $e->getCode(),
+                'domain' => $nzIsDomain ? $e->getMessage() : null,
+            ]);
+            return response()->json([ 'payment' => $nzIsDomain ? $e->getMessage() : '出现错误，请重试'], 403);
         }
     }
 
