@@ -499,9 +499,30 @@ class POSController extends Controller
         ]);
 
         DB::beginTransaction();
+        try {
+            $posCustomer = Session::get('customer_id') ? User::query()->find(Session::get('customer_id')) : null;
+            $accountDeletionService = app(\App\Services\CustomerAccountDeletion\CustomerAccountDeletionService::class);
+            $accountDeletionGate = $accountDeletionService->lockForOrder($posCustomer, false);
+        } catch (\App\Exceptions\AccountDeletionException $e) {
+            DB::rollBack();
+            Toastr::error($e->getMessage());
+            return back();
+        }
         $order = $this->placePosOrder($cart, $request, $restaurant, $this->getDistance($restaurant));
 
         if (data_get($order, 'status_code') === 200) {
+            try {
+                $accountDeletionService->finalizeCreatedOrder(
+                    $posCustomer,
+                    data_get($order, 'order'),
+                    $accountDeletionGate,
+                    false
+                );
+            } catch (\App\Exceptions\AccountDeletionException $e) {
+                DB::rollBack();
+                Toastr::error($e->getMessage());
+                return back();
+            }
             DB::commit();
             $order = data_get($order, 'order');
             try {

@@ -91,7 +91,7 @@ class CustomerAuthController extends Controller
                         $user_email = $user->email;
                     }
                     if (auth()->loginUsingId($user->id)) {
-                        $token = auth()->user()->createToken('RestaurantCustomerAuth')->accessToken;
+                        $token = app(\App\Services\Auth\CustomerAccessTokenIssuer::class)->issue(auth()->user());
                         if(isset($request['guest_id'])){
                             $this->check_guest_cart($user, $request['guest_id']);
                         }
@@ -146,7 +146,7 @@ class CustomerAuthController extends Controller
                     $user_email = $user->email;
                 }
                 if ($is_personal_info == 1 && auth()->loginUsingId($user->id)) {
-                    $token = auth()->user()->createToken('RestaurantCustomerAuth')->accessToken;
+                    $token = app(\App\Services\Auth\CustomerAccessTokenIssuer::class)->issue(auth()->user());
                     if(isset($request['guest_id'])){
                         $this->check_guest_cart($user, $request['guest_id']);
                     }
@@ -244,7 +244,7 @@ class CustomerAuthController extends Controller
                         $user_email = $user->email;
                     }
                     if ($is_personal_info == 1 && auth()->loginUsingId($user->id)) {
-                        $token = auth()->user()->createToken('RestaurantCustomerAuth')->accessToken;
+                        $token = app(\App\Services\Auth\CustomerAccessTokenIssuer::class)->issue(auth()->user());
                         if(isset($request['guest_id'])){
                             $this->check_guest_cart($user, $request['guest_id']);
                         }
@@ -333,7 +333,7 @@ class CustomerAuthController extends Controller
                 $user_email = $user->email;
             }
             if ($is_personal_info == 1 && auth()->loginUsingId($user->id)) {
-                $token = auth()->user()->createToken('RestaurantCustomerAuth')->accessToken;
+                $token = app(\App\Services\Auth\CustomerAccessTokenIssuer::class)->issue(auth()->user());
                 if(isset($request['guest_id'])){
                     $this->check_guest_cart($user, $request['guest_id']);
                 }
@@ -373,7 +373,7 @@ class CustomerAuthController extends Controller
                     $user_email = $user->email;
                 }
                 if ($is_personal_info == 1 && auth()->loginUsingId($user->id)) {
-                    $token = auth()->user()->createToken('RestaurantCustomerAuth')->accessToken;
+                    $token = app(\App\Services\Auth\CustomerAccessTokenIssuer::class)->issue(auth()->user());
                     if(isset($request['guest_id'])){
                         $this->check_guest_cart($user, $request['guest_id']);
                     }
@@ -510,7 +510,7 @@ class CustomerAuthController extends Controller
         $user->ref_code = Helpers::generate_referer_code($user);
         $user->save();
 
-        $token = $user->createToken('RestaurantCustomerAuth')->accessToken;
+        $token = app(\App\Services\Auth\CustomerAccessTokenIssuer::class)->issue($user);
 
         $login_settings = array_column(BusinessSetting::whereIn('key',['manual_login_status','otp_login_status','social_login_status','google_login_status','facebook_login_status','apple_login_status','email_verification_status','phone_verification_status'
         ])->get(['key','value'])->toArray(), 'value', 'key');
@@ -824,7 +824,7 @@ class CustomerAuthController extends Controller
         }
 
         if (auth()->attempt($data)) {
-            $token = auth()->user()->createToken('RestaurantCustomerAuth')->accessToken;
+            $token = app(\App\Services\Auth\CustomerAccessTokenIssuer::class)->issue(auth()->user());
             if(!auth()->user()->status)
             {
                 $errors = [];
@@ -908,7 +908,7 @@ class CustomerAuthController extends Controller
 
             $token = null;
             if ($is_personal_info == 1 && auth()->loginUsingId($user->id)) {
-                $token = auth()->user()->createToken('RestaurantCustomerAuth')->accessToken;
+                $token = app(\App\Services\Auth\CustomerAccessTokenIssuer::class)->issue(auth()->user());
                 if(isset($request_data['guest_id'])){
                     $this->check_guest_cart($user, $request_data['guest_id']);
                 }
@@ -1122,7 +1122,7 @@ class CustomerAuthController extends Controller
 
             $token = null;
             if ($is_personal_info == 1 && auth()->loginUsingId($user->id)) {
-                $token = auth()->user()->createToken('RestaurantCustomerAuth')->accessToken;
+                $token = app(\App\Services\Auth\CustomerAccessTokenIssuer::class)->issue(auth()->user());
                 if(isset($request_data['guest_id'])){
                     $this->check_guest_cart($user, $request_data['guest_id']);
                 }
@@ -1305,7 +1305,7 @@ class CustomerAuthController extends Controller
         $user->save();
         $token = null;
         if (auth()->loginUsingId($user->id)) {
-            $token = auth()->user()->createToken('RestaurantCustomerAuth')->accessToken;
+            $token = app(\App\Services\Auth\CustomerAccessTokenIssuer::class)->issue(auth()->user());
 
             if(isset($request['guest_id'])){
                 $this->check_guest_cart($user, $request['guest_id']);

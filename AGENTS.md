@@ -7,6 +7,7 @@
 - [x] Codex(Google address staging fix, 2026-07-13): complete in cacddaa; staging API + 390x844 browser QA passed; temporary address/user/token cleaned; no production deploy; no public storage.
 - [x] Codex(staging 订单支付闭环·2026-07-14) 已完成：`d6378c4` 让 `data-nz-ajax` 只归统一 AJAX owner，`e3ea7fb` 把取消审批操作移入真实可见详情模式并补契约测试。staging 真实浏览器确认顾客取消→商家同意→待退款→商家标记退款→顾客已退回闭环；另以订单 `100016` 单击一次出餐，Nginx 仅 1 个 `mark-dispatched` POST、数据库仅 1 条配送通知，merchant console error 0。未跑 staging API reset/migration/restart；临时数据、凭证文件与通知已精确清理，商家/支付方式/通知配置逐字段还原，production current 未变且未发生真实资金动作。
 - [ ] Codex(形态C v2·2026-07-13) 接手顾客端商家卡三态：customer_availability/分页前排序 + 首页、餐厅/搜索/分类/菜系「仅预约/休息中」底部横条。仅 staging，不碰生产，不改 DESIGN_SYSTEM/产品文档。
+- [ ] Codex(顾客自动注销亚美尼亚合规修正·2026-07-23) 在隔离 worktree `C:\Users\Administrator\Desktop\Nezha_H5\.codex-worktrees\customer-auto-deletion-legal-api-20260723` 实施默认关闭候选：完成通知、显式撤销、法定请求 SLA 边界、逐字段留存最小化、L1/隐私正本、MySQL 5.7 与 staging 全链；未过通知、迁移、截图、72 小时 soak、运营主体披露及生产回滚门前不合 main、不升 production。（2026-07-23）
 # AGENTS.md — 哪吒多窗口并发协调约定（所有 AI 窗口必读）
 
 > ⚠️ 本服务器是**单一共享工作目录**，可能同时有多个 AI 窗口（Claude Code / Codex / …）在改同一批文件。

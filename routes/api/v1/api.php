@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\V1\ConversationController;
 use App\Http\Controllers\Api\V1\CouponController as UserCouponController;
 use App\Http\Controllers\Api\V1\CuisineController;
 use App\Http\Controllers\Api\V1\CustomerController;
+use App\Http\Controllers\Api\V1\CustomerAccountDeletionController;
 use App\Http\Controllers\Api\V1\DeliverymanController;
 use App\Http\Controllers\Api\V1\DeliverymanEarningReportController;
 use App\Http\Controllers\Api\V1\DeliveryManReviewController;
@@ -109,6 +110,10 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         // Nezha: Google 整页跳转登录(ux_mode:redirect) — redirect-login 校验 id_token 返回一次性短码, social/exchange 凭短码换 token
         Route::post('google/redirect-login', [CustomerAuthController::class, 'google_redirect_login']);
         Route::post('social/exchange', [CustomerAuthController::class, 'social_exchange']);
+        Route::post('account-deletion/challenge/cancel', [CustomerAccountDeletionController::class, 'cancelFromChallenge'])
+            ->middleware('throttle:10,1');
+        Route::post('account-deletion/challenge/keep', [CustomerAccountDeletionController::class, 'keepFromChallenge'])
+            ->middleware('throttle:10,1');
 
         // Customer H5 only: Telegram OIDC uses a dedicated login bot/client.
         // Normal Google login above is unchanged; phone collisions require exact old-account proof.
@@ -464,6 +469,8 @@ Route::group(['namespace' => 'Api\V1', 'as' => 'api.v1.', 'middleware' => ['loca
         Route::get('info', [CustomerController::class, 'info']);
         Route::get('update-zone', [CustomerController::class, 'update_zone']);
         Route::post('update-profile', [CustomerController::class, 'update_profile']);
+        Route::get('account-deletion', [CustomerAccountDeletionController::class, 'show']);
+        Route::post('account-deletion/cancel', [CustomerAccountDeletionController::class, 'cancel']);
         Route::post('update-interest', [CustomerController::class, 'update_interest']);
         Route::put('cm-firebase-token', [CustomerController::class, 'update_cm_firebase_token']);
         Route::get('notification-preferences', [CustomerController::class, 'get_notification_preferences']);

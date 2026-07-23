@@ -163,10 +163,28 @@ class OrderController extends Controller
             'contact_person_name' => $request->user ? 'nullable' : 'required',
             'contact_person_number' => $request->user ? 'nullable' : 'required',
             'nezha_delivery_window_id' => 'nullable|integer', // 哪吒预约下单 M6: 顾客所选配送时段窗口(可选)
+            'account_deletion_requested' => 'nullable|boolean',
+            'account_deletion_copy_version' => 'required_if:account_deletion_requested,1|string|max:64',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
+        }
+
+        $accountDeletionRequested = $request->boolean('account_deletion_requested');
+        if ($accountDeletionRequested && ! $request->user) {
+            return response()->json(['errors' => [[
+                'code' => 'ACCOUNT_DELETION_NO_NOTICE_CHANNEL',
+                'message' => '游客不能预约自动注销，请先登录。',
+            ]]], 422);
+        }
+        $accountDeletionService = app(\App\Services\CustomerAccountDeletion\CustomerAccountDeletionService::class);
+        if ($request->user) {
+            $accountDeletionService->assertValidCheckoutRequest(
+                $request->user,
+                $accountDeletionRequested,
+                $request->account_deletion_copy_version
+            );
         }
 
         $order_validation_check =  $this->order_validation_check($request);
@@ -226,6 +244,13 @@ class OrderController extends Controller
         }
 
         DB::beginTransaction();
+
+        try {
+            $accountDeletionGate = $accountDeletionService->lockForOrder($request->user, $accountDeletionRequested);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            throw $e;
+        }
 
         if ($request['coupon_code']) {
             // 哪吒[券限领 race]: 事务内先对券行加排他锁, 串行化"同一券"的并发下单, 使 is_valide 的每人限领 count() 在锁内权威(防 TOCTOU 超限)。锁随 commit/rollBack 释放。
@@ -868,6 +893,15 @@ class OrderController extends Controller
                 $OrderReference->save();
             }
 
+            $accountDeletion = $accountDeletionService->finalizeCreatedOrder(
+                $request->user,
+                $order,
+                $accountDeletionGate,
+                $accountDeletionRequested,
+                $request->account_deletion_copy_version,
+                (string) ($request->header('X-localization') ?: 'zh-CN')
+            );
+
             DB::commit();
             //PlaceOrderMail
 
@@ -877,8 +911,12 @@ class OrderController extends Controller
             return response()->json([
                 'message' => translate('messages.order_placed_successfully'),
                 'order_id' => $order->id,
-                'total_ammount' => $total_price+$order->delivery_charge+$tax_amount
+                'total_ammount' => $total_price+$order->delivery_charge+$tax_amount,
+                'account_deletion' => $accountDeletion ? $accountDeletionService->projection($accountDeletion) : null,
             ], 200);
+        } catch (\App\Exceptions\AccountDeletionException $e) {
+            DB::rollBack();
+            throw $e;
         } catch (\Exception $e) {
             DB::rollBack();
             info($e->getMessage());
@@ -1749,7 +1787,7 @@ class OrderController extends Controller
         }
 
         $resolve_hours = (int) (DB::table('business_settings')->where('key', 'nezha_appeal_resolve_hours')->value('value') ?? 72);
-        $appeal = \App\Models\NezhaDeliveryAppeal::create([
+        $createAppeal = fn () => \App\Models\NezhaDeliveryAppeal::create([
             'order_id'    => $order->id,
             'user_id'     => $request->user ? $request->user->id : null,
             'reason_code' => $request->reason_code ?: 'not_received',
@@ -1762,6 +1800,13 @@ class OrderController extends Controller
             'status'      => 'open',
             'sla_due_at'  => now()->addHours($resolve_hours),
         ]);
+        $appeal = $request->user
+            ? app(\App\Services\CustomerAccountDeletion\CustomerAccountDeletionService::class)->noteNewObligation(
+                (int) $request->user->id,
+                \App\Services\CustomerAccountDeletion\CustomerAccountDeletionService::BLOCK_DELIVERY_APPEAL,
+                $createAppeal
+            )
+            : $createAppeal();
 
         // 留痕(审计: 谁/何时对哪个单发起配送申诉)
         try {
@@ -1863,21 +1908,34 @@ class OrderController extends Controller
 
             $refund_amount = round($order->order_amount - $order->delivery_charge- $order->dm_tips , config('round_up_to_digit'));
 
-            $refund = new Refund();
-            $refund->order_id = $order->id;
-            $refund->user_id = $order->user_id;
-            $refund->order_status= $order->order_status;
-            $refund->refund_status= 'pending';
-            $refund->refund_method= $request->refund_method ?? 'wallet';
-            $refund->customer_reason= $request->customer_reason;
-            $refund->customer_note= $request->customer_note;
-            $refund->refund_amount= $refund_amount;
-            $refund->image = $images;
-            $refund->save();
+            $createRefund = function () use ($order, $request, $refund_amount, $images) {
+                $refund = new Refund();
+                $refund->order_id = $order->id;
+                $refund->user_id = $order->user_id;
+                $refund->order_status= $order->order_status;
+                $refund->refund_status= 'pending';
+                $refund->refund_method= $request->refund_method ?? 'wallet';
+                $refund->customer_reason= $request->customer_reason;
+                $refund->customer_note= $request->customer_note;
+                $refund->refund_amount= $refund_amount;
+                $refund->image = $images;
+                $refund->save();
 
-            $order->order_status = 'refund_requested';
-            $order->refund_requested = now();
-            $order->save();
+                $order->order_status = 'refund_requested';
+                $order->refund_requested = now();
+                $order->save();
+
+                return $refund;
+            };
+            if ($request->user) {
+                app(\App\Services\CustomerAccountDeletion\CustomerAccountDeletionService::class)->noteNewObligation(
+                    (int) $request->user->id,
+                    \App\Services\CustomerAccountDeletion\CustomerAccountDeletionService::BLOCK_UNRESOLVED_REFUND,
+                    $createRefund
+                );
+            } else {
+                $createRefund();
+            }
             // Helpers::send_order_notification($order);
 
             $admin = Admin::where('role_id',1)->first();
@@ -1921,9 +1979,22 @@ class OrderController extends Controller
         $user_id = $request->user ? $request->user->id : $request['guest_id'];
         $order = Order::where(['user_id' => $user_id, 'id' => $request['order_id']])->where('is_guest', $request->user ? 0 : 1)->Notpos()->first();
         if ($order) {
-            Order::where(['user_id' =>$user_id, 'id' => $request['order_id']])->where('is_guest', $request->user ? 0 : 1)->update([
-                'payment_method' => 'cash_on_delivery', 'order_status'=>'pending', 'pending'=> now()
-            ]);
+            $reopenOrder = static function () use ($user_id, $request) {
+                return Order::where(['user_id' => $user_id, 'id' => $request['order_id']])
+                    ->where('is_guest', $request->user ? 0 : 1)
+                    ->update([
+                        'payment_method' => 'cash_on_delivery', 'order_status' => 'pending', 'pending' => now(),
+                    ]);
+            };
+            if ($request->user) {
+                app(\App\Services\CustomerAccountDeletion\CustomerAccountDeletionService::class)->noteNewObligation(
+                    (int) $request->user->id,
+                    \App\Services\CustomerAccountDeletion\CustomerAccountDeletionService::BLOCK_ONGOING_ORDER,
+                    $reopenOrder
+                );
+            } else {
+                $reopenOrder();
+            }
             $order_mail_status = Helpers::get_mail_status('place_order_mail_status_user');
             $order_verification_mail_status = Helpers::get_mail_status('order_verification_mail_status_user');
             $address = json_decode($order->delivery_address, true);

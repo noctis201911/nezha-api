@@ -132,6 +132,10 @@ class POSController extends Controller
         // dd(['pro'=>$product_price, 'add'=>$total_addon_price, 'discount'=>$restaurant_discount_amount, 'tax'=>$total_tax_amount ,'cart'=>$cart]);
 
         try {
+            DB::beginTransaction();
+            $posCustomer = $request->user_id ? User::query()->find($request->user_id) : null;
+            $accountDeletionService = app(\App\Services\CustomerAccountDeletion\CustomerAccountDeletionService::class);
+            $accountDeletionGate = $accountDeletionService->lockForOrder($posCustomer, false);
             $order->restaurant_discount_amount= $restaurant_discount_amount;
             $order->total_tax_amount= $total_tax_amount;
             $order->order_amount = $total_price + $total_tax_amount + $order->delivery_charge;
@@ -140,12 +144,23 @@ class POSController extends Controller
                 $order_details[$key]['order_id'] = $order->id;
             }
             OrderDetail::insert($order_details);
+            $accountDeletionService->finalizeCreatedOrder(
+                $posCustomer,
+                $order,
+                $accountDeletionGate,
+                false
+            );
+            DB::commit();
             return response()->json([
                 'message' => translate('messages.order_placed_successfully'),
                 'order_id' => $order->id,
                 'total_ammount' => $total_price+$order->delivery_charge+$total_tax_amount
             ], 200);
+        } catch (\App\Exceptions\AccountDeletionException $e) {
+            DB::rollBack();
+            return response()->json(['errors' => [['code' => $e->errorCode, 'message' => $e->getMessage()]]], $e->status);
         } catch (\Exception $e) {
+            DB::rollBack();
             info($e);
         }
         Toastr::warning(translate('messages.failed_to_place_order'));

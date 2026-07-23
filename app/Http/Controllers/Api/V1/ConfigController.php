@@ -182,7 +182,8 @@ class ConfigController extends Controller
             'customer_add_fund_min_amount',
             'nezha_usd_to_rmb_rate',
             'nezha_rate_cny_to_amd',
-            'nezha_rate_usd_to_amd'
+            'nezha_rate_usd_to_amd',
+            'nezha_account_deletion_intake_enabled'
         ];
 
 
@@ -431,6 +432,7 @@ class ConfigController extends Controller
             'banner_data' => $banner_data,
             'offline_payment_status' => (int)(isset($settings['offline_payment_status']) ? $settings['offline_payment_status'] : 0),
             'guest_checkout_status' => (int)(isset($settings['guest_checkout_status']) ? $settings['guest_checkout_status'] : 0),
+            'nezha_account_deletion_intake_enabled' => (int) ($settings['nezha_account_deletion_intake_enabled'] ?? 0),
             'country_picker_status' => (int)(isset($settings['country_picker_status']) ? $settings['country_picker_status'] : 0),
 
             'instant_order' => (bool)(isset($settings['instant_order']) ? $settings['instant_order'] : 0),

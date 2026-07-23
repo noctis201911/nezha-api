@@ -204,10 +204,23 @@ class LocalLifeController extends Controller
             $post->save();
             Toastr::success('已解除证据冻结：该帖联系方式/图片将按正常 30 天到期清除');
         } else {
-            $post->legal_hold = true;
-            $post->legal_hold_reason = $request->legal_hold_reason ?: '违规留证 / 配合调查';
-            $post->legal_hold_at = now();
-            $post->save();
+            $placeHold = static function () use ($post, $request) {
+                $post->legal_hold = true;
+                $post->legal_hold_reason = $request->legal_hold_reason ?: '违规留证 / 配合调查';
+                $post->legal_hold_at = now();
+                $post->save();
+
+                return $post;
+            };
+            if ($post->user_id) {
+                app(\App\Services\CustomerAccountDeletion\CustomerAccountDeletionService::class)->noteNewObligation(
+                    (int) $post->user_id,
+                    \App\Services\CustomerAccountDeletion\CustomerAccountDeletionService::BLOCK_LEGAL_HOLD,
+                    $placeHold
+                );
+            } else {
+                $placeHold();
+            }
             Toastr::warning('已冻结留证：该帖联系方式/图片豁免到期清除，供违规处理/配合调查；用尽后请解除');
         }
         return back();

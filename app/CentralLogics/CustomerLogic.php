@@ -15,6 +15,24 @@ class CustomerLogic{
     {
         if(BusinessSetting::where('key','wallet_status')->first()?->value != 1) return false;
 
+        $creditTypes = ['add_fund_by_admin','add_fund','order_refund','loyalty_point', 'referrer','CashBack'];
+        $mayCreateCashBlocker = in_array($transaction_type, $creditTypes, true)
+            && $amount > 0
+            && abs((float) (User::query()->whereKey($user_id)->value('wallet_balance') ?? 0)) < 0.000001;
+        if ($mayCreateCashBlocker) {
+            return app(\App\Services\CustomerAccountDeletion\CustomerAccountDeletionService::class)->noteNewObligation(
+                (int) $user_id,
+                \App\Services\CustomerAccountDeletion\CustomerAccountDeletionService::BLOCK_CASH_WALLET_BALANCE,
+                fn () => self::createWalletTransactionUnfenced($user_id, $amount, $transaction_type, $referance)
+            );
+        }
+
+        return self::createWalletTransactionUnfenced($user_id, $amount, $transaction_type, $referance);
+    }
+
+    private static function createWalletTransactionUnfenced($user_id, float $amount, $transaction_type, $referance)
+    {
+
         $user = User::find($user_id);
         $current_balance = $user->wallet_balance;
 

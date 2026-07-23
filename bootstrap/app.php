@@ -114,6 +114,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // 每 15 分钟整行清除，正常留存上界为 attempt TTL(默认10分钟)+调度间隔。
         // 持久身份归属 user_external_identities 不在本命令范围，防同一 provider subject 被错绑。
         $schedule->command('nezha:purge-external-identity-attempts')->everyFifteenMinutes()->withoutOverlapping();
+          // 顾客预约自动注销 V6：单一 durable worker 负责 blocker 重算、会话撤销、到点执行、
+          // purge 续跑与通知 outbox。四个业务开关均由数据库直读，migration 默认全部关闭。
+        $schedule->command('nezha:customer-account-deletion-work')->everyMinute()->withoutOverlapping();
 
         // 每天 09:00 检查商家预存佣金, 低于商家自设阈值(或为负)发提醒邮件(商家可在商家后台自助开关/设阈值/设邮箱)。
         $schedule->command('nezha:check-deposit-alerts')->dailyAt('09:00')->withoutOverlapping();

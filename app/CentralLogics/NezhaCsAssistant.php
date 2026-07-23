@@ -275,7 +275,7 @@ class NezhaCsAssistant
                 return;
             }
             $order = self::relevantOrder($customerUser);
-            DB::table('nezha_cs_tickets')->insert([
+            self::insertCustomerTicket([
                 'type' => 'human_handoff',
                 'status' => 'open',
                 'user_id' => $customerUser->id ?? null,
@@ -285,7 +285,7 @@ class NezhaCsAssistant
                 'note' => $online ? '顾客要求转人工（在线时段·待接入）' : '顾客要求转人工（非在线时段·留言待跟进）',
                 'created_at' => Carbon::now(),
                 'updated_at' => Carbon::now(),
-            ]);
+            ], $customerUser->id ?? null);
         } catch (\Throwable $e) {
             Log::warning('nezha cs handoff ticket failed: ' . $e->getMessage());
         }
@@ -531,7 +531,7 @@ class NezhaCsAssistant
 
         // 2) 留工单给后台跟进。
         try {
-            DB::table('nezha_cs_tickets')->insert([
+            self::insertCustomerTicket([
                 'type' => 'cant_reach',
                 'status' => 'open',
                 'user_id' => $customerUser->id ?? null,
@@ -541,7 +541,7 @@ class NezhaCsAssistant
                 'note' => $zh ? '顾客反映联系不上商家' : 'Customer cannot reach merchant',
                 'created_at' => Carbon::now(),
                 'updated_at' => Carbon::now(),
-            ]);
+            ], $customerUser->id ?? null);
         } catch (\Throwable $e) {
             Log::warning('nezha cs ticket insert failed: ' . $e->getMessage());
         }
@@ -571,6 +571,20 @@ class NezhaCsAssistant
                 : "I've noted this down for you. Could you share a bit more detail? I'll do my best to help.";
         }
         self::reply($conversation, $customerUser, $text, $cat, $usage);
+    }
+
+    private static function insertCustomerTicket(array $attributes, $userId): void
+    {
+        $insert = fn () => DB::table('nezha_cs_tickets')->insert($attributes);
+        if ($userId) {
+            app(\App\Services\CustomerAccountDeletion\CustomerAccountDeletionService::class)->noteNewObligation(
+                (int) $userId,
+                \App\Services\CustomerAccountDeletion\CustomerAccountDeletionService::BLOCK_TRANSACTION_SUPPORT_TICKET,
+                $insert
+            );
+            return;
+        }
+        $insert();
     }
 
     /**

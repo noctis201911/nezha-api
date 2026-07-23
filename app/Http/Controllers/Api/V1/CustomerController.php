@@ -183,6 +183,17 @@ class CustomerController extends Controller
 
     public function update_profile(Request $request)
     {
+        $authenticatedUser = $request->user();
+        $changesContact = $authenticatedUser && (
+            ($request->has('email') && mb_strtolower((string) $request->email) !== mb_strtolower((string) $authenticatedUser->email))
+            || ($request->has('phone') && (string) $request->phone !== (string) $authenticatedUser->phone)
+            || in_array((string) $request->button_type, ['email', 'phone'], true)
+        );
+        if ($changesContact) {
+            app(\App\Services\CustomerAccountDeletion\CustomerAccountDeletionService::class)
+                ->assertContactChangeAllowed($authenticatedUser);
+        }
+
         $validator = Validator::make($request->all(), [
             'name' => 'required',
             'email' => 'required|unique:users,email,' . $request?->user()?->id,
@@ -264,7 +275,12 @@ class CustomerController extends Controller
 
         }
 
-        $this->update_user_data($user, $request);
+        if ($changesContact) {
+            app(\App\Services\CustomerAccountDeletion\CustomerAccountDeletionService::class)
+                ->withContactChangeGuard($user, fn () => $this->update_user_data($user, $request));
+        } else {
+            $this->update_user_data($user, $request);
+        }
 
 
         return response()->json(['message' => $message], 200);
@@ -393,17 +409,12 @@ class CustomerController extends Controller
 
     public function remove_account(Request $request)
     {
-        $user = $request->user();
-
-        if (Order::where('user_id', $user->id)->where('is_guest', 0)->whereIn('order_status', ['pending', 'accepted', 'confirmed', 'processing', 'handover', 'picked_up'])->count()) {
-            return response()->json(['errors' => [['code' => 'on-going', 'message' => translate('messages.user_account_delete_warning')]]], 403);
-        }
-        $request?->user()?->token()->revoke();
-        if ($user?->userinfo) {
-            $user?->userinfo?->delete();
-        }
-        $user->delete();
-        return response()->json([]);
+        return response()->json([
+            'errors' => [[
+                'code' => 'ACCOUNT_DELETION_CHECKOUT_ONLY',
+                'message' => '请在下单确认页选择“本单完成后自动注销账号”。',
+            ]],
+        ], 409);
     }
 
 

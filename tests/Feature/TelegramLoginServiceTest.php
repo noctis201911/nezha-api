@@ -8,10 +8,12 @@ use App\Services\Auth\CustomerAccessTokenIssuer;
 use App\Services\Auth\GoogleTokenVerifier;
 use App\Services\Auth\TelegramLoginService;
 use App\Services\Auth\TelegramOidcClient;
+use App\Services\CustomerAccountDeletion\CustomerAccountDeletionService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Mockery;
 use Tests\TestCase;
 
@@ -289,6 +291,54 @@ class TelegramLoginServiceTest extends TestCase
         } catch (TelegramLoginException $error) {
             $this->assertSame('telegram_login_expired', $error->errorCode);
         }
+    }
+
+    public function test_account_deletion_challenge_and_exchange_consumption_commit_together(): void
+    {
+        (require database_path('migrations/2026_07_22_090000_create_customer_account_deletion_lifecycle.php'))->up();
+
+        $user = $this->createUser('+37499000010', 'deleting@example.com');
+        $requestId = (string) Str::uuid();
+        DB::table('customer_account_deletion_states')->insert([
+            'user_id' => $user->id,
+            'request_id' => $requestId,
+            'source' => 'checkout',
+            'status' => 'countdown',
+            'purge_matrix_version' => 'v4-local',
+            'copy_version' => 'v4-local',
+            'copy_locale' => 'zh-CN',
+            'requested_at' => now(),
+            'blocker_mask' => 0,
+            'obligation_epoch' => 1,
+            'state_version' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('user_external_identities')->insert([
+            'user_id' => $user->id,
+            'provider' => 'telegram',
+            'provider_subject' => 'tg-deleting',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $service = new TelegramLoginService(
+            $this->oidc,
+            $this->google,
+            new CustomerAccessTokenIssuer(app(CustomerAccountDeletionService::class)),
+        );
+        [$start, $state] = $this->beginWithClaims($this->claims(
+            'tg-deleting',
+            $user->getRawOriginal('phone'),
+        ));
+        $code = $service->completeCallback($state, 'telegram-code');
+        $result = $service->exchange($code, $start['browser_secret']);
+
+        $this->assertSame(409, $result['_http_status']);
+        $this->assertSame('ACCOUNT_DELETION_ACTIVE', $result['errors'][0]['code']);
+        $this->assertNotEmpty(DB::table('customer_account_deletion_states')->where('request_id', $requestId)->value('challenge_hash'));
+        $this->assertSame('consumed', DB::table('external_identity_login_attempts')->value('status'));
+        $this->assertNotNull(DB::table('external_identity_login_attempts')->value('consumed_at'));
     }
 
     private function beginWithClaims(array $claims): array

@@ -3,6 +3,7 @@
 namespace App\Services\Auth;
 
 use App\CentralLogics\Helpers;
+use App\Exceptions\AccountDeletionException;
 use App\Exceptions\TelegramLoginException;
 use App\Models\ExternalIdentityLoginAttempt;
 use App\Models\User;
@@ -350,7 +351,26 @@ class TelegramLoginService
 
     private function finishLogin(ExternalIdentityLoginAttempt $attempt, User $user): array
     {
-        $token = $this->tokenIssuer->issue($user);
+        try {
+            $token = $this->tokenIssuer->issue($user);
+        } catch (AccountDeletionException $exception) {
+            // This method runs inside the identity/exchange transaction. Convert the
+            // challenge into a committed result so its DB hash is not rolled back.
+            $attempt->forceFill([
+                'status' => 'consumed',
+                'consumed_at' => now(),
+                'provider_payload' => null,
+            ])->save();
+
+            return [
+                '_http_status' => $exception->status,
+                'errors' => [[
+                    'code' => $exception->errorCode,
+                    'message' => $exception->getMessage(),
+                ]],
+                'account_deletion' => $exception->context,
+            ];
+        }
         $attempt->forceFill([
             'status' => 'consumed',
             'consumed_at' => now(),

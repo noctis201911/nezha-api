@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Auth;
 
+use App\Exceptions\AccountDeletionException;
 use App\Exceptions\TelegramLoginException;
 use App\Http\Controllers\Controller;
 use App\Services\Auth\TelegramLoginService;
@@ -21,6 +22,8 @@ class TelegramAuthController extends Controller
             return response()->json($this->telegramLogin->begin());
         } catch (TelegramLoginException $error) {
             return $this->errorResponse($error);
+        } catch (AccountDeletionException $error) {
+            return $error->render();
         } catch (Throwable $error) {
             return $this->unexpectedError($error);
         }
@@ -66,12 +69,14 @@ class TelegramAuthController extends Controller
         ]);
 
         try {
-            return response()->json($this->telegramLogin->exchange(
+            return $this->loginResponse($this->telegramLogin->exchange(
                 $validated['code'],
                 $validated['browser_secret'],
             ));
         } catch (TelegramLoginException $error) {
             return $this->errorResponse($error);
+        } catch (AccountDeletionException $error) {
+            return $error->render();
         } catch (Throwable $error) {
             return $this->unexpectedError($error);
         }
@@ -87,7 +92,7 @@ class TelegramAuthController extends Controller
         ]);
 
         try {
-            return response()->json($this->telegramLogin->linkWithPassword(
+            return $this->loginResponse($this->telegramLogin->linkWithPassword(
                 $validated['code'],
                 $validated['browser_secret'],
                 $validated['email'],
@@ -95,6 +100,8 @@ class TelegramAuthController extends Controller
             ));
         } catch (TelegramLoginException $error) {
             return $this->errorResponse($error);
+        } catch (AccountDeletionException $error) {
+            return $error->render();
         } catch (Throwable $error) {
             return $this->unexpectedError($error);
         }
@@ -109,13 +116,15 @@ class TelegramAuthController extends Controller
         ]);
 
         try {
-            return response()->json($this->telegramLogin->linkWithGoogle(
+            return $this->loginResponse($this->telegramLogin->linkWithGoogle(
                 $validated['code'],
                 $validated['browser_secret'],
                 $validated['credential'],
             ));
         } catch (TelegramLoginException $error) {
             return $this->errorResponse($error);
+        } catch (AccountDeletionException $error) {
+            return $error->render();
         } catch (Throwable $error) {
             return $this->unexpectedError($error);
         }
@@ -129,6 +138,14 @@ class TelegramAuthController extends Controller
                 'message' => $error->getMessage(),
             ]],
         ], $error->httpStatus);
+    }
+
+    private function loginResponse(array $result): JsonResponse
+    {
+        $status = (int) ($result['_http_status'] ?? 200);
+        unset($result['_http_status']);
+
+        return response()->json($result, $status);
     }
 
     private function unexpectedError(Throwable $error): JsonResponse
