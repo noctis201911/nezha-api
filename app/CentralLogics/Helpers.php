@@ -321,7 +321,7 @@ class Helpers
                 $item['store_rank'] = $__nz_isFood ? ($__nz_rankMap[$item->id] ?? null) : null;
                 $item['recent_order_count'] = $__nz_isFood ? ($__nz_recentMap[$item->id] ?? 0) : 0;
                 $categories = [];
-                foreach (json_decode($item?->category_ids) as $value) {
+                foreach ((json_decode($item?->category_ids) ?: []) as $value) {
                     $categories[] = ['id' => (string) $value->id, 'position' => $value->position ?? 1, 'category_name' => ($__nz_catMap->get($value->id) ?? Category::find($value->id))?->name];
                 }
                 $item['category_ids'] = $categories;
@@ -578,7 +578,7 @@ class Helpers
         } else {
             $variations = [];
             $categories = [];
-            foreach (json_decode($data?->category_ids) as $value) {
+            foreach ((json_decode($data?->category_ids) ?: []) as $value) {
                 $categories[] = ['id' => (string) $value->id, 'position' => $value->position ?? 1, 'category_name' => Category::find($value->id)?->name];
             }
             $data['category_ids'] = $categories;
