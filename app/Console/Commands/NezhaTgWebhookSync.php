@@ -28,12 +28,18 @@ class NezhaTgWebhookSync extends Command
         $base = 'https://api.telegram.org/bot'.$token.'/';
         $before = $this->getInfo($base);
         $this->printInfo('同步前', $before);
+        $webhookUrl = $this->webhookUrl();
+        if ($webhookUrl === null) {
+            $this->error('APP_URL 无法转换为有效的 HTTPS webhook 地址。');
+
+            return self::FAILURE;
+        }
 
         $response = Http::asForm()
             ->connectTimeout(3)
             ->timeout(10)
             ->post($base.'setWebhook', [
-                'url' => rtrim((string) config('app.url'), '/').'/api/v1/nezha/telegram-webhook',
+                'url' => $webhookUrl,
                 'secret_token' => $secret,
                 'allowed_updates' => json_encode([
                     'message',
@@ -53,6 +59,21 @@ class NezhaTgWebhookSync extends Command
         $this->info('Telegram webhook 已同步。');
 
         return self::SUCCESS;
+    }
+
+    private function webhookUrl(): ?string
+    {
+        $appUrl = rtrim(trim((string) config('app.url')), '/');
+        if (str_starts_with(strtolower($appUrl), 'http://')) {
+            $appUrl = 'https://'.substr($appUrl, 7);
+        }
+
+        if (filter_var($appUrl, FILTER_VALIDATE_URL) === false
+            || strtolower((string) parse_url($appUrl, PHP_URL_SCHEME)) !== 'https') {
+            return null;
+        }
+
+        return $appUrl.'/api/v1/nezha/telegram-webhook';
     }
 
     private function getInfo(string $base): array

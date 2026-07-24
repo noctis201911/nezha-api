@@ -16,7 +16,7 @@ class NezhaTgWebhookSyncTest extends TestCase
     {
         Config::set('telegram_bot_token_conf', ['value' => 'TEST_TOKEN']);
         Config::set('nezha_cs_tg_webhook_secret_conf', ['value' => 'TEST_SECRET']);
-        Config::set('app.url', 'https://api.example.test');
+        Config::set('app.url', 'http://api.example.test');
         $infoCalls = 0;
         Http::fake(function (HttpRequest $request) use (&$infoCalls) {
             if (str_contains($request->url(), '/getWebhookInfo')) {
