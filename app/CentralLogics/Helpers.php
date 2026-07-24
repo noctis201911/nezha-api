@@ -313,9 +313,13 @@ class Helpers
                 }
                 $item['recommended'] = (int) $item->recommended;
                 // 哪吒[社会证明层] 真实字段: 月售(30天销量)/店内热销名次(前3名,否则null)/近期下单数(7天)
-                $item['month_sold'] = $__nz_monthMap[$item->id] ?? 0;
-                $item['store_rank'] = $__nz_rankMap[$item->id] ?? null;
-                $item['recent_order_count'] = $__nz_recentMap[$item->id] ?? 0;
+                // 🔴 三个映射按 order_details.food_id 建键, 只对 Food 有效; ItemCampaign 的 id 是另一套
+                // id 空间, 不隔离则活动 id 撞上有销量的 food id 会把别人的销量挂到活动上(造假)。活动卡
+                // 不读这三个字段, 对非 Food 一律给无数据默认。Food: instanceof 恒真 -> 与原三行逐字节等价。
+                $__nz_isFood = $item instanceof \App\Models\Food;
+                $item['month_sold'] = $__nz_isFood ? ($__nz_monthMap[$item->id] ?? 0) : 0;
+                $item['store_rank'] = $__nz_isFood ? ($__nz_rankMap[$item->id] ?? null) : null;
+                $item['recent_order_count'] = $__nz_isFood ? ($__nz_recentMap[$item->id] ?? 0) : 0;
                 $categories = [];
                 foreach (json_decode($item?->category_ids) as $value) {
                     $categories[] = ['id' => (string) $value->id, 'position' => $value->position ?? 1, 'category_name' => ($__nz_catMap->get($value->id) ?? Category::find($value->id))?->name];
