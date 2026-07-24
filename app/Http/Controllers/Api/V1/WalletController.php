@@ -145,7 +145,9 @@ class WalletController extends Controller
             ];
             return response()->json($data, 200);
             } catch(\Exception $e){
-                return response()->json(['error'=>$e->getMessage()],200);
+                // 哪吒[安全 2026-07-24]: 原始异常串不回客户端(充值走支付网关, 异常可能含网关/DB 内部信息)。
+                \Illuminate\Support\Facades\Log::warning('nz_wallet_topup_link_failed', ['ex' => get_class($e), 'code' => $e->getCode()]);
+                return response()->json(['error'=>'出现错误，请重试'],200);
             }
     }
 

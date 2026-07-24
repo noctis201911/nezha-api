@@ -197,8 +197,9 @@ class OrderSubscriptionController extends Controller
 
         }catch(Exception $ex){
             DB::rollBack();
-            info($ex->getMessage());
-            return response()->json(['errors' => [['code'=>$ex->getCode(), 'message'=>$ex->getMessage()]]], 403);
+            // 哪吒[安全 2026-07-24]: 原始异常串/内部错误码不回客户端, 只服务端记类名+码。
+            \Illuminate\Support\Facades\Log::warning('nz_subscription_update_failed', ['ex' => get_class($ex), 'code' => $ex->getCode()]);
+            return response()->json(['errors' => [['code'=>'subscription', 'message'=>translate('messages.failed_updated_subscription')]]], 403);
         }
 
         return response()->json(['errors' => [['code'=>'unknown-error', 'message'=>translate('messages.failed_updated_subscription')]]], 500);
@@ -220,8 +221,9 @@ class OrderSubscriptionController extends Controller
             $subscription?->schedules()?->updateOrInsert(['day'=>$request->day, 'subscription_id'=>$subscription->id],['time'=>$request->time]);
             return response()->json(translate('messages.subscription_schedule_updated_successfully'), 200);
         }catch(Exception $ex){
-            info($ex->getMessage());
-            return response()->json(['errors' => [['code'=>$ex->getCode(), 'message'=>$ex->getMessage()]]], 403);
+            // 哪吒[安全 2026-07-24]: 原始异常串/内部错误码不回客户端, 只服务端记类名+码。
+            \Illuminate\Support\Facades\Log::warning('nz_subscription_schedule_failed', ['ex' => get_class($ex), 'code' => $ex->getCode()]);
+            return response()->json(['errors' => [['code'=>'subscription', 'message'=>translate('messages.failed_updated_subscription_schedule')]]], 403);
         }
         return response()->json(['errors' => [['code'=>'unknown-error', 'message'=>translate('messages.failed_updated_subscription_schedule')]]], 500);
     }

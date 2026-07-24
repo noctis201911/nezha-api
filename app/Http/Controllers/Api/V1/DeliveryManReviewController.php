@@ -39,7 +39,9 @@ class DeliveryManReviewController extends Controller
             }
             return response()->json(floatval($overallRating), 200);
         } catch (\Exception $e) {
-            return response()->json(['errors' => $e->getMessage()], 403);
+            // 哪吒[安全 2026-07-24]: 原始异常串不回客户端。
+            \Illuminate\Support\Facades\Log::warning('nz_dm_rating_failed', ['ex' => get_class($e), 'code' => $e->getCode()]);
+            return response()->json(['errors' => '出现错误，请重试'], 403);
         }
     }
 

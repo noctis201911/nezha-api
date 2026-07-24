@@ -38,6 +38,13 @@ class NezhaApiExceptionLeakContractTest extends TestCase
         'app/Http/Controllers/Api/V1/CampaignController.php',
         'app/Http/Controllers/Api/V1/CategoryController.php',
         'app/Http/Controllers/Api/V1/ProductController.php',
+        // 哪吒[异常串外泄·2026-07-24] 本轮清干净并加钉:
+        'app/Http/Controllers/Api/V1/CouponController.php',
+        'app/Http/Controllers/Api/V1/DeliveryManReviewController.php',
+        'app/Http/Controllers/Api/V1/WalletController.php',
+        'app/Http/Controllers/Api/V1/OrderSubscriptionController.php',
+        'app/Http/Controllers/Api/V1/Vendor/VendorCategoryController.php',
+        'app/Http/Controllers/Api/V1/Vendor/VendorController.php',
     ];
 
     /**

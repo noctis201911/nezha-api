@@ -743,7 +743,9 @@ class VendorController extends Controller
         try {
             return response()->json($notifications, 200);
         } catch (\Exception $e) {
-            return response()->json([$e->getMessage()], 200);
+            // 哪吒[安全 2026-07-24]: 原始异常串不回客户端(try 内仅 json 序列化, 异常面小但统一收口)。
+            \Illuminate\Support\Facades\Log::warning('nz_vendor_notifications_failed', ['ex' => get_class($e), 'code' => $e->getCode()]);
+            return response()->json(['出现错误，请重试'], 200);
         }
     }
 

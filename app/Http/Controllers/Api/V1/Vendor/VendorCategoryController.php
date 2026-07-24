@@ -61,7 +61,9 @@ class VendorCategoryController extends Controller
                 }
                 return response()->json($categories, 200);
         } catch (\Exception $e) {
-            return response()->json([$e->getMessage()]);
+            // 哪吒[安全 2026-07-24]: 原始异常串不回客户端。
+            \Illuminate\Support\Facades\Log::warning('nz_vendor_categories_failed', ['ex' => get_class($e), 'code' => $e->getCode()]);
+            return response()->json(['出现错误，请重试']);
         }
     }
 
@@ -79,7 +81,9 @@ class VendorCategoryController extends Controller
             ->orderBy('priority','desc')->get();
             return response()->json(Helpers::category_data_formatting($categories, true), 200);
         } catch (\Exception $e) {
-            return response()->json([$e->getMessage()], 200);
+            // 哪吒[安全 2026-07-24]: 原始异常串不回客户端。
+            \Illuminate\Support\Facades\Log::warning('nz_vendor_childes_failed', ['ex' => get_class($e), 'code' => $e->getCode()]);
+            return response()->json(['出现错误，请重试'], 200);
         }
     }
 

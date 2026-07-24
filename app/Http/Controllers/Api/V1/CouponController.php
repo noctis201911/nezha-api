@@ -154,7 +154,9 @@ class CouponController extends Controller
                 ], 404);
             }
         } catch (\Exception $e) {
-            return response()->json(['errors' => $e->getMessage()], 403);
+            // 哪吒[安全 2026-07-24]: 原始异常串不回客户端(QueryException 会连 Host/Port/Database 与 bindings 外泄)。
+            \Illuminate\Support\Facades\Log::warning('nz_coupon_apply_failed', ['ex' => get_class($e), 'code' => $e->getCode()]);
+            return response()->json(['errors' => '出现错误，请重试'], 403);
         }
     }
 
