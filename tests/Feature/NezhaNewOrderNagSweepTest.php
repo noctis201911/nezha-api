@@ -180,9 +180,14 @@ class NezhaNewOrderNagSweepTest extends TestCase
     public function test_nag_copy_points_only_payment_to_tg_card(): void
     {
         $src = file_get_contents(base_path('app/Console/Commands/NezhaNewOrderNagSweep.php'));
+        $docs = file_get_contents(base_path('docs/PRELAUNCH_SWITCHES.md'));
 
         $this->assertStringContainsString('待接单，请在商家后台接单', $src);
         $this->assertStringContainsString('待确认收款，请在 TG 卡片上点「💰 确认收款」或登录后台', $src);
         $this->assertStringNotContainsString('TG 卡片上点「✅ 接单」', $src);
+        $this->assertStringContainsString(
+            '开催单前须先开 `nezha_order_tg_card_actions_status`，否则催单文案指向不存在的按钮',
+            $docs
+        );
     }
 }

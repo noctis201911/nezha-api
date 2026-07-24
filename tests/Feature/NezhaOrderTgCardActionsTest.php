@@ -21,7 +21,10 @@ class NezhaOrderTgCardActionsTest extends TestCase
     use DatabaseTransactions;
 
     /** @var int[] */
-    private array $orderIds = [93001, 93002, 93003, 93004, 93005, 93006, 93007, 93008, 93009];
+    private array $orderIds = [93001, 93002, 93003, 93004, 93005, 93006, 93007, 93008, 93009, 93010];
+
+    /** @var array<string, array<string, mixed>> */
+    private array $acceptedCallbackAnswers = [];
 
     protected function setUp(): void
     {
@@ -34,6 +37,7 @@ class NezhaOrderTgCardActionsTest extends TestCase
         $this->setSetting('nezha_sanction_inconclusive_action', 'hold', false);
         $this->setSetting('nezha_refund_chain_rpc_bsc_list', 'https://bsc.test', false);
         Config::set('mail.status', false);
+        $this->acceptedCallbackAnswers = [];
 
         DB::table('notification_messages')->updateOrInsert(
             ['key' => 'offline_order_accept_message', 'user_type' => 'user'],
@@ -109,6 +113,17 @@ class NezhaOrderTgCardActionsTest extends TestCase
 
         $this->assertDatabaseHas('orders', ['id' => 93002, 'order_status' => 'canceled', 'checked' => 0]);
         $this->assertTelegramFeedback('该订单已结束', true);
+    }
+
+    public function test_catch_path_answers_once_with_generic_alert(): void
+    {
+        $this->fakeTelegram();
+        $callback = $this->callbackPayload('catch-once', '700063', '55002', 'pay', 93002);
+        $callback['message']['chat']['id'] = new \stdClass;
+
+        NezhaOrderTgCardActions::handle($callback, 102);
+
+        $this->assertTelegramFeedback('操作失败，请稍后重试', true);
     }
 
     public function test_confirm_payment_is_idempotent_marks_only_one_order_and_notifies_once(): void
@@ -224,6 +239,77 @@ class NezhaOrderTgCardActionsTest extends TestCase
         }
         $joined = implode("\n", $telegramPayloads);
         foreach (['SENTINEL_SDN', 'SENTINEL_UID', $sentinelAddress, $txHash] as $sentinel) {
+            $this->assertStringNotContainsString($sentinel, $joined);
+        }
+    }
+
+    public function test_sanction_inconclusive_hold_releases_lock_and_can_retry_without_leaking(): void
+    {
+        $sentinelTx = '0x'.str_repeat('c', 64);
+        $sentinelAddress = '0x'.str_repeat('d', 40);
+        $sentinelSource = 'SENTINEL_HOLD_SOURCE';
+        $sentinelUid = 'SENTINEL_HOLD_UID';
+        $this->fakeTelegram();
+        $rid = $this->restaurant(70, '700070');
+        $this->offlineOrder(93010, $rid, 'pending', [], [
+            'method_id' => 2,
+            'method_name' => 'BSC USDT',
+            'tx_hash' => $sentinelTx,
+            'from' => $sentinelAddress,
+            'source' => $sentinelSource,
+            'sdn_uid' => $sentinelUid,
+        ]);
+        $this->card(93010, '700070', '55010');
+
+        NezhaOrderTgCardActions::handle(
+            $this->callbackPayload('hold-first', '700070', '55010', 'pay_t', 93010, 15),
+            220
+        );
+        $this->assertFalse(Cache::has('nz_tg_confirm_pay_93010'), '核验未决后必须释放订单锁');
+
+        NezhaOrderTgCardActions::handle(
+            $this->callbackPayload('hold-retry', '700070', '55010', 'pay_t', 93010, 15),
+            221
+        );
+        $this->assertFalse(Cache::has('nz_tg_confirm_pay_93010'), '重试仍未决时也必须释放订单锁');
+
+        $this->assertDatabaseHas('orders', [
+            'id' => 93010,
+            'order_status' => 'pending',
+            'payment_status' => 'unpaid',
+            'checked' => 0,
+        ]);
+        $this->assertDatabaseHas('offline_payments', ['order_id' => 93010, 'status' => 'pending']);
+        $this->assertSame(
+            1,
+            DB::table('nezha_risk_records')
+                ->where('order_id', 93010)
+                ->where('action', 'review')
+                ->where('status', 'pending')
+                ->count(),
+            '重复重试只保留一条待人工核验记录'
+        );
+        $this->assertSame(
+            2,
+            collect(Http::recorded())->filter(
+                fn (array $record): bool => $record[0]->url() === 'https://bsc.test'
+            )->count(),
+            '释放锁后第二次点击必须真正重新核验'
+        );
+        $this->assertTelegramFeedback(
+            '付款来源核验中，暂不能确认收款，请稍后重试',
+            true,
+            2
+        );
+
+        $telegramPayloads = [];
+        foreach (Http::recorded() as [$request]) {
+            if (str_contains($request->url(), 'api.telegram.org')) {
+                $telegramPayloads[] = json_encode($request->data(), JSON_UNESCAPED_UNICODE);
+            }
+        }
+        $joined = implode("\n", $telegramPayloads);
+        foreach ([$sentinelSource, $sentinelUid, $sentinelAddress, $sentinelTx] as $sentinel) {
             $this->assertStringNotContainsString($sentinel, $joined);
         }
     }
@@ -466,6 +552,18 @@ class NezhaOrderTgCardActionsTest extends TestCase
             if ($request->url() === 'https://bsc.test') {
                 return Http::response(['jsonrpc' => '2.0', 'id' => 1, 'result' => ['from' => $bscFrom]], 200);
             }
+            if (str_contains($request->url(), '/answerCallbackQuery')) {
+                $callbackId = (string) ($request['callback_query_id'] ?? '');
+                if (array_key_exists($callbackId, $this->acceptedCallbackAnswers)) {
+                    return Http::response([
+                        'ok' => false,
+                        'description' => 'Bad Request: query is too old and response timeout expired or query ID is invalid',
+                    ], 400);
+                }
+                $this->acceptedCallbackAnswers[$callbackId] = $request->data();
+
+                return Http::response(['ok' => true, 'result' => true], 200);
+            }
             if (str_contains($request->url(), '/sendMessage')) {
                 return Http::response(['ok' => true, 'result' => ['message_id' => 55006]], 200);
             }
@@ -491,11 +589,28 @@ class NezhaOrderTgCardActionsTest extends TestCase
         return $requests;
     }
 
-    private function assertTelegramFeedback(string $text, bool $showAlert): void
+    private function assertTelegramFeedback(string $text, bool $showAlert, int $expectedCount = 1): void
     {
-        Http::assertSent(fn (HttpRequest $request) => str_contains($request->url(), '/answerCallbackQuery')
-            && (string) ($request['text'] ?? '') === $text
-            && (bool) ($request['show_alert'] ?? false) === $showAlert
+        $accepted = array_filter(
+            $this->acceptedCallbackAnswers,
+            fn (array $payload): bool => (string) ($payload['text'] ?? '') === $text
+                && (bool) ($payload['show_alert'] ?? false) === $showAlert
         );
+        $this->assertCount(
+            $expectedCount,
+            $accepted,
+            '必须由 Telegram 接受带指定文字和提示样式的唯一作答'
+        );
+
+        foreach (array_keys($accepted) as $callbackId) {
+            $this->assertCount(
+                1,
+                array_filter(
+                    $this->telegramRequests('/answerCallbackQuery'),
+                    fn (HttpRequest $request): bool => (string) ($request['callback_query_id'] ?? '') === $callbackId
+                ),
+                "callback {$callbackId} 只能作答一次"
+            );
+        }
     }
 }

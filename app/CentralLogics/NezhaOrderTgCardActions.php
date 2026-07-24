@@ -21,9 +21,6 @@ class NezhaOrderTgCardActions
     {
         $callbackId = trim((string) ($callbackQuery['id'] ?? ''));
 
-        // Telegram 要求及时回答 callback；先消除客户端 loading，再做后续检查。
-        NezhaOrderTgCard::answerCallbackQuery($callbackId);
-
         try {
             if ($callbackId === '' || ! $updateId) {
                 self::feedback($callbackId, '请求无效，请稍后重试', true);
