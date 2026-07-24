@@ -8,14 +8,19 @@ if [ ! -f vendor/bin/phpunit ]; then
   echo "[pre-push] 跳过: 未找到 vendor/bin/phpunit"
   exit 0
 fi
-SUITES="tests/Feature/NezhaL1RedlineTest.php tests/Feature/NezhaIdorGuardTest.php tests/Feature/NezhaRiskChannelTest.php tests/Feature/NezhaCsGuidanceTest.php tests/Feature/NezhaTieredCouponParityTest.php tests/Unit/NezhaGetVarientDualFormatTest.php"
-# 异常串外泄棘轮(2026-07-24 接入·文件存在才跑): 陈旧工作树尚未 checkout 此测试文件时自动跳过,
-# 不误红账本/nzclaim/常规 push; 工作树够新(有此文件)即强制 —— 钉住 CLEANED_FILES 里 10 个控制器
-# 不得回归把 $e->getMessage() 回客户端。误报(领域码/审过安全)改 CLEANED_FILES/AUDITED_SAFE 并在 CLAIMS 留痕。
+# 固定墙(测试文件恒在): L1红线 / IDOR / 风控 / 死指引 / 满减配比
+SUITES="tests/Feature/NezhaL1RedlineTest.php tests/Feature/NezhaIdorGuardTest.php tests/Feature/NezhaRiskChannelTest.php tests/Feature/NezhaCsGuidanceTest.php tests/Feature/NezhaTieredCouponParityTest.php"
+# 以下为较晚加入的守卫测试: 用文件存在守卫, 老/陈旧工作树尚未 checkout 时自动跳过, 不误红别窗 push;
+# 工作树够新(有该文件)即强制。
+# 规格 get_varient money 双格式回归(0c705de8): 报价/下单/admin/vendor/POS 共用, 防双格式静默算错价。
+if [ -f tests/Unit/NezhaGetVarientDualFormatTest.php ]; then
+  SUITES="$SUITES tests/Unit/NezhaGetVarientDualFormatTest.php"
+fi
+# 异常串外泄棘轮(2026-07-24): 钉住 CLEANED_FILES 控制器不得回归把 getMessage() 回客户端。
 if [ -f tests/Feature/NezhaApiExceptionLeakContractTest.php ]; then
   SUITES="$SUITES tests/Feature/NezhaApiExceptionLeakContractTest.php"
 fi
-echo "[pre-push] 跑 L1 红线 + IDOR 守卫 + 在场感知死指引墙 + 异常串外泄棘轮测试..."
+echo "[pre-push] 跑 L1 红线 + IDOR 守卫 + 死指引墙 + 规格双格式 + 异常串外泄棘轮测试..."
 php vendor/bin/phpunit $SUITES
 if [ $? -ne 0 ]; then
   echo "[pre-push] 红线/IDOR守卫未通过, 拒绝 push。修复后再推(应急: git push --no-verify, 自负L1风险)。"
