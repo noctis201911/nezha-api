@@ -137,4 +137,62 @@ class NezhaIdorGuardTest extends TestCase
             ."确属合法跨查请在该行加注释 // idor-ok: <理由>"
         );
     }
+
+    /**
+     * F-1 越权删购物车 · 回归守卫 (2026-07-23, release 4e64e7d9)
+     *
+     * add_to_cart_multiple 是注册用户专用端点(方法体内无条件解引用 $request->user->id),
+     * 但它挂在 apiGuestCheck 中间件组下 —— 该中间件会放行任何带 body guest_id 的匿名请求。
+     * 方法入口的 purgeExpiredCarts($user_id, 0) 硬编码 is_guest=0(清除的是注册用户购物车),
+     * 且 $user_id 在无有效登录用户时取自攻击者可控的 body guest_id。因此若入口不 fail-closed,
+     * 完全匿名的请求即可用 guest_id=<任意注册用户id> 越权清除他人 is_guest=0 的过期购物车
+     * (生产 PoC 已坐实并修复)。本守卫钉住"purge 之前必须先挡掉无有效登录用户"。
+     *
+     * 纯静态检查(不连库),与本文件其余守卫同范式。仅在 F-1 原始漏洞面仍在(硬编码 is_guest=0 清除)
+     * 时才要求 fail-closed; 若 purge 改为作用域安全写法, 漏洞面消失, 本守卫自动放行。
+     */
+    public function test_add_to_cart_multiple_fail_closed_before_purge(): void
+    {
+        $file = base_path('app/Http/Controllers/Api/V1/CartController.php');
+        $this->assertFileExists($file, 'CartController 不见了, F-1 回归守卫失效');
+        $code = file_get_contents($file);
+
+        $target = null;
+        foreach ($this->splitMethods($code) as $m) {
+            if ($m['name'] === 'add_to_cart_multiple') {
+                $target = $m;
+                break;
+            }
+        }
+        $this->assertNotNull(
+            $target,
+            'CartController::add_to_cart_multiple 不见了(重命名/删除?). 若端点已下线或改造, 请同步更新/移除本 F-1 回归守卫.'
+        );
+
+        $body = $target['body'];
+
+        // 仅当仍保留 F-1 原始漏洞面(硬编码 is_guest=0 清除注册购物车)时才强制 fail-closed。
+        // purge 改成作用域安全写法后漏洞面消失, 本守卫自动放行(避免绑死实现细节)。
+        $purgePos = strpos($body, '$this->purgeExpiredCarts($user_id, 0)');
+        if ($purgePos === false) {
+            $this->addToAssertionCount(1);
+            return;
+        }
+
+        $beforePurge = substr($body, 0, $purgePos);
+        $failClosed =
+            preg_match('/if\s*\(\s*!\s*\$request->user\b/', $beforePurge)
+            || preg_match('/\$request->user\s*===?\s*null/', $beforePurge)
+            || preg_match('/empty\s*\(\s*\$request->user\s*\)/', $beforePurge);
+
+        $this->assertTrue(
+            (bool) $failClosed,
+            "F-1 越权删购物车回归: CartController::add_to_cart_multiple 在 purgeExpiredCarts(\$user_id, 0)"
+            ." (硬编码 is_guest=0, 清除注册用户购物车) 之前缺少对 \$request->user 的 fail-closed 守卫。\n"
+            ."后果: 端点挂在 apiGuestCheck 下会放行带 body guest_id 的匿名请求, 攻击者用 guest_id=<任意注册用户id>"
+            ." 即可越权清他人 is_guest=0 的过期购物车(生产 PoC 坐实, release 4e64e7d9)。\n"
+            ."修法: 方法入口加  if (!\$request->user) { return response()->json([...], 401); }  再 purge。\n"
+            ."若已改用其它 fail-closed 方式(如移入 auth:api 组), 请更新本守卫的匹配逻辑。"
+        );
+    }
 }
